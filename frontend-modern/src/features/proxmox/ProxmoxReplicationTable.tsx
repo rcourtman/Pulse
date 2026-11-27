@@ -10,11 +10,16 @@ import {
   type DetailValueTone,
 } from '@/components/shared/DetailSectionTable';
 import { InlineDetailTableRow } from '@/components/shared/InlineDetailTableRow';
+import { InlineNotice } from '@/components/shared/InlineNotice';
 import { StatusDot } from '@/components/shared/StatusDot';
 import type { StatusIndicatorVariant } from '@/utils/status';
 import { TableCell, TableHead, TableRow } from '@/components/shared/Table';
 import { apiErrorFromResponse, apiFetch } from '@/utils/apiClient';
 import { useRelativeTimeNow } from '@/utils/relativeTimeClock';
+import { getResourceStaleness } from '@/features/platformPage/resourceStaleness';
+import { getResourceSourceStatus } from '@/utils/resourceSourceHealth';
+import { asTrimmedString } from '@/utils/stringUtils';
+import type { Resource } from '@/types/resource';
 import {
   PlatformTableToolbar,
   PlatformErrorState,
@@ -59,7 +64,152 @@ import { parseBackupTimestampMs } from '@/utils/backupTimestamp';
 // ReplicationJobsSnapshot without going through the unified-resource
 // pipeline.
 
-type ReplicationStatusFilter = 'all' | 'healthy' | 'failed' | 'pending' | 'unknown' | 'disabled';
+type ReplicationStatusFilter =
+  'all' | 'healthy' | 'stale' | 'failed' | 'pending' | 'unknown' | 'disabled';
+
+type ReplicationJobRecord = ReplicationJob & {
+  // Go models.ReplicationJob serializes LastPolled as an RFC3339 string on
+  // /api/replication/jobs; ReplicationJobFrontend uses numeric polledAt.
+  lastPolled?: number | string;
+};
+
+export interface ReplicationStaleNotice {
+  badge: string;
+  compactBadge: string;
+  detail: string;
+  error?: string;
+}
+
+const CONNECTED_PROXMOX_SOURCE_STATUSES = new Set([
+  'online',
+  'running',
+  'healthy',
+  'connected',
+  'ok',
+]);
+const IMPAIRED_PROXMOX_CONNECTION_HEALTH = new Set(['stale', 'error', 'degraded', 'offline']);
+
+const normalizeReplicationToken = (value: unknown): string =>
+  typeof value === 'string' ? value.trim().toLowerCase() : '';
+
+const buildProxmoxNodeStaleNotice = (
+  node: Resource,
+  subjectOverride?: string,
+): ReplicationStaleNotice | null => {
+  const staleness = getResourceStaleness(node);
+  const proxmoxSource = getResourceSourceStatus(node, 'proxmox');
+  const sourceStatus = normalizeReplicationToken(proxmoxSource?.status);
+  const sourceError = asTrimmedString(proxmoxSource?.error);
+  const connectionHealth = normalizeReplicationToken(node.proxmox?.connectionHealth);
+  const nodeStatus = normalizeReplicationToken(node.status);
+
+  const sourceImpaired =
+    sourceStatus !== '' &&
+    sourceStatus !== 'pending' &&
+    !CONNECTED_PROXMOX_SOURCE_STATUSES.has(sourceStatus);
+  const connectionImpaired = IMPAIRED_PROXMOX_CONNECTION_HEALTH.has(connectionHealth);
+  const nodeOfflineOrUnknown =
+    (nodeStatus === 'offline' || nodeStatus === 'unknown') &&
+    !CONNECTED_PROXMOX_SOURCE_STATUSES.has(sourceStatus);
+
+  if (!staleness && !sourceImpaired && !connectionImpaired && !nodeOfflineOrUnknown) {
+    return null;
+  }
+
+  const subject =
+    asTrimmedString(subjectOverride) ||
+    asTrimmedString(node.proxmox?.nodeName) ||
+    asTrimmedString(node.name) ||
+    'Proxmox';
+
+  let reason: string;
+  const ageSuffix = staleness?.age ? ` (last report ${staleness.age} ago)` : '';
+  if (sourceError && staleness?.age) {
+    reason = `No Proxmox report from ${subject} for ${staleness.age} (${sourceError})`;
+  } else if (sourceError) {
+    reason = `Proxmox poll failed on ${subject} (${sourceError})`;
+  } else if (
+    connectionHealth === 'error' ||
+    sourceStatus === 'error' ||
+    sourceStatus === 'failed'
+  ) {
+    reason = `Proxmox API poll failed on ${subject}${ageSuffix}`;
+  } else if (
+    connectionHealth === 'offline' ||
+    sourceStatus === 'offline' ||
+    nodeStatus === 'offline'
+  ) {
+    reason = `Proxmox node ${subject} is offline in Pulse${ageSuffix}`;
+  } else if (staleness?.age) {
+    reason = `No Proxmox report from ${subject} for ${staleness.age}`;
+  } else if (connectionHealth === 'degraded') {
+    reason = `Proxmox connection for ${subject} is degraded`;
+  } else {
+    reason = `No recent Proxmox report from ${subject}`;
+  }
+
+  return {
+    badge: 'Stale data',
+    compactBadge: 'Stale',
+    detail: `${reason} — showing the last values received.`,
+    ...(sourceError ? { error: sourceError } : {}),
+  };
+};
+
+// Replication jobs come from /api/replication/jobs without a per-job source
+// health envelope, so freshness follows the owning Proxmox VE node (or whole
+// PVE connection when no specific source node matches) already loaded by the
+// page. This avoids inventing a client-side timeout that would disagree with
+// adaptive PVE polling intervals.
+export const getReplicationJobStaleNotice = (
+  job: ReplicationJob,
+  nodes: readonly Resource[] | undefined,
+): ReplicationStaleNotice | null => {
+  if (!nodes || nodes.length === 0) return null;
+  const instance = normalizeReplicationToken(job.instance);
+  const sourceNode =
+    normalizeReplicationToken(job.sourceNode) || normalizeReplicationToken(job.guestNode);
+  const pveNodes = nodes.filter((node) => node.type === 'agent');
+  if (pveNodes.length === 0) return null;
+
+  const instanceNodes = instance
+    ? pveNodes.filter((node) => normalizeReplicationToken(node.proxmox?.instance) === instance)
+    : [];
+
+  if (sourceNode) {
+    const matched = instanceNodes.find(
+      (node) =>
+        normalizeReplicationToken(node.proxmox?.nodeName) === sourceNode ||
+        normalizeReplicationToken(node.name) === sourceNode,
+    );
+    if (matched) {
+      return buildProxmoxNodeStaleNotice(matched);
+    }
+    if (instanceNodes.length === 0) {
+      const uninstancedMatches = pveNodes.filter(
+        (node) =>
+          !normalizeReplicationToken(node.proxmox?.instance) &&
+          (normalizeReplicationToken(node.proxmox?.nodeName) === sourceNode ||
+            normalizeReplicationToken(node.name) === sourceNode),
+      );
+      if (uninstancedMatches.length === 1) {
+        return buildProxmoxNodeStaleNotice(uninstancedMatches[0]);
+      }
+    }
+  }
+
+  if (instanceNodes.length > 0) {
+    const notices = instanceNodes.map((node) => buildProxmoxNodeStaleNotice(node));
+    if (notices.every((notice): notice is ReplicationStaleNotice => notice !== null)) {
+      if (instanceNodes.length === 1) return notices[0];
+      const preferredIndex = notices.findIndex((notice) => Boolean(notice.error));
+      const representative = instanceNodes[preferredIndex >= 0 ? preferredIndex : 0];
+      return buildProxmoxNodeStaleNotice(representative, job.instance);
+    }
+  }
+
+  return null;
+};
 
 type ReplicationColumn =
   | 'status'
@@ -160,6 +310,13 @@ const REPLICATION_COLUMN_WIDTH_CLASS: Record<
   },
 };
 
+const STALE_FILTER_OPTION: PlatformTableFilterOption<ReplicationStatusFilter> = {
+  value: 'stale',
+  label: 'Stale',
+  tone: 'warning',
+  leading: filterChipStatusDot('bg-amber-500'),
+};
+
 const STATUS_FILTER_OPTIONS: PlatformTableFilterOption<ReplicationStatusFilter>[] = [
   { value: 'all', label: 'All' },
   {
@@ -192,6 +349,7 @@ const STATUS_FILTER_OPTIONS: PlatformTableFilterOption<ReplicationStatusFilter>[
 interface ReplicationStatusIndicator {
   variant: StatusIndicatorVariant;
   label: string;
+  compactLabel?: string;
   tone: string;
 }
 
@@ -207,11 +365,14 @@ const hasSuccessfulSyncOutcome = (job: ReplicationJob): boolean =>
 const replicationFailCount = (job: ReplicationJob): number | undefined =>
   job.failCount ?? (hasSuccessfulSyncOutcome(job) ? 0 : undefined);
 
-function classifyJob(job: ReplicationJob): ReplicationStatusFilter {
+function classifyJob(
+  job: ReplicationJob,
+  staleNotice: ReplicationStaleNotice | null = null,
+): ReplicationStatusFilter {
   if (!job.enabled) return 'disabled';
   if ((job.failCount ?? 0) > 0) return 'failed';
   const last = reportedSyncOutcome(job);
-  if (hasSuccessfulSyncOutcome(job)) return 'healthy';
+  if (hasSuccessfulSyncOutcome(job)) return staleNotice ? 'stale' : 'healthy';
   if (last === 'failed' || last === 'error') return 'failed';
   if (last === 'pending') return 'pending';
   // Configuration can remain readable while its source-node status read is
@@ -226,6 +387,13 @@ function indicatorFor(classification: ReplicationStatusFilter): ReplicationStatu
         variant: 'success',
         label: 'Healthy',
         tone: 'text-emerald-600 dark:text-emerald-300',
+      };
+    case 'stale':
+      return {
+        variant: 'warning',
+        label: 'Stale data',
+        compactLabel: 'Stale',
+        tone: 'text-amber-700 dark:text-amber-300',
       };
     case 'failed':
       return { variant: 'danger', label: 'Failed', tone: 'text-red-600 dark:text-red-300' };
@@ -452,6 +620,7 @@ const replicationJobSummary = (job: ReplicationJob, now: number): string => {
 const buildReplicationJobSections = (
   job: ReplicationJob,
   classification: ReplicationStatusFilter,
+  staleNotice: ReplicationStaleNotice | null,
   guestLabel: string,
   now: number,
 ): DetailSection[] => {
@@ -459,6 +628,14 @@ const buildReplicationJobSections = (
   const last = lastSyncFor(job, now);
   const next = nextSyncFor(job, now);
   const failCount = replicationFailCount(job);
+  const polledRaw = (job as ReplicationJobRecord).lastPolled ?? job.polledAt;
+  const polled = readReplicationSyncTime(polledRaw, undefined, now);
+  const polledText =
+    polled.state === 'known'
+      ? formatPlatformTableRelativeTimeValue(new Date(polled.ms), { now })
+      : polled.state === 'invalid'
+        ? 'Unknown'
+        : '';
   return compactDetailSections([
     // A failed job's error is the drawer summary; any other job's error
     // still leads, because it is why the job may fail next.
@@ -474,6 +651,9 @@ const buildReplicationJobSections = (
         makeDetailRow('Guest', guestLabel === '—' ? '' : guestLabel),
         makeDetailRow('Job ID', job.jobId || job.id),
         makeDetailRow('Connection', job.instance, { wrap: true }),
+        classification === 'stale'
+          ? makeDetailRow('Last reported', 'Healthy', { tone: 'muted' })
+          : null,
         classification === 'unknown'
           ? makeDetailRow('Reported outcome', job.lastSyncStatus?.trim() || 'Not reported', {
               wrap: true,
@@ -521,6 +701,11 @@ const buildReplicationJobSections = (
             emptyText: '',
           }),
         ),
+        polledText
+          ? makeDetailRow('Last polled', polledText, {
+              tone: polled.state === 'invalid' ? 'muted' : staleNotice ? 'warning' : undefined,
+            })
+          : null,
       ]),
     },
   ]);
@@ -531,6 +716,7 @@ const buildReplicationJobSections = (
 const ReplicationJobDetail: Component<{
   job: ReplicationJob;
   classification: ReplicationStatusFilter;
+  staleNotice: ReplicationStaleNotice | null;
   guestLabel: string;
   now: number;
   onClose: () => void;
@@ -560,11 +746,20 @@ const ReplicationJobDetail: Component<{
       sections={buildReplicationJobSections(
         props.job,
         props.classification,
+        props.staleNotice,
         props.guestLabel,
         props.now,
       )}
       onClose={props.onClose}
-    />
+    >
+      <Show when={props.staleNotice}>
+        {(notice) => (
+          <InlineNotice tone="warning" role="status" data-testid="replication-job-stale-notice">
+            <span class="font-semibold">{notice().badge}.</span> {notice().detail}
+          </InlineNotice>
+        )}
+      </Show>
+    </InlineDetailPanel>
   );
 };
 
@@ -585,6 +780,7 @@ export async function fetchReplicationJobs(signal?: AbortSignal): Promise<Replic
 // Replication tab's visibility), so this table is purely presentational.
 export const ProxmoxReplicationTable: Component<{
   jobs: ReplicationJob[] | undefined;
+  nodes?: Resource[];
   error: unknown;
   onRetry: () => void;
   emptyIcon: JSX.Element;
@@ -598,6 +794,16 @@ export const ProxmoxReplicationTable: Component<{
   // the shared clock to keep moving while a job's timestamps do not change.
   const now = useRelativeTimeNow();
 
+  const staleNoticeByJobId = createMemo(() => {
+    const notices = new Map<string, ReplicationStaleNotice | null>();
+    for (const job of props.jobs ?? []) {
+      notices.set(job.id, getReplicationJobStaleNotice(job, props.nodes));
+    }
+    return notices;
+  });
+  const staleNoticeFor = (job: ReplicationJob): ReplicationStaleNotice | null =>
+    staleNoticeByJobId().get(job.id) ?? null;
+
   const matchingJobs = createMemo(() => {
     const jobs = props.jobs ?? [];
     const { needle, excludes } = splitSearchExclusions(search());
@@ -608,6 +814,7 @@ export const ProxmoxReplicationTable: Component<{
       .map((term) => term.trim())
       .filter(Boolean);
     return jobs.filter((job) => {
+      const staleNotice = staleNoticeFor(job);
       const haystack = [
         job.id,
         job.jobId,
@@ -621,6 +828,7 @@ export const ProxmoxReplicationTable: Component<{
         job.error,
         job.comment,
         replicationJobSearchLabel(job),
+        staleNotice ? `${staleNotice.badge} ${staleNotice.detail}` : '',
       ]
         .filter(Boolean)
         .join(' ')
@@ -637,9 +845,23 @@ export const ProxmoxReplicationTable: Component<{
     });
   });
   const filterByStatus = (want: ReplicationStatusFilter) =>
-    want === 'all' ? matchingJobs() : matchingJobs().filter((job) => classifyJob(job) === want);
+    want === 'all'
+      ? matchingJobs()
+      : matchingJobs().filter((job) => classifyJob(job, staleNoticeFor(job)) === want);
   const filtered = createMemo(() => filterByStatus(status()));
   const countForStatus = (value: ReplicationStatusFilter): number => filterByStatus(value).length;
+  const statusFilterOptions = createMemo(() => {
+    const showStaleChip = countForStatus('stale') > 0 || status() === 'stale';
+    const options = showStaleChip
+      ? [
+          STATUS_FILTER_OPTIONS[0],
+          STATUS_FILTER_OPTIONS[1],
+          STALE_FILTER_OPTION,
+          ...STATUS_FILTER_OPTIONS.slice(2),
+        ]
+      : STATUS_FILTER_OPTIONS;
+    return withPlatformStatusCounts(options, countForStatus);
+  });
 
   const total = createMemo(() => (props.jobs ?? []).length);
   const visible = createMemo(() => filtered().length);
@@ -718,7 +940,7 @@ export const ProxmoxReplicationTable: Component<{
               searchSuggestions={searchSuggestions}
               status={status()}
               onStatusChange={setStatus}
-              statusOptions={withPlatformStatusCounts(STATUS_FILTER_OPTIONS, countForStatus)}
+              statusOptions={statusFilterOptions()}
               visible={visible()}
               total={total()}
               rowNoun="jobs"
@@ -819,8 +1041,9 @@ export const ProxmoxReplicationTable: Component<{
                   <>
                     <PlatformWindowedRows items={filtered} estimatedRowHeight={32}>
                       {(job) => {
-                        const classification = classifyJob(job);
-                        const ind = indicatorFor(classification);
+                        const staleNotice = () => staleNoticeFor(job);
+                        const classification = () => classifyJob(job, staleNotice());
+                        const ind = () => indicatorFor(classification());
                         const last = () => lastSyncFor(job, now());
                         const next = () => nextSyncFor(job, now());
                         const sourceNode = (job.sourceNode ?? '').trim() || '—';
@@ -869,21 +1092,37 @@ export const ProxmoxReplicationTable: Component<{
                               </TableCell>
                               <TableCell
                                 class={`${getPlatformTableCellClassForKind('text')} ${mobilePaddingClass()}`}
+                                title={staleNotice()?.detail ?? ind().label}
                               >
-                                <div class={`flex items-center ${isCompact() ? 'gap-0' : 'gap-2'}`}>
+                                <div
+                                  class={`flex min-w-0 ${isCompact() ? 'flex-col items-start gap-0' : 'items-center gap-1.5'}`}
+                                >
                                   <Show when={!isCompact()}>
                                     <StatusDot
                                       size="sm"
-                                      variant={ind.variant}
-                                      title={ind.label}
+                                      variant={ind().variant}
+                                      title={ind().label}
                                       ariaHidden
                                     />
                                   </Show>
                                   <span
-                                    class={`${isCompact() ? 'text-[10px]' : 'text-[11px]'} font-medium ${ind.tone}`}
+                                    class={`shrink-0 ${isCompact() ? 'text-[10px] leading-tight' : 'text-[11px]'} font-medium ${ind().tone}`}
                                   >
-                                    {ind.label}
+                                    {isCompact()
+                                      ? (ind().compactLabel ?? ind().label)
+                                      : ind().label}
                                   </span>
+                                  <Show when={classification() !== 'stale' ? staleNotice() : null}>
+                                    {(notice) => (
+                                      <span
+                                        data-replication-stale-cue
+                                        class={`truncate font-medium text-amber-700 dark:text-amber-300 ${isCompact() ? 'text-[9px] leading-tight' : 'text-[10px]'}`}
+                                        title={notice().detail}
+                                      >
+                                        {notice().compactBadge}
+                                      </span>
+                                    )}
+                                  </Show>
                                 </div>
                               </TableCell>
                               <Show when={showJob()}>
@@ -1025,7 +1264,8 @@ export const ProxmoxReplicationTable: Component<{
                               >
                                 <ReplicationJobDetail
                                   job={job}
-                                  classification={classification}
+                                  classification={classification()}
+                                  staleNotice={staleNotice()}
                                   guestLabel={guestLabel}
                                   now={now()}
                                   onClose={() => setExpandedJobId(null)}

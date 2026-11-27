@@ -117,6 +117,8 @@ describe('replication inventory wire boundary', () => {
     ['rateLimitMbps', -1],
     ['error', {}],
     ['comment', false],
+    ['lastPolled', {}],
+    ['polledAt', '1793322000'],
   ])('rejects wrongly typed %s (%#) before classification, search or links', (field, value) => {
     expect(() =>
       parseReplicationInventory(payload([{ ...job(), [field as string]: value }])),

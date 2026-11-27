@@ -1,0 +1,45 @@
+{
+  "version": 1,
+  "base_sha": "d11fcd732b320e72e4aa76f7268dd6e3f6728933",
+  "verified_at": "2026-11-27T13:12:55Z",
+  "result": "passed",
+  "changed_paths": [
+    "frontend-modern/src/features/proxmox/ProxmoxPageSurface.tsx",
+    "frontend-modern/src/features/proxmox/ProxmoxReplicationTable.tsx",
+    "frontend-modern/src/features/proxmox/proxmoxReplicationInventory.ts"
+  ],
+  "content_sha256": {
+    "frontend-modern/src/features/proxmox/ProxmoxPageSurface.tsx": "0f4b36a76727f46f57338449689f6fe16e4e07c4ede45359964b77a67c1c35b3",
+    "frontend-modern/src/features/proxmox/ProxmoxReplicationTable.tsx": "fb106b2700e1340a58e194485525e2a0c190943e8e2703a36443e1ce35a49a99",
+    "frontend-modern/src/features/proxmox/proxmoxReplicationInventory.ts": "74c87d4f456a41d7763ceaf586b99097347c13dec5a641fe4cbaa86923a76aa0"
+  },
+  "routes": [
+    "/proxmox/replication"
+  ],
+  "viewports": [
+    {
+      "width": 1440,
+      "height": 940
+    },
+    {
+      "width": 360,
+      "height": 820
+    }
+  ],
+  "browser": {
+    "client": "1.56.1",
+    "chromium": "141.0.7390.37",
+    "webkit": "26.0"
+  },
+  "states": [
+    "Playwright 1.56.1 paired production builds (before 6070e4ac13a9 vs after d11fcd732b32) on desktop Chromium 141.0.7390.37 (1440x940 light) and touch WebKit 26.0 (360x820 dark); all 8 paired captures visually inspected via native read_file image view with 0 console errors, 0 page errors, 0 failed requests, 0 off-origin requests, and 0px horizontal overflow.",
+    "Desktop stale state: PVE source node pve-a stale (18m telemetry_stale, API timeout) with billing-db (last ok), worker-queue (last error, 2 fails), and fresh peer pve-b edge-proxy (ok). billing-db moves from false green Healthy (All 3 / Healthy 2 / Failed 1) to amber Stale data (All 3 / Healthy 1 / Stale 1 / Failed 1); worker-queue preserves red Failed and adds inline amber Stale cue; edge-proxy stays green Healthy; expanded billing-db drawer renders amber header dot, Stale data warning InlineNotice with pve-a age and API timeout reason, Last reported Healthy, and amber Last polled 18m ago.",
+    "Desktop live WebSocket recovery: delivering a rawData frame restoring pve-a to online/healthy while billing-db drawer stays open clears all stale cues, removes the Stale chip and drawer warning banner, and restores Healthy 2 / Failed 1 and green dots without page reload.",
+    "Touch phone dark state (360x820 WebKit): collapsed table keeps all 3 rows at exact 32px height with compact amber Stale for billing-db, stacked red Failed + amber Stale for worker-queue, and green Healthy for edge-proxy; expanded billing-db drawer wraps the amber Stale data warning banner cleanly with 0px horizontal overflow."
+  ],
+  "interactions": [
+    "Loaded /proxmox/replication on desktop light (1440x940), verified filter chips (All 3 / Healthy 1 / Stale 1 / Failed 1), expanded job 100-0 (billing-db) detail drawer, and verified stale warning banner, Last reported, and Last polled.",
+    "Delivered live WebSocket rawData recovery frame for pve-a while job 100-0 drawer remained open and verified immediate clearance of stale cues and banner without reload.",
+    "Loaded /proxmox/replication on touch phone dark (360x820 WebKit), verified 32px row heights and 0px horizontal overflow across all three rows, tapped the billing-db row to expand its drawer, and verified legible wrapped warning banner."
+  ]
+}

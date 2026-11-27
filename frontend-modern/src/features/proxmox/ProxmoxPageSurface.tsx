@@ -487,6 +487,7 @@ export function ProxmoxPageSurface() {
             <Show when={activeTab() === 'replication'}>
               <ProxmoxReplicationTable
                 jobs={replicationJobs.resolvedOnce() ? replicationJobs.value() : undefined}
+                nodes={model().pveNodes}
                 error={replicationJobs.error() ?? undefined}
                 onRetry={() => void replicationJobs.refetch()}
                 emptyIcon={<ProxmoxIcon class="h-6 w-6 text-slate-400" />}

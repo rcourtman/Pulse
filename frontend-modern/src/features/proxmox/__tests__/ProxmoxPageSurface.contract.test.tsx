@@ -166,10 +166,16 @@ vi.mock('../ProxmoxNodesTable', () => ({
 }));
 
 vi.mock('../ProxmoxReplicationTable', () => ({
-  ProxmoxReplicationTable: (props: { jobs?: unknown[]; error?: unknown; onRetry: () => void }) => (
+  ProxmoxReplicationTable: (props: {
+    jobs?: unknown[];
+    nodes?: Resource[];
+    error?: unknown;
+    onRetry: () => void;
+  }) => (
     <div
       data-testid="replication-table"
       data-jobs={props.jobs === undefined ? 'loading' : props.jobs.length}
+      data-nodes={props.nodes?.length ?? 0}
       data-error={props.error ? 'yes' : 'no'}
     >
       <button type="button" onClick={() => props.onRetry()}>
@@ -1013,6 +1019,7 @@ describe('ProxmoxPageSurface contract', () => {
       // Counts are known but the first read is pending: a direct link stays put.
       expect(tabs).toHaveAttribute('data-active', 'replication');
       expect(screen.getByTestId('replication-table')).toHaveAttribute('data-jobs', 'loading');
+      expect(screen.getByTestId('replication-table')).toHaveAttribute('data-nodes', '1');
 
       resolveFirstRead([{ id: 'job-1' }]);
       await waitFor(() =>
