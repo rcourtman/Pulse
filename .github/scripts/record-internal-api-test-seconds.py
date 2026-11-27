@@ -41,6 +41,7 @@ JSON (for example a vet or build error) fails the step.
 
 from __future__ import annotations
 
+from datetime import datetime
 import json
 from pathlib import Path
 import re
@@ -53,10 +54,23 @@ from collections import defaultdict
 MAX_FAILURE_IDENTIFIERS = 256
 MAX_IDENTIFIER_LENGTH = 256
 SOURCE_TEST_NAME = re.compile(r"(?:Test|Fuzz|Example)[A-Za-z0-9_]*")
+TIMESTAMP_FRACTION = re.compile(r"(\.\d+)(?=[+-]\d\d:\d\d$)")
 # Retain diagnostics, not an output-sized Python heap. Short roots stay in
 # memory; noisy roots spill to an anonymous, private temporary file. This is
 # a storage threshold, never an output limit or a different coverage verdict.
 HELD_OUTPUT_MEMORY_BYTES = 64 * 1024
+
+
+def parse_event_time(value: object) -> float | None:
+    """Parse Go's RFC3339Nano test event timestamp, ignoring absent/invalid values."""
+    if not isinstance(value, str) or not value:
+        return None
+    text = value[:-1] + "+00:00" if value.endswith("Z") else value
+    text = TIMESTAMP_FRACTION.sub(lambda match: match.group(1)[:7], text, count=1)
+    try:
+        return datetime.fromisoformat(text).timestamp()
+    except ValueError:
+        return None
 
 
 def bounded_identifiers(names: set[str]) -> dict[str, object]:
@@ -107,6 +121,17 @@ def main() -> int:
 
     running: set[str] = set()
     seconds: dict[str, float] = {}
+    # Go reports a parent test's Elapsed before waiting for parallel subtests,
+    # leaving parents that spawn t.Parallel() subtests near 0.00s even when
+    # their subtests consume tens of seconds of package wall time. Track active
+    # leaf execution slots across event timestamps so those roots retain their
+    # fractional wall-clock cost without double-counting concurrent roots.
+    active_parents: set[str] = set()
+    active_children: dict[str, set[str]] = defaultdict(set)
+    live_children: dict[str, set[str]] = defaultdict(set)
+    has_paused_child: set[str] = set()
+    slot_seconds: dict[str, float] = defaultdict(float)
+    last_event_time: float | None = None
     package_seconds = None
     failed = False
     failed_tests: set[str] = set()
@@ -122,6 +147,35 @@ def main() -> int:
     invalid_events = 0
     unexpected_package_events = 0
     out = sys.stdout
+
+    def advance_active_slots(timestamp: float | None) -> None:
+        nonlocal last_event_time
+        if timestamp is None:
+            return
+        if last_event_time is not None and timestamp > last_event_time:
+            dt = timestamp - last_event_time
+            weights: dict[str, int] = {}
+            for root in active_parents | active_children.keys():
+                active = active_children.get(root)
+                live = live_children.get(root)
+                leaf_count = 0
+                if active:
+                    leaf_count = sum(
+                        1 for child in active
+                        if not live or not any(other.startswith(child + "/") for other in live)
+                    )
+                if root in has_paused_child and leaf_count > 0:
+                    weights[root] = leaf_count
+                elif root in active_parents and root not in has_paused_child:
+                    weights[root] = 1
+                elif leaf_count > 0:
+                    weights[root] = leaf_count
+            total_weight = sum(weights.values())
+            if total_weight > 0:
+                for root, weight in weights.items():
+                    slot_seconds[root] += dt * (weight / total_weight)
+        if last_event_time is None or timestamp > last_event_time:
+            last_event_time = timestamp
 
     for raw in sys.stdin:
         try:
@@ -169,6 +223,7 @@ def main() -> int:
                 out.write(text)
                 out.flush()
             continue
+        advance_active_slots(parse_event_time(event.get("Time")))
         top = test.split("/", 1)[0]
 
         if not top:
@@ -197,11 +252,34 @@ def main() -> int:
                 parents_with_skipped_subtests.add(top)
                 skipped_subtest_events += 1
 
-        if action == "run" and test == top:
-            if top in started:
-                invalid_events += 1
-            started.add(top)
-            running.add(top)
+        if test == top:
+            if action == "run":
+                if top in started:
+                    invalid_events += 1
+                started.add(top)
+                running.add(top)
+                active_parents.add(top)
+            elif action == "pause":
+                active_parents.discard(top)
+            elif action == "cont":
+                active_parents.add(top)
+        else:
+            if action == "run":
+                active_children[top].add(test)
+                live_children[top].add(test)
+            elif action == "pause":
+                has_paused_child.add(top)
+                active_children[top].discard(test)
+            elif action == "cont":
+                active_children[top].add(test)
+                live_children[top].add(test)
+            elif action in ("pass", "fail", "skip"):
+                active_children[top].discard(test)
+                live_children[top].discard(test)
+                if not active_children[top]:
+                    active_children.pop(top, None)
+                if not live_children[top]:
+                    live_children.pop(top, None)
         if text:
             held[top].write(text)
         if test != top or action not in ("pass", "fail", "skip"):
@@ -210,6 +288,9 @@ def main() -> int:
         if top not in running or top in completed:
             invalid_events += 1
         running.discard(top)
+        active_parents.discard(top)
+        active_children.pop(top, None)
+        live_children.pop(top, None)
         completed.add(top)
         finish_output(top, show=action == "fail")
         if action == "fail":
@@ -218,7 +299,15 @@ def main() -> int:
             out.flush()
         elapsed = event.get("Elapsed")
         if isinstance(elapsed, (int, float)):
-            seconds[top] = float(elapsed)
+            recorded = float(elapsed)
+            if top in has_paused_child and slot_seconds.get(top, 0.0) > recorded:
+                recorded = slot_seconds[top]
+            seconds[top] = recorded
+
+    if package_seconds is not None and package_seconds > 0:
+        for top in has_paused_child:
+            if top in seconds and seconds[top] > package_seconds:
+                seconds[top] = package_seconds
 
     for top in sorted(running):
         failed = True

@@ -19,8 +19,10 @@ ROOT = Path(__file__).resolve().parents[2]
 RECORDER = ROOT / '.github/scripts/record-internal-api-test-seconds.py'
 
 
-def event(action, test=None, output=None, elapsed=None):
+def event(action, test=None, output=None, elapsed=None, time=None):
     value = {'Action': action, 'Package': 'example/internal/api'}
+    if time is not None:
+        value['Time'] = time
     if test is not None:
         value['Test'] = test
     if output is not None:
@@ -588,6 +590,130 @@ func ExampleFixture() { fmt.Println("fixture")
             self.assertEqual(index['missing_selected_tests']['observed_count'], 0)
             print('Real Go race JSON: complete pass/skip/fuzz/example accepted; '
                   'producer-zero omission, truncated completion and actual failure rejected.')
+
+    def test_parallel_subtests_record_fractional_active_wall_seconds(self):
+        # Non-parallel parent whose parallel subtests run for 10s while Go
+        # reports parent Elapsed=0.00, plus two concurrent parallel parents
+        # splitting a 12s window with nested subtests and a sequential sibling.
+        t = lambda s: f'2026-11-27T05:00:{s:09.6f}Z'
+        stream = (
+            event('start', time=t(0)) +
+            # Sequential test: keeps Go Elapsed verbatim (not wall delta).
+            event('run', 'TestSeq', time=t(0)) +
+            event('pass', 'TestSeq', elapsed=2.50, time=t(3)) +
+            # Non-parallel parent with 2 parallel subtests spanning 10s.
+            event('run', 'TestSubParent', time=t(3)) +
+            event('run', 'TestSubParent/a', time=t(3)) +
+            event('pause', 'TestSubParent/a', time=t(3)) +
+            event('run', 'TestSubParent/b', time=t(3)) +
+            event('pause', 'TestSubParent/b', time=t(3)) +
+            event('cont', 'TestSubParent/a', time=t(3)) +
+            event('cont', 'TestSubParent/b', time=t(3)) +
+            event('pass', 'TestSubParent/a', elapsed=6.0, time=t(9)) +
+            event('pass', 'TestSubParent/b', elapsed=10.0, time=t(13)) +
+            event('pass', 'TestSubParent', elapsed=0.00, time=t(13)) +
+            # Two parallel parents sharing a 12s window: ParentA has 1 leaf
+            # active (under an intermediate group), ParentB has 2 leaves active.
+            # ParentA gets 12 * (1/3) = 4.00s; ParentB gets 12 * (2/3) = 8.00s.
+            event('run', 'TestParA', time=t(13)) +
+            event('pause', 'TestParA', time=t(13)) +
+            event('run', 'TestParB', time=t(13)) +
+            event('pause', 'TestParB', time=t(13)) +
+            event('cont', 'TestParA', time=t(13)) +
+            event('run', 'TestParA/group', time=t(13)) +
+            event('run', 'TestParA/group/leaf', time=t(13)) +
+            event('pause', 'TestParA/group/leaf', time=t(13)) +
+            event('cont', 'TestParB', time=t(13)) +
+            event('run', 'TestParB/x', time=t(13)) +
+            event('pause', 'TestParB/x', time=t(13)) +
+            event('run', 'TestParB/y', time=t(13)) +
+            event('pause', 'TestParB/y', time=t(13)) +
+            event('cont', 'TestParA/group/leaf', time=t(13)) +
+            event('cont', 'TestParB/x', time=t(13)) +
+            event('cont', 'TestParB/y', time=t(13)) +
+            # Backward/malformed timestamps mid-window must not corrupt or crash.
+            event('output', 'TestParB/x', 'log\n', time=t(10)) +
+            event('output', 'TestParB/y', 'log\n', time='not-a-timestamp') +
+            event('pass', 'TestParA/group/leaf', elapsed=12.0, time=t(25)) +
+            event('pass', 'TestParA/group', elapsed=0.0, time=t(25)) +
+            event('pass', 'TestParA', elapsed=0.00, time=t(25)) +
+            event('pass', 'TestParB/x', elapsed=12.0, time=t(25)) +
+            event('pass', 'TestParB/y', elapsed=12.0, time=t(25)) +
+            event('pass', 'TestParB', elapsed=0.00, time=t(25)) +
+            event('pass', elapsed=25.0, time=t(25))
+        )
+        result, seconds, index, _ = self.record(
+            stream, ['TestSeq', 'TestSubParent', 'TestParA', 'TestParB'])
+        self.assertEqual(result.returncode, 0, result.stderr)
+        self.assertEqual(index['completed_top_level_test_count'], 4)
+        self.assertEqual(
+            seconds,
+            '# package-seconds 25.00\n'
+            'TestSeq 2.50\n'
+            'TestSubParent 10.00\n'
+            'TestParA 4.00\n'
+            'TestParB 8.00\n',
+        )
+
+    def test_parallel_subtest_wall_time_is_clamped_to_package_seconds(self):
+        stream = (
+            event('start', time='2026-11-27T05:00:00.000000000Z') +
+            event('run', 'TestSkew', time='2026-11-27T05:00:00.000000000Z') +
+            event('run', 'TestSkew/sub', time='2026-11-27T05:00:00.000000000Z') +
+            event('pause', 'TestSkew/sub', time='2026-11-27T05:00:00.000000000Z') +
+            event('cont', 'TestSkew/sub', time='2026-11-27T05:00:00.000000000Z') +
+            # Simulated 300s forward clock step during a 1.50s package run.
+            event('pass', 'TestSkew/sub', elapsed=1.0, time='2026-11-27T05:05:00.000000000Z') +
+            event('pass', 'TestSkew', elapsed=0.00, time='2026-11-27T05:05:00.000000000Z') +
+            event('pass', elapsed=1.50, time='2026-11-27T05:05:00.000000000Z')
+        )
+        result, seconds, _, _ = self.record(stream, ['TestSkew'])
+        self.assertEqual(result.returncode, 0, result.stderr)
+        self.assertEqual(seconds, '# package-seconds 1.50\nTestSkew 1.50\n')
+
+    @unittest.skipUnless(shutil.which('go'), 'real Go JSON requires the declared compiler')
+    def test_real_race_json_captures_parallel_subtest_wall_seconds(self):
+        with tempfile.TemporaryDirectory() as directory:
+            root = Path(directory)
+            package = 'example.invalid/parallelsubfixture'
+            (root / 'go.mod').write_text(f'module {package}\n\ngo 1.24\n')
+            (root / 'fixture_test.go').write_text('''package parallelsubfixture
+import ("testing"; "time")
+func TestParallelSubtests(t *testing.T) {
+    for _, name := range []string{"a", "b"} {
+        t.Run(name, func(t *testing.T) {
+            t.Parallel()
+            time.Sleep(250 * time.Millisecond)
+        })
+    }
+}
+''')
+            env = {**os.environ, 'GOWORK': 'off', 'GOPROXY': 'off',
+                   'GOTOOLCHAIN': 'local', 'GOMAXPROCS': '1'}
+            run = subprocess.run(
+                ['go', 'test', '-race', '-count=1', '-timeout', '30s', '-json', '.'],
+                cwd=root, env=env, text=True, capture_output=True, timeout=120)
+            self.assertEqual(run.returncode, 0, run.stderr)
+            raw_parent = [
+                json.loads(line)['Elapsed']
+                for line in run.stdout.splitlines()
+                if json.loads(line).get('Test') == 'TestParallelSubtests'
+                and json.loads(line).get('Action') == 'pass'
+            ][0]
+            self.assertLess(raw_parent, 0.15)
+            result, seconds, _, _ = self.record(run.stdout, ['TestParallelSubtests'], package)
+            self.assertEqual(result.returncode, 0, result.stderr)
+            parsed = {}
+            pkg_seconds = None
+            for line in seconds.splitlines():
+                fields = line.split()
+                if fields[:2] == ['#', 'package-seconds']:
+                    pkg_seconds = float(fields[2])
+                elif len(fields) == 2:
+                    parsed[fields[0]] = float(fields[1])
+            self.assertIsNotNone(pkg_seconds)
+            self.assertGreaterEqual(parsed['TestParallelSubtests'], 0.40)
+            self.assertLessEqual(parsed['TestParallelSubtests'], pkg_seconds)
 
 
 if __name__ == '__main__':
