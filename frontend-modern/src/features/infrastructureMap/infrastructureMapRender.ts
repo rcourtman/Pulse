@@ -208,12 +208,14 @@ const lineToSvg = (
   const d = node.points
     .map(([x, y], index) => `${index === 0 ? 'M' : 'L'}${n(x)} ${n(y)}`)
     .join('');
-  const path = `<path d="${d}" fill="none" stroke="${colour}" stroke-width="1.5" stroke-linejoin="round"${
+  const strokeWidth = node.strokeWidth ?? 1.5;
+  const flowWidth = Math.max(2, strokeWidth + 0.5);
+  const path = `<path d="${d}" fill="none" stroke="${colour}" stroke-width="${n(strokeWidth)}" stroke-linejoin="round"${
     node.dashed ? ' stroke-dasharray="5 4"' : ''
   }/>`;
   const flow =
     live && node.activity && !node.dashed
-      ? `<path d="${d}" fill="none" stroke="${colour}" stroke-width="2" stroke-dasharray="5 10" stroke-linecap="round" stroke-linejoin="round" class="pulse-map-flow pulse-map-flow-${node.activity}"/>`
+      ? `<path d="${d}" fill="none" stroke="${colour}" stroke-width="${n(flowWidth)}" stroke-dasharray="5 10" stroke-linecap="round" stroke-linejoin="round" class="pulse-map-flow pulse-map-flow-${node.activity}"/>`
       : '';
   if (!node.arrow) return path + flow;
   const [tipX, tipY] = node.points[node.points.length - 1];
@@ -240,8 +242,10 @@ const nodeToSvg = (node: SceneNode, palette: MapPalette, live: boolean): string 
         return `<rect x="${n(node.x)}" y="${n(node.y)}" width="${n(node.w)}" height="${n(node.h)}" rx="${n(node.r)}" fill="${palette.accent}" fill-opacity="${ACTIVITY_FILL_OPACITY[node.activity]}" stroke="${palette.accent}" stroke-opacity="${ACTIVITY_STROKE_OPACITY[node.activity]}" stroke-width="1.25" class="pulse-map-active pulse-map-active-${node.activity}"/>`;
       }
       return `<rect x="${n(node.x)}" y="${n(node.y)}" width="${n(node.w)}" height="${n(node.h)}" rx="${n(node.r)}" fill="${palette[node.fill]}"${
-        node.stroke ? ` stroke="${palette[node.stroke]}"` : ''
-      }${node.dashed ? ' stroke-dasharray="4 3"' : ''}/>`;
+        node.opacity !== undefined ? ` fill-opacity="${n(node.opacity)}"` : ''
+      }${node.stroke ? ` stroke="${palette[node.stroke]}"` : ''}${
+        node.dashed ? ' stroke-dasharray="4 3"' : ''
+      }/>`;
     case 'text':
       return `<text x="${n(node.x)}" y="${n(node.y)}" font-size="${n(node.size)}" font-weight="${node.weight}" fill="${palette[node.fill]}"${
         node.anchor === 'end'
@@ -365,6 +369,7 @@ export function renderMapLinkRings(
   const halos: string[] = [];
   const arcs: string[] = [];
   const dots: string[] = [];
+  const labelPills: string[] = [];
   if (source) {
     const sx = source.x + source.w / 2;
     const sy = source.y + source.h / 2;
@@ -407,6 +412,20 @@ export function renderMapLinkRings(
       dots.push(
         `<circle cx="${n(tx)}" cy="${n(ty)}" r="2.5" fill="${palette.accent}" fill-opacity="0.85"/>`,
       );
+      const rawLabel = of.linkLabels?.[target.hit.id]?.trim();
+      if (drawnTargets.length <= 6 && rawLabel) {
+        const text = rawLabel.length > 24 ? `${rawLabel.slice(0, 23).trimEnd()}…` : rawLabel;
+        const pillW = Math.max(36, text.length * 5.6 + 12);
+        const pillH = 15;
+        const bx = 0.25 * sx + 0.5 * cx + 0.25 * tx;
+        const by = 0.25 * sy + 0.5 * cy + 0.25 * ty;
+        labelPills.push(
+          `<g class="pulse-map-link-label">` +
+            `<rect x="${n(bx - pillW / 2)}" y="${n(by - pillH / 2)}" width="${n(pillW)}" height="${pillH}" rx="4" fill="${palette.surface}" stroke="${palette.accent}" stroke-opacity="0.55" stroke-width="1"/>` +
+            `<text x="${n(bx)}" y="${n(by + 3.2)}" font-size="9.5" font-weight="500" text-anchor="middle" fill="${palette.text}">${escapeXml(text)}</text>` +
+            `</g>`,
+        );
+      }
     });
     if (dots.length > 0) {
       dots.unshift(
@@ -422,7 +441,7 @@ export function renderMapLinkRings(
     )
     .join('');
 
-  return `${halos.join('')}${arcs.join('')}${dots.join('')}${rings}`;
+  return `${halos.join('')}${arcs.join('')}${dots.join('')}${rings}${labelPills.join('')}`;
 }
 
 /**

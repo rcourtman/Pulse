@@ -6,6 +6,7 @@ import {
   layoutServiceDiagram,
 } from '../infrastructureMapDiagram';
 import { buildMapExportSvg } from '../infrastructureMapExport';
+import { layoutHostDiagram, strokeWidthForLinkSpeed } from '../infrastructureMapHostDiagram';
 import {
   fitMapName,
   nextMapHitIndex,
@@ -886,7 +887,7 @@ describe('layoutServiceDiagram', () => {
       const machine = hitOf(scene, 'tower');
       if (!machine) throw new Error('the machine should be drawn');
       const rings = renderMapLinkRings(scene, from.hit, palette);
-      expect(rings.match(/<rect /g)).toHaveLength(2);
+      expect(rings.match(/stroke-width="1\.5"\/>/g)).toHaveLength(2);
       expect(rings).toContain(`x="${to.x}" y="${to.y}"`);
       expect(rings).toContain(`x="${machine.x}" y="${machine.y}"`);
       expect(rings).toContain(`stroke="${palette.accent}"`);
@@ -896,7 +897,7 @@ describe('layoutServiceDiagram', () => {
       const alone = hitOf(scene, 'c-sonarr');
       if (!alone) throw new Error('the tile should be drawn');
       const lone = renderMapLinkRings(scene, alone.hit, palette);
-      expect(lone.match(/<rect /g)).toHaveLength(1);
+      expect(lone.match(/stroke-width="1\.5"\/>/g)).toHaveLength(1);
       expect(lone).toContain(`x="${machine.x}" y="${machine.y}"`);
       expect(renderMapLinkRings(scene, to.hit, palette)).not.toBe('');
       // The page has one empty layer for them, which the pointer passes through.
@@ -1829,9 +1830,11 @@ describe('layoutServiceDiagram', () => {
       );
       expect(liveOverlay).toContain('stroke-dasharray="4 10"');
 
-      // Unmonitored gateway hover draws 1 ring, 1 halo, and 1 curved arc to its host.
+      // Unmonitored gateway hover draws 1 ring, 1 halo, 1 curved arc, and 1 factual relationship pill.
       const gatewayOverlay = renderMapLinkRings(scene, gatewayHit, palette, { liveTraffic: true });
-      expect(gatewayOverlay.match(/<rect /g)).toHaveLength(1);
+      expect(gatewayOverlay.match(/<rect /g)).toHaveLength(2);
+      expect(gatewayOverlay.match(/class="pulse-map-link-label"/g)).toHaveLength(1);
+      expect(gatewayOverlay).toContain('>gateway</text>');
       expect(gatewayOverlay.match(/class="pulse-map-link-halo"/g)).toHaveLength(1);
       expect(gatewayOverlay.match(/class="pulse-map-link-arc"/g)).toHaveLength(1);
       expect(gatewayOverlay.match(/class="pulse-map-link-flow"/g)).toHaveLength(1);
@@ -1896,6 +1899,912 @@ describe('layoutServiceDiagram', () => {
 
       // Static SVG exports never contain interactive network rings.
       expect(renderMapSceneToSvg(scene, MAP_PALETTES.dark)).not.toContain('pulse-map-network-ring');
+    });
+  });
+
+  describe('layoutHostDiagram and host-framed architectural mode', () => {
+    const richEstate = (): Resource[] => [
+      resource({
+        id: 'pve-1',
+        type: 'agent',
+        name: 'pve-core',
+        platformType: 'proxmox-pve',
+        clusterId: 'homelab',
+        status: 'online',
+        memory: { current: 50, total: 64 * 1024 ** 3, used: 32 * 1024 ** 3 },
+        network: { rxBytes: 40_000_000, txBytes: 10_000_000 },
+        proxmox: {
+          clusterName: 'homelab',
+          cpus: 16,
+          pveVersion: '8.3.2/abc',
+          networkInterfaces: [
+            { name: 'vmbr0', addresses: ['10.30.0.10/24'], speedMbps: 10000, linkUp: true },
+          ],
+        },
+        agent: {
+          defaultGateways: [{ address: '10.30.0.1', interface: 'vmbr0' }],
+          networkInterfaces: [
+            { name: 'vmbr0', addresses: ['10.30.0.10/24'], speedMbps: 10000, linkUp: true },
+          ],
+        },
+      }),
+      resource({
+        id: 'ct-102',
+        type: 'system-container',
+        name: 'jellyfin',
+        platformType: 'proxmox-pve',
+        parentId: 'pve-1',
+        status: 'running',
+        identity: { ips: ['10.30.0.102'] },
+        network: { rxBytes: 12_000_000, txBytes: 3_000_000 },
+        proxmox: { vmid: 102 },
+      }),
+      resource({
+        id: 'vm-105',
+        type: 'vm',
+        name: 'homeassistant',
+        platformType: 'proxmox-pve',
+        parentId: 'pve-1',
+        status: 'running',
+        identity: { ips: ['10.40.0.105'] },
+        proxmox: { vmid: 105 },
+      }),
+      resource({
+        id: 'ct-tunnel',
+        type: 'system-container',
+        name: 'cloudflared',
+        platformType: 'proxmox-pve',
+        parentId: 'pve-1',
+        status: 'running',
+        identity: { ips: ['10.30.0.20'] },
+        proxmox: { vmid: 100 },
+      }),
+      resource({
+        id: 'pool-nvme',
+        type: 'storage',
+        name: 'nvme-pool',
+        platformType: 'proxmox-pve',
+        parentId: 'pve-1',
+        status: 'online',
+        disk: { current: 82, total: 4 * 1024 ** 4, used: Math.round(3.28 * 1024 ** 4) },
+        storage: { type: 'zfspool', vdevLayout: 'mirror' },
+      }),
+      resource({
+        id: 'pool-critical',
+        type: 'storage',
+        name: 'archive-pool',
+        platformType: 'proxmox-pve',
+        parentId: 'pve-1',
+        status: 'online',
+        disk: { current: 94, total: 8 * 1024 ** 4, used: Math.round(7.52 * 1024 ** 4) },
+        storage: { type: 'zfspool', vdevLayout: 'raidz1' },
+      }),
+      resource({
+        id: 'docker-1',
+        type: 'docker-host',
+        name: 'dock-app',
+        platformType: 'docker',
+        status: 'online',
+        docker: {
+          cpus: 8,
+          dockerVersion: '27.3.1',
+          memory: { total: 32 * 1024 ** 3, used: 12 * 1024 ** 3 },
+          networkInterfaces: [
+            { name: 'eno1', addresses: ['10.40.0.30/24'], speedMbps: 2500, linkUp: true },
+          ],
+        },
+      }),
+      resource({
+        id: 'c-sonarr',
+        type: 'app-container',
+        name: 'sonarr',
+        platformType: 'docker',
+        parentId: 'docker-1',
+        status: 'running',
+        identity: { ips: ['10.30.0.31'] },
+        docker: {
+          composeProject: 'media-stack',
+          image: 'lscr.io/linuxserver/sonarr:latest',
+          ports: [{ publicPort: 8989, privatePort: 8989, protocol: 'tcp' }],
+        },
+      }),
+      resource({
+        id: 'c-radarr',
+        type: 'app-container',
+        name: 'radarr',
+        platformType: 'docker',
+        parentId: 'docker-1',
+        status: 'running',
+        identity: { ips: ['10.30.0.32'] },
+        docker: {
+          composeProject: 'media-stack',
+          image: 'lscr.io/linuxserver/radarr:latest',
+          ports: [{ publicPort: 7878, privatePort: 7878, protocol: 'tcp' }],
+        },
+      }),
+      resource({
+        id: 'c-grafana',
+        type: 'app-container',
+        name: 'grafana',
+        platformType: 'docker',
+        parentId: 'docker-1',
+        status: 'running',
+        identity: { ips: ['10.40.0.33'] },
+        docker: {
+          image: 'grafana/grafana:latest',
+        },
+      }),
+      resource({
+        id: 'pbs-store',
+        type: 'storage',
+        name: 'pbs-offsite',
+        platformType: 'proxmox-pve',
+        parentId: 'pve-1',
+        status: 'online',
+        disk: { current: 45, total: 10 * 1024 ** 4, used: Math.round(4.5 * 1024 ** 4) },
+        storage: { type: 'pbs' },
+      }),
+      resource({
+        id: 'chk-web',
+        type: 'network-endpoint',
+        name: 'Public site',
+        status: 'online',
+        availability: {
+          protocol: 'https',
+          applicationStatusCode: 200,
+          available: true,
+          latencyMillis: 24,
+        },
+      }),
+    ];
+
+    it('maps link speeds to connector stroke widths and renders strokeWidth and rect opacity in SVG', () => {
+      expect(strokeWidthForLinkSpeed(10000)).toBe(2.75);
+      expect(strokeWidthForLinkSpeed(25000)).toBe(2.75);
+      expect(strokeWidthForLinkSpeed(2500)).toBe(2.25);
+      expect(strokeWidthForLinkSpeed(1000)).toBe(1.75);
+      expect(strokeWidthForLinkSpeed(100)).toBe(1.25);
+      expect(strokeWidthForLinkSpeed(undefined)).toBe(1.5);
+
+      const miniScene: MapScene = {
+        width: 200,
+        height: 100,
+        nodes: [
+          {
+            kind: 'rect',
+            x: 10,
+            y: 10,
+            w: 80,
+            h: 40,
+            r: 6,
+            fill: 'surfaceAlt',
+            opacity: 0.45,
+            stroke: 'border',
+          },
+          {
+            kind: 'line',
+            points: [
+              [10, 60],
+              [120, 60],
+            ],
+            tone: 'accent',
+            strokeWidth: 2.75,
+            activity: 'high',
+          },
+        ],
+      };
+
+      const staticSvg = renderMapSceneToSvg(miniScene, MAP_PALETTES.dark);
+      expect(staticSvg).toContain('fill-opacity="0.45"');
+      expect(staticSvg).toContain('stroke-width="2.75"');
+      expect(staticSvg).not.toContain('pulse-map-flow');
+
+      const liveBody = renderMapSceneBody(miniScene, MAP_PAGE_PALETTES.dark, () => null);
+      expect(liveBody).toContain('fill-opacity="0.45"');
+      expect(liveBody).toContain('stroke-width="2.75"');
+      expect(liveBody).toContain('stroke-width="3.25"');
+    });
+
+    it('renders host frames with hardware specs, VMID, last octet, VLAN stripes, Compose stacks, storage bars, and speed drops', () => {
+      const diagram = buildServiceDiagram(buildInfrastructureMapModel(richEstate()));
+      const scene = layoutHostDiagram(diagram, {
+        width: 1400,
+        density: 'names',
+        liveTraffic: true,
+      });
+      const drawn = texts(scene);
+
+      // Host headers with hardware specs, cluster name, and live speed
+      expect(drawn).toContain('pve-core');
+      expect(drawn).toContain('· homelab');
+      expect(
+        drawn.some(
+          (text) => text.includes('16c') && text.includes('64 GB') && text.includes('PVE 8.3'),
+        ),
+      ).toBe(true);
+      expect(drawn).toContain('dock-app');
+      expect(
+        drawn.some(
+          (text) => text.includes('8c') && text.includes('32 GB') && text.includes('Docker 27.3'),
+        ),
+      ).toBe(true);
+
+      // Horizontal service cards show VMID badges and last IPv4 octets
+      expect(drawn).toContain('CT 102');
+      expect(drawn).toContain('.102');
+      expect(drawn).toContain('VM 105');
+      expect(drawn).toContain('.105');
+
+      // Left VLAN accent stripes (3.5px wide) drawn when multiple networks exist
+      const vlanStripes = ofKind(scene, 'rect').filter(
+        (node) => node.w === 3.5 && node.h === 36 && node.fill.startsWith('net'),
+      );
+      expect(vlanStripes.length).toBeGreaterThanOrEqual(3);
+
+      // Host header single-network left accent bar (3px wide, 52px header minus 8px)
+      const hostBars = ofKind(scene, 'rect').filter(
+        (node) => node.w === 3 && node.h === 44 && node.fill.startsWith('net'),
+      );
+      expect(hostBars.length).toBeGreaterThanOrEqual(1);
+
+      // Compose stack sub-box drawn with uppercase label and container count
+      expect(drawn).toContain('MEDIA-STACK');
+      expect(drawn).toContain('sonarr');
+      expect(drawn).toContain('radarr');
+
+      // Inline storage pool usage bars with track, severity fills, and percentages
+      expect(drawn).toContain('STORAGE');
+      expect(drawn).toContain('nvme-pool');
+      expect(drawn).toContain('82%');
+      expect(drawn).toContain('archive-pool');
+      expect(drawn).toContain('94%');
+      const barFills = ofKind(scene, 'rect').filter(
+        (node) =>
+          node.h === 6 &&
+          (node.fill === 'attention' || node.fill === 'critical' || node.fill === 'ok'),
+      );
+      expect(barFills.some((node) => node.fill === 'attention')).toBe(true);
+      expect(barFills.some((node) => node.fill === 'critical')).toBe(true);
+      expect(barFills.some((node) => node.fill === 'ok')).toBe(true);
+
+      // Link speed pills and stroke widths on host drops + network pills
+      expect(drawn).toContain('10G');
+      expect(drawn).toContain('2.5G');
+      expect(drawn.some((text) => text.includes('10.30.0.0/24') && text.includes('10G'))).toBe(
+        true,
+      );
+      const lines = ofKind(scene, 'line');
+      expect(lines.some((node) => node.strokeWidth === 2.75)).toBe(true);
+      expect(lines.some((node) => node.strokeWidth === 2.25)).toBe(true);
+
+      // Bottom layer renders backups and standalone checks with probe summary + latency
+      expect(drawn).toContain('BACKUPS');
+      expect(drawn).toContain('CHECKS');
+      expect(drawn).toContain('backups');
+      expect(drawn).toContain('checks');
+      expect(drawn.some((text) => text.includes('HTTPS 200') && text.includes('24 ms'))).toBe(true);
+
+      // Host header hit carries enriched metadata and wired links to guests and pools
+      const hostHit = ofKind(scene, 'hit').find((node) => node.hit.id === 'pve-1')?.hit;
+      expect(hostHit).toMatchObject({
+        cpuCores: 16,
+        versionLabel: 'PVE 8.3',
+        linkSpeedMbps: 10000,
+        navigable: true,
+      });
+      expect(hostHit?.linked).toContain('ct-102');
+      expect(hostHit?.linked).toContain('pool-nvme');
+
+      const ctHit = ofKind(scene, 'hit').find((node) => node.hit.id === 'ct-102')?.hit;
+      expect(ctHit?.vmid).toBe(102);
+
+      const poolHit = ofKind(scene, 'hit').find((node) => node.hit.id === 'pool-nvme')?.hit;
+      expect(poolHit).toMatchObject({
+        usedPercent: expect.closeTo(82, 5),
+        vdevLayout: 'mirror',
+      });
+    });
+
+    it('draws compact 40x40 icon tiles inside host frames in marks density and handles overflow bars', () => {
+      const manyGuests = Array.from({ length: 10 }, (_, index) =>
+        guest(`svc-${index}`, {
+          parentId: 'pve-1',
+          identity: { ips: [`10.30.0.${50 + index}`] },
+          proxmox: { vmid: 200 + index },
+        }),
+      );
+      const resources = [
+        resource({
+          id: 'pve-1',
+          type: 'agent',
+          name: 'pve-big',
+          platformType: 'proxmox-pve',
+          proxmox: { cpus: 32, pveVersion: '8.3.1' },
+        }),
+        ...manyGuests,
+      ];
+      const diagram = buildServiceDiagram(buildInfrastructureMapModel(resources), {
+        maxTilesPerGroup: 6,
+      });
+
+      const namedScene = layoutHostDiagram(diagram, { width: 1400, density: 'names' });
+      const compactScene = layoutHostDiagram(diagram, { width: 1400, density: 'marks' });
+
+      expect(compactScene.height).toBeLessThan(namedScene.height);
+      expect(texts(compactScene)).toContain('pve-big');
+      expect(texts(compactScene)).not.toContain('svc-0');
+      expect(
+        ofKind(compactScene, 'hit').filter((node) => node.w === 40 && node.h === 40).length,
+      ).toBe(6);
+
+      // Overflow bar opens the host frame drawer group (`host:pve-1`)
+      const overflowHit = ofKind(namedScene, 'hit').find(
+        (node) =>
+          node.hit.inspectTarget?.kind === 'group' &&
+          node.hit.inspectTarget.groupKey === 'host:pve-1',
+      );
+      expect(overflowHit).toBeDefined();
+      expect(texts(namedScene)).toContain('+4 more');
+    });
+
+    it('strips names, IPv4 octets, VMIDs, and Compose stack names under Hide names', () => {
+      const hidden = anonymizeInfrastructureMapModel(buildInfrastructureMapModel(richEstate()));
+      const diagram = buildServiceDiagram(hidden);
+      const scene = layoutHostDiagram(diagram, { width: 1400, density: 'names' });
+      const drawn = texts(scene);
+      const joined = drawn.join(' ');
+
+      expect(joined).not.toContain('pve-core');
+      expect(joined).not.toContain('dock-app');
+      expect(joined).not.toContain('media-stack');
+      expect(joined).not.toContain('MEDIA-STACK');
+      expect(joined).not.toContain('CT 102');
+      expect(joined).not.toContain('VM 105');
+      expect(drawn.some((text) => /^\.\d{1,3}$/.test(text))).toBe(false);
+    });
+
+    it('renders cleanly for checks-only estates with no monitored hosts and stays inside bounds at all widths', () => {
+      const checksOnly: Resource[] = [
+        resource({
+          id: 'chk-1',
+          type: 'network-endpoint',
+          name: 'API health',
+          status: 'online',
+          identity: { ips: ['10.20.0.5'] },
+          availability: {
+            protocol: 'https',
+            applicationStatusCode: 200,
+            available: true,
+            latencyMillis: 12,
+          },
+        }),
+        resource({
+          id: 'chk-2',
+          type: 'network-endpoint',
+          name: 'DNS check',
+          status: 'online',
+          identity: { ips: ['10.20.0.6'] },
+          availability: { protocol: 'tcp', available: true, latencyMillis: 5 },
+        }),
+      ];
+      const checksDiagram = buildServiceDiagram(buildInfrastructureMapModel(checksOnly));
+      const checksScene = layoutHostDiagram(checksDiagram, { width: 900, density: 'names' });
+      expect(texts(checksScene)).toContain('CHECKS');
+      expect(texts(checksScene)).toContain('API health');
+
+      const diagram = buildServiceDiagram(buildInfrastructureMapModel(richEstate()));
+      for (const width of [320, 375, 768, 1024, 1400, 1900]) {
+        for (const density of ['names', 'marks'] as const) {
+          const scene = layoutHostDiagram(diagram, { width, density, liveTraffic: true });
+          expect(scene.width).toBeLessThanOrEqual(Math.max(width, 300));
+          for (const node of scene.nodes) {
+            if (node.kind === 'rect' || node.kind === 'hit') {
+              expect(node.x, `${width} ${density}`).toBeGreaterThanOrEqual(0);
+              expect(node.x + node.w, `${width} ${density}`).toBeLessThanOrEqual(scene.width + 0.5);
+              expect(node.y + node.h, `${width} ${density}`).toBeLessThanOrEqual(
+                scene.height + 0.5,
+              );
+            }
+            if (node.kind === 'line') {
+              for (const [x, y] of node.points) {
+                expect(x, `${width} ${density}`).toBeGreaterThanOrEqual(0);
+                expect(x, `${width} ${density}`).toBeLessThanOrEqual(scene.width);
+                expect(y, `${width} ${density}`).toBeLessThanOrEqual(scene.height + 0.5);
+              }
+            }
+          }
+        }
+      }
+    });
+
+    it('delegates layoutMode hosts through layoutServiceDiagram, fitServiceDiagram, flowServiceDiagram, and buildMapExportSvg', () => {
+      const model = buildInfrastructureMapModel(richEstate());
+      const diagram = buildServiceDiagram(model);
+
+      const viaDelegate = layoutServiceDiagram(diagram, {
+        width: 1400,
+        density: 'names',
+        layoutMode: 'hosts',
+      });
+      expect(texts(viaDelegate)).toContain('CT 102');
+      expect(texts(viaDelegate)).toContain('MEDIA-STACK');
+
+      const fitted = fitServiceDiagram(diagram, { width: 1400, height: 900 }, 'names', {
+        layoutMode: 'hosts',
+        liveTraffic: true,
+      });
+      expect(texts(fitted.scene)).toContain('pve-core');
+      expect(texts(fitted.scene)).toContain('MEDIA-STACK');
+
+      const flowed = flowServiceDiagram(diagram, 375, 'names', {
+        layoutMode: 'hosts',
+        liveTraffic: false,
+      });
+      expect(texts(flowed.scene)).toContain('pve-core');
+
+      const exported = buildMapExportSvg(model, {
+        title: 'Infrastructure map',
+        density: 'names',
+        palette: MAP_PALETTES.dark,
+        layoutMode: 'hosts',
+        now: new Date('2026-11-27T12:00:00Z'),
+      });
+      expect(exported.svg).toContain('Infrastructure map');
+      expect(exported.svg).toContain('MEDIA-STACK');
+      expect(exported.svg).toContain('CT 102');
+      expect(exported.svg).toContain('stroke-width="2.75"');
+      expect(exported.svg).not.toContain('class=');
+
+      // Roles mode also applies link-speed stroke widths to hardware and network drops
+      const rolesScene = layoutServiceDiagram(diagram, {
+        width: 1400,
+        density: 'names',
+        layoutMode: 'roles',
+      });
+      expect(ofKind(rolesScene, 'line').some((node) => node.strokeWidth === 2.75)).toBe(true);
+    });
+
+    it('wraps 2+ clustered hosts in a dashed cluster container with shared storage footer and keeps bounds across widths', () => {
+      const clusteredEstate: Resource[] = [
+        resource({
+          id: 'pve-a',
+          type: 'agent',
+          name: 'pve-a',
+          platformType: 'proxmox-pve',
+          clusterId: 'homelab',
+          status: 'online',
+          proxmox: {
+            isClusterMember: true,
+            nodeName: 'pve-a',
+            clusterName: 'homelab',
+            cpus: 16,
+            pveVersion: '8.3.1',
+            networkInterfaces: [
+              { name: 'vmbr0', addresses: ['10.30.0.11/24'], speedMbps: 10000, linkUp: true },
+            ],
+          },
+        }),
+        resource({
+          id: 'pve-b',
+          type: 'agent',
+          name: 'pve-b',
+          platformType: 'proxmox-pve',
+          clusterId: 'homelab',
+          status: 'online',
+          proxmox: {
+            isClusterMember: true,
+            nodeName: 'pve-b',
+            clusterName: 'homelab',
+            cpus: 16,
+            pveVersion: '8.3.1',
+            networkInterfaces: [
+              { name: 'vmbr0', addresses: ['10.30.0.12/24'], speedMbps: 10000, linkUp: true },
+            ],
+          },
+        }),
+        guest('jellyfin', {
+          id: 'ct-a1',
+          parentId: 'pve-a',
+          identity: { ips: ['10.30.0.51'] },
+        }),
+        guest('grafana', {
+          id: 'ct-b1',
+          parentId: 'pve-b',
+          identity: { ips: ['10.30.0.52'] },
+        }),
+        resource({
+          id: 'ceph-pool',
+          type: 'storage',
+          name: 'ceph-rbd',
+          platformType: 'proxmox-pve',
+          proxmox: { instance: 'homelab' },
+          status: 'online',
+          disk: { current: 62, total: 12 * 1024 ** 4, used: Math.round(7.44 * 1024 ** 4) },
+          storage: { type: 'rbd', shared: true, nodes: ['pve-a', 'pve-b'] },
+        }),
+      ];
+
+      const diagram = buildServiceDiagram(buildInfrastructureMapModel(clusteredEstate));
+      const desktop = layoutHostDiagram(diagram, { width: 1400, density: 'names' });
+      const drawn = texts(desktop);
+
+      // Dashed cluster container with 0.35 opacity and radius 10
+      const clusterRect = ofKind(desktop, 'rect').find(
+        (node) => node.dashed && node.r === 10 && node.opacity === 0.35,
+      );
+      expect(clusterRect).toBeDefined();
+
+      // Uppercase cluster header naming cluster, type, and node count
+      expect(
+        drawn.some((text) => text.startsWith('HOMELAB · ') && text.endsWith(' · 2 NODES')),
+      ).toBe(true);
+
+      // Cluster-shared storage rendered inside the cluster footer, not duplicated as a separate bottom group
+      expect(drawn).toContain('SHARED STORAGE');
+      expect(drawn).toContain('ceph-rbd');
+      expect(drawn).toContain('62%');
+
+      // Child host frames sit side-by-side inside the cluster on desktop
+      const hitA = ofKind(desktop, 'hit').find((node) => node.hit.id === 'pve-a')!;
+      const hitB = ofKind(desktop, 'hit').find((node) => node.hit.id === 'pve-b')!;
+      expect(hitA.y).toBe(hitB.y);
+      expect(hitA.x).toBeGreaterThan(clusterRect!.x);
+      expect(hitB.x + hitB.w).toBeLessThan(clusterRect!.x + clusterRect!.w);
+
+      // Wraps cleanly inside bounds on mobile and desktop viewports
+      for (const width of [320, 375, 768, 1400]) {
+        const scene = layoutHostDiagram(diagram, { width, density: 'names' });
+        expect(scene.width).toBeLessThanOrEqual(Math.max(width, 300));
+        for (const node of scene.nodes) {
+          if (node.kind === 'rect' || node.kind === 'hit') {
+            expect(node.x, `${width}`).toBeGreaterThanOrEqual(0);
+            expect(node.x + node.w, `${width}`).toBeLessThanOrEqual(scene.width + 0.5);
+            expect(node.y + node.h, `${width}`).toBeLessThanOrEqual(scene.height + 0.5);
+          }
+          if (node.kind === 'line') {
+            for (const [x, y] of node.points) {
+              expect(x, `${width}`).toBeGreaterThanOrEqual(0);
+              expect(x, `${width}`).toBeLessThanOrEqual(scene.width);
+              expect(y, `${width}`).toBeLessThanOrEqual(scene.height + 0.5);
+            }
+          }
+        }
+      }
+    });
+
+    it('renders 2-row host header with CPU/MEM micro-meters, BUSY and DOWN pills, non-overlapping inspect count pill, and VLAN/saturated drop connectors', () => {
+      const resources: Resource[] = [
+        resource({
+          id: 'pve-fast',
+          type: 'agent',
+          name: 'pve-fast',
+          platformType: 'proxmox-pve',
+          status: 'online',
+          cpu: { current: 28 },
+          memory: { current: 58, total: 64 * 1024 ** 3, used: Math.round(37 * 1024 ** 3) },
+          network: { rxBytes: 25_000_000, txBytes: 5_000_000 },
+          proxmox: { cpus: 16, pveVersion: '8.3.1' },
+          agent: {
+            networkInterfaces: [
+              { name: 'eno1', addresses: ['10.30.0.10/24'], speedMbps: 10000, linkUp: true },
+            ],
+          },
+        }),
+        guest('jellyfin', {
+          id: 'ct-jf',
+          parentId: 'pve-fast',
+          identity: { ips: ['10.30.0.50'] },
+        }),
+        resource({
+          id: 'pve-busy',
+          type: 'agent',
+          name: 'pve-busy',
+          platformType: 'proxmox-pve',
+          status: 'online',
+          cpu: { current: 82 },
+          memory: { current: 93, total: 32 * 1024 ** 3, used: Math.round(29.76 * 1024 ** 3) },
+          // 110 MB/s on a 1000 Mbps link = 88% full-duplex peak utilization
+          network: { rxBytes: 110_000_000, txBytes: 4_000_000 },
+          proxmox: { cpus: 8, pveVersion: '8.3.1' },
+          agent: {
+            networkInterfaces: [
+              { name: 'eno1', addresses: ['10.40.0.10/24'], speedMbps: 1000, linkUp: true },
+              { name: 'eno2', addresses: [], speedMbps: 1000, linkUp: false },
+            ],
+          },
+        }),
+        guest('grafana', {
+          id: 'ct-gf',
+          parentId: 'pve-busy',
+          identity: { ips: ['10.40.0.50'] },
+        }),
+      ];
+
+      const diagram = buildServiceDiagram(buildInfrastructureMapModel(resources));
+      const scene = layoutHostDiagram(diagram, {
+        width: 1400,
+        density: 'names',
+        liveTraffic: true,
+      });
+      const drawn = texts(scene);
+
+      // Row 2 CPU & MEM micro-meters (5px tall bars with severity colours)
+      expect(drawn).toContain('CPU');
+      expect(drawn).toContain('28%');
+      expect(drawn).toContain('MEM');
+      expect(drawn).toContain('58%');
+      expect(drawn).toContain('82%');
+      expect(drawn).toContain('93%');
+      const meterFills = ofKind(scene, 'rect').filter(
+        (node) => node.h === 5 && node.fill !== 'border',
+      );
+      expect(meterFills.some((node) => node.fill === 'ok')).toBe(true);
+      expect(meterFills.some((node) => node.fill === 'attention')).toBe(true);
+      expect(meterFills.some((node) => node.fill === 'critical')).toBe(true);
+
+      // Row 1 inline amber BUSY 88% and 1 DOWN pills
+      expect(drawn).toContain('BUSY 88%');
+      expect(drawn).toContain('1 DOWN');
+      const amberPills = ofKind(scene, 'rect').filter(
+        (node) => node.fill === 'attention' && node.opacity === 0.18 && node.stroke === 'attention',
+      );
+      expect(amberPills).toHaveLength(2);
+
+      // Non-overlapping host inspect count pill (`host:pve-fast` and `host:pve-busy`)
+      const fastHit = ofKind(scene, 'hit').find((node) => node.hit.id === 'pve-fast')!;
+      const fastInspect = ofKind(scene, 'inspect').find(
+        (node) => node.target.kind === 'group' && node.target.groupKey === 'host:pve-fast',
+      )!;
+      expect(fastInspect).toBeDefined();
+      expect(fastInspect.label).toBe('Inspect pve-fast (1)');
+      expect(fastHit.x + fastHit.w).toBeLessThan(fastInspect.x);
+
+      // VLAN-coloured drop for pve-fast (`net0`, 10G -> 2.75px) and amber saturated drop for pve-busy (`attention`, 1G -> 1.75px)
+      const lines = ofKind(scene, 'line');
+      const vlanDrop = lines.find(
+        (node) => node.arrow && node.strokeWidth === 2.75 && node.tone.startsWith('net'),
+      );
+      expect(vlanDrop).toBeDefined();
+
+      const saturatedDrop = lines.find(
+        (node) => node.arrow && node.strokeWidth === 1.75 && node.tone === 'attention',
+      );
+      expect(saturatedDrop).toBeDefined();
+      expect(drawn).toContain('1G · 88%');
+
+      // Narrow host header (< 250px) falls back to compact meter text without overflowing
+      const narrowDiagram = buildServiceDiagram(
+        buildInfrastructureMapModel([
+          resource({
+            id: 'tiny-host',
+            type: 'agent',
+            name: 'tiny',
+            platformType: 'proxmox-pve',
+            status: 'online',
+            cpu: { current: 28 },
+            memory: { current: 58 },
+          }),
+        ]),
+      );
+      const narrowScene = layoutHostDiagram(narrowDiagram, { width: 240, density: 'names' });
+      expect(texts(narrowScene)).toContain('CPU 28% · MEM 58%');
+    });
+
+    it('groups 5+ loose host workloads across 2+ categories under uppercase sub-headers and keeps <=4 flat', () => {
+      const busyHost = [
+        resource({
+          id: 'pve-cat',
+          type: 'agent',
+          name: 'pve-cat',
+          platformType: 'proxmox-pve',
+          status: 'online',
+        }),
+        guest('jellyfin', { parentId: 'pve-cat' }),
+        guest('sonarr', { parentId: 'pve-cat' }),
+        guest('grafana', { parentId: 'pve-cat' }),
+        guest('prometheus', { parentId: 'pve-cat' }),
+        guest('postgres', { parentId: 'pve-cat' }),
+      ];
+      const busyScene = layoutHostDiagram(
+        buildServiceDiagram(buildInfrastructureMapModel(busyHost)),
+        { width: 1400, density: 'names' },
+      );
+      const busySubheaders = ofKind(busyScene, 'text')
+        .filter((node) => node.caps && node.size === 10 && node.weight === 600)
+        .map((node) => node.text);
+      expect(busySubheaders).toContain('MEDIA');
+      expect(busySubheaders).toContain('MONITORING');
+      expect(busySubheaders).toContain('DATABASES');
+
+      // <= 4 loose workloads stay flat with no category sub-headers
+      const smallHost = [
+        resource({
+          id: 'pve-small',
+          type: 'agent',
+          name: 'pve-small',
+          platformType: 'proxmox-pve',
+          status: 'online',
+        }),
+        guest('jellyfin', { parentId: 'pve-small' }),
+        guest('grafana', { parentId: 'pve-small' }),
+        guest('postgres', { parentId: 'pve-small' }),
+        guest('gitea', { parentId: 'pve-small' }),
+      ];
+      const smallScene = layoutHostDiagram(
+        buildServiceDiagram(buildInfrastructureMapModel(smallHost)),
+        { width: 1400, density: 'names' },
+      );
+      const smallSubheaders = ofKind(smallScene, 'text')
+        .filter((node) => node.caps && node.size === 10 && node.weight === 600)
+        .map((node) => node.text);
+      expect(smallSubheaders).not.toContain('MEDIA');
+      expect(smallSubheaders).not.toContain('MONITORING');
+      expect(smallSubheaders).not.toContain('DATABASES');
+    });
+
+    it('appends exposed port detail on horizontal cards when space allows', () => {
+      const resources: Resource[] = [
+        resource({
+          id: 'dock-1',
+          type: 'docker-host',
+          name: 'dock-1',
+          platformType: 'docker',
+          status: 'online',
+        }),
+        resource({
+          id: 'c-proxy',
+          type: 'app-container',
+          name: 'traefik',
+          platformType: 'docker',
+          parentId: 'dock-1',
+          status: 'running',
+          docker: {
+            hostSourceId: 'dock-1',
+            containerId: 'a'.repeat(64),
+            containerState: 'running',
+            image: 'traefik:latest',
+            networks: [{ name: 'proxy' }],
+          },
+        }),
+        resource({
+          id: 'c-notes',
+          type: 'app-container',
+          name: 'notes',
+          platformType: 'docker',
+          parentId: 'dock-1',
+          status: 'running',
+          docker: {
+            hostSourceId: 'dock-1',
+            containerId: 'b'.repeat(64),
+            containerState: 'running',
+            image: 'example/notes:latest',
+            networks: [{ name: 'proxy' }],
+            labels: {
+              'traefik.enable': 'true',
+              'traefik.http.routers.notes.rule': 'Host(`notes.home.arpa`)',
+            },
+            ports: [{ publicPort: 3000, privatePort: 3000, protocol: 'tcp' }],
+          },
+        }),
+      ];
+
+      const scene = layoutHostDiagram(buildServiceDiagram(buildInfrastructureMapModel(resources)), {
+        width: 1400,
+        density: 'names',
+      });
+      expect(texts(scene)).toContain('notes.home.arpa · :3000');
+    });
+
+    it('renders relationship-labelled hover arcs when <= 6 arcs, clamps long labels, and omits them when > 6', () => {
+      const resources: Resource[] = [
+        resource({
+          id: 'dock-1',
+          type: 'docker-host',
+          name: 'dock-1',
+          platformType: 'docker',
+          status: 'online',
+        }),
+        resource({
+          id: 'c-proxy',
+          type: 'app-container',
+          name: 'traefik',
+          platformType: 'docker',
+          parentId: 'dock-1',
+          status: 'running',
+          docker: {
+            hostSourceId: 'dock-1',
+            containerId: 'c'.repeat(64),
+            containerState: 'running',
+            image: 'traefik:latest',
+            networks: [{ name: 'proxy' }],
+          },
+        }),
+        resource({
+          id: 'c-app',
+          type: 'app-container',
+          name: 'memos',
+          platformType: 'docker',
+          parentId: 'dock-1',
+          status: 'running',
+          docker: {
+            hostSourceId: 'dock-1',
+            containerId: 'd'.repeat(64),
+            containerState: 'running',
+            image: 'neosmemo/memos:latest',
+            networks: [{ name: 'proxy' }],
+            labels: {
+              'traefik.enable': 'true',
+              'traefik.http.routers.memos.rule':
+                'Host(`very-long-service-hostname.internal.example.org`)',
+            },
+          },
+        }),
+      ];
+
+      const diagram = buildServiceDiagram(buildInfrastructureMapModel(resources));
+      const hostScene = layoutHostDiagram(diagram, { width: 1400, density: 'names' });
+      const proxyHit = ofKind(hostScene, 'hit').find((node) => node.hit.id === 'c-proxy')!.hit;
+      expect(proxyHit.linkLabels?.['c-app']).toBe(
+        'very-long-service-hostname.internal.example.org',
+      );
+
+      const overlay = renderMapLinkRings(hostScene, proxyHit, MAP_PAGE_PALETTES.dark);
+      expect(overlay).toContain('class="pulse-map-link-label"');
+      // Long label is clamped to <= 24 chars with ellipsis
+      expect(overlay).toContain('>very-long-service-hostn…</text>');
+      // Label pills render after arcs and dots so arcs never cross over pills
+      expect(overlay.lastIndexOf('pulse-map-link-arc')).toBeLessThan(
+        overlay.indexOf('pulse-map-link-label'),
+      );
+      expect(overlay.lastIndexOf('<circle ')).toBeLessThan(overlay.indexOf('pulse-map-link-label'));
+
+      // When > 6 targets are linked, relationship pills are omitted to prevent clutter
+      const crowdedResources: Resource[] = [
+        resource({ id: 'pve-hub', type: 'agent', name: 'pve-hub', platformType: 'proxmox-pve' }),
+        ...Array.from({ length: 8 }, (_, index) => guest(`svc-${index}`, { parentId: 'pve-hub' })),
+      ];
+      const crowdedScene = layoutHostDiagram(
+        buildServiceDiagram(buildInfrastructureMapModel(crowdedResources)),
+        { width: 1400, density: 'names' },
+      );
+      const hubHit = ofKind(crowdedScene, 'hit').find((node) => node.hit.id === 'pve-hub')!.hit;
+      expect(hubHit.linked?.length).toBeGreaterThan(6);
+      const crowdedOverlay = renderMapLinkRings(crowdedScene, hubHit, MAP_PAGE_PALETTES.dark);
+      expect(crowdedOverlay).not.toContain('pulse-map-link-label');
+    });
+
+    it('draws compact inline link-speed key in poster footer when showLinkSpeedKey is true and space permits', () => {
+      const diagram = buildServiceDiagram(buildInfrastructureMapModel(richEstate()));
+      const withKey = layoutHostDiagram(diagram, {
+        width: 1480,
+        density: 'names',
+        header: {
+          title: 'Infrastructure map',
+          facts: ['2 hosts'],
+          footer: 'Drawn by Pulse · 2026-11-27',
+          showLinkSpeedKey: true,
+        },
+      });
+      const withKeyTexts = texts(withKey);
+      expect(withKeyTexts).toContain('Link speed');
+      expect(
+        ofKind(withKey, 'rect').some((node) => node.h === 2.75 && node.fill === 'accent'),
+      ).toBe(true);
+      expect(
+        ofKind(withKey, 'rect').some((node) => node.h === 1.75 && node.fill === 'accent'),
+      ).toBe(true);
+
+      // Omitted when showLinkSpeedKey is false/unset
+      const withoutKey = layoutHostDiagram(diagram, {
+        width: 1480,
+        density: 'names',
+        header: {
+          title: 'Infrastructure map',
+          facts: ['2 hosts'],
+          footer: 'Drawn by Pulse · 2026-11-27',
+        },
+      });
+      expect(texts(withoutKey)).not.toContain('Link speed');
     });
   });
 });

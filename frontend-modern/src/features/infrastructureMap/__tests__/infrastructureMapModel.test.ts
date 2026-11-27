@@ -1073,4 +1073,165 @@ describe('live network telemetry extraction', () => {
     expect(JSON.stringify(anonymous)).not.toContain('shop.example.test');
     expect(JSON.stringify(anonymous)).not.toContain('203.0.113.42');
   });
+
+  it('extracts host hardware specs, version labels, VMIDs, Compose projects, and pool metadata, and strips names under Hide names', () => {
+    const model = buildInfrastructureMapModel([
+      resource({
+        id: 'pve-node',
+        type: 'agent',
+        name: 'rack-pve',
+        platformType: 'proxmox-pve',
+        proxmox: {
+          cpus: 16,
+          pveVersion: 'pve-manager/8.3.1/c1689ccb1065a83b',
+          memory: { total: 64 * GIB },
+        },
+        agent: { cpuCount: 8, memory: { total: 32 * GIB } },
+      }),
+      resource({
+        id: 'vm-102',
+        type: 'vm',
+        name: 'gitlab-runner',
+        platformType: 'proxmox-pve',
+        parentId: 'pve-node',
+        status: 'running',
+        proxmox: { vmid: 102 },
+      }),
+      resource({
+        id: 'ct-bad-vmid',
+        type: 'system-container',
+        name: 'scratch',
+        platformType: 'proxmox-pve',
+        parentId: 'pve-node',
+        status: 'running',
+        proxmox: { vmid: 0 },
+      }),
+      resource({
+        id: 'nvme-pool',
+        type: 'storage',
+        name: 'nvme-pool',
+        platformType: 'proxmox-pve',
+        parentId: 'pve-node',
+        disk: { current: 62, total: 4000 * GIB, used: 2480 * GIB },
+        storage: { vdevLayout: 'mirror', type: 'zfspool' },
+      }),
+      resource({
+        id: 'dock-host',
+        type: 'docker-host',
+        name: 'docker-box',
+        platformType: 'docker',
+        docker: {
+          cpus: 12,
+          dockerVersion: '27.3.1',
+          memory: { total: 32 * GIB },
+        },
+      }),
+      resource({
+        id: 'c-media-1',
+        type: 'app-container',
+        name: 'sonarr',
+        platformType: 'docker',
+        parentId: 'dock-host',
+        status: 'running',
+        docker: { composeProject: '  media-stack  ' },
+      }),
+      resource({
+        id: 'c-blank-project',
+        type: 'app-container',
+        name: 'redis',
+        platformType: 'docker',
+        parentId: 'dock-host',
+        status: 'running',
+        docker: { composeProject: '   ' },
+      }),
+      resource({
+        id: 'pbs-box',
+        type: 'pbs',
+        name: 'pbs-main',
+        platformType: 'proxmox-pbs',
+        pbs: { version: '3.2.7' },
+        memory: { current: 25, total: 16 * GIB, used: 4 * GIB },
+      }),
+      resource({
+        id: 'linux-box',
+        type: 'agent',
+        name: 'edge-linux',
+        platformType: 'agent',
+        agent: {
+          cpuCount: 4,
+          osName: 'Debian GNU/Linux',
+          osVersion: '12 (bookworm)',
+          memory: { total: 8 * GIB },
+        },
+      }),
+      resource({
+        id: 'long-os-box',
+        type: 'agent',
+        name: 'enterprise-box',
+        platformType: 'agent',
+        agent: {
+          osName: 'Red Hat Enterprise Linux',
+          osVersion: '9.4',
+        },
+      }),
+    ]);
+
+    const pve = hostNamed(model.blocks, 'rack-pve');
+    expect(pve).toMatchObject({
+      cpuCores: 16,
+      memoryTotalBytes: 64 * GIB,
+      versionLabel: 'PVE 8.3',
+    });
+    expect(pve.sections[0].items[0].vmid).toBe(102);
+    expect(pve.sections[1].items[0].vmid).toBeUndefined();
+    expect(pve.pools[0]).toMatchObject({
+      vdevLayout: 'mirror',
+      storageType: 'zfspool',
+    });
+
+    const dock = hostNamed(model.blocks, 'docker-box');
+    expect(dock).toMatchObject({
+      cpuCores: 12,
+      memoryTotalBytes: 32 * GIB,
+      versionLabel: 'Docker 27.3',
+    });
+    expect(dock.sections[0].items.find((item) => item.id === 'c-media-1')?.composeProject).toBe(
+      'media-stack',
+    );
+    expect(
+      dock.sections[0].items.find((item) => item.id === 'c-blank-project')?.composeProject,
+    ).toBeUndefined();
+
+    expect(hostNamed(model.blocks, 'pbs-main')).toMatchObject({
+      memoryTotalBytes: 16 * GIB,
+      versionLabel: 'PBS 3.2',
+    });
+    expect(hostNamed(model.blocks, 'edge-linux')).toMatchObject({
+      cpuCores: 4,
+      memoryTotalBytes: 8 * GIB,
+      versionLabel: 'Debian 12',
+    });
+    const longOsLabel = hostNamed(model.blocks, 'enterprise-box').versionLabel;
+    expect(longOsLabel).toBeDefined();
+    expect(longOsLabel!.length).toBeLessThanOrEqual(18);
+
+    // Hide names strips composeProject and vmid while preserving hardware specs, versions, and pool layouts.
+    const anonymous = anonymizeInfrastructureMapModel(model);
+    const anonPve = hostsOf(anonymous.blocks).find((host) => host.id === 'pve-node')!;
+    const anonDock = hostsOf(anonymous.blocks).find((host) => host.id === 'dock-host')!;
+    expect(anonPve).toMatchObject({
+      cpuCores: 16,
+      memoryTotalBytes: 64 * GIB,
+      versionLabel: 'PVE 8.3',
+    });
+    expect(anonPve.sections[0].items[0].vmid).toBeUndefined();
+    expect(anonPve.pools[0]).toMatchObject({
+      vdevLayout: 'mirror',
+      storageType: 'zfspool',
+    });
+    expect(
+      anonDock.sections[0].items.find((item) => item.id === 'c-media-1')?.composeProject,
+    ).toBeUndefined();
+    expect(JSON.stringify(anonymous)).not.toContain('media-stack');
+  });
 });

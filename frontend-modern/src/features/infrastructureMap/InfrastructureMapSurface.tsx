@@ -11,6 +11,7 @@ import {
 import ActivityIcon from 'lucide-solid/icons/activity';
 import DownloadIcon from 'lucide-solid/icons/download';
 import EyeOffIcon from 'lucide-solid/icons/eye-off';
+import GlobeIcon from 'lucide-solid/icons/globe';
 import MapIcon from 'lucide-solid/icons/map';
 import RotateCcwIcon from 'lucide-solid/icons/rotate-ccw';
 import SearchIcon from 'lucide-solid/icons/search';
@@ -42,7 +43,7 @@ import {
   sessionCanReadInfrastructureSettings,
 } from '@/stores/sessionSettingsCapabilities';
 import { MAP_DOC_URL } from '@/utils/docsLinks';
-import { formatSpeed } from '@/utils/format';
+import { formatBytes, formatSpeed } from '@/utils/format';
 import type { StatusIndicatorVariant } from '@/utils/status';
 import { showError, showSuccess } from '@/utils/toast';
 import './infrastructureMap.css';
@@ -65,6 +66,7 @@ import {
   type MapDensity,
   type MapHit,
   type MapInspectTarget,
+  type MapLayoutMode,
   type MapNetworkTone,
 } from './infrastructureMapLayout';
 import {
@@ -103,6 +105,26 @@ const LEGEND: Array<[StatusIndicatorVariant, string]> = [
 const DENSITY_OPTIONS: Array<{ value: MapDensity; label: string; title: string }> = [
   { value: 'names', label: 'Names', title: 'Write the name of every guest and container' },
   { value: 'marks', label: 'Compact', title: 'Draw each guest and container as its icon only' },
+];
+
+const LAYOUT_OPTIONS: Array<{
+  value: MapLayoutMode;
+  label: string;
+  compactLabel: string;
+  title: string;
+}> = [
+  {
+    value: 'hosts',
+    label: 'By host',
+    compactLabel: 'Hosts',
+    title: 'Group guests, stacks, and storage inside each host',
+  },
+  {
+    value: 'roles',
+    label: 'By role',
+    compactLabel: 'Roles',
+    title: 'Group services by purpose across the estate',
+  },
 ];
 
 // What the page keeps below the drawing: the panel's padding and one line of
@@ -188,6 +210,42 @@ const networkTooltipLines = (network: DiagramNetwork): string[] => {
   ].filter(Boolean);
 };
 
+const formatHostRam = (bytes?: number): string => {
+  if (!bytes || bytes <= 0) return '';
+  const formatted = formatBytes(bytes).replace(/(\.\d*?[1-9])0+(?=\s)|\.0+(?=\s)/, '$1');
+  return `${formatted} RAM`;
+};
+
+const formatHostSpecs = (hit: MapHit): string =>
+  [
+    hit.cpuCores && hit.cpuCores > 0
+      ? `${hit.cpuCores} ${hit.cpuCores === 1 ? 'core' : 'cores'}`
+      : '',
+    formatHostRam(hit.memoryTotalBytes),
+    hit.versionLabel ?? '',
+  ]
+    .filter(Boolean)
+    .join(' · ');
+
+const formatHitVmid = (hit: MapHit): string => {
+  if (hit.vmid === undefined) return '';
+  const isContainer = /\b(container|lxc)\b/i.test(hit.meta);
+  const label = `${isContainer ? 'CT' : 'VM'} ${hit.vmid}`;
+  return hit.meta.includes(label) ? '' : label;
+};
+
+const formatHitStoragePool = (hit: MapHit): string => {
+  if (hit.usedPercent === undefined) return '';
+  const summary = [
+    hit.vdevLayout ?? '',
+    hit.sizeLabel ?? '',
+    `${Math.round(hit.usedPercent)}% used`,
+  ]
+    .filter(Boolean)
+    .join(' · ');
+  return hit.meta.includes(summary) ? '' : summary;
+};
+
 /** What a tile's card says under its name: what it is, where, what it is connected to, how busy. */
 const hitLines = (hit: MapHit, density?: MapDensity): string[] =>
   [
@@ -197,7 +255,11 @@ const hitLines = (hit: MapHit, density?: MapDensity): string[] =>
       : hit.id.endsWith(':more') && density === 'names'
         ? 'Compact draws more of them'
         : '',
+    formatHostSpecs(hit),
+    formatHitStoragePool(hit),
     [
+      formatHitVmid(hit),
+      hit.composeProject ? `Stack ${hit.composeProject}` : '',
       // A plain check's caption is its address, so the line above has said it.
       hit.address && !hit.meta.includes(hit.address) ? hit.address : '',
       hit.detail ? `Published ${hit.detail}` : '',
@@ -232,6 +294,7 @@ export function InfrastructureMapSurface() {
   const canAddSystem = () => !kioskMode() && sessionCanReadInfrastructureSettings();
 
   const [densityChoice, setDensityChoice] = createSignal<MapDensity | null>(null);
+  const [layoutMode, setLayoutMode] = createSignal<MapLayoutMode>('hosts');
   const [liveTraffic, setLiveTraffic] = createSignal(true);
   const [namesHidden, setNamesHidden] = createSignal(false);
   const [exporting, setExporting] = createSignal(false);
@@ -370,6 +433,7 @@ export function InfrastructureMapSurface() {
     if (!room || model().isEmpty) return null;
     const filter = activeFilter();
     const traffic = liveTraffic();
+    const mode = layoutMode();
     const fit = (chosen: MapDensity) => {
       const diagram = buildServiceDiagram(model(), {
         maxTilesPerGroup: resolveDiagramTileLimit(chosen),
@@ -379,9 +443,13 @@ export function InfrastructureMapSurface() {
         density: chosen,
         diagram,
         ...(room.phone
-          ? flowServiceDiagram(diagram, room.width, chosen, { liveTraffic: traffic })
+          ? flowServiceDiagram(diagram, room.width, chosen, {
+              liveTraffic: traffic,
+              layoutMode: mode,
+            })
           : fitServiceDiagram(diagram, { width: room.width, height: room.height }, chosen, {
               liveTraffic: traffic,
+              layoutMode: mode,
             })),
       };
     };
@@ -416,6 +484,7 @@ export function InfrastructureMapSurface() {
     });
   });
   const estateTrafficBytes = createMemo(() => fullDiagram()?.estateTrafficBytes ?? 0);
+  const exposedCount = createMemo(() => fullDiagram()?.exposed.length ?? 0);
   const matchedResourceCount = createMemo(() => {
     const diagram = activeDiagram();
     return diagram ? countDiagramResources(diagram) : 0;
@@ -929,6 +998,7 @@ export function InfrastructureMapSurface() {
       const format = await downloadMapImage(model(), {
         title: 'Infrastructure map',
         density: density(),
+        layoutMode: layoutMode(),
         palette: resolveMapPalette(palette(), darkMode()),
       });
       recordInfrastructureMapExport(saved);
@@ -988,6 +1058,18 @@ export function InfrastructureMapSurface() {
             <span>{formatSpeed(estateTrafficBytes())}</span>
           </button>
         </Show>
+        <Show when={exposedCount() > 0}>
+          <button
+            type="button"
+            title="Inspect reverse-proxied hostnames and published ports across the estate"
+            data-testid="infrastructure-map-exposed-summary"
+            class="inline-flex items-center gap-1.5 rounded-full border border-indigo-300 bg-indigo-50 px-2.5 py-0.5 text-xs font-medium whitespace-nowrap text-indigo-700 tabular-nums transition-colors hover:bg-indigo-100 focus-visible:outline-solid focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-indigo-500 dark:border-indigo-700/80 dark:bg-indigo-950/50 dark:text-indigo-300 dark:hover:bg-indigo-900/50"
+            onClick={() => openDrawer({ kind: 'exposed' })}
+          >
+            <GlobeIcon class="h-3.5 w-3.5 shrink-0" aria-hidden="true" />
+            <span>{exposedCount().toLocaleString()} exposed</span>
+          </button>
+        </Show>
         <Show when={!liveModel().isEmpty}>
           <div class="flex w-full flex-wrap items-center gap-2 sm:ml-auto sm:w-auto">
             <div class="relative w-full sm:w-48 sm:flex-none md:w-56">
@@ -1017,6 +1099,14 @@ export function InfrastructureMapSurface() {
                 </button>
               </Show>
             </div>
+            <FilterButtonGroup
+              variant="compact"
+              ariaLabel="Map layout"
+              data-testid="infrastructure-map-layout"
+              options={LAYOUT_OPTIONS}
+              value={layoutMode()}
+              onChange={(value) => setLayoutMode(value)}
+            />
             <FilterButtonGroup
               variant="compact"
               ariaLabel="Map detail"
@@ -1359,6 +1449,20 @@ export function InfrastructureMapSurface() {
                 aria-hidden="true"
               />
               Active traffic
+            </li>
+          </Show>
+          <Show when={activeDiagram()?.hasLinkSpeeds}>
+            <li
+              class="inline-flex items-center gap-1.5"
+              data-testid="infrastructure-map-legend-speed"
+            >
+              <span class="inline-flex items-center gap-1" aria-hidden="true">
+                <span class="inline-block h-[3px] w-3.5 rounded-full bg-blue-600 dark:bg-blue-400" />
+                <span class="text-[10px]">10G</span>
+                <span class="inline-block h-[1.5px] w-3.5 rounded-full bg-blue-600 dark:bg-blue-400" />
+                <span class="text-[10px]">1G</span>
+              </span>
+              Link speed
             </li>
           </Show>
           {/* How a thing gets onto the map is not something the map can show. */}

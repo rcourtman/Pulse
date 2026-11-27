@@ -332,7 +332,7 @@ describe('InfrastructureMapSurface connections', () => {
     return found;
   };
   const rings = (container: HTMLElement) => [
-    ...container.querySelectorAll('[data-map-rings] rect'),
+    ...container.querySelectorAll('[data-map-rings] > rect'),
   ];
   // Where the rings are, in a fixed order.
   const ringed = (container: HTMLElement) => rings(container).map(place).sort();
@@ -996,19 +996,28 @@ describe('InfrastructureMapSurface live traffic and network telemetry', () => {
     expect(screen.getByTestId('infrastructure-map-legend-traffic')).toHaveTextContent(
       'Active traffic',
     );
-    expect(vi.mocked(fitServiceDiagram).mock.calls.at(-1)?.[3]).toEqual({ liveTraffic: true });
+    expect(vi.mocked(fitServiceDiagram).mock.calls.at(-1)?.[3]).toEqual({
+      liveTraffic: true,
+      layoutMode: 'hosts',
+    });
 
     fireEvent.click(toggle);
     expect(toggle).toHaveAttribute('aria-pressed', 'false');
     expect(screen.queryByTestId('infrastructure-map-legend-traffic')).not.toBeInTheDocument();
-    expect(vi.mocked(fitServiceDiagram).mock.calls.at(-1)?.[3]).toEqual({ liveTraffic: false });
+    expect(vi.mocked(fitServiceDiagram).mock.calls.at(-1)?.[3]).toEqual({
+      liveTraffic: false,
+      layoutMode: 'hosts',
+    });
 
     fireEvent.click(toggle);
     expect(toggle).toHaveAttribute('aria-pressed', 'true');
     expect(screen.getByTestId('infrastructure-map-legend-traffic')).toHaveTextContent(
       'Active traffic',
     );
-    expect(vi.mocked(fitServiceDiagram).mock.calls.at(-1)?.[3]).toEqual({ liveTraffic: true });
+    expect(vi.mocked(fitServiceDiagram).mock.calls.at(-1)?.[3]).toEqual({
+      liveTraffic: true,
+      layoutMode: 'hosts',
+    });
   });
 
   it('shows network throughput, check latency, link speed, link-down count, and firewall state in tooltips', async () => {
@@ -1131,8 +1140,8 @@ describe('InfrastructureMapSurface live traffic and network telemetry', () => {
 
     // Availability check tooltip combines probeSummary + latency and includes cert warning.
     fireEvent.pointerOver(tile(container, 'app-https'));
-    expect(await screen.findByText(/HTTPS 200 · 14 ms/)).toBeInTheDocument();
-    expect(screen.getByText(/Cert expiring soon/)).toBeInTheDocument();
+    expect(await screen.findByText(/HTTPS 200 · 14 ms/, { selector: 'span' })).toBeInTheDocument();
+    expect(screen.getByText(/Cert expiring soon/, { selector: 'span' })).toBeInTheDocument();
 
     // Hide names strips user-defined Docker network names from tooltips.
     fireEvent.click(screen.getByRole('button', { name: 'Hide names' }));
@@ -1283,5 +1292,306 @@ describe('InfrastructureMapSurface live traffic and network telemetry', () => {
     fireEvent.pointerOver(tile(container, 'idle-host'));
     expect(await screen.findByText(/Link 10G/)).toBeInTheDocument();
     expect(screen.queryByText(/Link 10G \(/)).not.toBeInTheDocument();
+  });
+});
+
+describe('InfrastructureMapSurface layout toggle, exposed drawer, and enriched tooltips', () => {
+  beforeEach(() => {
+    vi.clearAllMocks();
+    resourcesMock.read = undefined;
+    vi.mocked(downloadMapImage).mockResolvedValue('png');
+    resourcesMock.value = [
+      resource({
+        id: 'pve-spec',
+        type: 'agent',
+        name: 'pve-spec',
+        platformType: 'proxmox-pve',
+        memory: { current: 50, total: 64 * 1024 ** 3, used: 32 * 1024 ** 3 },
+        proxmox: { cpus: 16, pveVersion: '8.3.1' },
+        agent: {
+          networkInterfaces: [
+            { name: 'eno1', addresses: ['10.20.0.10/24'], speedMbps: 10000, linkUp: true },
+          ],
+        },
+      }),
+      resource({
+        id: 'vm-app',
+        type: 'vm',
+        name: 'app-vm',
+        platformType: 'proxmox-pve',
+        parentId: 'pve-spec',
+        status: 'running',
+        identity: { ips: ['10.20.0.50'] },
+        proxmox: { vmid: 105 },
+      }),
+      resource({
+        id: 'ct-dns',
+        type: 'system-container',
+        name: 'dns-ct',
+        platformType: 'proxmox-pve',
+        parentId: 'pve-spec',
+        status: 'running',
+        identity: { ips: ['10.20.0.52'] },
+        proxmox: { vmid: 102 },
+      }),
+      resource({
+        id: 'pool-nvme',
+        type: 'pool',
+        name: 'nvme-pool',
+        platformType: 'proxmox-pve',
+        parentId: 'pve-spec',
+        disk: {
+          current: 65,
+          total: 4 * 1024 ** 4,
+          used: Math.round(2.6 * 1024 ** 4),
+        },
+        storage: { vdevLayout: 'mirror', type: 'zfspool' },
+      }),
+      resource({
+        id: 'docker-exp',
+        type: 'docker-host',
+        name: 'docker-exp',
+        platformType: 'docker',
+      }),
+      resource({
+        id: 'ctr-traefik',
+        type: 'app-container',
+        name: 'traefik',
+        platformType: 'docker',
+        parentId: 'docker-exp',
+        status: 'running',
+        docker: {
+          hostSourceId: 'docker-exp',
+          containerId: '1'.repeat(64),
+          containerState: 'running',
+          image: 'traefik:v3',
+          networkMode: 'proxy-net',
+          networks: [{ name: 'proxy-net' }],
+        },
+      }),
+      resource({
+        id: 'ctr-notes',
+        type: 'app-container',
+        name: 'notes',
+        platformType: 'docker',
+        parentId: 'docker-exp',
+        status: 'running',
+        docker: {
+          hostSourceId: 'docker-exp',
+          containerId: '2'.repeat(64),
+          containerState: 'running',
+          image: 'example/notes:latest',
+          composeProject: 'workspace',
+          networkMode: 'proxy-net',
+          networks: [{ name: 'proxy-net' }],
+          labels: {
+            'traefik.http.routers.notes.rule': 'Host(`notes.home.arpa`)',
+          },
+        },
+      }),
+      resource({
+        id: 'ctr-grafana',
+        type: 'app-container',
+        name: 'grafana',
+        platformType: 'docker',
+        parentId: 'docker-exp',
+        status: 'running',
+        docker: {
+          hostSourceId: 'docker-exp',
+          containerId: '3'.repeat(64),
+          containerState: 'running',
+          image: 'grafana/grafana:latest',
+          composeProject: 'workspace',
+          networkMode: 'bridge',
+          networks: [{ name: 'bridge' }],
+          ports: [{ publicPort: 3000, privatePort: 3000, protocol: 'tcp' }],
+        },
+      }),
+    ];
+  });
+  afterEach(cleanup);
+
+  const tile = (container: HTMLElement, name: string) => {
+    const found = container.querySelector(`[aria-label^="${name},"]`);
+    if (!found) throw new Error(`no tile for ${name}`);
+    return found;
+  };
+
+  it('defaults to By host layout and passes layoutMode to fitServiceDiagram and downloadMapImage when toggled', async () => {
+    render(() => <InfrastructureMapSurface />);
+
+    const layoutGroup = screen.getByTestId('infrastructure-map-layout');
+    const byHostButton = screen.getByRole('button', { name: 'By host' });
+    const byRoleButton = screen.getByRole('button', { name: 'By role' });
+    expect(layoutGroup).toContainElement(byHostButton);
+    expect(byHostButton).toHaveAttribute('aria-pressed', 'true');
+    expect(byRoleButton).toHaveAttribute('aria-pressed', 'false');
+    expect(vi.mocked(fitServiceDiagram).mock.calls.at(-1)?.[3]).toEqual({
+      liveTraffic: true,
+      layoutMode: 'hosts',
+    });
+
+    fireEvent.click(byRoleButton);
+    expect(byHostButton).toHaveAttribute('aria-pressed', 'false');
+    expect(byRoleButton).toHaveAttribute('aria-pressed', 'true');
+    expect(vi.mocked(fitServiceDiagram).mock.calls.at(-1)?.[3]).toEqual({
+      liveTraffic: true,
+      layoutMode: 'roles',
+    });
+
+    saveImage();
+    await waitFor(() => expect(showSuccess).toHaveBeenCalledTimes(1));
+    expect(vi.mocked(downloadMapImage).mock.calls.at(-1)?.[1]?.layoutMode).toBe('roles');
+
+    fireEvent.click(byHostButton);
+    expect(byHostButton).toHaveAttribute('aria-pressed', 'true');
+    expect(vi.mocked(fitServiceDiagram).mock.calls.at(-1)?.[3]).toEqual({
+      liveTraffic: true,
+      layoutMode: 'hosts',
+    });
+
+    saveImage();
+    await waitFor(() => expect(showSuccess).toHaveBeenCalledTimes(2));
+    expect(vi.mocked(downloadMapImage).mock.calls.at(-1)?.[1]?.layoutMode).toBe('hosts');
+  });
+
+  it('opens the Published & routed drawer from the exposed summary pill and filters Proxied vs Published ports', async () => {
+    render(() => <InfrastructureMapSurface />);
+
+    const exposedPill = screen.getByTestId('infrastructure-map-exposed-summary');
+    expect(exposedPill).toHaveTextContent('2 exposed');
+
+    fireEvent.click(exposedPill);
+    expect(screen.getByTestId('infrastructure-map-drawer')).toBeInTheDocument();
+    expect(screen.getByRole('heading', { name: 'Published & routed' })).toBeInTheDocument();
+
+    const list = screen.getByTestId('infrastructure-map-exposed-list');
+    expect(list).toHaveTextContent('notes');
+    expect(list).toHaveTextContent('notes.home.arpa');
+    expect(list).toHaveTextContent('via traefik');
+    expect(list).toHaveTextContent('grafana');
+    expect(list).toHaveTextContent(':3000');
+
+    const filterGroup = screen.getByTestId('infrastructure-map-exposed-filter');
+    const proxiedButton = filterGroup.querySelectorAll('button')[1];
+    const portsButton = filterGroup.querySelectorAll('button')[2];
+    expect(proxiedButton).toHaveTextContent('Proxied');
+    expect(portsButton).toHaveTextContent('Published ports');
+
+    fireEvent.click(proxiedButton);
+    expect(proxiedButton).toHaveAttribute('aria-pressed', 'true');
+    expect(screen.getByTestId('infrastructure-map-exposed-list')).toHaveTextContent('notes');
+    expect(screen.getByTestId('infrastructure-map-exposed-list')).not.toHaveTextContent('grafana');
+
+    fireEvent.click(portsButton);
+    expect(portsButton).toHaveAttribute('aria-pressed', 'true');
+    expect(screen.getByTestId('infrastructure-map-exposed-list')).toHaveTextContent('grafana');
+    expect(screen.getByTestId('infrastructure-map-exposed-list')).not.toHaveTextContent('notes');
+
+    // Reset to All and search by hostname.
+    fireEvent.click(filterGroup.querySelectorAll('button')[0]);
+    const search = screen.getByTestId('infrastructure-map-drawer-search');
+    fireEvent.input(search, { target: { value: 'notes.home.arpa' } });
+    expect(screen.getByTestId('infrastructure-map-exposed-list')).toHaveTextContent('notes');
+    expect(screen.getByTestId('infrastructure-map-exposed-list')).not.toHaveTextContent('grafana');
+
+    // Close drawer, enable Hide names, and reopen to confirm hostnames are stripped while ports stay visible.
+    fireEvent.keyDown(document, { key: 'Escape' });
+    expect(screen.queryByTestId('infrastructure-map-drawer')).not.toBeInTheDocument();
+
+    fireEvent.click(screen.getByRole('button', { name: 'Hide names' }));
+    fireEvent.click(screen.getByTestId('infrastructure-map-exposed-summary'));
+    const hiddenList = screen.getByTestId('infrastructure-map-exposed-list');
+    expect(hiddenList).toHaveTextContent(':3000');
+    expect(hiddenList).not.toHaveTextContent('notes.home.arpa');
+  });
+
+  it('enriches hover tooltips with host hardware specs, VMIDs, Compose stacks, and storage pool usage', async () => {
+    const { container } = render(() => <InfrastructureMapSurface />);
+
+    fireEvent.pointerOver(tile(container, 'pve-spec'));
+    expect(await screen.findByText(/16 cores · 64 GB RAM · PVE 8\.3/)).toBeInTheDocument();
+
+    fireEvent.pointerOver(tile(container, 'app-vm'));
+    expect(await screen.findByText(/VM 105/, { selector: 'span' })).toBeInTheDocument();
+
+    fireEvent.pointerOver(tile(container, 'dns-ct'));
+    expect(await screen.findByText(/CT 102/, { selector: 'span' })).toBeInTheDocument();
+
+    fireEvent.pointerOver(tile(container, 'notes'));
+    expect(await screen.findByText(/Stack workspace/)).toBeInTheDocument();
+
+    fireEvent.pointerOver(tile(container, 'nvme-pool'));
+    expect(await screen.findByText(/mirror · 4 TB · 65% used/)).toBeInTheDocument();
+  });
+
+  it('shows the link-speed legend item only when link speeds are reported', () => {
+    const view = render(() => <InfrastructureMapSurface />);
+    const speedLegend = screen.getByTestId('infrastructure-map-legend-speed');
+    expect(speedLegend).toHaveTextContent('10G');
+    expect(speedLegend).toHaveTextContent('1G');
+    expect(speedLegend).toHaveTextContent('Link speed');
+    view.unmount();
+
+    resourcesMock.value = lab();
+    render(() => <InfrastructureMapSurface />);
+    expect(screen.queryByTestId('infrastructure-map-legend-speed')).not.toBeInTheDocument();
+  });
+
+  it('opens the host inspector drawer when clicking a host frame inspect count badge in By host view', () => {
+    const { container } = render(() => <InfrastructureMapSurface />);
+
+    const hostInspect = container.querySelector(
+      '[data-map-inspect][aria-label="Inspect pve-spec (2)"]',
+    );
+    expect(hostInspect).not.toBeNull();
+
+    fireEvent.click(hostInspect!);
+    expect(screen.getByTestId('infrastructure-map-drawer')).toBeInTheDocument();
+    expect(screen.getByRole('heading', { name: 'pve-spec' })).toBeInTheDocument();
+
+    const list = screen.getByTestId('infrastructure-map-drawer-list');
+    expect(list).toHaveTextContent('app-vm');
+    expect(list).toHaveTextContent('dns-ct');
+    expect(list).not.toHaveTextContent('notes');
+  });
+
+  it('renders factual relationship pills on hover arcs and strips route hostnames under Hide names', () => {
+    resourcesMock.value = [
+      ...resourcesMock.value,
+      resource({
+        id: 'chk-notes',
+        type: 'network-endpoint',
+        name: 'notes-https',
+        platformType: 'availability',
+        status: 'online',
+        availability: {
+          targetKind: 'service',
+          address: 'https://notes.home.arpa',
+          protocol: 'https',
+          applicationStatusCode: 200,
+          available: true,
+          latencyMillis: 12,
+          linkedResourceId: 'ctr-notes',
+        },
+      }),
+    ];
+
+    const { container } = render(() => <InfrastructureMapSurface />);
+    const linkLabels = () =>
+      [...container.querySelectorAll('[data-map-rings] .pulse-map-link-label')].map(
+        (element) => element.textContent?.trim() ?? '',
+      );
+
+    fireEvent.pointerOver(tile(container, 'traefik'));
+    expect(linkLabels()).toContain('notes.home.arpa');
+
+    fireEvent.pointerOver(tile(container, 'notes-https'));
+    expect(linkLabels()).toContain('checks');
+
+    fireEvent.click(screen.getByRole('button', { name: 'Hide names' }));
+    fireEvent.pointerOver(tile(container, 'Traefik'));
+    expect(linkLabels()).toContain('routes');
+    expect(linkLabels().join(' ')).not.toContain('notes.home.arpa');
   });
 });

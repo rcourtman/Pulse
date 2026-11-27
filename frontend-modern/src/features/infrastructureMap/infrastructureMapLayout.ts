@@ -28,6 +28,8 @@ export type MapTone =
 
 export type MapDensity = 'names' | 'marks';
 
+export type MapLayoutMode = 'hosts' | 'roles';
+
 /** Everything the map has an outline glyph for: each platform, the Internet and a gateway. */
 export type MapGlyphKey = MapPlatform | 'internet' | 'gateway' | 'switch' | 'access-point';
 
@@ -35,7 +37,8 @@ export type MapInspectTarget =
   | { kind: 'group'; groupKey: string; initialFilter?: 'all' | 'attention' | 'off' }
   | { kind: 'network'; networkId: string }
   | { kind: 'all-networks' }
-  | { kind: 'traffic' };
+  | { kind: 'traffic' }
+  | { kind: 'exposed' };
 
 export interface MapHit {
   id: string;
@@ -44,6 +47,14 @@ export interface MapHit {
   health: MapHealth;
   cpu?: number;
   memory?: number;
+  vmid?: number;
+  composeProject?: string;
+  cpuCores?: number;
+  memoryTotalBytes?: number;
+  versionLabel?: string;
+  usedPercent?: number;
+  sizeLabel?: string;
+  vdevLayout?: string;
   netRxBytes?: number;
   netTxBytes?: number;
   latencyMs?: number;
@@ -62,6 +73,8 @@ export interface MapHit {
   links?: string[];
   /** The tiles those connections join it to, by id. Only ones that are drawn. */
   linked?: string[];
+  /** Short factual relationship labels for linked peer tiles, keyed by peer id. */
+  linkLabels?: Record<string, string>;
   /** A tile that stands for several things is not a resource and opens nothing. */
   navigable: boolean;
   /** Set on a thing nothing monitors: its tile opens a new check for this address. */
@@ -79,6 +92,7 @@ export type SceneNode =
       h: number;
       r: number;
       fill: MapTone | MapHealth | 'none';
+      opacity?: number;
       stroke?: MapTone | MapHealth;
       dashed?: boolean;
       activity?: MapTrafficTier;
@@ -90,7 +104,7 @@ export type SceneNode =
       text: string;
       size: number;
       weight: 400 | 500 | 600;
-      fill: MapTone;
+      fill: MapTone | MapHealth;
       anchor?: 'start' | 'middle' | 'end';
       /** Uppercase section labels are tracked out, as table headers are. */
       caps?: boolean;
@@ -112,7 +126,8 @@ export type SceneNode =
       /** A connector through the given corners, with an arrowhead at the end. */
       kind: 'line';
       points: Array<[number, number]>;
-      tone: MapTone;
+      tone: MapTone | MapHealth;
+      strokeWidth?: number;
       dashed?: boolean;
       arrow?: boolean;
       activity?: MapTrafficTier;
@@ -140,7 +155,7 @@ export interface MapLayoutOptions {
   width: number;
   density: MapDensity;
   /** Drawn above the map in an exported image; the page has its own toolbar. */
-  header?: { title: string; facts: string[]; footer: string };
+  header?: { title: string; facts: string[]; footer: string; showLinkSpeedKey?: boolean };
   /**
    * Lets a name take a second line. A saved image has no hover to read a
    * cut-off name from; the page does, and has to fit one screen.
@@ -154,6 +169,8 @@ export interface MapLayoutOptions {
   nameWidth?: number;
   /** Highlight active tiles, network pills, and live connectors on the interactive page. */
   liveTraffic?: boolean;
+  /** Group workloads inside architectural host frames or by service role. */
+  layoutMode?: MapLayoutMode;
 }
 
 export interface MapCursor {
@@ -464,6 +481,66 @@ export const drawPosterFooter = (
         fill: 'muted',
       });
       x += 12 + textWidth(HEALTH_WORD[health], 11, 400) + POSTER_LEGEND_GAP;
+    }
+    if (header.showLinkSpeedKey) {
+      const barW = 14;
+      const barGap = 5;
+      const pairGap = 10;
+      const label10gW = textWidth('10G', 10, 500);
+      const label1gW = textWidth('1G', 10, 500);
+      const titleW = textWidth('Link speed', 11, 400);
+      const keyWidth = barW + barGap + label10gW + pairGap + barW + barGap + label1gW + 8 + titleW;
+      if (x + keyWidth + POSTER_LEGEND_GAP <= footerLeft) {
+        out.nodes.push({
+          kind: 'rect',
+          x,
+          y: baseline - 4 - 2.75 / 2,
+          w: barW,
+          h: 2.75,
+          r: 1.375,
+          fill: 'accent',
+        });
+        x += barW + barGap;
+        out.nodes.push({
+          kind: 'text',
+          x,
+          y: baseline,
+          text: '10G',
+          size: 10,
+          weight: 500,
+          fill: 'muted',
+        });
+        x += label10gW + pairGap;
+        out.nodes.push({
+          kind: 'rect',
+          x,
+          y: baseline - 4 - 1.75 / 2,
+          w: barW,
+          h: 1.75,
+          r: 0.875,
+          fill: 'accent',
+        });
+        x += barW + barGap;
+        out.nodes.push({
+          kind: 'text',
+          x,
+          y: baseline,
+          text: '1G',
+          size: 10,
+          weight: 500,
+          fill: 'muted',
+        });
+        x += label1gW + 8;
+        out.nodes.push({
+          kind: 'text',
+          x,
+          y: baseline,
+          text: 'Link speed',
+          size: 11,
+          weight: 400,
+          fill: 'muted',
+        });
+      }
     }
   }
   return baseline + margin - 8;

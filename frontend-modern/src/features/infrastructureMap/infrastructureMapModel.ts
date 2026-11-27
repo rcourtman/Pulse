@@ -84,6 +84,10 @@ export interface MapItem {
   typeLabel: string;
   health: MapHealth;
   status: string;
+  /** Proxmox VM or LXC numeric identifier, when known. */
+  vmid?: number;
+  /** Docker Compose project name, when an app container belongs to a Compose stack. */
+  composeProject?: string;
   cpu?: number;
   memory?: number;
   /** Live inbound network rate in bytes per second, when collected. */
@@ -151,6 +155,10 @@ export interface MapPool {
   health: MapHealth;
   usedPercent?: number;
   sizeLabel?: string;
+  /** ZFS or storage vdev layout for display (e.g. `mirror`, `raidz2`). */
+  vdevLayout?: string;
+  /** Storage driver or backend type (e.g. `zfspool`, `nfs`, `pbs`). */
+  storageType?: string;
   /** A place backups are written to, as opposed to one guests run from. */
   backup?: boolean;
   totalBytes?: number;
@@ -170,6 +178,12 @@ export interface MapHost {
   typeLabel: string;
   health: MapHealth;
   status: string;
+  /** Logical CPU cores reported for the host, when positive. */
+  cpuCores?: number;
+  /** Total physical memory in bytes reported for the host, when positive. */
+  memoryTotalBytes?: number;
+  /** Short truthful platform or OS version label (e.g. `PVE 8.3`, `Docker 27.3`, `Debian 12`). */
+  versionLabel?: string;
   cpu?: number;
   memory?: number;
   /** Live inbound network rate in bytes per second, when collected. */
@@ -304,6 +318,71 @@ const finitePercent = (value: number | undefined): number | undefined =>
 
 const finiteNonNegative = (value: number | undefined): number | undefined =>
   typeof value === 'number' && Number.isFinite(value) && value >= 0 ? value : undefined;
+
+const positiveInt = (value: number | undefined): number | undefined =>
+  typeof value === 'number' && Number.isFinite(value) && Number.isInteger(value) && value > 0
+    ? value
+    : undefined;
+
+const positiveFinite = (value: number | undefined): number | undefined =>
+  typeof value === 'number' && Number.isFinite(value) && value > 0 ? value : undefined;
+
+const extractMajorMinor = (raw: string | undefined): string | undefined => {
+  const value = clean(raw);
+  if (!value) return undefined;
+  const match = value.match(/(\d+\.\d+)/) ?? value.match(/(\d+)/);
+  return match?.[1];
+};
+
+const hostCpuCoresOf = (resource: Resource): number | undefined =>
+  positiveInt(resource.proxmox?.cpus) ??
+  positiveInt(resource.agent?.cpuCount) ??
+  positiveInt(resource.docker?.cpus) ??
+  positiveInt(resource.vmware?.cpuCount);
+
+const hostMemoryTotalBytesOf = (resource: Resource): number | undefined =>
+  positiveFinite(resource.memory?.total) ??
+  positiveFinite(resource.proxmox?.memory?.total) ??
+  positiveFinite(resource.agent?.memory?.total) ??
+  positiveFinite(resource.docker?.memory?.total);
+
+const hostVersionLabelOf = (resource: Resource): string | undefined => {
+  const pve = extractMajorMinor(resource.proxmox?.pveVersion);
+  if (pve) return `PVE ${pve}`;
+
+  const docker = extractMajorMinor(resource.docker?.dockerVersion);
+  if (docker) return `Docker ${docker}`;
+
+  const runtimeVer = extractMajorMinor(resource.docker?.runtimeVersion);
+  if (runtimeVer) {
+    const runtime = clean(resource.docker?.runtime).toLowerCase();
+    const prefix = runtime === 'podman' ? 'Podman' : 'Docker';
+    return `${prefix} ${runtimeVer}`;
+  }
+
+  const pbs = extractMajorMinor(resource.pbs?.version);
+  if (pbs) return `PBS ${pbs}`;
+
+  const pmg = extractMajorMinor(resource.pmg?.version);
+  if (pmg) return `PMG ${pmg}`;
+
+  const truenas = extractMajorMinor(resource.truenas?.version);
+  if (truenas) return `TrueNAS ${truenas}`;
+
+  const k8s = extractMajorMinor(resource.kubernetes?.version);
+  if (k8s) return `K8s ${k8s}`;
+
+  const rawOsName = clean(resource.agent?.osName)
+    .replace(/\([^)]*\)/g, '')
+    .replace(/\bGNU\/Linux\b/gi, '')
+    .replace(/\s+/g, ' ')
+    .trim();
+  if (!rawOsName) return undefined;
+  const osMajor = clean(resource.agent?.osVersion).match(/(\d+)/)?.[1];
+  const hasMajor = osMajor !== undefined && new RegExp(`(^|\\D)${osMajor}(\\D|$)`).test(rawOsName);
+  const combined = osMajor && !hasMajor ? `${rawOsName} ${osMajor}` : rawOsName;
+  return combined.length > 18 ? combined.slice(0, 18).trimEnd() : combined;
+};
 
 const HOST_LOCAL_INTERFACE =
   /^(lo|docker\d*|podman\d*|br-[0-9a-f]{12}|veth.*|virbr\d*|cni.*|flannel.*|cali.*|kube-ipvs\d*)$/i;
@@ -657,6 +736,13 @@ const toItem = (
   const dockerNetworks = dockerNetworksOf(resource);
   const probeSummary = probeSummaryOf(resource);
   const certWarning = certWarningOf(resource);
+  const vmid = positiveInt(resource.proxmox?.vmid);
+  const composeProject =
+    resource.type === 'app-container'
+      ? clean(resource.docker?.composeProject) ||
+        clean(resource.docker?.podman?.composeProject) ||
+        undefined
+      : undefined;
   const detail =
     resource.type === 'app-container'
       ? publishedPorts(resource)
@@ -670,6 +756,8 @@ const toItem = (
     typeLabel,
     health,
     status: resource.status,
+    ...(vmid !== undefined ? { vmid } : {}),
+    ...(composeProject ? { composeProject } : {}),
     cpu: finitePercent(resource.cpu?.current),
     memory: finitePercent(getMemoryPercent(resource)),
     ...rates,
@@ -749,6 +837,8 @@ const isBackupTarget = (resource: Resource): boolean =>
 const toPool = (resource: Resource): MapPool => {
   const total = resource.disk?.total;
   const used = resource.disk?.used;
+  const vdevLayout = clean(resource.storage?.vdevLayout) || undefined;
+  const storageType = clean(resource.storage?.type) || undefined;
   const consumerIds = (resource.storage?.topConsumers ?? [])
     .map((consumer) => clean(consumer.resourceId))
     .filter(Boolean);
@@ -758,6 +848,8 @@ const toPool = (resource: Resource): MapPool => {
     health: resolveMapHealth(resource),
     usedPercent: finitePercent(getDiskPercent(resource)),
     sizeLabel: typeof total === 'number' && total > 0 ? formatBytes(total, 0) : undefined,
+    ...(vdevLayout ? { vdevLayout } : {}),
+    ...(storageType ? { storageType } : {}),
     ...(isBackupTarget(resource) ? { backup: true } : {}),
     ...(typeof total === 'number' && total > 0 && typeof used === 'number' && used >= 0
       ? { totalBytes: total, usedBytes: used }
@@ -867,6 +959,9 @@ export function buildInfrastructureMapModel(
       rates.netTxBytes,
       nic.linkSpeedMbps,
     );
+    const cpuCores = hostCpuCoresOf(resource);
+    const memoryTotalBytes = hostMemoryTotalBytesOf(resource);
+    const versionLabel = hostVersionLabelOf(resource);
     drafts.set(resource.id, {
       resource,
       sections: new Map(),
@@ -878,6 +973,9 @@ export function buildInfrastructureMapModel(
         typeLabel: HOST_TYPE_LABEL[platform],
         health,
         status: resource.status,
+        ...(cpuCores !== undefined ? { cpuCores } : {}),
+        ...(memoryTotalBytes !== undefined ? { memoryTotalBytes } : {}),
+        ...(versionLabel ? { versionLabel } : {}),
         cpu: finitePercent(resource.cpu?.current),
         memory: finitePercent(getMemoryPercent(resource)),
         ...rates,
@@ -1194,6 +1292,8 @@ export function anonymizeInfrastructureMapModel(
         address: _address,
         dockerNetworks: _dockerNetworks,
         ingressHosts: _ingressHosts,
+        composeProject: _composeProject,
+        vmid: _vmid,
         ...item
       }) => ({
         ...item,

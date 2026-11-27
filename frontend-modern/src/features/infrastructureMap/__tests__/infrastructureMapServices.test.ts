@@ -14,8 +14,12 @@ import {
 import {
   buildServiceDiagram,
   collectActiveTrafficTiles,
+  collectDiagramGroups,
+  collectExposedEntries,
   collectNetworkTiles,
   compareDiagramTilesByTraffic,
+  countDiagramResources,
+  findDiagramGroup,
   formatMapLatency,
   formatMapLinkSpeed,
   type DiagramGroup,
@@ -591,8 +595,8 @@ describe('buildServiceDiagram', () => {
       const diagram = buildServiceDiagram(buildInfrastructureMapModel(unraid()));
 
       expect(between(diagram)).toEqual([
-        { fromId: 'c-prowlarr', toId: 'c-gluetun' },
-        { fromId: 'c-qbittorrent', toId: 'c-gluetun' },
+        { fromId: 'c-prowlarr', toId: 'c-gluetun', label: 'via gluetun' },
+        { fromId: 'c-qbittorrent', toId: 'c-gluetun', label: 'via gluetun' },
       ]);
       const client = tileOf(diagram, 'c-qbittorrent');
       expect(client?.caption).toBe('via gluetun');
@@ -639,7 +643,9 @@ describe('buildServiceDiagram', () => {
         ]),
       );
 
-      expect(between(diagram)).toEqual([{ fromId: 'c-traefik', toId: 'c-jellyfin' }]);
+      expect(between(diagram)).toEqual([
+        { fromId: 'c-traefik', toId: 'c-jellyfin', label: 'media.example.test' },
+      ]);
       // Where it answers is its caption, in place of the host it runs on.
       expect(tileOf(diagram, 'c-jellyfin')?.caption).toBe('media.example.test');
       expect(tileOf(diagram, 'c-jellyfin')?.links).toEqual([
@@ -777,8 +783,8 @@ describe('buildServiceDiagram', () => {
       ]);
 
       expect(between(diagram)).toEqual([
-        { fromId: 'c-traefik', toId: 'c-wiki-internal' },
-        { fromId: 'gateway:0', toId: 'tower' },
+        { fromId: 'c-traefik', toId: 'c-wiki-internal', label: 'routes' },
+        { fromId: 'gateway:0', toId: 'tower', label: 'gateway' },
       ]);
       expect(diagram.gateways.map((tile) => tile.name)).toEqual(['Gateway']);
       expect(written).toContain('Routed by Traefik');
@@ -1157,6 +1163,8 @@ describe('buildServiceDiagram', () => {
       links: [],
       networks: [],
       groups: [],
+      hostFrames: [],
+      exposed: [],
       serviceCount: 0,
     });
   });
@@ -1780,6 +1788,831 @@ describe('buildServiceDiagram', () => {
       expect(hiddenTile.links).toBeUndefined();
       expect(hiddenTile.detail).toBe(':30300');
       expect(JSON.stringify(hiddenTile)).not.toContain('example.test');
+    });
+  });
+
+  describe('host frames, Compose stacks, shared storage, and exposed entries', () => {
+    const GIB = 1024 ** 3;
+    const hex = (seed: string): string =>
+      [...seed]
+        .map((char) => char.charCodeAt(0).toString(16).padStart(2, '0'))
+        .join('')
+        .padEnd(64, '0')
+        .slice(0, 64);
+
+    const archEstate = (): Resource[] => [
+      resource({
+        id: 'pve-1',
+        type: 'agent',
+        name: 'pve-01',
+        platformType: 'proxmox-pve',
+        clusterId: 'lab-cluster',
+        proxmox: {
+          isClusterMember: true,
+          cpus: 16,
+          pveVersion: '8.3.0/abc',
+          memory: { total: 64 * GIB },
+        },
+        agent: {
+          networkInterfaces: [
+            { name: 'vmbr0', addresses: ['10.30.0.10/24'], speedMbps: 10000, linkUp: true },
+          ],
+        },
+      }),
+      resource({
+        id: 'vm-notes',
+        type: 'vm',
+        name: 'notes-vm',
+        platformType: 'proxmox-pve',
+        parentId: 'pve-1',
+        status: 'running',
+        proxmox: { vmid: 102 },
+        identity: { ips: ['10.30.0.102'] },
+        network: { rxBytes: 2_000_000, txBytes: 1_000_000 },
+        health: { verdict: 'attention', reasons: [{ code: 'high_cpu' }] },
+      }),
+      guest('adguard', 'pve-1', {
+        proxmox: { vmid: 105 },
+        identity: { ips: ['10.30.0.53'] },
+      }),
+      resource({
+        id: 'pve-1-zfs',
+        type: 'storage',
+        name: 'nvme-pool',
+        platformType: 'proxmox-pve',
+        parentId: 'pve-1',
+        disk: { current: 54, total: 2000 * GIB, used: 1080 * GIB },
+        storage: {
+          vdevLayout: 'mirror',
+          type: 'zfspool',
+          topConsumers: [{ resourceId: 'vm-notes', resourceType: 'vm', name: 'notes-vm' }],
+        },
+      }),
+      resource({
+        id: 'pve-1-pbs',
+        type: 'storage',
+        name: 'pbs-backup',
+        platformType: 'proxmox-pve',
+        parentId: 'pve-1',
+        disk: { current: 41, total: 4000 * GIB, used: 1640 * GIB },
+        storage: { type: 'pbs', content: 'backup' },
+      }),
+      resource({
+        id: 'cluster-nfs',
+        type: 'storage',
+        name: 'truenas-nfs',
+        platformType: 'proxmox-pve',
+        proxmox: { instance: 'lab-cluster' },
+        disk: { current: 78, total: 10000 * GIB, used: 7800 * GIB },
+        storage: { type: 'nfs', shared: true },
+      }),
+      resource({
+        id: 'dock-1',
+        type: 'docker-host',
+        name: 'docker-prod',
+        platformType: 'docker',
+        docker: {
+          cpus: 8,
+          dockerVersion: '27.3.1',
+          memory: { total: 32 * GIB },
+        },
+        agent: {
+          networkInterfaces: [
+            { name: 'eth0', addresses: ['10.30.0.20/24'], speedMbps: 2500, linkUp: true },
+          ],
+        },
+        network: { rxBytes: 30_000_000, txBytes: 5_000_000 },
+      }),
+      resource({
+        id: 'c-traefik',
+        type: 'app-container',
+        name: 'traefik',
+        platformType: 'docker',
+        parentId: 'dock-1',
+        status: 'running',
+        docker: {
+          hostSourceId: 'dock-1',
+          containerId: hex('traefik'),
+          containerState: 'running',
+          image: 'traefik:v3.1',
+          composeProject: 'edge-stack',
+          networks: [{ name: 'proxy_net' }],
+          ports: [{ publicPort: 443, privatePort: 443 }],
+        },
+      }),
+      resource({
+        id: 'c-sonarr',
+        type: 'app-container',
+        name: 'sonarr',
+        platformType: 'docker',
+        parentId: 'dock-1',
+        status: 'running',
+        docker: {
+          hostSourceId: 'dock-1',
+          containerId: hex('sonarr'),
+          containerState: 'running',
+          image: 'lscr.io/linuxserver/sonarr:latest',
+          composeProject: 'media-stack',
+          networks: [{ name: 'proxy_net' }],
+          ports: [{ publicPort: 8989, privatePort: 8989 }],
+          labels: {
+            'traefik.enable': 'true',
+            'traefik.http.routers.sonarr.rule': 'Host(`tv.home.arpa`)',
+          },
+        },
+      }),
+      resource({
+        id: 'c-radarr',
+        type: 'app-container',
+        name: 'radarr',
+        platformType: 'docker',
+        parentId: 'dock-1',
+        status: 'running',
+        docker: {
+          hostSourceId: 'dock-1',
+          containerId: hex('radarr'),
+          image: 'lscr.io/linuxserver/radarr:latest',
+          composeProject: 'media-stack',
+          ports: [{ publicPort: 7878, privatePort: 7878 }],
+        },
+      }),
+      resource({
+        id: 'c-grafana',
+        type: 'app-container',
+        name: 'grafana',
+        platformType: 'docker',
+        parentId: 'dock-1',
+        status: 'running',
+        docker: {
+          hostSourceId: 'dock-1',
+          containerId: hex('grafana'),
+          image: 'grafana/grafana:latest',
+          composeProject: 'alpha-obs',
+          ports: [{ publicPort: 3000, privatePort: 3000 }],
+        },
+      }),
+      resource({
+        id: 'c-prometheus',
+        type: 'app-container',
+        name: 'prometheus',
+        platformType: 'docker',
+        parentId: 'dock-1',
+        status: 'running',
+        docker: {
+          hostSourceId: 'dock-1',
+          containerId: hex('prometheus'),
+          image: 'prom/prometheus:latest',
+          composeProject: 'alpha-obs',
+        },
+      }),
+      resource({
+        id: 'c-solo',
+        type: 'app-container',
+        name: 'portainer',
+        platformType: 'docker',
+        parentId: 'dock-1',
+        status: 'running',
+        docker: {
+          hostSourceId: 'dock-1',
+          containerId: hex('portainer'),
+          image: 'portainer/portainer-ce:latest',
+          composeProject: 'solo-stack',
+          ports: [{ publicPort: 9000, privatePort: 9000 }],
+        },
+      }),
+      resource({
+        id: 'check-site',
+        type: 'network-endpoint',
+        name: 'Status page',
+        platformType: 'availability',
+        availability: {
+          address: '10.30.0.80',
+          protocol: 'https',
+          applicationStatusCode: 200,
+          available: true,
+          latencyMillis: 8,
+        },
+      }),
+    ];
+
+    it('builds hostFrames with hardware specs, VMIDs, Compose stacks, local pools, sharedStorage, and checks', () => {
+      const diagram = diagramOf(archEstate());
+
+      expect(diagram.hostFrames.map((frame) => frame.id)).toEqual(['pve-1', 'dock-1']);
+
+      const pveFrame = diagram.hostFrames[0];
+      expect(pveFrame.clusterName).toBe('lab-cluster');
+      expect(pveFrame.host).toMatchObject({
+        name: 'pve-01',
+        cpuCores: 16,
+        memoryTotalBytes: 64 * GIB,
+        versionLabel: 'PVE 8.3',
+        linkSpeedMbps: 10000,
+      });
+      expect(pveFrame.linkSpeedMbps).toBe(10000);
+      // Child workload traffic propagates onto the host frame trafficTier.
+      expect(pveFrame.trafficTier).toBe('medium');
+      // Access tile (adguard) lives in WAYS IN, never duplicated inside hostFrames.
+      expect(pveFrame.looseTiles.map((tile) => tile.id)).toEqual(['vm-notes']);
+      expect(pveFrame.looseTiles[0]).toMatchObject({
+        vmid: 102,
+        hostId: 'pve-1',
+        hostName: 'pve-01',
+      });
+      expect(pveFrame.attentionCount).toBe(1);
+      expect(pveFrame.totalCount).toBe(1);
+      expect(pveFrame.overflowCount).toBe(0);
+      // Local non-backup pool appears on the host frame, while backup pool stays in backups.
+      expect(pveFrame.pools).toHaveLength(1);
+      expect(pveFrame.pools[0]).toMatchObject({
+        id: 'pve-1-zfs',
+        name: 'nvme-pool',
+        usedPercent: 54,
+        vdevLayout: 'mirror',
+        storageType: 'zfspool',
+        navigable: true,
+        links: ['Used by notes-vm'],
+      });
+      expect(pveFrame.pools[0].sizeLabel).toBeDefined();
+
+      const dockFrame = diagram.hostFrames[1];
+      expect(dockFrame.clusterName).toBeUndefined();
+      expect(dockFrame.host).toMatchObject({
+        name: 'docker-prod',
+        cpuCores: 8,
+        memoryTotalBytes: 32 * GIB,
+        versionLabel: 'Docker 27.3',
+      });
+      expect(dockFrame.trafficTier).toBe('high');
+      expect(dockFrame.linkSpeedMbps).toBe(2500);
+      // Traefik is in WAYS IN, excluded from hostFrame workloads.
+      expect(dockFrame.allTiles.some((tile) => tile.id === 'c-traefik')).toBe(false);
+      // 2+ containers with the same composeProject form alphabetically sorted stacks.
+      expect(
+        dockFrame.stacks.map((stack) => [stack.label, stack.tiles.map((t) => t.name)]),
+      ).toEqual([
+        ['alpha-obs', ['grafana', 'prometheus']],
+        ['media-stack', ['radarr', 'sonarr']],
+      ]);
+      // A single-container composeProject stays in looseTiles.
+      expect(dockFrame.looseTiles.map((tile) => tile.name)).toEqual(['portainer']);
+      expect(dockFrame.looseTiles[0].composeProject).toBe('solo-stack');
+
+      // Shared storage excludes local pools and backup pools.
+      expect(diagram.sharedStorage?.tiles.map((tile) => tile.id)).toEqual(['cluster-nfs']);
+      expect(diagram.sharedStorage?.tiles[0]).toMatchObject({
+        usedPercent: 78,
+        storageType: 'nfs',
+      });
+      // Backups holds backup pools.
+      expect(diagram.backups?.tiles.map((tile) => tile.id)).toEqual(['pve-1-pbs']);
+      // Checks exposes plain non-gear checks directly.
+      expect(diagram.checks?.tiles.map((tile) => tile.id)).toEqual(['check-site']);
+    });
+
+    it('caps hostFrames workloads via maxTilesPerGroup and resolves host:<id> via findDiagramGroup without double-counting', () => {
+      const resources = archEstate();
+      const diagram = diagramOf(resources, 2);
+      const baseCount = countDiagramResources(diagram);
+
+      const dockFrame = diagram.hostFrames.find((frame) => frame.id === 'dock-1')!;
+      expect(dockFrame.totalCount).toBe(5);
+      expect(dockFrame.overflowCount).toBe(3);
+      expect(dockFrame.allTiles).toHaveLength(5);
+
+      const hostGroup = findDiagramGroup(diagram, 'host:dock-1');
+      expect(hostGroup).toMatchObject({
+        key: 'host:dock-1',
+        label: 'docker-prod',
+        count: 5,
+      });
+      expect(hostGroup?.allTiles).toHaveLength(5);
+      expect(findDiagramGroup(diagram, 'shared-storage')?.key).toBe('shared-storage');
+      expect(findDiagramGroup(diagram, 'checks')?.key).toBe('checks');
+      expect(findDiagramGroup(diagram, 'host:missing')).toBeUndefined();
+
+      // collectDiagramGroups never double-counts host frames.
+      expect(collectDiagramGroups(diagram).some((group) => group.key.startsWith('host:'))).toBe(
+        false,
+      );
+      expect(countDiagramResources(diagram)).toBe(baseCount);
+    });
+
+    it('filters hostFrames by attentionOnly and query, keeping matching hosts or hosts with matching children', () => {
+      const model = buildInfrastructureMapModel(archEstate());
+
+      const attentionOnly = buildServiceDiagram(model, { filter: { attentionOnly: true } });
+      expect(attentionOnly.hostFrames.map((frame) => frame.id)).toEqual(['pve-1']);
+      expect(attentionOnly.hostFrames[0].allTiles.map((tile) => tile.id)).toEqual(['vm-notes']);
+
+      const byStack = buildServiceDiagram(model, { filter: { query: 'media-stack' } });
+      expect(byStack.hostFrames.map((frame) => frame.id)).toEqual(['dock-1']);
+      expect(byStack.hostFrames[0].stacks.map((stack) => stack.label)).toEqual(['media-stack']);
+      expect(byStack.hostFrames[0].looseTiles).toEqual([]);
+
+      const byVmid = buildServiceDiagram(model, { filter: { query: '102' } });
+      expect(byVmid.hostFrames.map((frame) => frame.id)).toEqual(['pve-1']);
+      expect(byVmid.hostFrames[0].allTiles.map((tile) => tile.id)).toEqual(['vm-notes']);
+    });
+
+    it('collects and sorts exposed services from reverse proxies, K8s Ingresses, and published ports, and respects filters and Hide names', () => {
+      const resources: Resource[] = [
+        ...archEstate(),
+        resource({ id: 'k8s', type: 'k8s-cluster', name: 'k3s', platformType: 'kubernetes' }),
+        resource({
+          id: 'pod-api',
+          type: 'pod',
+          name: 'api-0',
+          platformType: 'kubernetes',
+          parentId: 'k8s',
+          status: 'running',
+          kubernetes: { namespace: 'prod', labels: { app: 'api' } },
+        }),
+        resource({
+          id: 'svc-api',
+          type: 'k8s-service',
+          name: 'api-svc',
+          platformType: 'kubernetes',
+          parentId: 'k8s',
+          kubernetes: {
+            namespace: 'prod',
+            serviceType: 'NodePort',
+            servicePorts: [{ port: 8080, nodePort: 30808 }],
+            selector: { app: 'api' },
+          },
+        }),
+        resource({
+          id: 'ing-api',
+          type: 'k8s-ingress',
+          name: 'api-ing',
+          platformType: 'kubernetes',
+          parentId: 'k8s',
+          kubernetes: {
+            namespace: 'prod',
+            serviceName: 'api-svc',
+            hosts: ['API.Cluster.Local'],
+          },
+        }),
+      ];
+
+      const model = buildInfrastructureMapModel(resources);
+      const diagram = buildServiceDiagram(model);
+      const exposed = collectExposedEntries(diagram);
+
+      // Proxied/ingress entries come first (alphabetically by name), then published-port-only entries.
+      expect(
+        exposed.map((entry) => ({
+          id: entry.tile.id,
+          hostnames: entry.hostnames,
+          ports: entry.ports,
+          proxyName: entry.proxyName,
+          groupLabel: entry.groupLabel,
+        })),
+      ).toEqual([
+        {
+          id: 'pod-api',
+          hostnames: ['api.cluster.local'],
+          ports: ':30808',
+          proxyName: undefined,
+          groupLabel: 'Other',
+        },
+        {
+          id: 'c-sonarr',
+          hostnames: ['tv.home.arpa'],
+          ports: ':8989',
+          proxyName: 'traefik',
+          groupLabel: 'Media',
+        },
+        {
+          id: 'c-grafana',
+          hostnames: [],
+          ports: ':3000',
+          proxyName: undefined,
+          groupLabel: 'Monitoring',
+        },
+        {
+          id: 'c-solo',
+          hostnames: [],
+          ports: ':9000',
+          proxyName: undefined,
+          groupLabel: 'Monitoring',
+        },
+        {
+          id: 'c-radarr',
+          hostnames: [],
+          ports: ':7878',
+          proxyName: undefined,
+          groupLabel: 'Media',
+        },
+        {
+          id: 'c-traefik',
+          hostnames: [],
+          ports: ':443',
+          proxyName: undefined,
+          groupLabel: 'Ways in',
+        },
+      ]);
+
+      // Filtered diagram filters exposed entries to matching services.
+      const filtered = buildServiceDiagram(model, { filter: { query: 'sonarr' } });
+      expect(collectExposedEntries(filtered).map((entry) => entry.tile.id)).toEqual(['c-sonarr']);
+
+      // Hide names strips Compose stacks, VMIDs, and exposed hostnames while retaining published ports and hardware specs.
+      const hidden = buildServiceDiagram(anonymizeInfrastructureMapModel(model));
+      const hiddenDock = hidden.hostFrames.find((frame) => frame.id === 'dock-1')!;
+      const hiddenPve = hidden.hostFrames.find((frame) => frame.id === 'pve-1')!;
+      expect(hiddenDock.stacks).toEqual([]);
+      expect(hiddenDock.host.versionLabel).toBe('Docker 27.3');
+      expect(hiddenPve.host.cpuCores).toBe(16);
+      expect(hiddenPve.looseTiles[0].vmid).toBeUndefined();
+      expect(hiddenPve.pools[0].vdevLayout).toBe('mirror');
+
+      const hiddenSonarr = collectExposedEntries(hidden).find(
+        (entry) => entry.tile.id === 'c-sonarr',
+      )!;
+      expect(hiddenSonarr.hostnames).toEqual([]);
+      expect(hiddenSonarr.ports).toBe(':8989');
+      expect(hiddenSonarr.proxyName).toBe('Traefik');
+
+      const serialized = JSON.stringify([hidden.hostFrames, hidden.exposed]);
+      expect(serialized).not.toContain('media-stack');
+      expect(serialized).not.toContain('alpha-obs');
+      expect(serialized).not.toContain('tv.home.arpa');
+      expect(serialized).not.toContain('api.cluster.local');
+    });
+
+    it('attaches factual link labels across relationship types and preserves specificity over runs on', () => {
+      const TB = 1_000_000_000_000;
+      const resources: Resource[] = [
+        resource({
+          id: 'pve-1',
+          type: 'agent',
+          name: 'pve-01',
+          platformType: 'proxmox-pve',
+          agent: {
+            networkInterfaces: [{ name: 'vmbr0', addresses: ['192.168.10.10/24'] }],
+            defaultGateways: [{ address: '192.168.10.1', interface: 'vmbr0' }],
+            dnsServers: ['192.168.10.53'],
+          },
+        }),
+        resource({
+          id: 'pve-2',
+          type: 'agent',
+          name: 'pve-02',
+          platformType: 'proxmox-pve',
+          agent: {
+            networkInterfaces: [{ name: 'vmbr0', addresses: ['192.168.10.11/24'] }],
+            defaultGateways: [{ address: '10.99.0.1', interface: 'eth0' }],
+            dnsServers: ['192.168.10.53'],
+          },
+        }),
+        // Monitored gateway running on pve-1: 'gateway' must win over generic 'runs on'.
+        guest('opnsense', 'pve-1', { identity: { ips: ['192.168.10.1'] } }),
+        // Monitored DNS resolver running on pve-1: 'DNS' must win over generic 'runs on'.
+        guest('adguard', 'pve-1', { identity: { ips: ['192.168.10.53'] } }),
+        // Regular guest mounting a pool and targeted by a check.
+        guest('jellyfin', 'pve-1', {
+          identity: { ips: ['192.168.10.50'] },
+          proxmox: {
+            disks: [
+              { mountpoint: '/', device: 'local-zfs:subvol-1-disk-0', total: 8e9, used: 2e9 },
+              {
+                mountpoint: '/media',
+                device: '/mnt/media',
+                filesystem: 'mp0',
+                total: 10 * TB,
+                used: 6 * TB,
+              },
+            ],
+          },
+        }),
+        resource({
+          id: 'pool-media',
+          type: 'storage',
+          name: 'media-array',
+          platformType: 'proxmox-pve',
+          parentId: 'pve-2',
+          disk: { current: 60, total: 10 * TB, used: 6 * TB },
+        }),
+        resource({
+          id: 'pool-local',
+          type: 'storage',
+          name: 'local-zfs',
+          platformType: 'proxmox-pve',
+          parentId: 'pve-1',
+          storage: {
+            topConsumers: [
+              { resourceId: 'ct-adguard', resourceType: 'system-container', name: 'adguard' },
+            ],
+          },
+        }),
+        resource({
+          id: 'pool-pbs',
+          type: 'storage',
+          name: 'pbs-store',
+          platformType: 'proxmox-pve',
+          parentId: 'pve-1',
+          storage: { type: 'pbs', content: 'backup' },
+        }),
+        resource({
+          id: 'check-jf',
+          type: 'network-endpoint',
+          name: 'Jellyfin HTTPS',
+          availability: {
+            address: '192.168.10.50',
+            targetKind: 'service',
+            linkedResourceId: 'ct-jellyfin',
+          },
+        }),
+        resource({
+          id: 'dock-1',
+          type: 'docker-host',
+          name: 'docker-prod',
+          platformType: 'docker',
+        }),
+        resource({
+          id: 'c-traefik',
+          type: 'app-container',
+          name: 'traefik',
+          platformType: 'docker',
+          parentId: 'dock-1',
+          status: 'running',
+          docker: {
+            hostSourceId: 'dock-1',
+            containerId: hex('traefik'),
+            image: 'traefik:v3.1',
+            networks: [{ name: 'proxy_net' }],
+          },
+        }),
+        resource({
+          id: 'c-gluetun',
+          type: 'app-container',
+          name: 'gluetun',
+          platformType: 'docker',
+          parentId: 'dock-1',
+          status: 'running',
+          docker: {
+            hostSourceId: 'dock-1',
+            containerId: hex('gluetun'),
+            image: 'qmcgaw/gluetun:latest',
+            networks: [{ name: 'proxy_net' }],
+          },
+        }),
+        resource({
+          id: 'c-sonarr',
+          type: 'app-container',
+          name: 'sonarr',
+          platformType: 'docker',
+          parentId: 'dock-1',
+          status: 'running',
+          docker: {
+            hostSourceId: 'dock-1',
+            containerId: hex('sonarr'),
+            image: 'lscr.io/linuxserver/sonarr:latest',
+            networkMode: `container:${hex('gluetun')}`,
+            labels: {
+              'traefik.enable': 'true',
+              'traefik.http.routers.sonarr.rule': 'Host(`tv.example.test`)',
+            },
+          },
+        }),
+      ];
+
+      const model = buildInfrastructureMapModel(resources);
+      const diagram = buildServiceDiagram(model);
+      const labelBetween = (a: string, b: string) =>
+        diagram.links.find(
+          (link) =>
+            (link.fromId === a && link.toId === b) || (link.fromId === b && link.toId === a),
+        )?.label;
+
+      expect(labelBetween('c-traefik', 'c-sonarr')).toBe('tv.example.test');
+      expect(labelBetween('c-sonarr', 'c-gluetun')).toBe('via gluetun');
+      expect(labelBetween('check-jf', 'ct-jellyfin')).toBe('checks');
+      expect(labelBetween('ct-opnsense', 'pve-1')).toBe('gateway');
+      expect(labelBetween('gateway:0', 'pve-2')).toBe('gateway');
+      expect(labelBetween('ct-adguard', 'pve-1')).toBe('DNS');
+      expect(labelBetween('ct-adguard', 'pve-2')).toBe('DNS');
+      expect(labelBetween('ct-jellyfin', 'pve-1')).toBe('runs on');
+      expect(labelBetween('ct-jellyfin', 'pool-media')).toBe('mounts');
+      expect(labelBetween('ct-adguard', 'pool-local')).toBe('storage');
+      expect(labelBetween('pve-1', 'pool-local')).toBe('storage');
+      expect(labelBetween('pve-1', 'pool-pbs')).toBe('backups');
+
+      // Under Hide names, reverse proxy routes emit 'routes' without leaking hostnames.
+      const hidden = buildServiceDiagram(anonymizeInfrastructureMapModel(model));
+      const hiddenRoute = hidden.links.find(
+        (link) => link.fromId === 'c-traefik' && link.toId === 'c-sonarr',
+      );
+      expect(hiddenRoute?.label).toBe('routes');
+      expect(JSON.stringify(hidden.links)).not.toContain('example.test');
+    });
+
+    it('populates categoryLabel and isRouted on workload tiles for reverse proxy routes and Kubernetes Ingress', () => {
+      const resources: Resource[] = [
+        ...archEstate(),
+        resource({ id: 'k8s', type: 'k8s-cluster', name: 'k3s', platformType: 'kubernetes' }),
+        resource({
+          id: 'pod-api',
+          type: 'pod',
+          name: 'api-0',
+          platformType: 'kubernetes',
+          parentId: 'k8s',
+          status: 'running',
+          kubernetes: { namespace: 'prod', labels: { app: 'api' } },
+        }),
+        resource({
+          id: 'svc-api',
+          type: 'k8s-service',
+          name: 'api-svc',
+          platformType: 'kubernetes',
+          parentId: 'k8s',
+          kubernetes: {
+            namespace: 'prod',
+            serviceType: 'ClusterIP',
+            selector: { app: 'api' },
+          },
+        }),
+        resource({
+          id: 'ing-api',
+          type: 'k8s-ingress',
+          name: 'api-ing',
+          platformType: 'kubernetes',
+          parentId: 'k8s',
+          kubernetes: {
+            namespace: 'prod',
+            serviceName: 'api-svc',
+            hosts: ['api.home.arpa'],
+          },
+        }),
+      ];
+
+      const model = buildInfrastructureMapModel(resources);
+      const diagram = buildServiceDiagram(model);
+
+      const dockFrame = diagram.hostFrames.find((frame) => frame.id === 'dock-1')!;
+      const pveFrame = diagram.hostFrames.find((frame) => frame.id === 'pve-1')!;
+      const k8sFrame = diagram.hostFrames.find((frame) => frame.id === 'k8s')!;
+
+      const sonarr = dockFrame.allTiles.find((tile) => tile.id === 'c-sonarr')!;
+      const radarr = dockFrame.allTiles.find((tile) => tile.id === 'c-radarr')!;
+      const grafana = dockFrame.allTiles.find((tile) => tile.id === 'c-grafana')!;
+      const notes = pveFrame.allTiles.find((tile) => tile.id === 'vm-notes')!;
+      const podApi = k8sFrame.allTiles.find((tile) => tile.id === 'pod-api')!;
+
+      expect(sonarr.categoryLabel).toBe('Media');
+      expect(grafana.categoryLabel).toBe('Monitoring');
+      expect(notes.categoryLabel).toBe('Other');
+      expect(podApi.categoryLabel).toBe('Other');
+
+      expect(sonarr.isRouted).toBe(true);
+      expect(podApi.isRouted).toBe(true);
+      expect(radarr.isRouted).toBeUndefined();
+      expect(grafana.isRouted).toBeUndefined();
+
+      // Reverse proxy isRouted remains true under Hide names while hostnames are stripped.
+      const hidden = buildServiceDiagram(anonymizeInfrastructureMapModel(model));
+      const hiddenSonarr = hidden.hostFrames
+        .find((frame) => frame.id === 'dock-1')
+        ?.allTiles.find((tile) => tile.id === 'c-sonarr');
+      expect(hiddenSonarr?.categoryLabel).toBe('Media');
+      expect(hiddenSonarr?.isRouted).toBe(true);
+    });
+
+    it('attaches clusterId, clusterTypeLabel, and clusterPools on multi-node clusters without duplicating them in sharedStorage', () => {
+      const resources: Resource[] = [
+        resource({
+          id: 'pve-1',
+          type: 'agent',
+          name: 'pve-01',
+          platformType: 'proxmox-pve',
+          clusterId: 'prod-cluster',
+          proxmox: { isClusterMember: true, nodeName: 'pve-01' },
+          health: { verdict: 'attention', reasons: [{ code: 'high_cpu' }] },
+        }),
+        resource({
+          id: 'pve-2',
+          type: 'agent',
+          name: 'pve-02',
+          platformType: 'proxmox-pve',
+          clusterId: 'prod-cluster',
+          proxmox: { isClusterMember: true, nodeName: 'pve-02' },
+        }),
+        guest('jellyfin', 'pve-1'),
+        resource({
+          id: 'cluster-ceph',
+          type: 'storage',
+          name: 'ceph-rbd',
+          platformType: 'proxmox-pve',
+          proxmox: { instance: 'prod-cluster' },
+          disk: { current: 62, total: 8000 * GIB, used: 4960 * GIB },
+          storage: {
+            type: 'rbd',
+            shared: true,
+            nodes: ['pve-01', 'pve-02'],
+            topConsumers: [
+              { resourceId: 'ct-jellyfin', resourceType: 'system-container', name: 'jellyfin' },
+            ],
+          },
+          health: { verdict: 'attention', reasons: [{ code: 'disk_high' }] },
+        }),
+        resource({
+          id: 'cluster-pbs',
+          type: 'storage',
+          name: 'pbs-cluster',
+          platformType: 'proxmox-pve',
+          proxmox: { instance: 'prod-cluster' },
+          storage: { type: 'pbs', content: 'backup', shared: true, nodes: ['pve-01', 'pve-02'] },
+        }),
+        resource({
+          id: 'standalone-nfs',
+          type: 'storage',
+          name: 'unplaced-nfs',
+          platformType: 'proxmox-pve',
+          proxmox: { instance: 'other-cluster' },
+          disk: { current: 45, total: 4000 * GIB, used: 1800 * GIB },
+          storage: { type: 'nfs', shared: true },
+        }),
+      ];
+
+      const model = buildInfrastructureMapModel(resources);
+      const diagram = buildServiceDiagram(model);
+
+      expect(diagram.hostFrames.map((frame) => frame.id)).toEqual(['pve-1', 'pve-2']);
+      for (const frame of diagram.hostFrames) {
+        expect(frame.clusterId).toBe('map:group:proxmox:prod-cluster');
+        expect(frame.clusterName).toBe('prod-cluster');
+        expect(frame.clusterTypeLabel).toBe('Proxmox cluster');
+        // Non-backup cluster pools attach to the cluster's host frames; backup pools stay in backups.
+        expect(frame.clusterPools?.map((tile) => tile.id)).toEqual(['cluster-ceph']);
+        expect(frame.clusterPools?.[0]).toMatchObject({
+          name: 'ceph-rbd',
+          usedPercent: 62,
+          storageType: 'rbd',
+          links: ['Used by jellyfin'],
+        });
+      }
+
+      // 2+ node cluster pool is NOT duplicated in sharedStorage, while unclustered shared storage stays there.
+      expect(diagram.sharedStorage?.tiles.map((tile) => tile.id)).toEqual(['standalone-nfs']);
+      expect(diagram.backups?.tiles.map((tile) => tile.id)).toEqual(['cluster-pbs']);
+
+      // By-role storage group and collectDiagramGroups remain completely unaffected.
+      expect(diagram.storage?.tiles.map((tile) => tile.id)).toEqual([
+        'cluster-ceph',
+        'standalone-nfs',
+      ]);
+      expect(collectDiagramGroups(diagram).map((group) => group.key)).toEqual([
+        'media',
+        'storage',
+        'backups',
+        'hardware',
+      ]);
+
+      // When a filter leaves fewer than 2 visible cluster nodes, cluster storage stays in sharedStorage so it never disappears.
+      const filtered = buildServiceDiagram(model, { filter: { attentionOnly: true } });
+      expect(filtered.hostFrames.map((frame) => frame.id)).toEqual(['pve-1']);
+      expect(filtered.sharedStorage?.tiles.map((tile) => tile.id)).toEqual(['cluster-ceph']);
+
+      // A 2-node cluster with no standalone shared pools omits sharedStorage entirely.
+      const clusterOnly = diagramOf(resources.filter((entry) => entry.id !== 'standalone-nfs'));
+      expect(clusterOnly.sharedStorage).toBeUndefined();
+      expect(clusterOnly.hostFrames[0].clusterPools?.map((tile) => tile.id)).toEqual([
+        'cluster-ceph',
+      ]);
+    });
+
+    it('sets hasLinkSpeeds only when at least one drawn host frame, hardware tile, or network reports a positive link speed', () => {
+      const withSpeed = diagramOf([
+        resource({
+          id: 'pve-1',
+          type: 'agent',
+          name: 'pve-01',
+          platformType: 'proxmox-pve',
+          agent: {
+            networkInterfaces: [{ name: 'eno1', addresses: [], speedMbps: 10000, linkUp: true }],
+          },
+        }),
+      ]);
+      expect(withSpeed.hasLinkSpeeds).toBe(true);
+
+      const withoutSpeed = diagramOf([
+        resource({
+          id: 'pve-1',
+          type: 'agent',
+          name: 'pve-01',
+          platformType: 'proxmox-pve',
+          agent: {
+            networkInterfaces: [
+              { name: 'vmbr0', addresses: ['192.168.10.10/24'], speedMbps: 0, linkUp: true },
+            ],
+          },
+        }),
+      ]);
+      expect(withoutSpeed.hasLinkSpeeds).toBeUndefined();
+
+      expect(diagramOf(archEstate()).hasLinkSpeeds).toBe(true);
+      expect(diagramOf(homelab()).hasLinkSpeeds).toBeUndefined();
     });
   });
 });
