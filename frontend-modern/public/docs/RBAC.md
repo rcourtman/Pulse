@@ -212,7 +212,10 @@ pulse_api GET /api/admin/users
 
 SSO users are displayed using the latest configured username claim and email
 when available. The `username` field remains the provider-scoped stable
-principal used for authorization.
+principal used for authorization. Each SSO provider binds that principal to its
+original verified issuer, so repointing an existing provider to a different
+issuer creates separate issuer-scoped principals on subsequent logins instead of
+transferring saved manual roles from the previous identity provider.
 
 ### Setting Roles for a User
 
@@ -271,6 +274,8 @@ How it works:
 - A user can receive multiple roles from multiple group mappings.
 - Once a provider has any group role mappings configured, the mapping is authoritative: on every login the user's role assignments are replaced with whatever the mapping resolves to. A login that matches no mapped group resolves to an empty set, which clears the user's existing role assignments. Watch for identity providers that silently drop the groups claim (see the Entra ID group overage warning in [OIDC.md](OIDC.md#microsoft-entra-id-formerly-azure-ad)) — to Pulse that looks the same as losing every group.
 - Logins that assign at least one role are logged to the [audit log](AUDIT_LOGGING.md) as `sso_oidc_role_assignment` events. A login that clears a user's roles does not write this event.
+- If a configured group mapping references a deleted or missing role, Pulse replaces the user's saved roles with only the mapped roles that exist, and refuses sign-in (`session_failed`) if saved roles cannot be replaced.
+- Removing all group role mappings from a provider clears roles that an earlier mapping saved on the user's next login, while keeping roles assigned manually by an administrator.
 
 See [OIDC documentation](OIDC.md#group-to-role-mapping) for full configuration details.
 

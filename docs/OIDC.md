@@ -59,8 +59,10 @@ sign-ins, not to the separate local password login.
 | **Client ID** | The application ID from your provider. |
 | **Client Secret** | The application secret. |
 | **Redirect URL** | Auto-detected. Override only if running behind a complex proxy setup. |
-| **Scopes** | Space-separated scopes. Default: `openid profile email`. |
+| **Scopes** | Space-separated scopes. Default: `openid profile email`. Enabled providers with custom scopes must include the exact `openid` token. |
 | **Claim Mapping** | Map `email`, `username`, and `groups` to specific token claims. |
+
+When creating an enabled OIDC provider, enabling a disabled provider, or changing custom **Scopes** on an enabled provider, Pulse requires the exact `openid` token and rejects the write (`Include openid in Scopes, or clear Scopes to use the defaults. Nothing was saved.`) if it is omitted. Leaving **Scopes** blank uses the defaults. Disabled drafts and unchanged scopes on already-enabled providers remain editable.
 
 > **Note**: `OIDC_*` does not override saved providers. Read [configuration sources](#configuration-sources) before editing a deployment-managed provider.
 
@@ -116,6 +118,9 @@ See [CONFIGURATION.md](CONFIGURATION.md).
 - For each group that matches a mapping, the corresponding role is assigned.
 - Multiple groups can map to multiple roles (user gets all matching roles).
 - Role assignments are updated on every login to reflect current group membership.
+- If a configured mapping references a role that no longer exists, Pulse replaces the user's saved roles with only the mapped roles that still exist rather than leaving earlier grants in place. If Pulse cannot replace the saved roles, sign-in is refused (`session_failed`) instead of admitting the user with stale roles.
+- Clearing all **Group Role Mappings** on a provider withdraws roles that an earlier mapping saved on the user's next sign-in, while preserving roles assigned manually by an administrator.
+- If an administrator edits or disables a provider while a sign-in callback is in flight, Pulse refuses the stale callback (`invalid_state`) rather than rewriting roles or opening a session under the older policy.
 - Successful non-empty assignments get an audit event. Clearing roles does not.
 - Instance-administration routes require the built-in `admin` role or another
   role with an explicit `admin` grant on all resources. The `operator` and
@@ -167,7 +172,18 @@ prove that their existing Pulse session or role assignments have been revoked.
 
 Disabling or deleting a provider, or changing its issuer/client ID, likewise
 must not be treated as revoking existing Pulse sessions. Keep a working,
-independent administrator login before changing SSO. For planned access removal:
+independent administrator login before changing SSO.
+
+Each SSO provider binds to its original verified issuer (the OIDC **Issuer
+URL** or SAML **IdP Entity ID**), so existing users keep their saved identities
+across upgrades. Editing an existing provider to point at a different issuer,
+or changing or deleting a provider whose original issuer cannot be resolved,
+causes future logins on that provider ID to use separate issuer-scoped
+principals rather than inheriting saved roles from the previous identity
+provider. Legacy assignments keyed by email address are never migrated from an
+unverified OIDC address (`email_verified: false`).
+
+For planned access removal:
 
 1. Block future sign-ins for the affected identity at the IdP or its application
    assignment, without changing access for unrelated users.
