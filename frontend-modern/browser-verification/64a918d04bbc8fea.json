@@ -1,0 +1,54 @@
+{
+  "version": 1,
+  "base_sha": "b4d908f9652794b427b7d5dff456a7859d9bd82f",
+  "verified_at": "2026-11-27T09:23:54Z",
+  "result": "passed",
+  "changed_paths": [
+    "frontend-modern/src/features/infrastructureMap/InfrastructureMapDrawer.tsx",
+    "frontend-modern/src/features/infrastructureMap/InfrastructureMapSurface.tsx",
+    "frontend-modern/src/features/infrastructureMap/infrastructureMap.css",
+    "frontend-modern/src/features/infrastructureMap/infrastructureMapDiagram.ts",
+    "frontend-modern/src/features/infrastructureMap/infrastructureMapExport.ts",
+    "frontend-modern/src/features/infrastructureMap/infrastructureMapLayout.ts",
+    "frontend-modern/src/features/infrastructureMap/infrastructureMapModel.ts",
+    "frontend-modern/src/features/infrastructureMap/infrastructureMapRender.ts",
+    "frontend-modern/src/features/infrastructureMap/infrastructureMapServices.ts"
+  ],
+  "content_sha256": {
+    "frontend-modern/src/features/infrastructureMap/InfrastructureMapDrawer.tsx": "acd80bf2ce07de991845a900853f14319e35811a6947a1380b06d94bb5328379",
+    "frontend-modern/src/features/infrastructureMap/InfrastructureMapSurface.tsx": "f189eba82f343f6aca8c2571b00e44a1c2c49c960175ab7f945db71fafa10fdf",
+    "frontend-modern/src/features/infrastructureMap/infrastructureMap.css": "b26ab8376f4fb665689d272d55a1f615d219b7e971f72d92c0ad042c7e078f5a",
+    "frontend-modern/src/features/infrastructureMap/infrastructureMapDiagram.ts": "d8842742336689f85554bff0f1f02dd487d9124d2c742918817c0d2b3f39c110",
+    "frontend-modern/src/features/infrastructureMap/infrastructureMapExport.ts": "d7bdb0e4368c447f2cdfb5c1f0a699bb6d49cfae20ec663cde2229f1222159ca",
+    "frontend-modern/src/features/infrastructureMap/infrastructureMapLayout.ts": "9afc11d1e2a88732b6b23e09164fdb2411fc248c9e171956732394ed8a66c06e",
+    "frontend-modern/src/features/infrastructureMap/infrastructureMapModel.ts": "0789d9b33e1d91827cfe84725691ef7c09ff007819d527d6c797bfb56da8cf0f",
+    "frontend-modern/src/features/infrastructureMap/infrastructureMapRender.ts": "f607377cf7e91ca7dfc165f366a033b029931a07212394dd748e4786689821bc",
+    "frontend-modern/src/features/infrastructureMap/infrastructureMapServices.ts": "380c965a6047483f5eb2ceac6788404aa8de00f1de11d92ae73147aec755c1f5"
+  },
+  "routes": [
+    "/map"
+  ],
+  "viewports": [
+    {
+      "width": 1440,
+      "height": 900
+    },
+    {
+      "width": 390,
+      "height": 844
+    }
+  ],
+  "states": [
+    "Chromium desktop 1440x900 dark theme with Live traffic enabled: active tiles, active vmbr0 VLAN 30 pill (6 connected, 46M/s), and active branch connectors animated while idle Security group and dashed Internet connector stay static",
+    "Active qbittorrent container preserves stated via gluetun connection caption at rest while displaying its live traffic highlight halo",
+    "Network gear tiles (Core Switch, Edge Router) display latency captions, vmbr0 network colour bar, and appear inside the vmbr0 network drawer so drawer count (All 6) matches pill count (6 connected)",
+    "Chromium desktop 1440x900 with Live traffic toggled off: zero animated flow connectors, zero activity halos, and Active traffic legend hidden",
+    "Chromium desktop 1440x900 prefers-reduced-motion reduce with computed animation-name none on active flow connectors",
+    "Chromium mobile 390x844 dark theme with clean toolbar wrapping and zero horizontal overflow"
+  ],
+  "interactions": [
+    "Hover active Proxmox VM tile (plex-media) to verify NIC firewall flag and Net rx/tx rate tooltip lines",
+    "Open active vmbr0 VLAN 30 network pill drawer, confirm all 6 attached resources (including Core Switch and Edge Router), NIC firewall and Link down badges, toggle Attention/Traffic sort to place plex-media first, and close with Escape",
+    "Toggle Live traffic button off and back on and confirm aria-pressed, SVG flow paths, and activity halos update cleanly"
+  ]
+}

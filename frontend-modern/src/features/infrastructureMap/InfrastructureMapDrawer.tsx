@@ -8,6 +8,7 @@ import { Button } from '@/components/shared/Button';
 import { Dialog } from '@/components/shared/Dialog';
 import { MetadataBadge } from '@/components/shared/MetadataBadge';
 import { StatusDot } from '@/components/shared/StatusDot';
+import { formatSpeed } from '@/utils/format';
 import type { StatusIndicatorVariant } from '@/utils/status';
 import type { MapInspectTarget } from './infrastructureMapLayout';
 import type { MapHealth } from './infrastructureMapModel';
@@ -15,6 +16,9 @@ import {
   collectDiagramGroups,
   collectNetworkTiles,
   compareDiagramTilesByAttention,
+  compareDiagramTilesByTraffic,
+  formatMapLatency,
+  formatMapLinkSpeed,
   isDiagramTileAttention,
   matchesDiagramTileQuery,
   type DiagramNetwork,
@@ -23,6 +27,7 @@ import {
 } from './infrastructureMapServices';
 
 type DrawerHealthFilter = 'all' | 'attention' | 'ok' | 'off';
+type DrawerSortMode = 'attention' | 'traffic';
 
 interface DrawerEntry {
   tile: DiagramTile;
@@ -69,12 +74,27 @@ const healthBadge = (
   }
 };
 
+const formatDrawerNet = (tile: DiagramTile): string => {
+  if (tile.netRxBytes === undefined && tile.netTxBytes === undefined) return '';
+  const rx = tile.netRxBytes ?? 0;
+  const tx = tile.netTxBytes ?? 0;
+  const total = tile.netTotalBytes ?? rx + tx;
+  if (total <= 0) return '';
+  if (total < 1024) return 'Net <1 KB/s';
+  return `Net ↓ ${formatSpeed(rx)} ↑ ${formatSpeed(tx)}`;
+};
+
 const networkSubtitle = (network: DiagramNetwork): string => {
   const count =
     network.kind === 'bridge'
       ? `${network.memberCount.toLocaleString()} connected`
       : `${network.memberCount.toLocaleString()} ${network.memberCount === 1 ? 'address' : 'addresses'}`;
-  return [network.detail, count].filter(Boolean).join(' · ');
+  const throughput =
+    network.netTotalBytes !== undefined && network.netTotalBytes >= 1024
+      ? formatSpeed(network.netTotalBytes)
+      : '';
+  const linkSpeed = network.linkSpeedMbps ? formatMapLinkSpeed(network.linkSpeedMbps) : '';
+  return [network.detail, count, throughput, linkSpeed].filter(Boolean).join(' · ');
 };
 
 const tileSubtitle = (entry: DrawerEntry): string =>
@@ -94,6 +114,9 @@ const tileMetrics = (tile: DiagramTile): string =>
   [
     tile.cpu !== undefined ? `CPU ${Math.round(tile.cpu)}%` : '',
     tile.memory !== undefined ? `Mem ${Math.round(tile.memory)}%` : '',
+    formatDrawerNet(tile),
+    tile.latencyMs !== undefined ? `Latency ${formatMapLatency(tile.latencyMs)}` : '',
+    tile.linkSpeedMbps ? `${formatMapLinkSpeed(tile.linkSpeedMbps)} link` : '',
   ]
     .filter(Boolean)
     .join(' · ');
@@ -101,10 +124,12 @@ const tileMetrics = (tile: DiagramTile): string =>
 export function InfrastructureMapDrawer(props: InfrastructureMapDrawerProps) {
   const [query, setQuery] = createSignal('');
   const [healthFilter, setHealthFilter] = createSignal<DrawerHealthFilter>('all');
+  const [sortMode, setSortMode] = createSignal<DrawerSortMode>('attention');
 
   createEffect(() => {
     const current = props.target;
     setQuery('');
+    setSortMode('attention');
     if (current?.kind === 'group' && current.initialFilter) {
       setHealthFilter(current.initialFilter);
     } else {
@@ -154,16 +179,26 @@ export function InfrastructureMapDrawer(props: InfrastructureMapDrawerProps) {
     return { all: entries.length, attention, ok, off };
   });
 
+  const hasTrafficEntries = createMemo(() =>
+    allEntries().some(
+      (entry) => entry.tile.netTotalBytes !== undefined && entry.tile.netTotalBytes > 0,
+    ),
+  );
+
   const filteredEntries = createMemo(() => {
     const filter = healthFilter();
     const search = query().trim();
-    return allEntries().filter((entry) => {
+    const filtered = allEntries().filter((entry) => {
       if (filter === 'attention' && !isDiagramTileAttention(entry.tile.health)) return false;
       if (filter === 'ok' && entry.tile.health !== 'ok') return false;
       if (filter === 'off' && entry.tile.health !== 'off') return false;
       if (!search) return true;
       return matchesDiagramTileQuery(entry.tile, search, entry.groupLabel ?? '');
     });
+    if (sortMode() === 'traffic' && hasTrafficEntries()) {
+      return [...filtered].sort((a, b) => compareDiagramTilesByTraffic(a.tile, b.tile));
+    }
+    return filtered;
   });
 
   const filteredNetworks = createMemo(() => {
@@ -265,6 +300,15 @@ export function InfrastructureMapDrawer(props: InfrastructureMapDrawerProps) {
                   {counts().attention.toLocaleString()} need attention
                 </MetadataBadge>
               </Show>
+              <Show
+                when={props.target?.kind === 'network' && (activeNetwork()?.linkDownCount ?? 0) > 0}
+              >
+                <MetadataBadge tone="warning" size="xs" shape="pill">
+                  {activeNetwork()!.linkDownCount === 1
+                    ? 'Link down'
+                    : `Link down (${activeNetwork()!.linkDownCount})`}
+                </MetadataBadge>
+              </Show>
             </div>
             <p class="mt-0.5 text-xs text-muted">{subtitle()}</p>
           </div>
@@ -330,29 +374,71 @@ export function InfrastructureMapDrawer(props: InfrastructureMapDrawerProps) {
             </Show>
           </div>
 
-          <Show when={props.target?.kind !== 'all-networks' && filterOptions().length > 1}>
-            <div
-              class="flex flex-wrap items-center gap-1.5"
-              role="group"
-              aria-label="Status filter"
-            >
-              <For each={filterOptions()}>
-                {(option) => (
+          <Show
+            when={
+              props.target?.kind !== 'all-networks' &&
+              (filterOptions().length > 1 || hasTrafficEntries())
+            }
+          >
+            <div class="flex flex-wrap items-center justify-between gap-2">
+              <Show when={filterOptions().length > 1}>
+                <div
+                  class="flex flex-wrap items-center gap-1.5"
+                  role="group"
+                  aria-label="Status filter"
+                >
+                  <For each={filterOptions()}>
+                    {(option) => (
+                      <button
+                        type="button"
+                        aria-pressed={healthFilter() === option.value}
+                        class={`inline-flex items-center gap-1.5 rounded-full border px-2.5 py-1 text-xs font-medium transition-colors ${
+                          healthFilter() === option.value
+                            ? 'border-blue-400 bg-blue-500/15 text-blue-700 dark:border-blue-500 dark:text-blue-300'
+                            : 'border-border bg-surface text-muted hover:bg-surface-hover hover:text-base-content'
+                        }`}
+                        onClick={() => setHealthFilter(option.value)}
+                      >
+                        <span>{option.label}</span>
+                        <span class="tabular-nums">{option.count.toLocaleString()}</span>
+                      </button>
+                    )}
+                  </For>
+                </div>
+              </Show>
+              <Show when={hasTrafficEntries()}>
+                <div
+                  class="ml-auto inline-flex items-center rounded-md border border-border bg-surface p-0.5 text-xs"
+                  role="group"
+                  aria-label="Sort resources"
+                  data-testid="infrastructure-map-drawer-sort"
+                >
                   <button
                     type="button"
-                    aria-pressed={healthFilter() === option.value}
-                    class={`inline-flex items-center gap-1.5 rounded-full border px-2.5 py-1 text-xs font-medium transition-colors ${
-                      healthFilter() === option.value
-                        ? 'border-blue-400 bg-blue-500/15 text-blue-700 dark:border-blue-500 dark:text-blue-300'
-                        : 'border-border bg-surface text-muted hover:bg-surface-hover hover:text-base-content'
+                    aria-pressed={sortMode() === 'attention'}
+                    class={`rounded px-2 py-0.5 font-medium transition-colors ${
+                      sortMode() === 'attention'
+                        ? 'bg-blue-500/15 text-blue-700 dark:text-blue-300'
+                        : 'text-muted hover:text-base-content'
                     }`}
-                    onClick={() => setHealthFilter(option.value)}
+                    onClick={() => setSortMode('attention')}
                   >
-                    <span>{option.label}</span>
-                    <span class="tabular-nums">{option.count.toLocaleString()}</span>
+                    Attention
                   </button>
-                )}
-              </For>
+                  <button
+                    type="button"
+                    aria-pressed={sortMode() === 'traffic'}
+                    class={`rounded px-2 py-0.5 font-medium transition-colors ${
+                      sortMode() === 'traffic'
+                        ? 'bg-blue-500/15 text-blue-700 dark:text-blue-300'
+                        : 'text-muted hover:text-base-content'
+                    }`}
+                    onClick={() => setSortMode('traffic')}
+                  >
+                    Traffic
+                  </button>
+                </div>
+              </Show>
             </div>
           </Show>
         </div>
@@ -413,6 +499,23 @@ export function InfrastructureMapDrawer(props: InfrastructureMapDrawerProps) {
                                     {item().label}
                                   </MetadataBadge>
                                 )}
+                              </Show>
+                              <Show when={(entry.tile.linkDownCount ?? 0) > 0}>
+                                <MetadataBadge tone="warning" size="xs" shape="pill">
+                                  {entry.tile.linkDownCount === 1
+                                    ? 'Link down'
+                                    : `Link down (${entry.tile.linkDownCount})`}
+                                </MetadataBadge>
+                              </Show>
+                              <Show when={entry.tile.firewallEnabled}>
+                                <MetadataBadge
+                                  tone="neutral"
+                                  size="xs"
+                                  shape="pill"
+                                  title="Proxmox guest interface firewall flag is enabled"
+                                >
+                                  NIC firewall
+                                </MetadataBadge>
                               </Show>
                             </div>
                             <p class="mt-0.5 truncate text-xs text-muted">{tileSubtitle(entry)}</p>
@@ -482,8 +585,17 @@ export function InfrastructureMapDrawer(props: InfrastructureMapDrawerProps) {
                         >
                           <NetworkIcon class="h-4 w-4 shrink-0 text-muted" aria-hidden="true" />
                           <div class="min-w-0 flex-1">
-                            <div class="truncate text-sm font-medium text-base-content">
-                              {network.label}
+                            <div class="flex flex-wrap items-center gap-1.5">
+                              <span class="truncate text-sm font-medium text-base-content">
+                                {network.label}
+                              </span>
+                              <Show when={(network.linkDownCount ?? 0) > 0}>
+                                <MetadataBadge tone="warning" size="xs" shape="pill">
+                                  {network.linkDownCount === 1
+                                    ? 'Link down'
+                                    : `Link down (${network.linkDownCount})`}
+                                </MetadataBadge>
+                              </Show>
                             </div>
                             <div class="truncate text-xs text-muted">
                               {networkSubtitle(network)}

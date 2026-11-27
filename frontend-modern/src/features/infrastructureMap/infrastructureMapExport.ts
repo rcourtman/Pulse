@@ -67,7 +67,13 @@ export function buildMapExportSvg(
   // Nobody can hover a saved image, so every name is written out, on two
   // lines when it needs them.
   const layoutAt = (width: number): MapScene =>
-    layoutServiceDiagram(diagram, { width, density: options.density, header, wrapNames: true });
+    layoutServiceDiagram(diagram, {
+      width,
+      density: options.density,
+      header,
+      wrapNames: true,
+      liveTraffic: false,
+    });
   let scene = layoutAt(EXPORT_WIDTHS[0]);
   for (const width of EXPORT_WIDTHS.slice(1)) {
     const wider = layoutAt(width);

@@ -11,13 +11,15 @@ import {
 } from './infrastructureMapCatalogue';
 import { mapRouteLabel } from './infrastructureMapConnections';
 import type { MapGlyphKey } from './infrastructureMapLayout';
-import type {
-  InfrastructureMapModel,
-  MapHealth,
-  MapHost,
-  MapItem,
-  MapMount,
-  MapPool,
+import {
+  resolveMapTrafficTier,
+  type InfrastructureMapModel,
+  type MapHealth,
+  type MapHost,
+  type MapItem,
+  type MapMount,
+  type MapPool,
+  type MapTrafficTier,
 } from './infrastructureMapModel';
 import {
   OTHER_SEGMENT_ID,
@@ -60,8 +62,20 @@ export interface DiagramTile {
   platform?: MapGlyphKey;
   /** The first network the thing is on, as an id into `networks`. */
   segmentId?: string;
+  /** Every planned network the thing is attached to, for accurate drawer membership. */
+  segmentIds?: string[];
+  /** True when the tile caption states a collected connection (`via` container or route). */
+  hasConnectionCaption?: boolean;
   cpu?: number;
   memory?: number;
+  netRxBytes?: number;
+  netTxBytes?: number;
+  netTotalBytes?: number;
+  trafficTier?: MapTrafficTier;
+  latencyMs?: number;
+  linkSpeedMbps?: number;
+  linkDownCount?: number;
+  firewallEnabled?: boolean;
   address?: string;
   detail?: string;
   /** What the thing's connections say about it, one sentence each, for the hover. */
@@ -102,6 +116,10 @@ export interface DiagramNetwork {
   detail?: string;
   memberCount: number;
   colorIndex: number;
+  netTotalBytes?: number;
+  trafficTier?: MapTrafficTier;
+  linkSpeedMbps?: number;
+  linkDownCount?: number;
 }
 
 /**
@@ -185,6 +203,137 @@ const nameList = (names: string[]): string => {
 const hostsOf = (model: InfrastructureMapModel): MapHost[] =>
   model.blocks.flatMap((block) => (block.kind === 'group' ? block.group.hosts : [block.host]));
 
+export const formatMapLinkSpeed = (speedMbps: number): string =>
+  speedMbps >= 1000 ? `${Number((speedMbps / 1000).toFixed(1))}G` : `${Math.round(speedMbps)}M`;
+
+export const formatMapLatency = (latencyMs: number): string => {
+  if (latencyMs < 1) return '<1 ms';
+  if (latencyMs < 10) return `${Math.round(latencyMs * 10) / 10} ms`;
+  return `${Math.round(latencyMs)} ms`;
+};
+
+const tileNetworkTelemetry = (
+  source: Pick<MapHost, 'netRxBytes' | 'netTxBytes' | 'linkSpeedMbps' | 'linkDownCount'> & {
+    latencyMs?: number;
+    firewallEnabled?: boolean;
+  },
+): Pick<
+  DiagramTile,
+  | 'netRxBytes'
+  | 'netTxBytes'
+  | 'netTotalBytes'
+  | 'trafficTier'
+  | 'latencyMs'
+  | 'linkSpeedMbps'
+  | 'linkDownCount'
+  | 'firewallEnabled'
+> => {
+  const hasNet = source.netRxBytes !== undefined || source.netTxBytes !== undefined;
+  const netTotalBytes = hasNet ? (source.netRxBytes ?? 0) + (source.netTxBytes ?? 0) : undefined;
+  const trafficTier = resolveMapTrafficTier(netTotalBytes);
+  return {
+    ...(source.netRxBytes !== undefined ? { netRxBytes: source.netRxBytes } : {}),
+    ...(source.netTxBytes !== undefined ? { netTxBytes: source.netTxBytes } : {}),
+    ...(netTotalBytes !== undefined ? { netTotalBytes } : {}),
+    ...(trafficTier !== undefined ? { trafficTier } : {}),
+    ...(source.latencyMs !== undefined ? { latencyMs: source.latencyMs } : {}),
+    ...(source.linkSpeedMbps !== undefined ? { linkSpeedMbps: source.linkSpeedMbps } : {}),
+    ...(source.linkDownCount !== undefined ? { linkDownCount: source.linkDownCount } : {}),
+    ...(source.firewallEnabled ? { firewallEnabled: true } : {}),
+  };
+};
+
+const annotateNetworkMetrics = (
+  model: InfrastructureMapModel,
+  networks: DiagramNetwork[],
+  networkOf: (segmentId: string | undefined) => string | undefined,
+): DiagramNetwork[] => {
+  const statsByNetwork = new Map<
+    string,
+    {
+      hasWorkloadNet: boolean;
+      workloadNetSum: number;
+      hasHostNet: boolean;
+      hostNetSum: number;
+      maxLinkSpeed: number;
+      linkDownCount: number;
+    }
+  >();
+  const statsFor = (id: string) => {
+    let stats = statsByNetwork.get(id);
+    if (!stats) {
+      stats = {
+        hasWorkloadNet: false,
+        workloadNetSum: 0,
+        hasHostNet: false,
+        hostNetSum: 0,
+        maxLinkSpeed: 0,
+        linkDownCount: 0,
+      };
+      statsByNetwork.set(id, stats);
+    }
+    return stats;
+  };
+  const plannedIds = (segmentIds: readonly string[] | undefined): string[] => [
+    ...new Set(
+      (segmentIds ?? [])
+        .map((segmentId) => networkOf(segmentId))
+        .filter((id): id is string => Boolean(id)),
+    ),
+  ];
+
+  for (const host of hostsOf(model)) {
+    if (host.isResource) {
+      const hostHasNet = host.netRxBytes !== undefined || host.netTxBytes !== undefined;
+      const hostTotal = hostHasNet ? (host.netRxBytes ?? 0) + (host.netTxBytes ?? 0) : 0;
+      for (const id of plannedIds(host.ownSegmentIds)) {
+        const stats = statsFor(id);
+        if (hostHasNet) {
+          stats.hasHostNet = true;
+          stats.hostNetSum += hostTotal;
+        }
+        if (host.linkSpeedMbps !== undefined && host.linkSpeedMbps > stats.maxLinkSpeed) {
+          stats.maxLinkSpeed = host.linkSpeedMbps;
+        }
+        if (host.linkDownCount !== undefined && host.linkDownCount > 0) {
+          stats.linkDownCount += host.linkDownCount;
+        }
+      }
+    }
+    for (const section of host.sections) {
+      if (!SERVICE_SECTION.test(section.key)) continue;
+      for (const item of section.items) {
+        const itemHasNet = item.netRxBytes !== undefined || item.netTxBytes !== undefined;
+        if (!itemHasNet) continue;
+        const itemTotal = (item.netRxBytes ?? 0) + (item.netTxBytes ?? 0);
+        for (const id of plannedIds(item.segmentIds)) {
+          const stats = statsFor(id);
+          stats.hasWorkloadNet = true;
+          stats.workloadNetSum += itemTotal;
+        }
+      }
+    }
+  }
+
+  return networks.map((network) => {
+    const stats = statsByNetwork.get(network.id);
+    if (!stats) return network;
+    const netTotalBytes = stats.hasWorkloadNet
+      ? stats.workloadNetSum
+      : stats.hasHostNet
+        ? stats.hostNetSum
+        : undefined;
+    const trafficTier = resolveMapTrafficTier(netTotalBytes);
+    return {
+      ...network,
+      ...(netTotalBytes !== undefined ? { netTotalBytes } : {}),
+      ...(trafficTier !== undefined ? { trafficTier } : {}),
+      ...(stats.maxLinkSpeed > 0 ? { linkSpeedMbps: stats.maxLinkSpeed } : {}),
+      ...(stats.linkDownCount > 0 ? { linkDownCount: stats.linkDownCount } : {}),
+    };
+  });
+};
+
 interface NetworkPlan {
   networks: DiagramNetwork[];
   /** The named network a tile on a segment is marked with. */
@@ -236,7 +385,12 @@ const planNetworks = (model: InfrastructureMapModel): NetworkPlan => {
     colorIndex,
   });
   if (segments.length <= DIAGRAM_MAX_NETWORKS) {
-    return { networks: segments.map(plain), networkOf: (segmentId) => segmentId, where };
+    const networkOf: NetworkPlan['networkOf'] = (segmentId) => segmentId;
+    return {
+      networks: annotateNetworkMetrics(model, segments.map(plain), networkOf),
+      networkOf,
+      where,
+    };
   }
 
   // Fold the networks of one bridge. A bridge with a single network gains
@@ -300,7 +454,27 @@ const planNetworks = (model: InfrastructureMapModel): NetworkPlan => {
   ]
     .sort((a, b) => b.memberCount - a.memberCount || collator.compare(a.label, b.label))
     .map((network, index) => ({ ...network, colorIndex: index }));
-  return { networks, networkOf: (segmentId) => foldOf.get(segmentId ?? '') ?? segmentId, where };
+  const networkOf: NetworkPlan['networkOf'] = (segmentId) =>
+    foldOf.get(segmentId ?? '') ?? segmentId;
+  return {
+    networks: annotateNetworkMetrics(model, networks, networkOf),
+    networkOf,
+    where,
+  };
+};
+
+const plannedTileNetworks = (
+  segmentIds: readonly string[] | undefined,
+  plan: NetworkPlan,
+): { segmentId?: string; segmentIds?: string[] } => {
+  if (!segmentIds?.length) return {};
+  const mapped = [
+    ...new Set(
+      segmentIds.map((id) => plan.networkOf(id)).filter((id): id is string => Boolean(id)),
+    ),
+  ];
+  if (mapped.length === 0) return {};
+  return { segmentId: mapped[0], segmentIds: mapped };
 };
 
 const serviceTile = (item: MapItem, host: MapHost, plan: NetworkPlan): DiagramTile => ({
@@ -311,9 +485,10 @@ const serviceTile = (item: MapItem, host: MapHost, plan: NetworkPlan): DiagramTi
   status: item.status,
   health: item.health,
   ...(item.app?.icon ? { icon: item.app.icon } : {}),
-  ...(item.segmentIds?.[0] ? { segmentId: plan.networkOf(item.segmentIds[0]) } : {}),
+  ...plannedTileNetworks(item.segmentIds, plan),
   cpu: item.cpu,
   memory: item.memory,
+  ...tileNetworkTelemetry(item),
   address: plan.where(item.address, item.segmentIds),
   detail: item.detail,
   navigable: true,
@@ -327,17 +502,26 @@ const GEAR_GLYPH: Record<AvailabilityNetworkGearKind, MapGlyphKey> = {
 
 // A check on a router, a switch or an access point. It is drawn as the
 // device and says which, where a plain check says its address.
-const gearTile = (item: MapItem, kind: AvailabilityNetworkGearKind): DiagramTile => ({
-  id: item.id,
-  name: item.name,
-  caption: getAvailabilityTargetKindInfo(kind)?.noun ?? kind,
-  typeLabel: item.typeLabel,
-  status: item.status,
-  health: item.health,
-  platform: GEAR_GLYPH[kind],
-  address: item.address,
-  navigable: true,
-});
+const gearTile = (
+  item: MapItem,
+  kind: AvailabilityNetworkGearKind,
+  plan: NetworkPlan,
+): DiagramTile => {
+  const noun = getAvailabilityTargetKindInfo(kind)?.noun ?? kind;
+  return {
+    id: item.id,
+    name: item.name,
+    caption: item.latencyMs !== undefined ? `${noun} · ${formatMapLatency(item.latencyMs)}` : noun,
+    typeLabel: item.typeLabel,
+    status: item.status,
+    health: item.health,
+    platform: GEAR_GLYPH[kind],
+    ...plannedTileNetworks(item.segmentIds, plan),
+    address: plan.where(item.address, item.segmentIds),
+    ...tileNetworkTelemetry(item),
+    navigable: true,
+  };
+};
 
 const foldTile = (key: string, name: string, caption: string): DiagramTile => ({
   id: key,
@@ -355,6 +539,10 @@ export const isDiagramTileAttention = (health: MapHealth): boolean =>
 /** Sort tiles with Critical first, then Needs attention, then Stale/Unknown, Healthy, Off, then name. */
 export const compareDiagramTilesByAttention = (a: DiagramTile, b: DiagramTile): number =>
   HEALTH_RANK[b.health] - HEALTH_RANK[a.health] || collator.compare(a.name, b.name);
+
+/** Sort tiles by live combined network throughput descending, then attention and name. */
+export const compareDiagramTilesByTraffic = (a: DiagramTile, b: DiagramTile): number =>
+  (b.netTotalBytes ?? -1) - (a.netTotalBytes ?? -1) || compareDiagramTilesByAttention(a, b);
 
 /** Multi-term case-insensitive search matcher across a tile's visible and contextual metadata. */
 export const matchesDiagramTileQuery = (
@@ -400,7 +588,7 @@ export const collectNetworkTiles = (
   for (const group of collectDiagramGroups(diagram)) {
     for (const tile of group.allTiles) {
       if (seen.has(tile.id)) continue;
-      if (tile.segmentId === networkId) {
+      if (tile.segmentIds?.includes(networkId) || tile.segmentId === networkId) {
         seen.add(tile.id);
         out.push({ tile, groupLabel: group.label });
       }
@@ -686,7 +874,7 @@ export function buildServiceDiagram(
         for (const item of section.items) {
           if (isNetworkGearKind(item.checkKind)) {
             const list = byCategory.get('access') ?? [];
-            const gear = gearTile(item, item.checkKind);
+            const gear = gearTile(item, item.checkKind, plan);
             recordTileNetworks(gear.id, item.segmentIds);
             list.push(gear);
             byCategory.set('access', list);
@@ -701,7 +889,9 @@ export function buildServiceDiagram(
             status: item.status,
             health: item.health,
             platform: 'checks',
-            address: item.address,
+            ...plannedTileNetworks(item.segmentIds, plan),
+            address: plan.where(item.address, item.segmentIds),
+            ...tileNetworkTelemetry(item),
             navigable: true,
           });
         }
@@ -724,9 +914,10 @@ export function buildServiceDiagram(
       status: host.status,
       health: host.health,
       platform: host.platform,
-      ...(host.ownSegmentIds[0] ? { segmentId: plan.networkOf(host.ownSegmentIds[0]) } : {}),
+      ...plannedTileNetworks(host.ownSegmentIds, plan),
       cpu: host.cpu,
       memory: host.memory,
+      ...tileNetworkTelemetry(host),
       address: plan.where(host.address, host.ownSegmentIds),
       navigable: true,
     };
@@ -990,6 +1181,7 @@ export function buildServiceDiagram(
       // The container it reaches the world through says more than the host
       // it runs on, which the hardware box already shows.
       from.caption = `via ${to.name}`;
+      from.hasConnectionCaption = true;
       carried.set(to.id, (carried.get(to.id) ?? 0) + 1);
     } else {
       say(
@@ -999,7 +1191,10 @@ export function buildServiceDiagram(
           : `Routed by ${from.name}`,
       );
       // Where it answers says more than the host it runs on.
-      if (link.hosts.length > 0) to.caption = mapRouteLabel(link.hosts);
+      if (link.hosts.length > 0) {
+        to.caption = mapRouteLabel(link.hosts);
+        to.hasConnectionCaption = true;
+      }
       routedBy.set(from.id, (routedBy.get(from.id) ?? 0) + 1);
     }
     links.push({ fromId: link.fromId, toId: link.toId });

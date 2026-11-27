@@ -591,6 +591,24 @@ test.describe("Infrastructure map", () => {
     await page.keyboard.press("Escape");
     await expect(drawer).toBeHidden();
 
+    // Live traffic starts active, toggles cleanly off and back on.
+    const liveTraffic = page.getByTestId("infrastructure-map-live-traffic");
+    await expect(liveTraffic).toBeVisible();
+    await expect(liveTraffic).toHaveAttribute("aria-pressed", "true");
+    await expect(
+      page.getByTestId("infrastructure-map-legend-traffic"),
+    ).toBeVisible();
+    await liveTraffic.click();
+    await expect(liveTraffic).toHaveAttribute("aria-pressed", "false");
+    await expect(
+      page.getByTestId("infrastructure-map-legend-traffic"),
+    ).toBeHidden();
+    await liveTraffic.click();
+    await expect(liveTraffic).toHaveAttribute("aria-pressed", "true");
+    await expect(
+      page.getByTestId("infrastructure-map-legend-traffic"),
+    ).toBeVisible();
+
     // Zoom controls step cleanly and Fit resets to 100%.
     const zoomReset = page.getByTestId("infrastructure-map-zoom-reset");
     await expect(zoomReset).toHaveText("100%");

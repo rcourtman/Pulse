@@ -923,3 +923,113 @@ describe('InfrastructureMapSurface on a phone', () => {
     await waitFor(() => expect(fitServiceDiagram).toHaveBeenCalled());
   });
 });
+
+describe('InfrastructureMapSurface live traffic and network telemetry', () => {
+  beforeEach(() => {
+    vi.clearAllMocks();
+    resourcesMock.read = undefined;
+    resourcesMock.value = [
+      resource({
+        id: 'pve-net',
+        type: 'agent',
+        name: 'pve-net',
+        platformType: 'proxmox-pve',
+        network: { rxBytes: 2_097_152, txBytes: 524_288 },
+        agent: {
+          networkInterfaces: [
+            { name: 'eno1', addresses: ['192.168.10.11/24'], speedMbps: 10000, linkUp: true },
+            { name: 'eno2', speedMbps: 1000, linkUp: false },
+          ],
+        },
+      }),
+      resource({
+        id: 'vm-fw',
+        type: 'vm',
+        name: 'fw-guest',
+        platformType: 'proxmox-pve',
+        parentId: 'pve-net',
+        status: 'running',
+        identity: { ips: ['192.168.10.50'] },
+        network: { rxBytes: 400, txBytes: 200 },
+        proxmox: {
+          networkInterfaces: [{ name: 'net0', bridge: 'vmbr0', firewall: true }],
+        },
+      }),
+      resource({
+        id: 'vm-idle',
+        type: 'vm',
+        name: 'idle-guest',
+        platformType: 'proxmox-pve',
+        parentId: 'pve-net',
+        status: 'running',
+        identity: { ips: ['192.168.10.51'] },
+        network: { rxBytes: 0, txBytes: 0 },
+      }),
+      resource({
+        id: 'chk-router',
+        type: 'network-endpoint',
+        name: 'core-router',
+        platformType: 'availability',
+        status: 'online',
+        availability: {
+          targetKind: 'router',
+          address: '192.168.10.1',
+          available: true,
+          latencyMillis: 2.4,
+        },
+      }),
+    ];
+  });
+  afterEach(cleanup);
+
+  const tile = (container: HTMLElement, name: string) => {
+    const found = container.querySelector(`[aria-label^="${name},"]`);
+    if (!found) throw new Error(`no tile for ${name}`);
+    return found;
+  };
+
+  it('starts with Live traffic enabled, shows Active traffic in the legend, and toggles cleanly', () => {
+    render(() => <InfrastructureMapSurface />);
+
+    const toggle = screen.getByTestId('infrastructure-map-live-traffic');
+    expect(toggle).toHaveAttribute('aria-pressed', 'true');
+    expect(screen.getByTestId('infrastructure-map-legend-traffic')).toHaveTextContent(
+      'Active traffic',
+    );
+    expect(vi.mocked(fitServiceDiagram).mock.calls.at(-1)?.[3]).toEqual({ liveTraffic: true });
+
+    fireEvent.click(toggle);
+    expect(toggle).toHaveAttribute('aria-pressed', 'false');
+    expect(screen.queryByTestId('infrastructure-map-legend-traffic')).not.toBeInTheDocument();
+    expect(vi.mocked(fitServiceDiagram).mock.calls.at(-1)?.[3]).toEqual({ liveTraffic: false });
+
+    fireEvent.click(toggle);
+    expect(toggle).toHaveAttribute('aria-pressed', 'true');
+    expect(screen.getByTestId('infrastructure-map-legend-traffic')).toHaveTextContent(
+      'Active traffic',
+    );
+    expect(vi.mocked(fitServiceDiagram).mock.calls.at(-1)?.[3]).toEqual({ liveTraffic: true });
+  });
+
+  it('shows network throughput, check latency, link speed, link-down count, and firewall state in tooltips', async () => {
+    const { container } = render(() => <InfrastructureMapSurface />);
+
+    fireEvent.pointerOver(tile(container, 'pve-net'));
+    expect(await screen.findByText(/Link 10G/)).toBeInTheDocument();
+    expect(screen.getByText(/1 link down/)).toBeInTheDocument();
+    expect(screen.getByText(/Net ↓ 2\.00 MB\/s ↑ 512 KB\/s/)).toBeInTheDocument();
+
+    fireEvent.pointerOver(tile(container, 'fw-guest'));
+    expect(await screen.findByText(/NIC firewall flag/)).toBeInTheDocument();
+    expect(screen.getByText(/Net <1 KB\/s/)).toBeInTheDocument();
+
+    fireEvent.pointerOver(tile(container, 'idle-guest'));
+    await waitFor(() =>
+      expect(screen.getAllByText('idle-guest').some((el) => el.tagName === 'SPAN')).toBe(true),
+    );
+    expect(screen.queryByText(/Net /)).not.toBeInTheDocument();
+
+    fireEvent.pointerOver(tile(container, 'core-router'));
+    expect(await screen.findByText(/Latency 2\.4 ms/)).toBeInTheDocument();
+  });
+});

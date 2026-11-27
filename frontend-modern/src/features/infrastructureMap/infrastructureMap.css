@@ -1,0 +1,56 @@
+@keyframes pulse-map-flow-dash {
+  from {
+    stroke-dashoffset: 30;
+  }
+  to {
+    stroke-dashoffset: 0;
+  }
+}
+
+@keyframes pulse-map-active-pulse {
+  0%,
+  100% {
+    opacity: 1;
+  }
+  50% {
+    opacity: 0.65;
+  }
+}
+
+.pulse-map-flow {
+  pointer-events: none;
+}
+
+.pulse-map-flow-low {
+  animation: pulse-map-flow-dash 3.2s linear infinite;
+  opacity: 0.55;
+}
+
+.pulse-map-flow-medium {
+  animation: pulse-map-flow-dash 1.8s linear infinite;
+  opacity: 0.78;
+}
+
+.pulse-map-flow-high {
+  animation: pulse-map-flow-dash 0.95s linear infinite;
+  opacity: 0.95;
+}
+
+.pulse-map-active {
+  pointer-events: none;
+}
+
+.pulse-map-active-high {
+  animation: pulse-map-active-pulse 2.4s ease-in-out infinite;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .pulse-map-flow,
+  .pulse-map-flow-low,
+  .pulse-map-flow-medium,
+  .pulse-map-flow-high,
+  .pulse-map-active,
+  .pulse-map-active-high {
+    animation: none !important;
+  }
+}

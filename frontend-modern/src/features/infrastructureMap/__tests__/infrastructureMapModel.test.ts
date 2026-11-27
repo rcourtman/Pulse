@@ -1,9 +1,11 @@
 import { describe, expect, it } from 'vitest';
 import type { Resource } from '@/types/resource';
 import {
+  MAP_TRAFFIC_ACTIVE_BYTES,
   anonymizeInfrastructureMapModel,
   buildInfrastructureMapModel,
   resolveMapHealth,
+  resolveMapTrafficTier,
   type MapBlock,
   type MapHost,
 } from '../infrastructureMapModel';
@@ -415,5 +417,204 @@ describe('anonymizeInfrastructureMapModel', () => {
     expect(standIn('fast')).toMatch(/^Pool \d+$/);
     expect(standIn('fast')).not.toBe(standIn('local-node-a'));
     expect(JSON.stringify(pools)).not.toContain('fast-nvme');
+  });
+
+  it('preserves numeric and boolean network telemetry while removing names and addresses', () => {
+    const model = buildInfrastructureMapModel([
+      resource({
+        id: 'pve-1',
+        type: 'agent',
+        name: 'secret-pve',
+        platformType: 'proxmox-pve',
+        network: { rxBytes: 5_000_000, txBytes: 2_000_000 },
+        agent: {
+          networkInterfaces: [
+            { name: 'enp1s0', addresses: ['10.20.30.10/24'], speedMbps: 10000, linkUp: true },
+            { name: 'enp2s0', addresses: [], speedMbps: 1000, linkUp: false },
+          ],
+        },
+      }),
+      resource({
+        id: 'vm-1',
+        type: 'vm',
+        name: 'secret-vm',
+        platformType: 'proxmox-pve',
+        parentId: 'pve-1',
+        status: 'running',
+        network: { rxBytes: 1_500_000, txBytes: 500_000 },
+        proxmox: {
+          networkInterfaces: [
+            { name: 'net0', addresses: ['10.20.30.50'], bridge: 'vmbr0', firewall: true },
+          ],
+        },
+      }),
+      resource({
+        id: 'check-gw',
+        type: 'network-endpoint',
+        name: 'secret-router',
+        status: 'online',
+        availability: {
+          address: '10.20.30.1',
+          targetKind: 'router',
+          available: true,
+          latencyMillis: 1.8,
+        },
+      }),
+    ]);
+
+    const anonymous = anonymizeInfrastructureMapModel(model);
+    const host = hostsOf(anonymous.blocks).find((entry) => entry.id === 'pve-1')!;
+    expect(host).toMatchObject({
+      name: 'Proxmox 1',
+      netRxBytes: 5_000_000,
+      netTxBytes: 2_000_000,
+      linkSpeedMbps: 10000,
+      linkDownCount: 1,
+    });
+    expect(host.address).toBeUndefined();
+
+    const vm = host.sections[0].items[0];
+    expect(vm).toMatchObject({
+      name: 'VM 1',
+      netRxBytes: 1_500_000,
+      netTxBytes: 500_000,
+      firewallEnabled: true,
+    });
+    expect(vm.address).toBeUndefined();
+
+    const router = hostNamed(anonymous.blocks, 'Availability checks').sections[0].items[0];
+    expect(router).toMatchObject({
+      name: 'Router 1',
+      latencyMs: 1.8,
+    });
+    expect(router.address).toBeUndefined();
+  });
+});
+
+describe('resolveMapTrafficTier', () => {
+  it('classifies live bytes per second into truthful tiers', () => {
+    expect(MAP_TRAFFIC_ACTIVE_BYTES).toBe(10 * 1024);
+    expect(resolveMapTrafficTier(undefined)).toBeUndefined();
+    expect(resolveMapTrafficTier(Number.NaN)).toBeUndefined();
+    expect(resolveMapTrafficTier(Number.POSITIVE_INFINITY)).toBeUndefined();
+    expect(resolveMapTrafficTier(-5)).toBeUndefined();
+    expect(resolveMapTrafficTier(0)).toBeUndefined();
+    expect(resolveMapTrafficTier(MAP_TRAFFIC_ACTIVE_BYTES - 1)).toBeUndefined();
+    expect(resolveMapTrafficTier(MAP_TRAFFIC_ACTIVE_BYTES)).toBe('low');
+    expect(resolveMapTrafficTier(1024 * 1024 - 1)).toBe('low');
+    expect(resolveMapTrafficTier(1024 * 1024)).toBe('medium');
+    expect(resolveMapTrafficTier(25 * 1024 * 1024 - 1)).toBe('medium');
+    expect(resolveMapTrafficTier(25 * 1024 * 1024)).toBe('high');
+    expect(resolveMapTrafficTier(100 * 1024 * 1024)).toBe('high');
+  });
+});
+
+describe('live network telemetry extraction', () => {
+  it('extracts truthful rates, link speed, link-down count, firewall, and check latency', () => {
+    const model = buildInfrastructureMapModel([
+      resource({
+        id: 'pve-live',
+        type: 'agent',
+        name: 'pve-live',
+        platformType: 'proxmox-pve',
+        status: 'online',
+        network: { rxBytes: 0, txBytes: 12_500 },
+        agent: {
+          networkInterfaces: [
+            // Host-local interfaces are ignored for speed and link-down counts.
+            { name: 'lo', speedMbps: 40000, linkUp: false },
+            { name: 'docker0', speedMbps: 25000, linkUp: false },
+            { name: 'podman0', speedMbps: 25000, linkUp: false },
+            { name: 'br-0123456789ab', speedMbps: 25000, linkUp: false },
+            { name: 'veth9a8b', speedMbps: 10000, linkUp: false },
+            { name: 'virbr0', speedMbps: 10000, linkUp: false },
+            { name: 'cni0', speedMbps: 10000, linkUp: false },
+            { name: 'flannel.1', speedMbps: 10000, linkUp: false },
+            { name: 'cali1234', speedMbps: 10000, linkUp: false },
+            { name: 'kube-ipvs0', speedMbps: 10000, linkUp: false },
+            // Real NICs are inspected.
+            { name: 'eno1', speedMbps: 2500, linkUp: true, rxBytes: 999_999_999 },
+            { name: 'eno2', speedMbps: 1000, linkUp: false },
+          ],
+        },
+        docker: {
+          networkInterfaces: [
+            // Duplicate NIC name across facets should not double-count link-down.
+            { name: 'eno2', speedMbps: 1000, linkUp: false },
+          ],
+        },
+      }),
+      resource({
+        id: 'pve-offline',
+        type: 'agent',
+        name: 'pve-offline',
+        platformType: 'proxmox-pve',
+        status: 'offline',
+        agent: {
+          networkInterfaces: [
+            // Cumulative counters here are never treated as live rates.
+            {
+              name: 'eno1',
+              speedMbps: 1000,
+              linkUp: false,
+              rxBytes: 800_000_000,
+              txBytes: 900_000,
+            },
+          ],
+        },
+      }),
+      resource({
+        id: 'vm-fw',
+        type: 'vm',
+        name: 'fw-guest',
+        platformType: 'proxmox-pve',
+        parentId: 'pve-live',
+        status: 'running',
+        network: { rxBytes: -10, txBytes: Number.NaN },
+        proxmox: {
+          networkInterfaces: [
+            { name: 'net0', bridge: 'vmbr0', firewall: true },
+            { name: 'net1', bridge: 'vmbr1', firewall: false },
+          ],
+        },
+      }),
+      resource({
+        id: 'check-up',
+        type: 'network-endpoint',
+        name: 'core-router',
+        status: 'online',
+        availability: { targetKind: 'router', available: true, latencyMillis: 2.4 },
+      }),
+      resource({
+        id: 'check-down',
+        type: 'network-endpoint',
+        name: 'down-router',
+        status: 'offline',
+        availability: { targetKind: 'router', available: false, latencyMillis: 2.4 },
+      }),
+    ]);
+
+    const liveHost = hostNamed(model.blocks, 'pve-live');
+    expect(liveHost).toMatchObject({
+      netRxBytes: 0,
+      netTxBytes: 12_500,
+      linkSpeedMbps: 2500,
+      linkDownCount: 1,
+    });
+
+    const offlineHost = hostNamed(model.blocks, 'pve-offline');
+    expect(offlineHost.netRxBytes).toBeUndefined();
+    expect(offlineHost.netTxBytes).toBeUndefined();
+    expect(offlineHost.linkSpeedMbps).toBe(1000);
+    expect(offlineHost.linkDownCount).toBeUndefined();
+
+    const vm = liveHost.sections[0].items[0];
+    expect(vm.netRxBytes).toBeUndefined();
+    expect(vm.netTxBytes).toBeUndefined();
+    expect(vm.firewallEnabled).toBe(true);
+
+    const checkItems = hostNamed(model.blocks, 'Availability checks').sections[0].items;
+    expect(checkItems.find((item) => item.id === 'check-up')?.latencyMs).toBe(2.4);
+    expect(checkItems.find((item) => item.id === 'check-down')?.latencyMs).toBeUndefined();
   });
 });
