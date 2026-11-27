@@ -130,6 +130,67 @@ class SchedulerHealthAPIHelpDocsTest(unittest.TestCase):
             sched_doc,
         )
 
+    def test_poller_startup_and_fencing_notes_match_runtime_source(self) -> None:
+        api_text = " ".join(API_DOC.read_text(encoding="utf-8").split())
+        section = " ".join(scheduler_section().split())
+        sched_doc = " ".join(SCHEDULER_DOC.read_text(encoding="utf-8").split())
+        pve_init = (ROOT / "internal/monitoring/monitor_client_init.go").read_text(
+            encoding="utf-8"
+        )
+        vmware_poller = (ROOT / "internal/monitoring/vmware_poller.go").read_text(
+            encoding="utf-8"
+        )
+        readiness = (ROOT / "internal/api/update_readiness.go").read_text(
+            encoding="utf-8"
+        )
+        resource_links = (
+            ROOT / "frontend-modern/src/routing/resourceLinks.ts"
+        ).read_text(encoding="utf-8")
+
+        self.assertIn("publishPVEStartupFailure", pve_init)
+        self.assertIn("pveStartupFailureError", pve_init)
+        self.assertIn("errors.Is(ctx.Err(), context.Canceled)", vmware_poller)
+        self.assertIn("p.providersByOrg[entry.orgID][entry.connectionID] != entry.provider", vmware_poller)
+        self.assertIn("AVAILABILITY_PATH = '/availability'", resource_links)
+
+        for phrase in (
+            "Proxmox VE startup and reconnect construction failures populate `pollStatus.lastError`, breaker state, and staleness tracking immediately",
+            "TrueNAS and VMware pollers drop explicit shutdown cancellations (`context.Canceled`) without recording fabricated poll failures",
+            "fence in-flight completions against active provider ownership",
+            "unreadable-config fail-closed connections cannot resurrect cached state or overwrite a replacement provider",
+        ):
+            with self.subTest(scheduler_phrase=phrase):
+                self.assertIn(phrase, section)
+
+        for phrase in (
+            "Proxmox VE startup and reconnect construction failures populate `pollStatus`, breaker state, and staleness tracking immediately.",
+            "TrueNAS and VMware pollers drop explicit shutdown cancellations without fabricating poll failures",
+            "fence in-flight completions against active provider ownership",
+        ):
+            with self.subTest(sched_doc_phrase=phrase):
+                self.assertIn(phrase, sched_doc)
+
+        for phrase in (
+            "Newly created or recreated Proxmox VE clients stay `pending` with no `lastError` until their first connectivity poll completes",
+            "classify transport or TLS errors as `unreachable` rather than `unauthorized`",
+            "ICMP ping, TCP port, UDP, DNS, HTTP, or HTTPS probes.",
+            "top-level **Availability** page (`/availability`)",
+        ):
+            with self.subTest(api_phrase=phrase):
+                self.assertIn(phrase, api_text)
+        self.assertNotIn("Settings -> Monitoring -> Availability checks", api_text)
+
+        for check_id in (
+            "server-update-path",
+            "agent-continuity",
+            "agent-migration-security",
+            "agent-token-scopes",
+            "container-data-persistence",
+        ):
+            with self.subTest(check_id=check_id):
+                self.assertIn(f'ID:      "{check_id}"', readiness)
+                self.assertIn(f"`{check_id}`", api_text)
+
     def test_in_app_links_target_real_shipped_docs_and_headings(self) -> None:
         section = scheduler_section()
         links = re.findall(r"\[[^\]]+\]\(([^)]+)\)", section)

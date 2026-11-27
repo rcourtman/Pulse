@@ -28,6 +28,10 @@ class LicenseRecoveryDocsTest(unittest.TestCase):
 
     def test_active_key_is_not_a_private_runtime_install(self):
         text = section((ROOT / "docs/PULSE_PRO.md").read_text())
+        messages = (ROOT / "frontend-modern/src/i18n/messages.ts").read_text()
+        self.assertIn("'settings.nav.item.plans': 'Plans & Billing'", messages)
+        self.assertIn("Open **Settings → System → Plans & Billing**", text)
+        self.assertNotIn("Open **Plans & Billing → Plan**", text)
         for phrase in (
             "accepted key and an installed Pro runtime are separate requirements",
             "intended Pulse instance and organisation",

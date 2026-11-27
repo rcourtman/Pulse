@@ -561,6 +561,8 @@ Returns the canonical fleet connections ledger with per-row fleet-governance sta
 
 The payload is the source of truth for enrollment, liveness, version drift, adapter health, config rollout, credential posture, update posture, and remote-control posture. Consumers must not rebuild those states from provider-specific config stores or display labels.
 
+Newly created or recreated Proxmox VE clients stay `pending` with no `lastError` until their first connectivity poll completes rather than reporting healthy before polling. Proxmox VE startup and reconnect failures record `lastError` immediately and classify transport or TLS errors as `unreachable` rather than `unauthorized`. Paused connections report `paused` with no error.
+
 Define the private-response helper in [Authentication](#-authentication),
 with `settings:read` on the token:
 
@@ -1567,7 +1569,15 @@ poll interval:
   `key`. A complete success clears `lastError`. A `partial` read can advance
   `lastSuccess` while leaving `lastError` with `category: "partial"` and
   `consecutiveFailures: 0`, meaning Pulse reached the target but some readings
-  were unavailable. Having no error rows does not prove polling ran.
+  were unavailable. Proxmox VE startup and reconnect construction failures
+  populate `pollStatus.lastError`, breaker state, and staleness tracking
+  immediately rather than waiting for a later poll. TrueNAS and VMware pollers
+  drop explicit shutdown cancellations (`context.Canceled`) without recording
+  fabricated poll failures while still reporting genuine poll timeouts, and
+  fence in-flight completions against active provider ownership so deleted,
+  paused, or unreadable-config fail-closed connections cannot resurrect cached
+  state or overwrite a replacement provider. Having no error rows does not
+  prove polling ran.
 - **`instances[].breaker` and `breakers`**: `state` is `closed`, `open` or
   `half_open`, and `retryAt` is the earliest time the breaker will allow the
   next probe. Passing `retryAt` does not prove a poll ran, and the state can
@@ -1594,7 +1604,12 @@ reading.
 - `POST /api/updates/apply`
 - `GET /api/updates/status`
 - `GET /api/updates/stream`
-- `GET /api/updates/plan?version=X.Y.Z` (optional `channel`, accepts `v` prefix)
+- `GET /api/updates/plan?version=X.Y.Z` (optional `channel`, accepts `v` prefix):
+  returns the deployment update plan and `readiness` (`ready`, `attention`, or
+  `blocked`) with per-check results (`server-update-path`, `agent-continuity`,
+  `agent-migration-security`, `agent-token-scopes`, and
+  `container-data-persistence` when a Docker server stores its data directory
+  on the container's ephemeral root filesystem).
 - `GET /api/updates/history`
 - `GET /api/updates/history/entry?id=<event_id>`
 - `GET /api/updates/pro-runtime` (`settings:read`): whether this community build
@@ -2260,9 +2275,9 @@ Every profile route requires admin access and the `agent_profiles` licence featu
 ## Availability Checks
 
 Agentless availability checks monitor endpoint-only devices and services with
-ICMP ping, TCP port, UDP, HTTP, or HTTPS probes. They are managed from
-**Settings -> Monitoring -> Availability checks** and are also exposed through
-the API for automation.
+ICMP ping, TCP port, UDP, DNS, HTTP, or HTTPS probes. They are managed from
+the top-level **Availability** page (`/availability`) and are also exposed
+through the API for automation.
 
 ### Target Management
 

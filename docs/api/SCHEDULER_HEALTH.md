@@ -89,7 +89,7 @@ appear here. Neither `enabled` nor the queue depth is a health verdict.
 ### Instances (`instances`)
 The scheduler's record of each connection's recent poll results.
 
-*   **`pollStatus`**: `lastSuccess` timestamp, the current outstanding `lastError` if present, and `consecutiveFailures`. A complete success clears the error. A partial read can record both a success and a `partial` error with no consecutive failures.
+*   **`pollStatus`**: `lastSuccess` timestamp, the current outstanding `lastError` if present, and `consecutiveFailures`. A complete success clears the error. A partial read can record both a success and a `partial` error with no consecutive failures. Proxmox VE startup and reconnect construction failures populate `pollStatus`, breaker state, and staleness tracking immediately. TrueNAS and VMware pollers drop explicit shutdown cancellations without fabricating poll failures while still reporting genuine poll timeouts, and fence in-flight completions against active provider ownership so deleted, paused, or unreadable-config fail-closed connections cannot resurrect cached state or overwrite a replacement provider.
 *   **`breaker`**: `state` (`closed`/`open`/`half_open`), `retryAt` next retry, `since` state start, `lastTransition` timestamp.
 *   **`deadLetter`**: `present` flag, `reason` (e.g., `permanent_failure`),
     `retryCount` and the recorded `nextRetry`. This time does not schedule a

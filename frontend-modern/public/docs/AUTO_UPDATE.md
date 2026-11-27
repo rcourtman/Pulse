@@ -38,6 +38,30 @@ For PVE, legacy, disabled, or failed agent updates, use **Agent Doctor** at
    - Automatic backup notice, when rollback is supported
 5. Click **"Start Update"** in the confirmation dialog to begin
 
+### Upgrade checks
+
+When an update is available, **Settings → System → Updates** loads upgrade
+readiness checks from `GET /api/updates/plan` (`ready`, `attention`, or
+`blocked`):
+
+- **Server update path** (`server-update-path`): whether automatic install and
+  rollback support are available or manual steps are required.
+- **Agent continuity** (`agent-continuity`): whether registered Pulse agents
+  have recent heartbeats and reported versions before the server restarts.
+- **Agent migration security** (`agent-migration-security`): warns when legacy
+  v5 agents remain connected so you can keep first-hop updates on HTTPS or a
+  trusted local network, or reinstall through the signed v6 installer.
+- **Agent token scopes** (`agent-token-scopes`): warns on expired or expiring
+  `agent:report` tokens and blocks the update when registered agents have no
+  valid `agent:report` token loaded.
+- **Container data persistence** (`container-data-persistence`): appears on
+  Docker installs when Pulse's runtime data directory (`/data` or
+  `PULSE_DATA_DIR`) is on the container's ephemeral root filesystem instead of
+  a mounted volume.
+
+Resolve any **blocked** checks before installing an update. Review **warning**
+checks before proceeding, even though they do not disable installation.
+
 ### Update Process
 
 1. **Download**: New version is downloaded, its signature and checksum are verified
@@ -133,6 +157,16 @@ the exact release first, then pull and recreate only the Pulse service with the
 same mounted data. Pulling another tag alone does not change the image in your
 Compose file. Do not run `docker compose down` for a Pulse-only update or remove
 its data volume.
+
+If Pulse detects that its Docker data directory (`/data` or `PULSE_DATA_DIR`)
+is not mounted on a persistent volume, it surfaces a **Container data
+persistence** warning in the available-update banner and under **Upgrade
+checks** in **Settings → System → Updates**. Recreating the container while
+storage is ephemeral erases your configuration, authentication, and history.
+Export a configuration backup from **Settings → System → Recovery** and mount
+a persistent volume (for example `-v pulse-data:/data`) before updating. Set
+`PULSE_SUPPRESS_EPHEMERAL_DATA_WARNING=true` only when ephemeral container
+storage is intentional.
 
 Private Pro installs must keep the private image supplied by the
 [download page](https://pulserelay.pro/download.html); replacing it with
