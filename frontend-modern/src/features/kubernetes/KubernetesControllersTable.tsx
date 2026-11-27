@@ -19,7 +19,6 @@ import {
 } from '@/features/platformPage/sharedPlatformPage';
 import { getPlatformStatusTextToneClass } from '@/features/platformPage/platformStatusTone';
 import {
-  createPlatformResourceDetailState,
   createPlatformResourceLabelResolver,
   getPlatformResourceDetailRowClass,
 } from '@/features/platformPage/PlatformResourceDetailTableRow';
@@ -41,6 +40,7 @@ import {
   KubernetesRowLead,
   KubernetesStaleDataCue,
   KubernetesTableFrame,
+  createKubernetesDetailState,
 } from './KubernetesRecordDetail';
 
 const controllerName = (resource: Resource): string =>
@@ -245,7 +245,7 @@ export const KubernetesControllersTable: Component<{
       getKubernetesControllerSortValue,
     ),
   );
-  const drawer = createPlatformResourceDetailState({ idPrefix: 'kubernetes-controller-drawer' });
+  const drawer = createKubernetesDetailState('kubernetes-controller-drawer');
   const resolveResourceLabel = createPlatformResourceLabelResolver(() => props.resources);
 
   return (

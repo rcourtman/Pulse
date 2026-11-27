@@ -16,7 +16,6 @@ import {
   type PlatformTableSortValue,
 } from '@/features/platformPage/sharedPlatformPage';
 import {
-  createPlatformResourceDetailState,
   createPlatformResourceLabelResolver,
   getPlatformResourceDetailRowClass,
 } from '@/features/platformPage/PlatformResourceDetailTableRow';
@@ -32,6 +31,7 @@ import {
   KubernetesDetailRow,
   KubernetesRowLead,
   KubernetesTableFrame,
+  createKubernetesDetailState,
 } from './KubernetesRecordDetail';
 
 // Services have a distinct API contract from Ingress and EndpointSlice:
@@ -116,7 +116,7 @@ export const KubernetesServicesTable: Component<{
     externalSearch: props.externalSearch,
     externalStatus: props.externalStatus,
   });
-  const drawer = createPlatformResourceDetailState({ idPrefix: 'kubernetes-service-drawer' });
+  const drawer = createKubernetesDetailState('kubernetes-service-drawer');
   const resolveResourceLabel = createPlatformResourceLabelResolver(() => props.resources);
   const sort = createPlatformTableSortState({
     storageKey: 'kubernetesServices',

@@ -1,4 +1,5 @@
 import { Show, createMemo, type Component, type JSX } from 'solid-js';
+import { StatusDot } from '@/components/shared/StatusDot';
 import { StatusIndicatorBadge } from '@/components/shared/StatusIndicatorBadge';
 import { TableCell, TableRow } from '@/components/shared/Table';
 import { ResourceNameWithWebInterfaceLink } from '@/components/shared/WebInterfaceLink';
@@ -9,6 +10,7 @@ import { useAlertsActivation } from '@/stores/alertsActivation';
 import {
   PlatformWindowedRows,
   PlatformSortableTableHead,
+  PlatformTableMetricFallback,
   PlatformTableShell,
   PlatformResponsiveTableLabel,
   createPlatformTableFilterState,
@@ -21,7 +23,6 @@ import {
   type PlatformTableSortValue,
 } from '@/features/platformPage/sharedPlatformPage';
 import {
-  createPlatformResourceDetailState,
   createPlatformResourceLabelResolver,
   getPlatformResourceDetailRowClass,
 } from '@/features/platformPage/PlatformResourceDetailTableRow';
@@ -44,6 +45,7 @@ import {
   KubernetesDetailRow,
   KubernetesRowLead,
   KubernetesTableFrame,
+  createKubernetesDetailState,
   getKubernetesMemorySortValue,
 } from './KubernetesRecordDetail';
 
@@ -138,7 +140,7 @@ export const KubernetesNodesTable: Component<{
     initialStatus: 'all' as KubernetesResourceStatusFilter,
     filter: filterKubernetesResources,
   });
-  const drawer = createPlatformResourceDetailState({ idPrefix: 'kubernetes-node-drawer' });
+  const drawer = createKubernetesDetailState('kubernetes-node-drawer');
   const resolveResourceLabel = createPlatformResourceLabelResolver(() => props.resources);
   // User-controlled sorting layered over the attention-first default: rows
   // are pre-sorted by attention (status and open alerts), then the status
@@ -349,6 +351,14 @@ export const KubernetesNodesTable: Component<{
                           drawer={drawer}
                           label={name()}
                           status={indicator()}
+                          statusDot={
+                            <StatusDot
+                              size="sm"
+                              variant={indicator().variant}
+                              title={indicator().label}
+                              ariaHidden
+                            />
+                          }
                         >
                           <div class="flex min-w-0 flex-1 flex-col">
                             <ResourceNameWithWebInterfaceLink
@@ -406,6 +416,7 @@ export const KubernetesNodesTable: Component<{
                       <KubernetesCpuMemoryCells
                         resource={node}
                         canRenderMetrics={canRenderMetrics()}
+                        memoryFallback={<PlatformTableMetricFallback />}
                       />
                       <TableCell
                         class={`${getPlatformTableCellClassForKind('numeric-value')} hidden text-base-content md:table-cell`}

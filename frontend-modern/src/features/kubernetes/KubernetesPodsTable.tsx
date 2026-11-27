@@ -19,7 +19,6 @@ import {
   isPlatformAttentionVariant,
 } from '@/features/platformPage/platformStatusTone';
 import {
-  createPlatformResourceDetailState,
   createPlatformResourceLabelResolver,
   getPlatformResourceDetailRowClass,
 } from '@/features/platformPage/PlatformResourceDetailTableRow';
@@ -38,6 +37,7 @@ import {
   KubernetesDetailRow,
   KubernetesRowLead,
   KubernetesTableFrame,
+  createKubernetesDetailState,
 } from './KubernetesRecordDetail';
 
 const podName = (resource: Resource): string =>
@@ -170,7 +170,7 @@ export const KubernetesPodsTable: Component<{
       getKubernetesPodSortValue,
     ),
   );
-  const drawer = createPlatformResourceDetailState({ idPrefix: 'kubernetes-pod-drawer' });
+  const drawer = createKubernetesDetailState('kubernetes-pod-drawer');
   const resolveResourceLabel = createPlatformResourceLabelResolver(() => props.resources);
 
   return (

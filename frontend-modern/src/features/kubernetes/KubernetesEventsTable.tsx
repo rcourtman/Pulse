@@ -15,10 +15,7 @@ import {
   type PlatformTableFilterOption,
   PlatformTableShell,
 } from '@/features/platformPage/sharedPlatformPage';
-import {
-  createPlatformResourceDetailState,
-  getPlatformResourceDetailRowClass,
-} from '@/features/platformPage/PlatformResourceDetailTableRow';
+import { getPlatformResourceDetailRowClass } from '@/features/platformPage/PlatformResourceDetailTableRow';
 import type { Resource } from '@/types/resource';
 import {
   compareKubernetesEvents,
@@ -31,6 +28,7 @@ import {
   KubernetesEventDetailPanel,
   KubernetesRowLead,
   KubernetesTableFrame,
+  createKubernetesDetailState,
   kubernetesEventInvolvedObject,
   kubernetesEventName,
 } from './KubernetesRecordDetail';
@@ -77,7 +75,7 @@ export const KubernetesEventsTable: Component<{
     initialStatus: 'all' as KubernetesEventSeverityFilter,
     filter: filterKubernetesEvents,
   });
-  const drawer = createPlatformResourceDetailState({ idPrefix: 'kubernetes-event-drawer' });
+  const drawer = createKubernetesDetailState('kubernetes-event-drawer');
 
   return (
     <KubernetesTableFrame

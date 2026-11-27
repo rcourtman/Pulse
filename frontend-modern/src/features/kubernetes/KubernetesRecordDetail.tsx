@@ -23,12 +23,12 @@ import { asTrimmedString } from '@/utils/stringUtils';
 import {
   PlatformResourceDetailTableRow,
   PlatformResourceDetailToggleButton,
+  createPlatformResourceDetailState,
   type PlatformResourceDetailState,
 } from '@/features/platformPage/PlatformResourceDetailTableRow';
 import {
   PLATFORM_HEALTH_FILTER_OPTIONS,
   PlatformTableEmptyState,
-  PlatformTableMetricFallback,
   PlatformTableToolbar,
   getPlatformTableCellClassForKind,
   getPlatformTableFiniteMetric,
@@ -44,6 +44,9 @@ import {
 } from './kubernetesPageModel';
 import { makeDetailTimestampRow } from '@/features/platformPage/platformDetailTimestampRow';
 
+export const createKubernetesDetailState = (idPrefix: string): PlatformResourceDetailState =>
+  createPlatformResourceDetailState({ idPrefix });
+
 export const getKubernetesMemorySortValue = (resource: Resource): number | null => {
   const total = getPlatformTableFiniteMetric(resource.memory?.total) ?? 0;
   if (total > 0) {
@@ -55,6 +58,7 @@ export const getKubernetesMemorySortValue = (resource: Resource): number | null 
 export const KubernetesCpuMemoryCells: Component<{
   resource: Resource;
   canRenderMetrics: boolean;
+  memoryFallback: JSX.Element;
 }> = (props) => {
   const alertsActivation = useAlertsActivation();
   const alertResourceIds = () => unifiedPlatformOverrideIdCandidates(props.resource);
@@ -80,7 +84,7 @@ export const KubernetesCpuMemoryCells: Component<{
       <TableCell class={metricCellClass}>
         <Show
           when={props.canRenderMetrics && (memoryTotal() > 0 || memoryPercentOnly() !== undefined)}
-          fallback={<PlatformTableMetricFallback />}
+          fallback={props.memoryFallback}
         >
           <StackedMemoryBar
             used={memoryUsed()}
@@ -115,6 +119,7 @@ export const KubernetesRowLead: Component<{
   label: string;
   status: StatusIndicator;
   dotTitle?: string;
+  statusDot?: JSX.Element;
   children?: JSX.Element;
 }> = (props) => (
   <div class="flex min-w-0 items-center gap-2">
@@ -124,12 +129,14 @@ export const KubernetesRowLead: Component<{
       controlsId={props.drawer.detailRowId(props.resource)}
       onToggle={() => props.drawer.toggle(props.resource)}
     />
-    <StatusDot
-      size="sm"
-      variant={props.status.variant}
-      title={props.dotTitle ?? props.status.label}
-      ariaHidden
-    />
+    {props.statusDot ?? (
+      <StatusDot
+        size="sm"
+        variant={props.status.variant}
+        title={props.dotTitle ?? props.status.label}
+        ariaHidden
+      />
+    )}
     {props.children ?? (
       <span class="truncate font-semibold text-base-content" title={props.label}>
         {props.label}

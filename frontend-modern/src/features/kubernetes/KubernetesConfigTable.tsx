@@ -25,7 +25,6 @@ import {
   withPlatformStatusCounts,
 } from '@/features/platformPage/sharedPlatformPage';
 import {
-  createPlatformResourceDetailState,
   createPlatformResourceLabelResolver,
   getPlatformResourceDetailRowClass,
 } from '@/features/platformPage/PlatformResourceDetailTableRow';
@@ -57,6 +56,7 @@ import {
   KubernetesDetailRow,
   KubernetesRecordDetailPanel,
   KubernetesRowLead,
+  createKubernetesDetailState,
   kubernetesLabelsSection,
   kubernetesObjectSection,
 } from './KubernetesRecordDetail';
@@ -378,7 +378,7 @@ export const KubernetesConfigTable: Component<{
     if (!shouldCollapseRoutineMetadataOnly()) return filtered;
     return filtered.filter((resource) => !isRoutineMetadataOnlyConfig(resource));
   });
-  const drawer = createPlatformResourceDetailState({ idPrefix: 'kubernetes-config-drawer' });
+  const drawer = createKubernetesDetailState('kubernetes-config-drawer');
   const resolveResourceLabel = createPlatformResourceLabelResolver(() => props.resources);
   const sort = createPlatformTableSortState({
     storageKey: 'kubernetesConfig',

@@ -19,10 +19,7 @@ import {
   PlatformTableShell,
   platformTableBandWidthStyle,
 } from '@/features/platformPage/sharedPlatformPage';
-import {
-  createPlatformResourceDetailState,
-  getPlatformResourceDetailRowClass,
-} from '@/features/platformPage/PlatformResourceDetailTableRow';
+import { getPlatformResourceDetailRowClass } from '@/features/platformPage/PlatformResourceDetailTableRow';
 import type { Resource } from '@/types/resource';
 import {
   filterKubernetesResources,
@@ -33,6 +30,7 @@ import {
   KubernetesRecordDetailPanel,
   KubernetesRowLead,
   KubernetesTableFrame,
+  createKubernetesDetailState,
   kubernetesLabelsSection,
   kubernetesObjectSection,
 } from './KubernetesRecordDetail';
@@ -282,7 +280,7 @@ export const KubernetesPolicyTable: Component<{
     externalSearch: props.externalSearch,
     externalStatus: props.externalStatus,
   });
-  const drawer = createPlatformResourceDetailState({ idPrefix: 'kubernetes-policy-drawer' });
+  const drawer = createKubernetesDetailState('kubernetes-policy-drawer');
 
   return (
     <KubernetesTableFrame

@@ -16,7 +16,6 @@ import {
   type PlatformTableSortValue,
 } from '@/features/platformPage/sharedPlatformPage';
 import {
-  createPlatformResourceDetailState,
   createPlatformResourceLabelResolver,
   getPlatformResourceDetailRowClass,
 } from '@/features/platformPage/PlatformResourceDetailTableRow';
@@ -32,6 +31,7 @@ import {
   KubernetesDetailRow,
   KubernetesRowLead,
   KubernetesTableFrame,
+  createKubernetesDetailState,
 } from './KubernetesRecordDetail';
 
 const KUBERNETES_STORAGE_KIND_OPTIONS: PlatformTableFilterOption<KubernetesStorageKindFilter>[] = [
@@ -227,7 +227,7 @@ export const KubernetesStorageTable: Component<{
     initialStatus: 'all' as KubernetesStorageKindFilter,
     filter: filterKubernetesStorageResources,
   });
-  const drawer = createPlatformResourceDetailState({ idPrefix: 'kubernetes-storage-drawer' });
+  const drawer = createKubernetesDetailState('kubernetes-storage-drawer');
   const resolveResourceLabel = createPlatformResourceLabelResolver(() => props.resources);
   const sort = createPlatformTableSortState({
     storageKey: 'kubernetesStorage',

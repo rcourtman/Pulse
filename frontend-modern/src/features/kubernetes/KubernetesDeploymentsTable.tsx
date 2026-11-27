@@ -18,7 +18,6 @@ import {
 } from '@/features/platformPage/sharedPlatformPage';
 import { getPlatformStatusTextToneClass } from '@/features/platformPage/platformStatusTone';
 import {
-  createPlatformResourceDetailState,
   createPlatformResourceLabelResolver,
   getPlatformResourceDetailRowClass,
 } from '@/features/platformPage/PlatformResourceDetailTableRow';
@@ -36,6 +35,7 @@ import {
   KubernetesRowLead,
   KubernetesStaleDataCue,
   KubernetesTableFrame,
+  createKubernetesDetailState,
 } from './KubernetesRecordDetail';
 
 // Kubernetes Deployments are scheduling abstractions over their controlled
@@ -121,7 +121,7 @@ export const KubernetesDeploymentsTable: Component<{
       getKubernetesDeploymentSortValue,
     ),
   );
-  const drawer = createPlatformResourceDetailState({ idPrefix: 'kubernetes-deployment-drawer' });
+  const drawer = createKubernetesDetailState('kubernetes-deployment-drawer');
   const resolveResourceLabel = createPlatformResourceLabelResolver(() => props.resources);
 
   return (

@@ -6,6 +6,7 @@ import {
   PlatformWindowedRows,
   PlatformSortableTableHead,
   PlatformTableCountRatioValue,
+  PlatformTableMetricFallback,
   PlatformResponsiveTableLabel,
   createPlatformTableFilterState,
   createPlatformTableSortState,
@@ -16,7 +17,6 @@ import {
   type PlatformTableSortValue,
 } from '@/features/platformPage/sharedPlatformPage';
 import {
-  createPlatformResourceDetailState,
   createPlatformResourceLabelResolver,
   getPlatformResourceDetailRowClass,
 } from '@/features/platformPage/PlatformResourceDetailTableRow';
@@ -35,6 +35,7 @@ import {
   KubernetesRowLead,
   KubernetesStaleDataCue,
   KubernetesTableFrame,
+  createKubernetesDetailState,
   getKubernetesMemorySortValue,
 } from './KubernetesRecordDetail';
 
@@ -80,7 +81,7 @@ export const KubernetesClustersTable: Component<{
     initialStatus: 'all' as KubernetesResourceStatusFilter,
     filter: filterKubernetesResources,
   });
-  const drawer = createPlatformResourceDetailState({ idPrefix: 'kubernetes-cluster-drawer' });
+  const drawer = createKubernetesDetailState('kubernetes-cluster-drawer');
   const resolveResourceLabel = createPlatformResourceLabelResolver(() => props.scope);
 
   const countsByCluster = createMemo(() =>
@@ -298,6 +299,7 @@ export const KubernetesClustersTable: Component<{
                       <KubernetesCpuMemoryCells
                         resource={cluster}
                         canRenderMetrics={canRenderMetrics()}
+                        memoryFallback={<PlatformTableMetricFallback />}
                       />
                       <TableCell
                         class={`${getPlatformTableCellClassForKind('numeric-value')} text-base-content`}

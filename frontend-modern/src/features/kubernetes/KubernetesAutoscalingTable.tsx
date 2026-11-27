@@ -16,7 +16,6 @@ import {
   type PlatformTableSortValue,
 } from '@/features/platformPage/sharedPlatformPage';
 import {
-  createPlatformResourceDetailState,
   createPlatformResourceLabelResolver,
   getPlatformResourceDetailRowClass,
 } from '@/features/platformPage/PlatformResourceDetailTableRow';
@@ -32,6 +31,7 @@ import {
   KubernetesDetailRow,
   KubernetesRowLead,
   KubernetesTableFrame,
+  createKubernetesDetailState,
 } from './KubernetesRecordDetail';
 
 const autoscalerName = (resource: Resource): string =>
@@ -113,7 +113,7 @@ export const KubernetesAutoscalingTable: Component<{
     externalSearch: props.externalSearch,
     externalStatus: props.externalStatus,
   });
-  const drawer = createPlatformResourceDetailState({ idPrefix: 'kubernetes-autoscaling-drawer' });
+  const drawer = createKubernetesDetailState('kubernetes-autoscaling-drawer');
   const resolveResourceLabel = createPlatformResourceLabelResolver(() => props.resources);
   const sort = createPlatformTableSortState({
     storageKey: 'kubernetesAutoscaling',
