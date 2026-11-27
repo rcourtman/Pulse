@@ -48,6 +48,14 @@
   pointer-events: none;
 }
 
+.pulse-map-link-halo {
+  pointer-events: none;
+}
+
+.pulse-map-network-ring {
+  pointer-events: none;
+}
+
 .pulse-map-link-flow {
   pointer-events: none;
   animation: pulse-map-flow-dash 1.4s linear infinite;

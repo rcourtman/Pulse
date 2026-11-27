@@ -23,6 +23,7 @@ import {
   MAP_PAGE_PALETTES,
   MAP_PALETTES,
   renderMapLinkRings,
+  renderMapNetworkRings,
   renderMapSceneBody,
   renderMapSceneToSvg,
 } from '../infrastructureMapRender';
@@ -1802,30 +1803,99 @@ describe('layoutServiceDiagram', () => {
       expect(hostHit.linked).toHaveLength(21);
       expect(gatewayHit.linked).toEqual(['docker-1']);
 
-      // Static mode: all 21 linked tiles get rings, curved arcs capped at MAP_MAX_LINK_ARCS (16), no flow overlay.
+      // Static mode: all 21 linked tiles get tinted rings, curved halos and arcs capped at MAP_MAX_LINK_ARCS (16), no flow overlay.
       const staticOverlay = renderMapLinkRings(scene, hostHit, palette);
       expect(staticOverlay.match(/<rect /g)).toHaveLength(21);
+      expect(staticOverlay).toContain(`fill="${palette.accent}" fill-opacity="0.06"`);
+      expect(staticOverlay.match(/class="pulse-map-link-halo"/g)).toHaveLength(MAP_MAX_LINK_ARCS);
+      expect(staticOverlay).toContain(
+        `stroke="${palette.surface}" stroke-width="4" stroke-opacity="0.72" class="pulse-map-link-halo"`,
+      );
       expect(staticOverlay.match(/class="pulse-map-link-arc"/g)).toHaveLength(MAP_MAX_LINK_ARCS);
+      expect(staticOverlay.indexOf('pulse-map-link-halo')).toBeLessThan(
+        staticOverlay.indexOf('pulse-map-link-arc'),
+      );
       expect(staticOverlay).toMatch(/d="M[\d.]+ [\d.]+ Q[\d.]+ [\d.]+ [\d.]+ [\d.]+"/);
       expect(staticOverlay.match(/<circle /g)).toHaveLength(MAP_MAX_LINK_ARCS + 1);
       expect(staticOverlay).not.toContain('pulse-map-link-flow');
 
-      // Live traffic mode: emits matching animated flow paths alongside base arcs.
+      // Live traffic mode: emits matching animated flow paths alongside base arcs and halos.
       const liveOverlay = renderMapLinkRings(scene, hostHit, palette, { liveTraffic: true });
+      expect(liveOverlay.match(/class="pulse-map-link-halo"/g)).toHaveLength(MAP_MAX_LINK_ARCS);
       expect(liveOverlay.match(/class="pulse-map-link-arc"/g)).toHaveLength(MAP_MAX_LINK_ARCS);
       expect(liveOverlay.match(/class="pulse-map-link-flow"/g)).toHaveLength(MAP_MAX_LINK_ARCS);
+      expect(liveOverlay.indexOf('pulse-map-link-halo')).toBeLessThan(
+        liveOverlay.indexOf('pulse-map-link-arc'),
+      );
       expect(liveOverlay).toContain('stroke-dasharray="4 10"');
 
-      // Unmonitored gateway hover draws 1 ring and 1 curved arc to its host.
+      // Unmonitored gateway hover draws 1 ring, 1 halo, and 1 curved arc to its host.
       const gatewayOverlay = renderMapLinkRings(scene, gatewayHit, palette, { liveTraffic: true });
       expect(gatewayOverlay.match(/<rect /g)).toHaveLength(1);
+      expect(gatewayOverlay.match(/class="pulse-map-link-halo"/g)).toHaveLength(1);
       expect(gatewayOverlay.match(/class="pulse-map-link-arc"/g)).toHaveLength(1);
       expect(gatewayOverlay.match(/class="pulse-map-link-flow"/g)).toHaveLength(1);
 
-      // Exported SVG never contains hover rings or arcs.
+      // Exported SVG never contains hover rings, halos, or arcs.
       const exported = renderMapSceneToSvg(scene, MAP_PALETTES.dark);
+      expect(exported).not.toContain('pulse-map-link-halo');
       expect(exported).not.toContain('pulse-map-link-arc');
       expect(exported).not.toContain('pulse-map-link-flow');
+    });
+
+    it('propagates segmentIds and linkUtilizationPercent onto MapHit and renders interactive network rings', () => {
+      const resources: Resource[] = [
+        resource({
+          id: 'pve-net',
+          type: 'agent',
+          name: 'pve-net',
+          platformType: 'proxmox-pve',
+          network: { rxBytes: 112_500_000, txBytes: 5_000_000 },
+          agent: {
+            networkInterfaces: [
+              { name: 'eno1', addresses: ['10.30.0.10/24'], speedMbps: 1000, linkUp: true },
+            ],
+          },
+        }),
+        guest('jellyfin', {
+          parentId: 'pve-net',
+          identity: { ips: ['10.30.0.50', '10.40.0.50'] },
+        }),
+        guest('grafana', {
+          parentId: 'pve-net',
+          identity: { ips: ['10.40.0.60'] },
+        }),
+      ];
+      const diagram = buildServiceDiagram(buildInfrastructureMapModel(resources));
+      const scene = layoutServiceDiagram(diagram, { width: 1400, density: 'names' });
+      const net30 = diagram.networks.find((entry) => entry.label === '10.30.0.0/24')!;
+      const net40 = diagram.networks.find((entry) => entry.label === '10.40.0.x')!;
+
+      const hostHit = ofKind(scene, 'hit').find((node) => node.hit.id === 'pve-net')!.hit;
+      const jellyfinHit = ofKind(scene, 'hit').find((node) => node.hit.id === 'ct-jellyfin')!.hit;
+      const grafanaHit = ofKind(scene, 'hit').find((node) => node.hit.id === 'ct-grafana')!.hit;
+
+      expect(hostHit.linkUtilizationPercent).toBe(90);
+      expect(hostHit.segmentIds).toEqual([net30.id]);
+      expect(jellyfinHit.segmentIds?.sort()).toEqual([net30.id, net40.id].sort());
+      expect(grafanaHit.segmentIds).toEqual([net40.id]);
+
+      // Network hover rings highlight every member tile of that network (including multi-homed tiles).
+      const rings30 = renderMapNetworkRings(scene, net30.id, MAP_PAGE_PALETTES.dark.net0);
+      expect(rings30.match(/class="pulse-map-network-ring"/g)).toHaveLength(2);
+      expect(rings30).toContain(
+        `fill="${MAP_PAGE_PALETTES.dark.net0}" fill-opacity="0.08" stroke="${MAP_PAGE_PALETTES.dark.net0}" stroke-width="2" class="pulse-map-network-ring"`,
+      );
+
+      const rings40 = renderMapNetworkRings(scene, net40.id, MAP_PAGE_PALETTES.dark.net1);
+      expect(rings40.match(/class="pulse-map-network-ring"/g)).toHaveLength(2);
+
+      // Unknown or empty network id emits no rings.
+      expect(renderMapNetworkRings(scene, 'net:missing', '#60a5fa')).toBe('');
+      expect(renderMapNetworkRings(scene, '', '#60a5fa')).toBe('');
+
+      // Static SVG exports never contain interactive network rings.
+      expect(renderMapSceneToSvg(scene, MAP_PALETTES.dark)).not.toContain('pulse-map-network-ring');
     });
   });
 });

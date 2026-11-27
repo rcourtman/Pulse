@@ -10756,3 +10756,34 @@ unified resource fields:
 
 Verified by the 7-file Infrastructure Map Vitest suite, `tsc --noEmit`,
 `vite build`, and Playwright browser verification.
+
+### Infrastructure Map link utilization, active traffic filter, Kubernetes/TrueNAS/Swarm ports, and network hover rings (27 November 2026)
+
+`frontend-modern/src/features/infrastructureMap/` extends the map model,
+service diagram, layout hits, and SVG overlay renderer using existing unified
+resource fields:
+
+- `infrastructureMapModel.ts` adds `MAP_LINK_SATURATED_PERCENT` (`80`),
+  `computeMapLinkUtilizationPercent` (full-duplex utilization from
+  `max(rxBytes, txBytes)` against reported NIC `speedMbps`, omitting sub-1%
+  readings), and `linkUtilizationPercent` on `MapItem` and `MapHost`. It also
+  expands `publishedPorts` to cover Docker Swarm `endpointPorts` and TrueNAS
+  app `usedPorts`/`portConfig`, matches Kubernetes `k8s-service` selectors
+  within the same cluster (`parentId`) and namespace to surface `NodePort` and
+  `LoadBalancer` ports (without leaking external IPs), and links matching
+  `k8s-ingress` hostnames onto pod `ingressHosts` (stripped under
+  `anonymizeInfrastructureMapModel`).
+- `infrastructureMapServices.ts` projects `DiagramTile.linkUtilizationPercent`,
+  adds `ServiceDiagramFilter.activeTrafficOnly` (aligned 1-for-1 with
+  `collectActiveTrafficTiles`), and renders Kubernetes `ingressHosts` as pod
+  captions (`hasConnectionCaption: true`) and `Ingress: ...` hover links.
+- `infrastructureMapLayout.ts` and `infrastructureMapDiagram.ts` carry opaque
+  planned `segmentIds` and `linkUtilizationPercent` on `MapHit`.
+- `infrastructureMapRender.ts` adds `renderMapNetworkRings` to outline every
+  drawn member tile on a hovered network (`.pulse-map-network-ring`), adds a
+  `surface`-coloured under-stroke halo (`.pulse-map-link-halo`) behind curved
+  hover arcs and a subtle accent tint on target rings in `renderMapLinkRings`,
+  and keeps static exports free of hover overlays.
+
+Verified by the 7-file Infrastructure Map Vitest suite, `tsc --noEmit`,
+`vite build`, and Playwright browser verification.

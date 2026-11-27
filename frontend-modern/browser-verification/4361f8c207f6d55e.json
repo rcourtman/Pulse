@@ -1,0 +1,52 @@
+{
+  "version": 1,
+  "base_sha": "c36580f4528d85438506b284a43441ef3f31570d",
+  "verified_at": "2026-11-27T12:12:47Z",
+  "result": "passed",
+  "changed_paths": [
+    "frontend-modern/src/features/infrastructureMap/InfrastructureMapDrawer.tsx",
+    "frontend-modern/src/features/infrastructureMap/InfrastructureMapSurface.tsx",
+    "frontend-modern/src/features/infrastructureMap/infrastructureMap.css",
+    "frontend-modern/src/features/infrastructureMap/infrastructureMapDiagram.ts",
+    "frontend-modern/src/features/infrastructureMap/infrastructureMapLayout.ts",
+    "frontend-modern/src/features/infrastructureMap/infrastructureMapModel.ts",
+    "frontend-modern/src/features/infrastructureMap/infrastructureMapRender.ts",
+    "frontend-modern/src/features/infrastructureMap/infrastructureMapServices.ts"
+  ],
+  "content_sha256": {
+    "frontend-modern/src/features/infrastructureMap/InfrastructureMapDrawer.tsx": "d0554dff6c7fd2e689ac6c48ecc1e03770beb510c93f54706f49ca7d7d962e55",
+    "frontend-modern/src/features/infrastructureMap/InfrastructureMapSurface.tsx": "284d5f2c1382f2c6656d602dec4ae91d17372cc0cbf9d7d6c6375dcbb50f88be",
+    "frontend-modern/src/features/infrastructureMap/infrastructureMap.css": "7491b35f6bb80c8dca54a1a7a530bdf70a6f4fa0db36159167ac637ed26a5105",
+    "frontend-modern/src/features/infrastructureMap/infrastructureMapDiagram.ts": "96d84ad8bc0e265f1e495fd1890b0b21d3d7eb1cb805283c5948800f3e354f1c",
+    "frontend-modern/src/features/infrastructureMap/infrastructureMapLayout.ts": "a57311e4c8af6da6a10578de25433d9fd4b93cb12e158ea9db906c5b44434ad9",
+    "frontend-modern/src/features/infrastructureMap/infrastructureMapModel.ts": "5ec3dc4d36b0ce319c984a77481c2bcec66c65f0d051509b095da82b6ed6aa41",
+    "frontend-modern/src/features/infrastructureMap/infrastructureMapRender.ts": "ec11f674870c9075a43f8fa553abaae18a8d944f4de1f4e734ae923766953b48",
+    "frontend-modern/src/features/infrastructureMap/infrastructureMapServices.ts": "9c913ed74f40c45b909865a7f8984bc484ffcbb74701c11c22a20ba889579827"
+  },
+  "routes": [
+    "/map"
+  ],
+  "viewports": [
+    {
+      "width": 1440,
+      "height": 900
+    },
+    {
+      "width": 390,
+      "height": 844
+    }
+  ],
+  "states": [
+    "Chromium desktop 1440x900 dark and light themes hovering vmbr0 VLAN 30 pill: all 5 attached tiles highlighted with network-coloured .pulse-map-network-ring rings and tooltip displaying 10.30.0.0/24, 5 connected, 46.2 MB/s, 10G link, 1 link down, and Click to inspect or filter",
+    "Hovering plex-media clears network rings (mutual exclusivity) and renders crisp curved connection arcs with surface-coloured .pulse-map-link-halo under-strokes and .pulse-map-link-flow overlays to nvme-pool and pve-01",
+    "Saturated 1G host nas-01 (110 MB/s rx) displays Link 1G (92%) and Link busy in hover tooltip and Link busy (92%) warning badge in Live traffic drawer",
+    "Kubernetes pod api-gateway-pod matched by k8s-service NodePort 30080 and k8s-ingress api.cluster.local preserves Ingress caption on tile and shows Published :30080 and Ingress: api.cluster.local in tooltip",
+    "Active traffic canvas filter triggered from Live traffic drawer Filter map button shows Active traffic filter bar chip and isolates the 5 active talkers (hiding idle authentik-sec)",
+    "Chromium mobile 390x844 light theme with zero horizontal overflow"
+  ],
+  "interactions": [
+    "Hover vmbr0 network pill to highlight all 5 attached tiles on the canvas and display network tooltip",
+    "Move pointer from network pill to plex-media, nas-01, and api-gateway-pod tiles to verify mutually exclusive rings, under-stroke arc halos, full-duplex link saturation, and Kubernetes Service/Ingress tooltips",
+    "Open Live traffic drawer via estate 166 MB/s pill, verify Link busy (92%) badge, click Filter map to activate Active traffic canvas filter, and clear via Clear active traffic filter button"
+  ]
+}

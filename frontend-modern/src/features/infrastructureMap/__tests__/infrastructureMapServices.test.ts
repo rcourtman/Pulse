@@ -1661,5 +1661,125 @@ describe('buildServiceDiagram', () => {
       expect(quiet.estateTrafficBytes).toBeUndefined();
       expect(collectActiveTrafficTiles(quiet)).toEqual([]);
     });
+
+    it('filters the service diagram by activeTrafficOnly in exact 1-for-1 match with collectActiveTrafficTiles', () => {
+      const resources: Resource[] = [
+        resource({
+          id: 'pve',
+          type: 'agent',
+          name: 'delly',
+          platformType: 'proxmox-pve',
+          network: { rxBytes: 100_000_000, txBytes: 10_000_000 },
+          agent: {
+            networkInterfaces: [{ name: 'eno1', addresses: ['10.10.0.10/24'], speedMbps: 1000 }],
+            defaultGateways: [{ address: '10.10.0.1', interface: 'eno1' }],
+          },
+        }),
+        guest('jellyfin', 'pve', {
+          identity: { ips: ['10.10.0.50'] },
+          network: { rxBytes: 2_000_000, txBytes: 500_000 },
+        }),
+        guest('sonarr', 'pve', {
+          identity: { ips: ['10.10.0.51'] },
+          network: { rxBytes: 0, txBytes: 0 },
+        }),
+        guest('radarr', 'pve', {
+          identity: { ips: ['10.10.0.52'] },
+        }),
+      ];
+
+      const model = buildInfrastructureMapModel(resources);
+      const full = buildServiceDiagram(model);
+      const expectedIds = collectActiveTrafficTiles(full)
+        .map(({ tile }) => tile.id)
+        .sort();
+      expect(expectedIds).toEqual(['ct-jellyfin', 'pve']);
+
+      const filtered = buildServiceDiagram(model, { filter: { activeTrafficOnly: true } });
+      const visibleIds = [
+        filtered.access,
+        ...filtered.groups,
+        filtered.storage,
+        filtered.backups,
+        filtered.hardware,
+      ]
+        .flatMap((group) => group?.allTiles ?? [])
+        .map((tile) => tile.id)
+        .sort();
+      expect(visibleIds).toEqual(expectedIds);
+      expect(filtered.gateways).toEqual([]);
+      expect(filtered.hardware?.tiles[0].linkUtilizationPercent).toBe(80);
+    });
+
+    it('surfaces Kubernetes Ingress routes on service tiles and strips them when names are hidden', () => {
+      const resources: Resource[] = [
+        resource({
+          id: 'k8s',
+          type: 'k8s-cluster',
+          name: 'homelab-k3s',
+          platformType: 'kubernetes',
+        }),
+        resource({
+          id: 'pod-grafana',
+          type: 'pod',
+          name: 'grafana-0',
+          platformType: 'kubernetes',
+          parentId: 'k8s',
+          status: 'running',
+          kubernetes: {
+            namespace: 'monitoring',
+            labels: { app: 'grafana' },
+          },
+        }),
+        resource({
+          id: 'svc-grafana',
+          type: 'k8s-service',
+          name: 'grafana-svc',
+          platformType: 'kubernetes',
+          parentId: 'k8s',
+          kubernetes: {
+            namespace: 'monitoring',
+            serviceType: 'NodePort',
+            servicePorts: [{ port: 3000, nodePort: 30300 }],
+            selector: { app: 'grafana' },
+          },
+        }),
+        resource({
+          id: 'ing-grafana',
+          type: 'k8s-ingress',
+          name: 'grafana-ingress',
+          platformType: 'kubernetes',
+          parentId: 'k8s',
+          kubernetes: {
+            namespace: 'monitoring',
+            serviceName: 'grafana-svc',
+            hosts: ['metrics.example.test', 'dash.example.test'],
+          },
+        }),
+      ];
+
+      const diagram = diagramOf(resources);
+      const tile = diagram.groups
+        .flatMap((group) => group.tiles)
+        .find((candidate) => candidate.id === 'pod-grafana')!;
+      expect(tile).toMatchObject({
+        caption: 'dash.example.test +1',
+        hasConnectionCaption: true,
+        detail: ':30300',
+        links: ['Ingress: dash.example.test, metrics.example.test'],
+      });
+
+      // Anonymized diagram drops Ingress hostnames cleanly while retaining the numeric NodePort.
+      const hidden = buildServiceDiagram(
+        anonymizeInfrastructureMapModel(buildInfrastructureMapModel(resources)),
+      );
+      const hiddenTile = hidden.groups
+        .flatMap((group) => group.tiles)
+        .find((candidate) => candidate.id === 'pod-grafana')!;
+      expect(hiddenTile.hasConnectionCaption).toBeUndefined();
+      expect(hiddenTile.links).toBeUndefined();
+      expect(hiddenTile.detail).toBe(':30300');
+      expect(JSON.stringify(hiddenTile)).not.toContain('example.test');
+    });
   });
 });

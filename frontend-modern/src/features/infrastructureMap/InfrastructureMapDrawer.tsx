@@ -11,7 +11,7 @@ import { StatusDot } from '@/components/shared/StatusDot';
 import { formatSpeed } from '@/utils/format';
 import type { StatusIndicatorVariant } from '@/utils/status';
 import type { MapInspectTarget } from './infrastructureMapLayout';
-import type { MapHealth } from './infrastructureMapModel';
+import { MAP_LINK_SATURATED_PERCENT, type MapHealth } from './infrastructureMapModel';
 import {
   collectActiveTrafficTiles,
   collectDiagramGroups,
@@ -39,9 +39,11 @@ export interface InfrastructureMapDrawerProps {
   target: MapInspectTarget | null;
   diagram: ServiceDiagram | null;
   activeNetworkId: string | null;
+  activeTrafficOnly?: boolean;
   hrefForResourceId: (id: string) => string | null;
   onSelectTarget: (target: MapInspectTarget) => void;
   onFilterByNetwork: (networkId: string | null) => void;
+  onFilterByActiveTraffic?: (active: boolean) => void;
   onClose: () => void;
 }
 
@@ -129,13 +131,20 @@ const tileSubtitle = (entry: DrawerEntry): string =>
     .filter(Boolean)
     .join(' · ');
 
+const formatDrawerLinkSpeed = (tile: DiagramTile): string => {
+  if (!tile.linkSpeedMbps) return '';
+  return tile.linkUtilizationPercent !== undefined
+    ? `${formatMapLinkSpeed(tile.linkSpeedMbps)} link (${tile.linkUtilizationPercent}%)`
+    : `${formatMapLinkSpeed(tile.linkSpeedMbps)} link`;
+};
+
 const tileMetrics = (tile: DiagramTile): string =>
   [
     tile.cpu !== undefined ? `CPU ${Math.round(tile.cpu)}%` : '',
     tile.memory !== undefined ? `Mem ${Math.round(tile.memory)}%` : '',
     formatDrawerNet(tile),
     formatProbeAndLatency(tile.probeSummary, tile.latencyMs),
-    tile.linkSpeedMbps ? `${formatMapLinkSpeed(tile.linkSpeedMbps)} link` : '',
+    formatDrawerLinkSpeed(tile),
   ]
     .filter(Boolean)
     .join(' · ');
@@ -361,6 +370,24 @@ export function InfrastructureMapDrawer(props: InfrastructureMapDrawerProps) {
                 </Button>
               )}
             </Show>
+            <Show
+              when={
+                props.target?.kind === 'traffic' &&
+                props.onFilterByActiveTraffic &&
+                (allEntries().length > 0 || props.activeTrafficOnly)
+              }
+            >
+              <Button
+                variant={props.activeTrafficOnly ? 'primaryFlat' : 'secondary'}
+                size="sm"
+                onClick={() => {
+                  props.onFilterByActiveTraffic?.(!props.activeTrafficOnly);
+                  props.onClose();
+                }}
+              >
+                {props.activeTrafficOnly ? 'Show all' : 'Filter map'}
+              </Button>
+            </Show>
             <button
               type="button"
               class="inline-flex h-8 w-8 items-center justify-center rounded-md text-muted transition-colors hover:bg-surface-hover hover:text-base-content focus-visible:outline-solid focus-visible:outline-2 focus-visible:outline-blue-500"
@@ -539,6 +566,16 @@ export function InfrastructureMapDrawer(props: InfrastructureMapDrawerProps) {
                                   {entry.tile.linkDownCount === 1
                                     ? 'Link down'
                                     : `Link down (${entry.tile.linkDownCount})`}
+                                </MetadataBadge>
+                              </Show>
+                              <Show
+                                when={
+                                  entry.tile.linkUtilizationPercent !== undefined &&
+                                  entry.tile.linkUtilizationPercent >= MAP_LINK_SATURATED_PERCENT
+                                }
+                              >
+                                <MetadataBadge tone="warning" size="xs" shape="pill">
+                                  Link busy ({entry.tile.linkUtilizationPercent}%)
                                 </MetadataBadge>
                               </Show>
                               <Show when={entry.tile.firewallEnabled}>

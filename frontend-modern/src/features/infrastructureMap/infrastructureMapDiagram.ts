@@ -333,6 +333,11 @@ const drawTile = (
           ? { kind: 'group', groupKey }
           : undefined
       : undefined;
+  const segmentIds = tile.segmentIds?.length
+    ? tile.segmentIds
+    : tile.segmentId
+      ? [tile.segmentId]
+      : undefined;
   out.hits.push({
     kind: 'hit',
     x,
@@ -357,11 +362,15 @@ const drawTile = (
       ...(tile.netTxBytes !== undefined ? { netTxBytes: tile.netTxBytes } : {}),
       ...(tile.latencyMs !== undefined ? { latencyMs: tile.latencyMs } : {}),
       ...(tile.linkSpeedMbps !== undefined ? { linkSpeedMbps: tile.linkSpeedMbps } : {}),
+      ...(tile.linkUtilizationPercent !== undefined
+        ? { linkUtilizationPercent: tile.linkUtilizationPercent }
+        : {}),
       ...(tile.linkDownCount !== undefined ? { linkDownCount: tile.linkDownCount } : {}),
       ...(tile.firewallEnabled ? { firewallEnabled: true } : {}),
       ...(tile.dockerNetworks?.length ? { dockerNetworks: tile.dockerNetworks } : {}),
       ...(tile.probeSummary ? { probeSummary: tile.probeSummary } : {}),
       ...(tile.certWarning ? { certWarning: tile.certWarning } : {}),
+      ...(segmentIds ? { segmentIds } : {}),
       address: tile.address,
       detail: tile.detail,
       navigable: real,

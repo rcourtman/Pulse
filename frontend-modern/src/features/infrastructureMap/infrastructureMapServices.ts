@@ -74,6 +74,7 @@ export interface DiagramTile {
   trafficTier?: MapTrafficTier;
   latencyMs?: number;
   linkSpeedMbps?: number;
+  linkUtilizationPercent?: number;
   linkDownCount?: number;
   firewallEnabled?: boolean;
   dockerNetworks?: string[];
@@ -152,6 +153,8 @@ export interface ServiceDiagram {
 export interface ServiceDiagramFilter {
   /** Keep only resources whose health is critical or attention. */
   attentionOnly?: boolean;
+  /** Keep only resources with active live network traffic (> 0 B/s). */
+  activeTrafficOnly?: boolean;
   /** Case-insensitive search query matched across names, types, hosts, addresses, and groups. */
   query?: string;
   /** Keep only resources belonging to this planned network id. */
@@ -218,7 +221,10 @@ export const formatMapLatency = (latencyMs: number): string => {
 };
 
 const tileNetworkTelemetry = (
-  source: Pick<MapHost, 'netRxBytes' | 'netTxBytes' | 'linkSpeedMbps' | 'linkDownCount'> & {
+  source: Pick<
+    MapHost,
+    'netRxBytes' | 'netTxBytes' | 'linkSpeedMbps' | 'linkUtilizationPercent' | 'linkDownCount'
+  > & {
     latencyMs?: number;
     firewallEnabled?: boolean;
   },
@@ -230,6 +236,7 @@ const tileNetworkTelemetry = (
   | 'trafficTier'
   | 'latencyMs'
   | 'linkSpeedMbps'
+  | 'linkUtilizationPercent'
   | 'linkDownCount'
   | 'firewallEnabled'
 > => {
@@ -243,6 +250,9 @@ const tileNetworkTelemetry = (
     ...(trafficTier !== undefined ? { trafficTier } : {}),
     ...(source.latencyMs !== undefined ? { latencyMs: source.latencyMs } : {}),
     ...(source.linkSpeedMbps !== undefined ? { linkSpeedMbps: source.linkSpeedMbps } : {}),
+    ...(source.linkUtilizationPercent !== undefined
+      ? { linkUtilizationPercent: source.linkUtilizationPercent }
+      : {}),
     ...(source.linkDownCount !== undefined ? { linkDownCount: source.linkDownCount } : {}),
     ...(source.firewallEnabled ? { firewallEnabled: true } : {}),
   };
@@ -482,23 +492,28 @@ const plannedTileNetworks = (
   return { segmentId: mapped[0], segmentIds: mapped };
 };
 
-const serviceTile = (item: MapItem, host: MapHost, plan: NetworkPlan): DiagramTile => ({
-  id: item.id,
-  name: item.name,
-  caption: item.app?.role ?? host.name,
-  typeLabel: item.app ? `${item.app.label} · ${item.typeLabel}` : item.typeLabel,
-  status: item.status,
-  health: item.health,
-  ...(item.app?.icon ? { icon: item.app.icon } : {}),
-  ...plannedTileNetworks(item.segmentIds, plan),
-  cpu: item.cpu,
-  memory: item.memory,
-  ...tileNetworkTelemetry(item),
-  ...(item.dockerNetworks?.length ? { dockerNetworks: item.dockerNetworks } : {}),
-  address: plan.where(item.address, item.segmentIds),
-  detail: item.detail,
-  navigable: true,
-});
+const serviceTile = (item: MapItem, host: MapHost, plan: NetworkPlan): DiagramTile => {
+  const ingressHosts = item.ingressHosts?.length ? item.ingressHosts : undefined;
+  return {
+    id: item.id,
+    name: item.name,
+    caption: ingressHosts ? mapRouteLabel(ingressHosts) : (item.app?.role ?? host.name),
+    typeLabel: item.app ? `${item.app.label} · ${item.typeLabel}` : item.typeLabel,
+    status: item.status,
+    health: item.health,
+    ...(item.app?.icon ? { icon: item.app.icon } : {}),
+    ...plannedTileNetworks(item.segmentIds, plan),
+    ...(ingressHosts ? { hasConnectionCaption: true } : {}),
+    cpu: item.cpu,
+    memory: item.memory,
+    ...tileNetworkTelemetry(item),
+    ...(item.dockerNetworks?.length ? { dockerNetworks: item.dockerNetworks } : {}),
+    address: plan.where(item.address, item.segmentIds),
+    detail: item.detail,
+    ...(ingressHosts ? { links: [`Ingress: ${ingressHosts.join(', ')}`] } : {}),
+    navigable: true,
+  };
+};
 
 const GEAR_GLYPH: Record<AvailabilityNetworkGearKind, MapGlyphKey> = {
   router: 'gateway',
@@ -810,9 +825,10 @@ export function buildServiceDiagram(
 ): ServiceDiagram {
   const max = Math.max(2, options.maxTilesPerGroup ?? DIAGRAM_MAX_TILES_PER_GROUP);
   const attentionOnly = Boolean(options.filter?.attentionOnly);
+  const activeTrafficOnly = Boolean(options.filter?.activeTrafficOnly);
   const query = (options.filter?.query ?? '').trim();
   const networkId = options.filter?.networkId?.trim() || undefined;
-  const hasFilter = attentionOnly || query.length > 0 || Boolean(networkId);
+  const hasFilter = attentionOnly || activeTrafficOnly || query.length > 0 || Boolean(networkId);
   const byCategory = new Map<MapCategoryId, DiagramTile[]>();
   const roles = new Set<MapAppRole>();
   const pools: PoolEntry[] = [];
@@ -845,6 +861,9 @@ export function buildServiceDiagram(
   };
   const matchesFilter = (tile: DiagramTile, groupLabel: string): boolean => {
     if (attentionOnly && !isDiagramTileAttention(tile.health)) return false;
+    if (activeTrafficOnly && !(tile.netTotalBytes !== undefined && tile.netTotalBytes > 0)) {
+      return false;
+    }
     const netIds = tileNetworkIds.get(tile.id) ?? (tile.segmentId ? [tile.segmentId] : []);
     if (networkId && !netIds.includes(networkId)) {
       return false;

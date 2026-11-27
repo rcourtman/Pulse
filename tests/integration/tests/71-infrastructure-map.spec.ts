@@ -592,7 +592,8 @@ test.describe("Infrastructure map", () => {
     await expect(drawer).toBeHidden();
 
     // If the estate reports active live traffic, clicking the traffic summary
-    // pill opens the Live traffic drawer and Escape closes it cleanly.
+    // pill opens the Live traffic drawer, Filter map filters to active traffic,
+    // and Clear filters returns to the full estate.
     const trafficSummary = page.getByTestId(
       "infrastructure-map-traffic-summary",
     );
@@ -603,8 +604,23 @@ test.describe("Infrastructure map", () => {
       await expect(
         trafficDrawer.getByRole("heading", { name: "Live traffic" }),
       ).toBeVisible();
-      await page.keyboard.press("Escape");
-      await expect(trafficDrawer).toBeHidden();
+      const filterMapButton = trafficDrawer.getByRole("button", {
+        name: "Filter map",
+      });
+      if (await filterMapButton.isVisible()) {
+        await filterMapButton.click();
+        await expect(trafficDrawer).toBeHidden();
+        await expect(
+          page.getByTestId("infrastructure-map-filter-bar"),
+        ).toContainText("Active traffic");
+        await page.getByRole("button", { name: "Clear filters" }).click();
+        await expect(
+          page.getByTestId("infrastructure-map-filter-bar"),
+        ).toBeHidden();
+      } else {
+        await page.keyboard.press("Escape");
+        await expect(trafficDrawer).toBeHidden();
+      }
     }
 
     // Live traffic starts active, toggles cleanly off and back on.

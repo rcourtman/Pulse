@@ -1,9 +1,11 @@
 import { describe, expect, it } from 'vitest';
 import type { Resource } from '@/types/resource';
 import {
+  MAP_LINK_SATURATED_PERCENT,
   MAP_TRAFFIC_ACTIVE_BYTES,
   anonymizeInfrastructureMapModel,
   buildInfrastructureMapModel,
+  computeMapLinkUtilizationPercent,
   resolveMapHealth,
   resolveMapTrafficTier,
   type MapBlock,
@@ -793,5 +795,282 @@ describe('live network telemetry extraction', () => {
       probeSummary: 'HTTPS 200',
       certWarning: 'Cert expired',
     });
+  });
+
+  it('computes full-duplex link utilization, omitting sub-1% noise and clamping at 100%', () => {
+    expect(MAP_LINK_SATURATED_PERCENT).toBe(80);
+    expect(computeMapLinkUtilizationPercent(undefined, undefined, 1000)).toBeUndefined();
+    expect(computeMapLinkUtilizationPercent(50_000_000, 0, undefined)).toBeUndefined();
+    expect(computeMapLinkUtilizationPercent(50_000_000, 0, 0)).toBeUndefined();
+    expect(computeMapLinkUtilizationPercent(50_000_000, 0, -1000)).toBeUndefined();
+    expect(
+      computeMapLinkUtilizationPercent(Number.NaN, Number.POSITIVE_INFINITY, 1000),
+    ).toBeUndefined();
+    expect(computeMapLinkUtilizationPercent(0, 0, 1000)).toBeUndefined();
+    // Sub-1% on 10G (12 MB/s = 0.96%) and 1G (1 MB/s = 0.8%) stays omitted.
+    expect(computeMapLinkUtilizationPercent(12_000_000, 5_000_000, 10000)).toBeUndefined();
+    expect(computeMapLinkUtilizationPercent(1_000_000, 0, 1000)).toBeUndefined();
+    // Exact 1% boundary on 10G: 12.5 MB/s.
+    expect(computeMapLinkUtilizationPercent(12_500_000, 0, 10000)).toBe(1);
+    // Full-duplex peak uses max(rx, tx), never rx + tx.
+    expect(computeMapLinkUtilizationPercent(50_000_000, 50_000_000, 1000)).toBe(40);
+    // Saturated threshold at 80% (100 MB/s on 1G).
+    expect(computeMapLinkUtilizationPercent(100_000_000, 10_000_000, 1000)).toBe(80);
+    // Clamps above line rate to 100%.
+    expect(computeMapLinkUtilizationPercent(0, 150_000_000, 1000)).toBe(100);
+
+    const model = buildInfrastructureMapModel([
+      resource({
+        id: 'pve-busy',
+        type: 'agent',
+        name: 'busy-host',
+        platformType: 'proxmox-pve',
+        network: { rxBytes: 105_000_000, txBytes: 20_000_000 },
+        agent: {
+          networkInterfaces: [{ name: 'eno1', speedMbps: 1000, linkUp: true }],
+        },
+      }),
+      resource({
+        id: 'vm-busy',
+        type: 'vm',
+        name: 'busy-vm',
+        platformType: 'proxmox-pve',
+        parentId: 'pve-busy',
+        status: 'running',
+        network: { rxBytes: 25_000_000, txBytes: 62_500_000 },
+        proxmox: {
+          networkInterfaces: [{ name: 'net0', speedMbps: 1000, linkUp: true }],
+        },
+      }),
+    ]);
+
+    const host = hostNamed(model.blocks, 'busy-host');
+    expect(host.linkUtilizationPercent).toBe(84);
+    expect(host.sections[0].items[0].linkUtilizationPercent).toBe(50);
+
+    // Anonymization preserves numeric utilization percentage.
+    const anonymous = anonymizeInfrastructureMapModel(model);
+    const anonHost = hostsOf(anonymous.blocks).find((entry) => entry.id === 'pve-busy')!;
+    expect(anonHost.linkUtilizationPercent).toBe(84);
+    expect(anonHost.sections[0].items[0].linkUtilizationPercent).toBe(50);
+  });
+
+  it('extracts published ports from Docker containers, Swarm endpointPorts, and TrueNAS apps', () => {
+    const model = buildInfrastructureMapModel([
+      resource({ id: 'dock-1', type: 'docker-host', name: 'dock-1', platformType: 'docker' }),
+      resource({
+        id: 'c-swarm',
+        type: 'app-container',
+        name: 'gateway-svc',
+        platformType: 'docker',
+        parentId: 'dock-1',
+        status: 'running',
+        docker: {
+          ports: [{ publicPort: 8080, privatePort: 80 }],
+          endpointPorts: [
+            { publishedPort: 443, targetPort: 443, protocol: 'tcp' },
+            { publishedPort: 8080, targetPort: 8080, protocol: 'tcp' },
+          ],
+        },
+      }),
+      resource({ id: 'nas-1', type: 'agent', name: 'truenas-box', platformType: 'truenas' }),
+      resource({
+        id: 'tn-app',
+        type: 'app-container',
+        name: 'immich',
+        platformType: 'truenas',
+        parentId: 'nas-1',
+        status: 'running',
+        truenas: {
+          app: {
+            usedPorts: [
+              { containerPort: 2283, hostPorts: [{ hostPort: 30041, hostIp: '0.0.0.0' }] },
+              { containerPort: 80, hostPorts: [{ hostPort: 8081 }] },
+            ],
+            containers: [
+              {
+                serviceName: 'server',
+                portConfig: [
+                  { containerPort: 443, hostPorts: [{ hostPort: 8443 }, { hostPort: 30041 }] },
+                  { containerPort: 9090, hostPorts: [{ hostPort: 9090 }] },
+                ],
+              },
+            ],
+          },
+        },
+      }),
+    ]);
+
+    const dock = hostNamed(model.blocks, 'dock-1');
+    expect(dock.sections[0].items[0].detail).toBe(':443, 8080');
+
+    const nas = hostNamed(model.blocks, 'truenas-box');
+    expect(nas.sections[0].items[0].detail).toBe(':8081, 8443, 9090 +1');
+
+    // Numeric published ports stay preserved when names are hidden.
+    const anonymous = anonymizeInfrastructureMapModel(model);
+    const anonNas = hostsOf(anonymous.blocks).find((entry) => entry.id === 'nas-1')!;
+    expect(anonNas.sections[0].items[0].detail).toBe(':8081, 8443, 9090 +1');
+  });
+
+  it('matches Kubernetes Services and Ingresses factually by cluster, namespace, and selector, and strips Ingress hosts when anonymized', () => {
+    const model = buildInfrastructureMapModel([
+      resource({ id: 'k8s-a', type: 'k8s-cluster', name: 'prod-k8s', platformType: 'kubernetes' }),
+      resource({
+        id: 'k8s-b',
+        type: 'k8s-cluster',
+        name: 'staging-k8s',
+        platformType: 'kubernetes',
+      }),
+      resource({
+        id: 'pod-web',
+        type: 'pod',
+        name: 'web-7c9d',
+        platformType: 'kubernetes',
+        parentId: 'k8s-a',
+        status: 'running',
+        kubernetes: {
+          namespace: 'apps',
+          labels: { app: 'web', tier: 'frontend' },
+        },
+      }),
+      resource({
+        id: 'pod-partial',
+        type: 'pod',
+        name: 'web-worker-1',
+        platformType: 'kubernetes',
+        parentId: 'k8s-a',
+        status: 'running',
+        kubernetes: {
+          namespace: 'apps',
+          labels: { app: 'web' },
+        },
+      }),
+      resource({
+        id: 'pod-default-ns',
+        type: 'pod',
+        name: 'metrics-0',
+        platformType: 'kubernetes',
+        parentId: 'k8s-a',
+        status: 'running',
+        kubernetes: {
+          labels: { app: 'metrics' },
+        },
+      }),
+      resource({
+        id: 'pod-other-cluster',
+        type: 'pod',
+        name: 'web-staging',
+        platformType: 'kubernetes',
+        parentId: 'k8s-b',
+        status: 'running',
+        kubernetes: {
+          namespace: 'apps',
+          labels: { app: 'web', tier: 'frontend' },
+        },
+      }),
+      // LoadBalancer service matching pod-web (externalIps must never leak into detail).
+      resource({
+        id: 'svc-web-lb',
+        type: 'k8s-service',
+        name: 'web-svc',
+        platformType: 'kubernetes',
+        parentId: 'k8s-a',
+        kubernetes: {
+          namespace: 'apps',
+          serviceType: 'LoadBalancer',
+          externalIps: ['203.0.113.42'],
+          servicePorts: [
+            { port: 443, targetPort: '8443', nodePort: 31443 },
+            { port: 80, targetPort: '8080', nodePort: 31080 },
+          ],
+          selector: { app: 'web', tier: 'frontend' },
+        },
+      }),
+      // ClusterIP service matching pod-web (no published ports, but matched by Ingress).
+      resource({
+        id: 'svc-web-internal',
+        type: 'k8s-service',
+        name: 'web-internal',
+        platformType: 'kubernetes',
+        parentId: 'k8s-a',
+        kubernetes: {
+          namespace: 'apps',
+          serviceType: 'ClusterIP',
+          servicePorts: [{ port: 9000, targetPort: '9000' }],
+          selector: { app: 'web', tier: 'frontend' },
+        },
+      }),
+      // NodePort service in default namespace matching pod-default-ns.
+      resource({
+        id: 'svc-metrics-np',
+        type: 'k8s-service',
+        name: 'metrics-np',
+        platformType: 'kubernetes',
+        parentId: 'k8s-a',
+        kubernetes: {
+          serviceType: 'NodePort',
+          servicePorts: [{ port: 9090, nodePort: 30090 }],
+          selector: { app: 'metrics' },
+        },
+      }),
+      // Ingress routing to web-internal in same cluster + namespace.
+      resource({
+        id: 'ing-web',
+        type: 'k8s-ingress',
+        name: 'web-ingress',
+        platformType: 'kubernetes',
+        parentId: 'k8s-a',
+        kubernetes: {
+          namespace: 'apps',
+          serviceName: 'web-internal',
+          hosts: ['WWW.Shop.Example.Test', 'shop.example.test', 'shop.example.test', '*'],
+        },
+      }),
+      // Ingress in another namespace must NOT match pod-web.
+      resource({
+        id: 'ing-wrong-ns',
+        type: 'k8s-ingress',
+        name: 'other-ingress',
+        platformType: 'kubernetes',
+        parentId: 'k8s-a',
+        kubernetes: {
+          namespace: 'other',
+          serviceName: 'web-internal',
+          hosts: ['wrong-ns.example.test'],
+        },
+      }),
+    ]);
+
+    const prod = hostNamed(model.blocks, 'prod-k8s');
+    const appsSection = prod.sections.find((section) => section.label === 'apps')!;
+    const defaultSection = prod.sections.find((section) => section.label === 'default')!;
+    const webPod = appsSection.items.find((item) => item.id === 'pod-web')!;
+    const partialPod = appsSection.items.find((item) => item.id === 'pod-partial')!;
+    const metricsPod = defaultSection.items.find((item) => item.id === 'pod-default-ns')!;
+
+    expect(webPod.detail).toBe(':80, 443');
+    expect(webPod.detail).not.toContain('203.0.113.42');
+    expect(webPod.ingressHosts).toEqual(['shop.example.test', 'www.shop.example.test']);
+    expect(partialPod.detail).toBeUndefined();
+    expect(partialPod.ingressHosts).toBeUndefined();
+    expect(metricsPod.detail).toBe(':30090');
+    expect(metricsPod.ingressHosts).toBeUndefined();
+
+    const staging = hostNamed(model.blocks, 'staging-k8s');
+    const stagingPod = staging.sections[0].items[0];
+    expect(stagingPod.detail).toBeUndefined();
+    expect(stagingPod.ingressHosts).toBeUndefined();
+
+    // Anonymization strips Ingress hostnames while preserving numeric Service ports.
+    const anonymous = anonymizeInfrastructureMapModel(model);
+    const anonProd = hostsOf(anonymous.blocks).find((host) => host.id === 'k8s-a')!;
+    const anonWebPod = anonProd.sections
+      .flatMap((section) => section.items)
+      .find((item) => item.id === 'pod-web')!;
+    expect(anonWebPod.ingressHosts).toBeUndefined();
+    expect(anonWebPod.detail).toBe(':80, 443');
+    expect(JSON.stringify(anonymous)).not.toContain('shop.example.test');
+    expect(JSON.stringify(anonymous)).not.toContain('203.0.113.42');
   });
 });

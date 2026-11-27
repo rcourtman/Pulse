@@ -362,6 +362,7 @@ export function renderMapLinkRings(
   if (targets.length === 0) return '';
 
   const liveTraffic = Boolean(options?.liveTraffic);
+  const halos: string[] = [];
   const arcs: string[] = [];
   const dots: string[] = [];
   if (source) {
@@ -392,6 +393,9 @@ export function renderMapLinkRings(
       const cx = mx + nx * bend;
       const cy = my + ny * bend;
       const d = `M${n(sx)} ${n(sy)} Q${n(cx)} ${n(cy)} ${n(tx)} ${n(ty)}`;
+      halos.push(
+        `<path d="${d}" fill="none" stroke="${palette.surface}" stroke-width="4" stroke-opacity="0.72" class="pulse-map-link-halo"/>`,
+      );
       arcs.push(
         `<path d="${d}" fill="none" stroke="${palette.accent}" stroke-width="1.5" stroke-opacity="0.65" class="pulse-map-link-arc"/>`,
       );
@@ -414,11 +418,31 @@ export function renderMapLinkRings(
   const rings = targets
     .map(
       (node) =>
-        `<rect x="${n(node.x)}" y="${n(node.y)}" width="${n(node.w)}" height="${n(node.h)}" rx="${n(node.r)}" fill="none" stroke="${palette.accent}" stroke-width="1.5"/>`,
+        `<rect x="${n(node.x)}" y="${n(node.y)}" width="${n(node.w)}" height="${n(node.h)}" rx="${n(node.r)}" fill="${palette.accent}" fill-opacity="0.06" stroke="${palette.accent}" stroke-width="1.5"/>`,
     )
     .join('');
 
-  return `${arcs.join('')}${dots.join('')}${rings}`;
+  return `${halos.join('')}${arcs.join('')}${dots.join('')}${rings}`;
+}
+
+/**
+ * A ring round every tile attached to the given planned network. Shown only
+ * interactively while a network pill is pointed at or focused, never in static
+ * exports.
+ */
+export function renderMapNetworkRings(scene: MapScene, networkId: string, color: string): string {
+  if (!networkId) return '';
+  const paint = escapeXml(color);
+  return scene.nodes
+    .filter(
+      (node): node is HitSceneNode =>
+        node.kind === 'hit' && Boolean(node.hit.segmentIds?.includes(networkId)),
+    )
+    .map(
+      (node) =>
+        `<rect x="${n(node.x)}" y="${n(node.y)}" width="${n(node.w)}" height="${n(node.h)}" rx="${n(node.r)}" fill="${paint}" fill-opacity="0.08" stroke="${paint}" stroke-width="2" class="pulse-map-network-ring"/>`,
+    )
+    .join('');
 }
 
 /**
