@@ -1,5 +1,5 @@
-import { cleanup, fireEvent, render, screen } from '@solidjs/testing-library';
-import type { JSX } from 'solid-js';
+import { cleanup, fireEvent, render, screen, waitFor, within } from '@solidjs/testing-library';
+import { createSignal, type JSX } from 'solid-js';
 import { Route, Router } from '@solidjs/router';
 import { afterEach, describe, expect, it } from 'vitest';
 
@@ -146,5 +146,58 @@ describe('KubernetesAlertsTable', () => {
     ));
     expect(screen.getByText('No K8s alerts')).toBeInTheDocument();
     expect(document.querySelector('[data-kubernetes-alert-row]')).toBeNull();
+  });
+
+  it('shows stale-reading cue and drawer notice when Kubernetes polling is impaired and clears on recovery', async () => {
+    const stalePod = makeResource({
+      id: 'pod-payments',
+      type: 'pod',
+      name: 'payments-worker-abc',
+      kubernetes: { clusterName: 'prod-eu', namespace: 'services' },
+      sourceStatus: {
+        kubernetes: { status: 'stale', error: 'apiserver connection refused' },
+      },
+      incidents: [{ code: 'k8s_pod_crashloop', severity: 'critical', summary: 'CrashLoopBackOff' }],
+    });
+    const [resources, setResources] = createSignal([stalePod]);
+
+    renderInRouter(() => (
+      <KubernetesAlertsTable
+        incidents={buildKubernetesIncidentRows(resources())}
+        emptyIcon={<span />}
+        emptyTitle="No K8s alerts"
+        emptyDescription="Active alerts appear here."
+        showToolbar={false}
+      />
+    ));
+
+    const row = screen.getByText('CrashLoopBackOff').closest('tr')!;
+    expect(within(row).getByText('Stale data')).toHaveAttribute(
+      'data-platform-alert-stale',
+      'kubernetes',
+    );
+    expect(within(row).getByTitle('Critical')).toHaveClass('bg-red-500');
+
+    await fireEvent.click(row);
+    const notice = screen.getByTestId('kubernetes-alert-stale-readings-notice');
+    expect(notice).toHaveTextContent('Stale data.');
+    expect(notice).toHaveTextContent('apiserver connection refused');
+    expect(notice).toHaveTextContent(
+      'This alert reflects the last report received and may no longer be current.',
+    );
+
+    setResources([
+      makeResource({
+        ...stalePod,
+        sourceStatus: { kubernetes: { status: 'online' } },
+      }),
+    ]);
+
+    await waitFor(() => {
+      expect(screen.queryByText('Stale data')).not.toBeInTheDocument();
+      expect(
+        screen.queryByTestId('kubernetes-alert-stale-readings-notice'),
+      ).not.toBeInTheDocument();
+    });
   });
 });

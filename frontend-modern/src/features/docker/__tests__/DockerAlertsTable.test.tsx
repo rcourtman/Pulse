@@ -1,11 +1,11 @@
 import { cleanup, fireEvent, render, screen, waitFor, within } from '@solidjs/testing-library';
-import type { JSX } from 'solid-js';
+import { createSignal, type JSX } from 'solid-js';
 import { Route, Router } from '@solidjs/router';
 import { afterEach, describe, expect, it } from 'vitest';
 
 import type { Resource } from '@/types/resource';
 import { DockerAlertsTable } from '../DockerAlertsTable';
-import { buildDockerIncidentRows } from '../dockerPageModel';
+import { buildDockerIncidentRows, filterDockerIncidents } from '../dockerPageModel';
 
 // Record drawers link to the object they are about, which needs a router.
 const renderInRouter = (component: () => JSX.Element) =>
@@ -162,5 +162,85 @@ describe('DockerAlertsTable', () => {
     ));
     expect(screen.getByText('No Docker alerts')).toBeInTheDocument();
     expect(document.querySelector('[data-docker-alert-row]')).toBeNull();
+  });
+
+  it('surfaces stale-reading cues, search matches, and drawer warning on stale Docker alerts and clears them on recovery', async () => {
+    const staleContainer = makeResource({
+      id: 'ctr-payments',
+      type: 'app-container',
+      name: 'payments-worker',
+      displayName: 'payments-worker',
+      docker: { hostname: 'edge-01', runtime: 'docker' },
+      sourceStatus: {
+        docker: { status: 'error', error: 'daemon socket timed out' },
+      },
+      health: {
+        verdict: 'stale',
+        reasons: [{ code: 'telemetry_stale', detail: '14m' }],
+      },
+      incidents: [
+        { code: 'docker_container_oom', severity: 'critical', summary: 'Container OOMKilled' },
+      ],
+    });
+    const freshContainer = makeResource({
+      id: 'ctr-web',
+      type: 'app-container',
+      name: 'web-proxy',
+      displayName: 'web-proxy',
+      docker: { hostname: 'edge-02', runtime: 'docker' },
+      sourceStatus: {
+        docker: { status: 'online' },
+      },
+      incidents: [
+        { code: 'docker_container_restarting', severity: 'warning', summary: 'Restart loop' },
+      ],
+    });
+
+    const [resources, setResources] = createSignal([staleContainer, freshContainer]);
+    const allIncidents = buildDockerIncidentRows(resources());
+    expect(filterDockerIncidents(allIncidents, 'daemon socket timed out', 'all')).toHaveLength(1);
+    expect(filterDockerIncidents(allIncidents, 'stale data', 'all')).toHaveLength(1);
+
+    renderInRouter(() => (
+      <DockerAlertsTable
+        incidents={buildDockerIncidentRows(resources())}
+        emptyIcon={<span />}
+        emptyTitle="No Docker alerts"
+        emptyDescription="Active alerts appear here."
+        showToolbar={false}
+      />
+    ));
+
+    const staleRow = screen.getByText('Container OOMKilled').closest('tr')!;
+    const freshRow = screen.getByText('Restart loop').closest('tr')!;
+    expect(within(staleRow).getByText('Stale data')).toHaveAttribute(
+      'data-platform-alert-stale',
+      'docker',
+    );
+    expect(within(staleRow).getByTitle('Critical')).toHaveClass('bg-red-500');
+    expect(within(freshRow).queryByText('Stale data')).not.toBeInTheDocument();
+
+    await fireEvent.click(staleRow);
+    const notice = screen.getByTestId('docker-alert-stale-readings-notice');
+    expect(notice).toHaveTextContent('Stale data.');
+    expect(notice).toHaveTextContent('No Docker report for 14m');
+    expect(notice).toHaveTextContent('daemon socket timed out');
+    expect(notice).toHaveTextContent(
+      'This alert reflects the last report received and may no longer be current.',
+    );
+
+    setResources([
+      makeResource({
+        ...staleContainer,
+        sourceStatus: { docker: { status: 'online' } },
+        health: { verdict: 'critical', reasons: [] },
+      }),
+      freshContainer,
+    ]);
+
+    await waitFor(() => {
+      expect(screen.queryByText('Stale data')).not.toBeInTheDocument();
+      expect(screen.queryByTestId('docker-alert-stale-readings-notice')).not.toBeInTheDocument();
+    });
   });
 });

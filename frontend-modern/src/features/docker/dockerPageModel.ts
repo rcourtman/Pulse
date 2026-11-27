@@ -902,8 +902,9 @@ export function buildDockerIncidentRows(resources: Resource[]): DockerIncidentRo
   });
 }
 
-const dockerIncidentSearchHaystack = (row: DockerIncidentRow): string =>
-  [
+const dockerIncidentSearchHaystack = (row: DockerIncidentRow): string => {
+  const staleNotice = getDockerStaleNotice(row.resource);
+  return [
     row.resourceName,
     row.resourceId,
     row.resourceType,
@@ -919,11 +920,14 @@ const dockerIncidentSearchHaystack = (row: DockerIncidentRow): string =>
     row.label,
     row.category,
     row.action,
+    staleNotice?.label,
+    staleNotice?.detail,
     ...(row.resource.tags ?? []),
   ]
     .filter((value): value is string => typeof value === 'string' && value.trim().length > 0)
     .join(' ')
     .toLowerCase();
+};
 
 export function filterDockerIncidents(
   incidents: DockerIncidentRow[],

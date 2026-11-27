@@ -1,7 +1,10 @@
 import { resolveResourcePlatformType } from '@/utils/sourcePlatforms';
 import { asTrimmedString } from '@/utils/stringUtils';
 import { parseBackupTimestampMs } from '@/utils/backupTimestamp';
-import { getResourceStaleness } from '@/features/platformPage/resourceStaleness';
+import {
+  getPlatformResourceStaleNotice,
+  getResourceStaleness,
+} from '@/features/platformPage/resourceStaleness';
 import {
   getTrueNASDatasetStateSummary,
   getTrueNASStaleNotice,
@@ -1681,8 +1684,9 @@ export function filterTrueNASShares(
   );
 }
 
-const incidentSearchHaystack = (row: TrueNASIncidentRow): string =>
-  joinSearchTokens([
+const incidentSearchHaystack = (row: TrueNASIncidentRow): string => {
+  const staleNotice = getPlatformResourceStaleNotice('truenas', row.resource);
+  return joinSearchTokens([
     row.resourceName,
     row.resourceId,
     row.resourceType,
@@ -1696,8 +1700,11 @@ const incidentSearchHaystack = (row: TrueNASIncidentRow): string =>
     row.label,
     row.category,
     row.action,
+    staleNotice?.label,
+    staleNotice?.detail,
     ...(row.resource.tags ?? []),
   ]);
+};
 
 export function filterTrueNASIncidents(
   incidents: TrueNASIncidentRow[],

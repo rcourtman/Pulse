@@ -6,6 +6,7 @@ import {
   makeDetailRow,
   type DetailSection,
 } from '@/components/shared/DetailSectionTable';
+import { InlineNotice } from '@/components/shared/InlineNotice';
 import { InlineDetailTableRow } from '@/components/shared/InlineDetailTableRow';
 import { StatusDot } from '@/components/shared/StatusDot';
 import { TableCell, TableRow } from '@/components/shared/Table';
@@ -37,6 +38,10 @@ import {
   getPlatformResourceDetailRowClass,
 } from '@/features/platformPage/PlatformResourceDetailTableRow';
 import { RecordOwnerLink } from '@/features/platformPage/RecordOwnerLink';
+import {
+  ensureStaleNoticeSentence,
+  getPlatformResourceStaleNotice,
+} from '@/features/platformPage/resourceStaleness';
 import {
   formatPlatformAlertDetailDateTime,
   formatPlatformAlertEntityType,
@@ -144,31 +149,46 @@ const buildActivityDetailSections = (activity: VmwareActivityRow): DetailSection
   ]);
 };
 
-const ActivityDetail: Component<{ activity: VmwareActivityRow; onClose: () => void }> = (props) => (
-  <InlineDetailPanel
-    testId="vsphere-activity-detail"
-    detailFor={props.activity.id}
-    title={props.activity.resourceName || props.activity.title}
-    status={{
-      variant: ACTIVITY_STATE_TONE[props.activity.stateBucket],
-      label: formatPlatformTableTitleCaseValue(props.activity.stateBucket),
-    }}
-    summary={`${formatPlatformTableTitleCaseValue(props.activity.activityKind)} · ${props.activity.title}`}
-    actions={
-      <RecordOwnerLink
-        subject={{
-          id: props.activity.resourceId,
-          name: props.activity.resourceName,
-          type: props.activity.resourceType,
-          resource: props.activity.resource,
-        }}
-      />
-    }
-    sections={buildActivityDetailSections(props.activity)}
-    detailAttributes={{ 'data-vsphere-activity-detail-for': props.activity.id }}
-    onClose={props.onClose}
-  />
-);
+const ActivityDetail: Component<{ activity: VmwareActivityRow; onClose: () => void }> = (props) => {
+  const staleNotice = () => getPlatformResourceStaleNotice('vmware', props.activity.resource);
+  return (
+    <InlineDetailPanel
+      testId="vsphere-activity-detail"
+      detailFor={props.activity.id}
+      title={props.activity.resourceName || props.activity.title}
+      status={{
+        variant: ACTIVITY_STATE_TONE[props.activity.stateBucket],
+        label: formatPlatformTableTitleCaseValue(props.activity.stateBucket),
+      }}
+      summary={`${formatPlatformTableTitleCaseValue(props.activity.activityKind)} · ${props.activity.title}`}
+      actions={
+        <RecordOwnerLink
+          subject={{
+            id: props.activity.resourceId,
+            name: props.activity.resourceName,
+            type: props.activity.resourceType,
+            resource: props.activity.resource,
+          }}
+        />
+      }
+      sections={buildActivityDetailSections(props.activity)}
+      detailAttributes={{ 'data-vsphere-activity-detail-for': props.activity.id }}
+      onClose={props.onClose}
+    >
+      <Show when={staleNotice()}>
+        {(stale) => (
+          <div data-testid="vsphere-activity-stale-readings-notice">
+            <InlineNotice tone="warning" role="status">
+              <span class="font-medium">{stale().label}.</span>{' '}
+              {ensureStaleNoticeSentence(stale().detail)} Activity records reflect the last report
+              received and newer vCenter tasks or events may be missing.
+            </InlineNotice>
+          </div>
+        )}
+      </Show>
+    </InlineDetailPanel>
+  );
+};
 
 // Columns a user can sort by: every activity column carries a scalar. When
 // orders chronologically, newest first on the first click.
@@ -349,6 +369,8 @@ export const VsphereActivityTable: Component<{
                   {(activity) => {
                     const meta = () => activity.resource.vmware;
                     const tone = () => ACTIVITY_STATE_TONE[activity.stateBucket];
+                    const staleNotice = () =>
+                      getPlatformResourceStaleNotice('vmware', activity.resource);
                     const detailRowId = () => drawer.detailRowId(activity);
                     const isExpanded = () => drawer.isExpanded(activity);
                     return (
@@ -371,34 +393,47 @@ export const VsphereActivityTable: Component<{
                                 variant={tone()}
                                 title={formatActivityState(activity)}
                               />
-                              <div class="flex min-w-0 flex-1 items-center gap-1.5">
-                                <div
-                                  class="min-w-0 truncate font-medium text-base-content"
-                                  title={[
-                                    activity.resourceName,
-                                    formatPlatformAlertResourceType(
-                                      activity.resourceType,
-                                      'vmware',
-                                    ),
-                                    activity.resource.parentName
-                                      ? `on ${activity.resource.parentName}`
-                                      : '',
-                                  ]
-                                    .filter(Boolean)
-                                    .join(' · ')}
-                                >
-                                  {activity.resourceName}
-                                </div>
-                                {/* A phone hides State; a state that needs attention joins the
-                                    name on its line. */}
-                                <span
-                                  class={`platform-table-phone-only-inline text-[11px] ${getPlatformInlineStateClass(isPlatformAttentionVariant(tone()))} ${getPlatformStatusTextToneClass(tone())}`}
-                                  data-vsphere-activity-state-phone={tone()}
-                                >
-                                  <span class="min-w-0 truncate">
-                                    {formatActivityState(activity)}
+                              <div class="min-w-0 flex-1">
+                                <div class="flex min-w-0 items-center gap-1.5">
+                                  <div
+                                    class="min-w-0 truncate font-medium text-base-content"
+                                    title={[
+                                      activity.resourceName,
+                                      formatPlatformAlertResourceType(
+                                        activity.resourceType,
+                                        'vmware',
+                                      ),
+                                      activity.resource.parentName
+                                        ? `on ${activity.resource.parentName}`
+                                        : '',
+                                    ]
+                                      .filter(Boolean)
+                                      .join(' · ')}
+                                  >
+                                    {activity.resourceName}
+                                  </div>
+                                  {/* A phone hides State; a state that needs attention joins the
+                                      name on its line. */}
+                                  <span
+                                    class={`platform-table-phone-only-inline text-[11px] ${getPlatformInlineStateClass(isPlatformAttentionVariant(tone()))} ${getPlatformStatusTextToneClass(tone())}`}
+                                    data-vsphere-activity-state-phone={tone()}
+                                  >
+                                    <span class="min-w-0 truncate">
+                                      {formatActivityState(activity)}
+                                    </span>
                                   </span>
-                                </span>
+                                </div>
+                                <Show when={staleNotice()}>
+                                  {(stale) => (
+                                    <span
+                                      class="block truncate text-[10px] font-medium text-amber-800 dark:text-amber-300"
+                                      title={stale().detail}
+                                      data-vsphere-activity-stale="true"
+                                    >
+                                      {stale().label}
+                                    </span>
+                                  )}
+                                </Show>
                               </div>
                             </div>
                           </TableCell>

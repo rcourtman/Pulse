@@ -1,5 +1,5 @@
-import { cleanup, fireEvent, render, screen, within } from '@solidjs/testing-library';
-import type { JSX } from 'solid-js';
+import { cleanup, fireEvent, render, screen, waitFor, within } from '@solidjs/testing-library';
+import { createSignal, type JSX } from 'solid-js';
 import { Route, Router } from '@solidjs/router';
 import { afterEach, describe, expect, it } from 'vitest';
 
@@ -239,5 +239,91 @@ describe('VsphereActivityTable', () => {
       within(screen.getByRole('table')).queryByRole('columnheader', { name: /vCenter/ }),
     ).not.toBeInTheDocument();
     expect(screen.queryByText('lab-vcenter')).not.toBeInTheDocument();
+  });
+  it('surfaces stale-reading cue, search match, and drawer notice on impaired vSphere activity and clears them on recovery', async () => {
+    const staleVm = makeVm({
+      sourceStatus: {
+        vmware: { status: 'error', error: 'dial tcp 10.0.0.5:443: i/o timeout' },
+      },
+      health: {
+        verdict: 'stale',
+        reasons: [{ code: 'telemetry_stale', detail: '18m' }],
+      },
+    });
+    const freshVm = makeVm({
+      id: 'vm-202',
+      name: 'billing-worker-01',
+      displayName: 'billing-worker-01',
+      sourceStatus: { vmware: { status: 'online' } },
+      recentChanges: [
+        {
+          id: 'activity-event-fresh',
+          observedAt: '2026-05-21T10:20:00Z',
+          occurredAt: '2026-05-21T10:20:00Z',
+          resourceId: 'vm-202',
+          kind: 'activity',
+          sourceType: 'platform_event',
+          sourceAdapter: 'vmware_adapter',
+          confidence: 'high',
+          reason: 'Virtual machine billing-worker-01 migrated',
+          metadata: {
+            activity_type: 'vmware_event',
+            activity_native_id: 'event-601',
+            activity_title: 'Virtual machine billing-worker-01 migrated',
+            vmwareEventType: 'VmMigratedEvent',
+            vmwareEventMessage: 'Virtual machine billing-worker-01 migrated',
+            vmwareManagedObjectId: 'vm-202',
+            vmwareEntityType: 'vm',
+          },
+        },
+      ],
+    });
+    const [resources, setResources] = createSignal([staleVm, freshVm]);
+    const rows = buildVmwareActivityRows(resources());
+    expect(filterVmwareActivity(rows, 'i/o timeout', 'all')).toHaveLength(2);
+    expect(filterVmwareActivity(rows, 'stale data', 'all')).toHaveLength(2);
+
+    renderInRouter(() => (
+      <VsphereActivityTable
+        activity={buildVmwareActivityRows(resources())}
+        emptyIcon={<span />}
+        emptyTitle="No activity"
+        emptyDescription="No activity"
+        showToolbar={false}
+      />
+    ));
+
+    const staleRow = screen.getByText('Reconfigure virtual machine').closest('tr')!;
+    const freshRow = screen.getByText('Virtual machine billing-worker-01 migrated').closest('tr')!;
+    expect(within(staleRow).getByText('Stale data')).toHaveAttribute(
+      'data-vsphere-activity-stale',
+      'true',
+    );
+    expect(within(freshRow).queryByText('Stale data')).not.toBeInTheDocument();
+
+    await fireEvent.click(staleRow);
+    const notice = screen.getByTestId('vsphere-activity-stale-readings-notice');
+    expect(notice).toHaveTextContent('Stale data.');
+    expect(notice).toHaveTextContent('dial tcp 10.0.0.5:443: i/o timeout');
+    expect(notice).toHaveTextContent('last report 18m ago');
+    expect(notice).toHaveTextContent(
+      'Activity records reflect the last report received and newer vCenter tasks or events may be missing.',
+    );
+
+    setResources([
+      makeVm({
+        ...staleVm,
+        sourceStatus: { vmware: { status: 'online' } },
+        health: { verdict: 'ok', reasons: [] },
+      }),
+      freshVm,
+    ]);
+
+    await waitFor(() => {
+      expect(screen.queryByText('Stale data')).not.toBeInTheDocument();
+      expect(
+        screen.queryByTestId('vsphere-activity-stale-readings-notice'),
+      ).not.toBeInTheDocument();
+    });
   });
 });

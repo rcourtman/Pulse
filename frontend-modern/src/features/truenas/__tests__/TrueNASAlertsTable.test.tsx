@@ -1,10 +1,13 @@
-import { cleanup, fireEvent, render, screen, within } from '@solidjs/testing-library';
+import { cleanup, fireEvent, render, screen, waitFor, within } from '@solidjs/testing-library';
 import { Route, Router } from '@solidjs/router';
 import { createSignal, type JSX } from 'solid-js';
 import { afterEach, describe, expect, it } from 'vitest';
 
 import { TrueNASAlertsTable } from '@/features/truenas/TrueNASAlertsTable';
-import { buildTrueNASIncidentRows } from '@/features/truenas/truenasPageModel';
+import {
+  buildTrueNASIncidentRows,
+  filterTrueNASIncidents,
+} from '@/features/truenas/truenasPageModel';
 import type { Resource } from '@/types/resource';
 
 // Record drawers link to the object they are about, which needs a router.
@@ -194,5 +197,75 @@ describe('TrueNASAlertsTable', () => {
       'aria-expanded',
       'false',
     );
+  });
+
+  it('surfaces stale-reading cue, search match, and drawer notice on impaired TrueNAS alerts and clears them on recovery', async () => {
+    const staleDisk = makeDisk({
+      sourceStatus: {
+        truenas: { status: 'error', error: 'websocket handshake timed out' },
+      },
+      health: {
+        verdict: 'stale',
+        reasons: [{ code: 'telemetry_stale', detail: '22m' }],
+      },
+    });
+    const freshDisk = makeDisk({
+      id: 'disk-sdd',
+      name: 'sdd',
+      displayName: 'sdd',
+      sourceStatus: { truenas: { status: 'online' } },
+      incidents: [
+        {
+          code: 'smart',
+          severity: 'warning',
+          source: 'SMART',
+          summary: 'Device /dev/sdd temperature warning.',
+          startedAt: '2026-05-21T16:10:00Z',
+        },
+      ],
+    });
+    const [resources, setResources] = createSignal([staleDisk, freshDisk]);
+    const rows = buildTrueNASIncidentRows(resources());
+    expect(filterTrueNASIncidents(rows, 'websocket handshake timed out', 'all')).toHaveLength(1);
+    expect(filterTrueNASIncidents(rows, 'stale data', 'all')).toHaveLength(1);
+
+    renderInRouter(() => (
+      <TrueNASAlertsTable
+        incidents={buildTrueNASIncidentRows(resources())}
+        scope={resources()}
+        emptyIcon={<span />}
+        emptyTitle="No alerts"
+        emptyDescription="No alerts"
+        showToolbar={false}
+      />
+    ));
+
+    const staleRow = screen.getByText('Device /dev/sdc has SMART test failures.').closest('tr')!;
+    const freshRow = screen.getByText('Device /dev/sdd temperature warning.').closest('tr')!;
+    expect(within(staleRow).getByText('Stale data')).toHaveAttribute(
+      'data-platform-alert-stale',
+      'truenas',
+    );
+    expect(within(freshRow).queryByText('Stale data')).not.toBeInTheDocument();
+
+    await fireEvent.click(staleRow);
+    const notice = screen.getByTestId('truenas-alert-stale-readings-notice');
+    expect(notice).toHaveTextContent('Stale data.');
+    expect(notice).toHaveTextContent('TrueNAS collection error: websocket handshake timed out');
+    expect(notice).toHaveTextContent('last report 22m ago');
+
+    setResources([
+      makeDisk({
+        ...staleDisk,
+        sourceStatus: { truenas: { status: 'online' } },
+        health: { verdict: 'attention', reasons: [] },
+      }),
+      freshDisk,
+    ]);
+
+    await waitFor(() => {
+      expect(screen.queryByText('Stale data')).not.toBeInTheDocument();
+      expect(screen.queryByTestId('truenas-alert-stale-readings-notice')).not.toBeInTheDocument();
+    });
   });
 });
