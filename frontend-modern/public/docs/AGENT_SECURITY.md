@@ -484,7 +484,7 @@ by installing the collector with command execution.
   status read and a start. Package commands stay with the runner. Read-only
   Linux APT pending-update inspection (`apt-get -s -o Debug::NoLocking=1
   upgrade`) is a local monitoring read that runs in the collector without an
-  action runner or privilege gain; package installation and upgrade mutations
+  action runner or privilege gain. Package installation and upgrade mutations
   remain runner-only and are refused on the collector command client.
 - **Who decides.** An admin approves every start. There is no automatic
   authorization for it. Pulse's own Proxmox API read decides whether the guest

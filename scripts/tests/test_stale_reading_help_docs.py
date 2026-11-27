@@ -437,7 +437,7 @@ class StaleReadingAndAgentHelpDocsTest(unittest.TestCase):
         security = norm(doc_text("docs/AGENT_SECURITY.md"))
         for phrase in (
             "Package commands stay with the runner.",
-            "Read-only Linux APT pending-update inspection (`apt-get -s -o Debug::NoLocking=1 upgrade`) is a local monitoring read that runs in the collector without an action runner or privilege gain; package installation and upgrade mutations remain runner-only and are refused on the collector command client.",
+            "Read-only Linux APT pending-update inspection (`apt-get -s -o Debug::NoLocking=1 upgrade`) is a local monitoring read that runs in the collector without an action runner or privilege gain. Package installation and upgrade mutations remain runner-only and are refused on the collector command client.",
         ):
             with self.subTest(doc="AGENT_SECURITY.md", phrase=phrase):
                 self.assertIn(phrase, security)
