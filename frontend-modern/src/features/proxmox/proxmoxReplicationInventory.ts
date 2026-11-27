@@ -58,6 +58,8 @@ const jobShape: Readonly<Record<string, FieldCheck>> = {
   lastSyncDurationSeconds: optional(isNonnegativeNumber),
   failCount: optional(isCount),
   rateLimitMbps: optional(isNonnegativeNumber),
+  lastPolled: optional(isTime),
+  polledAt: optional(isNumber),
 };
 
 export function parseReplicationInventory(payload: unknown): ReplicationJob[] {
