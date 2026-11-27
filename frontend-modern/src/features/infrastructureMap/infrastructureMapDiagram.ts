@@ -1,4 +1,4 @@
-import { estimateTextWidth } from '@/utils/format';
+import { estimateTextWidth, formatCompactSpeed } from '@/utils/format';
 import {
   drawPosterFooter,
   drawPosterHeader,
@@ -14,6 +14,7 @@ import {
   type MapTone,
   type SceneNode,
 } from './infrastructureMapLayout';
+import type { MapTrafficTier } from './infrastructureMapModel';
 import {
   DIAGRAM_MAX_NETWORKS,
   type DiagramGroup,
@@ -168,7 +169,38 @@ interface Painter {
   out: MapCursor;
   metrics: Metrics;
   toneFor: (segmentId: string | undefined) => MapNetworkTone | undefined;
+  liveTraffic: boolean;
 }
+
+const TRAFFIC_TIER_RANK: Record<MapTrafficTier, number> = {
+  low: 1,
+  medium: 2,
+  high: 3,
+};
+
+const maxTrafficTier = (
+  ...tiers: Array<MapTrafficTier | undefined>
+): MapTrafficTier | undefined => {
+  let best: MapTrafficTier | undefined;
+  let bestRank = 0;
+  for (const tier of tiers) {
+    if (!tier) continue;
+    const rank = TRAFFIC_TIER_RANK[tier];
+    if (rank > bestRank) {
+      best = tier;
+      bestRank = rank;
+    }
+  }
+  return best;
+};
+
+const groupTrafficTier = (group: DiagramGroup | undefined): MapTrafficTier | undefined =>
+  group
+    ? maxTrafficTier(
+        ...group.allTiles.map((tile) => tile.trafficTier),
+        ...group.tiles.map((tile) => tile.trafficTier),
+      )
+    : undefined;
 
 const drawTile = (
   painter: Painter,
@@ -195,6 +227,17 @@ const drawTile = (
       fill: 'none',
       stroke: 'border',
       dashed: true,
+    });
+  } else if (painter.liveTraffic && tile.trafficTier) {
+    out.nodes.push({
+      kind: 'rect',
+      x,
+      y,
+      w: metrics.tileW,
+      h: metrics.tileH,
+      r: CARD_RADIUS,
+      fill: 'none',
+      activity: tile.trafficTier,
     });
   }
   const iconY = metrics.named ? y + 7 : y + (metrics.tileH - metrics.icon) / 2;
@@ -238,17 +281,24 @@ const drawTile = (
       });
     });
     if (real || dashed) {
+      const liveSpeed =
+        painter.liveTraffic &&
+        tile.trafficTier &&
+        tile.netTotalBytes !== undefined &&
+        !tile.hasConnectionCaption
+          ? fitMapText(`${formatCompactSpeed(tile.netTotalBytes)}/s`, metrics.tileW - 6, 10, 500)
+          : undefined;
       out.nodes.push({
         kind: 'text',
         x: cx,
         // The caption follows the name's last line.
         y: y + 66 + (nameLines.length - 1) * NAME_LINE,
-        text: fitMapName(tile.caption, metrics.tileW - 6, 10, 400),
+        text: liveSpeed ?? fitMapName(tile.caption, metrics.tileW - 6, 10, 400),
         size: 10,
-        weight: 400,
-        fill: 'muted',
+        weight: liveSpeed ? 500 : 400,
+        fill: liveSpeed ? 'accent' : 'muted',
         anchor: 'middle',
-        ...(off ? { dim: true } : {}),
+        ...(off && !liveSpeed ? { dim: true } : {}),
       });
     }
   }
@@ -303,6 +353,12 @@ const drawTile = (
       health: tile.health,
       cpu: tile.cpu,
       memory: tile.memory,
+      ...(tile.netRxBytes !== undefined ? { netRxBytes: tile.netRxBytes } : {}),
+      ...(tile.netTxBytes !== undefined ? { netTxBytes: tile.netTxBytes } : {}),
+      ...(tile.latencyMs !== undefined ? { latencyMs: tile.latencyMs } : {}),
+      ...(tile.linkSpeedMbps !== undefined ? { linkSpeedMbps: tile.linkSpeedMbps } : {}),
+      ...(tile.linkDownCount !== undefined ? { linkDownCount: tile.linkDownCount } : {}),
+      ...(tile.firewallEnabled ? { firewallEnabled: true } : {}),
       address: tile.address,
       detail: tile.detail,
       navigable: real,
@@ -450,7 +506,7 @@ const placeRow = (
 const line = (
   lines: SceneNode[],
   points: Array<[number, number]>,
-  options: { arrow?: boolean; dashed?: boolean } = {},
+  options: { arrow?: boolean; dashed?: boolean; activity?: MapTrafficTier } = {},
 ) => {
   lines.push({
     kind: 'line',
@@ -458,7 +514,62 @@ const line = (
     tone: 'accent',
     ...(options.arrow ? { arrow: true } : {}),
     ...(options.dashed ? { dashed: true } : {}),
+    ...(options.activity && !options.dashed ? { activity: options.activity } : {}),
   });
+};
+
+// Draws a horizontal bus segment, splitting out only the sub-range that feeds
+// active targets so idle branches stay calm and flow moves outward from feedX.
+const drawHorizontalBus = (
+  lines: SceneNode[],
+  leftX: number,
+  rightX: number,
+  busY: number,
+  feedX: number,
+  activeXs: number[],
+  activity: MapTrafficTier | undefined,
+) => {
+  if (!activity || activeXs.length === 0 || leftX >= rightX) {
+    line(lines, [
+      [leftX, busY],
+      [rightX, busY],
+    ]);
+    return;
+  }
+  const activeMin = Math.max(leftX, Math.min(feedX, ...activeXs));
+  const activeMax = Math.min(rightX, Math.max(feedX, ...activeXs));
+  if (leftX < activeMin) {
+    line(lines, [
+      [leftX, busY],
+      [activeMin, busY],
+    ]);
+  }
+  if (activeMin < feedX) {
+    line(
+      lines,
+      [
+        [feedX, busY],
+        [activeMin, busY],
+      ],
+      { activity },
+    );
+  }
+  if (feedX < activeMax) {
+    line(
+      lines,
+      [
+        [feedX, busY],
+        [activeMax, busY],
+      ],
+      { activity },
+    );
+  }
+  if (activeMax < rightX) {
+    line(lines, [
+      [activeMax, busY],
+      [rightX, busY],
+    ]);
+  }
 };
 
 const connectorLabel = (labels: SceneNode[], text: string, x: number, y: number) => {
@@ -479,14 +590,20 @@ const connectorLabel = (labels: SceneNode[], text: string, x: number, y: number)
 // A Proxmox bridge counts what is plugged into it, since a guest there may
 // report no address at all. Its detail is the subnet it carries, or whose
 // bridge it is when two clusters both have a `vmbr0`.
-const networkText = (network: DiagramNetwork): string =>
-  network.kind === 'bridge'
-    ? [network.label, network.detail, `${network.memberCount.toLocaleString()} connected`]
-        .filter(Boolean)
-        .join(' · ')
-    : `${network.label} · ${network.memberCount.toLocaleString()} ${
-        network.memberCount === 1 ? 'address' : 'addresses'
-      }`;
+const networkText = (network: DiagramNetwork): string => {
+  const base =
+    network.kind === 'bridge'
+      ? [network.label, network.detail, `${network.memberCount.toLocaleString()} connected`]
+          .filter(Boolean)
+          .join(' · ')
+      : `${network.label} · ${network.memberCount.toLocaleString()} ${
+          network.memberCount === 1 ? 'address' : 'addresses'
+        }`;
+  if (network.trafficTier && network.netTotalBytes !== undefined) {
+    return `${base} · ${formatCompactSpeed(network.netTotalBytes)}/s`;
+  }
+  return base;
+};
 
 // One pill per network, centred and wrapped. Returns the bottom of the row.
 const drawNetworks = (
@@ -496,6 +613,7 @@ const drawNetworks = (
   width: number,
   y: number,
   toneOf: (network: DiagramNetwork) => MapTone,
+  liveTraffic: boolean,
 ): number => {
   const shown = networks.slice(0, DIAGRAM_MAX_NETWORKS);
   const hidden = networks.length - shown.length;
@@ -505,6 +623,7 @@ const drawNetworks = (
     w: number;
     label: string;
     target: MapInspectTarget;
+    activity?: MapTrafficTier;
   }> = shown.map((network) => {
     // Cut by the measure the pill is sized with, so a long label ends in an
     // ellipsis inside the row and never makes a pill wider than the drawing.
@@ -515,16 +634,23 @@ const drawNetworks = (
       w: labelWidth(text, 12) + 36,
       label: `Inspect network ${network.label}`,
       target: { kind: 'network', networkId: network.id },
+      ...(liveTraffic && network.trafficTier ? { activity: network.trafficTier } : {}),
     };
   });
   if (hidden > 0) {
     const text = `+${hidden} more`;
+    const hiddenTier = liveTraffic
+      ? maxTrafficTier(
+          ...networks.slice(DIAGRAM_MAX_NETWORKS).map((network) => network.trafficTier),
+        )
+      : undefined;
     pills.push({
       text,
       tone: 'netOther',
       w: labelWidth(text, 12) + 36,
       label: `Inspect all ${networks.length.toLocaleString()} networks`,
       target: { kind: 'all-networks' },
+      ...(hiddenTier ? { activity: hiddenTier } : {}),
     });
   }
   const rows: Array<typeof pills> = [];
@@ -557,6 +683,18 @@ const drawNetworks = (
         fill: 'surfaceAlt',
         stroke: 'border',
       });
+      if (pill.activity) {
+        out.nodes.push({
+          kind: 'rect',
+          x,
+          y: top,
+          w: pill.w,
+          h: PILL_HEIGHT,
+          r: PILL_HEIGHT / 2,
+          fill: 'none',
+          activity: pill.activity,
+        });
+      }
       out.nodes.push({
         kind: 'rect',
         x: x + 10,
@@ -618,12 +756,16 @@ export function layoutServiceDiagram(diagram: ServiceDiagram, options: MapLayout
         : NETWORK_TONES[network.colorIndex % NETWORK_TONES.length],
     );
   }
+  const liveTraffic = Boolean(options.liveTraffic);
+  const activeTier = (tier: MapTrafficTier | undefined): MapTrafficTier | undefined =>
+    liveTraffic ? tier : undefined;
   const painter: Painter = {
     out,
     metrics,
     // With one network every tile is on it, so the mark would say nothing.
     toneFor: (segmentId) =>
       diagram.networks.length > 1 && segmentId ? toneByNetwork.get(segmentId) : undefined,
+    liveTraffic,
   };
 
   let y = drawPosterHeader(out, options.header, margin, width - margin * 2);
@@ -731,6 +873,8 @@ export function layoutServiceDiagram(diagram: ServiceDiagram, options: MapLayout
     y = drawGatewayRows(y) + LAYER_GAP;
   }
 
+  const accessTier = activeTier(groupTrafficTier(diagram.access));
+
   if (diagram.networks.length > 0) {
     const bandBottom = drawNetworks(
       out,
@@ -739,6 +883,7 @@ export function layoutServiceDiagram(diagram: ServiceDiagram, options: MapLayout
       inner,
       y,
       (network) => toneByNetwork.get(network.id) ?? 'netOther',
+      liveTraffic,
     );
     if (source) {
       line(
@@ -747,7 +892,7 @@ export function layoutServiceDiagram(diagram: ServiceDiagram, options: MapLayout
           [source.x, source.y],
           [mid, y],
         ],
-        { arrow: true },
+        { arrow: true, activity: accessTier },
       );
     }
     source = { x: mid, y: bandBottom };
@@ -760,67 +905,136 @@ export function layoutServiceDiagram(diagram: ServiceDiagram, options: MapLayout
     inner,
   );
   const placed: Box[][] = [];
+  const placedTiers: Array<Array<MapTrafficTier | undefined>> = [];
   let rowTop = y;
   for (const row of rows) {
     const boxes = placeRow(painter, row, left, inner, rowTop);
     placed.push(boxes);
+    placedTiers.push(row.map((entry) => activeTier(groupTrafficTier(entry.group))));
     rowTop = Math.max(...boxes.map(bottomOf)) + ROW_GAP;
   }
   const single = placed.length === 1;
   const leftRail = margin + GUTTER / 2;
   const rightRail = width - margin - GUTTER / 2;
+  const rowMaxTiers = placedTiers.map((tiers) => maxTrafficTier(...tiers));
+  const allGroupsTier = maxTrafficTier(...rowMaxTiers);
 
   if (source && placed.length > 0) {
     if (single) {
       const boxes = placed[0];
+      const tiers = placedTiers[0];
       const busY = boxes[0].y - BUS_DROP;
-      line(lines, [
-        [source.x, source.y],
-        [source.x, busY],
-      ]);
+      line(
+        lines,
+        [
+          [source.x, source.y],
+          [source.x, busY],
+        ],
+        { activity: allGroupsTier },
+      );
       const xs = [...boxes.map(centreX), source.x];
-      line(lines, [
-        [Math.min(...xs), busY],
-        [Math.max(...xs), busY],
-      ]);
-      for (const box of boxes)
+      const activeXs = boxes
+        .map((box, index) => (tiers[index] ? centreX(box) : undefined))
+        .filter((value): value is number => value !== undefined);
+      drawHorizontalBus(
+        lines,
+        Math.min(...xs),
+        Math.max(...xs),
+        busY,
+        source.x,
+        activeXs,
+        allGroupsTier,
+      );
+      boxes.forEach((box, index) =>
         line(
           lines,
           [
             [centreX(box), busY],
             [centreX(box), box.y],
           ],
-          { arrow: true },
-        );
+          { arrow: true, activity: tiers[index] },
+        ),
+      );
     } else {
       // Several rows: a bus above each row, joined by a rail down the left edge.
       const firstBus = placed[0][0].y - BUS_DROP;
       const lastBus = placed[placed.length - 1][0].y - BUS_DROP;
-      line(lines, [
-        [source.x, source.y],
-        [source.x, firstBus],
-      ]);
-      line(lines, [
-        [leftRail, firstBus],
-        [leftRail, lastBus],
-      ]);
-      for (const boxes of placed) {
+      const lowerRowsTier = maxTrafficTier(...rowMaxTiers.slice(1));
+      let lastActiveRow = -1;
+      for (let rowIndex = 1; rowIndex < rowMaxTiers.length; rowIndex += 1) {
+        if (rowMaxTiers[rowIndex]) lastActiveRow = rowIndex;
+      }
+      line(
+        lines,
+        [
+          [source.x, source.y],
+          [source.x, firstBus],
+        ],
+        { activity: allGroupsTier },
+      );
+      if (lastActiveRow > 0 && lowerRowsTier) {
+        const activeRailBottom = placed[lastActiveRow][0].y - BUS_DROP;
+        line(
+          lines,
+          [
+            [leftRail, firstBus],
+            [leftRail, activeRailBottom],
+          ],
+          { activity: lowerRowsTier },
+        );
+        if (activeRailBottom < lastBus) {
+          line(lines, [
+            [leftRail, activeRailBottom],
+            [leftRail, lastBus],
+          ]);
+        }
+      } else {
+        line(lines, [
+          [leftRail, firstBus],
+          [leftRail, lastBus],
+        ]);
+      }
+      placed.forEach((boxes, rowIndex) => {
+        const tiers = placedTiers[rowIndex];
         const busY = boxes[0].y - BUS_DROP;
         const reach = busY === firstBus ? source.x : 0;
-        line(lines, [
-          [leftRail, busY],
-          [Math.max(reach, ...boxes.map(centreX)), busY],
-        ]);
-        for (const box of boxes)
+        const busRight = Math.max(reach, ...boxes.map(centreX));
+        const activeXs = boxes
+          .map((box, index) => (tiers[index] ? centreX(box) : undefined))
+          .filter((value): value is number => value !== undefined);
+        if (rowIndex === 0) {
+          const row0Targets = lastActiveRow > 0 ? [leftRail, ...activeXs] : activeXs;
+          drawHorizontalBus(
+            lines,
+            leftRail,
+            busRight,
+            busY,
+            source.x,
+            row0Targets,
+            maxTrafficTier(rowMaxTiers[0], lowerRowsTier),
+          );
+        } else {
+          drawHorizontalBus(
+            lines,
+            leftRail,
+            busRight,
+            busY,
+            leftRail,
+            activeXs,
+            rowMaxTiers[rowIndex],
+          );
+        }
+        boxes.forEach((box, index) =>
           line(
             lines,
             [
               [centreX(box), busY],
               [centreX(box), box.y],
             ],
-            { arrow: true },
-          );
-      }
+            { arrow: true, activity: tiers[index] },
+          ),
+        );
+      });
     }
   }
 
@@ -832,6 +1046,8 @@ export function layoutServiceDiagram(diagram: ServiceDiagram, options: MapLayout
   const lower = [diagram.storage, diagram.backups, diagram.hardware].filter(
     (group): group is DiagramGroup => group !== undefined,
   );
+  const lowerTiers = lower.map((group) => activeTier(groupTrafficTier(group)));
+  const anyLowerTier = maxTrafficTier(...lowerTiers);
   let lowerBoxes: Box[] = [];
   if (lower.length > 0) {
     const sized = lower.map((group) => sizeGroup(group, metrics, inner));
@@ -846,38 +1062,122 @@ export function layoutServiceDiagram(diagram: ServiceDiagram, options: MapLayout
     const targets = lowerBoxes.filter((box) => box.y === y);
     if (placed.length > 0 && targets.length > 0) {
       const collectY = appsBottom + BUS_DROP;
+      const wrapped = lowerBoxes.slice(targets.length);
+      const targetTiers = targets.map((_, index) => lowerTiers[index]);
+      const wrappedTiers = wrapped.map((_, index) => lowerTiers[targets.length + index]);
+      const wrappedMaxTier = maxTrafficTier(...wrappedTiers);
+      const bridgeTier =
+        allGroupsTier && anyLowerTier ? maxTrafficTier(allGroupsTier, anyLowerTier) : undefined;
       if (single) {
         const boxes = placed[0];
-        for (const box of boxes)
-          line(lines, [
-            [centreX(box), bottomOf(box)],
-            [centreX(box), collectY],
-          ]);
+        const tiers = placedTiers[0];
+        boxes.forEach((box, index) =>
+          line(
+            lines,
+            [
+              [centreX(box), bottomOf(box)],
+              [centreX(box), collectY],
+            ],
+            { activity: anyLowerTier ? tiers[index] : undefined },
+          ),
+        );
         const xs = [...boxes.map(centreX), ...targets.map(centreX)];
-        line(lines, [
-          [Math.min(...xs), collectY],
-          [Math.max(...xs), collectY],
-        ]);
+        const minX = Math.min(...xs);
+        const maxX = Math.max(...xs);
+        if (bridgeTier) {
+          const activeSourceXs = boxes
+            .map((box, index) => (tiers[index] ? centreX(box) : undefined))
+            .filter((value): value is number => value !== undefined);
+          const activeTargetXs = [
+            ...targets
+              .map((box, index) => (targetTiers[index] ? centreX(box) : undefined))
+              .filter((value): value is number => value !== undefined),
+            ...(wrappedMaxTier ? [maxX] : []),
+          ];
+          const minAct = Math.min(...activeSourceXs, ...activeTargetXs);
+          const maxAct = Math.max(...activeSourceXs, ...activeTargetXs);
+          if (minX < minAct) {
+            line(lines, [
+              [minX, collectY],
+              [minAct, collectY],
+            ]);
+          }
+          if (minAct < maxAct) {
+            line(
+              lines,
+              [
+                [minAct, collectY],
+                [maxAct, collectY],
+              ],
+              { activity: bridgeTier },
+            );
+          }
+          if (maxAct < maxX) {
+            line(lines, [
+              [maxAct, collectY],
+              [maxX, collectY],
+            ]);
+          }
+        } else {
+          line(lines, [
+            [minX, collectY],
+            [maxX, collectY],
+          ]);
+        }
       } else {
         // Each row drains from its last box to a rail down the right edge.
         let railTop = collectY;
-        for (const boxes of placed) {
+        let firstActiveTickY: number | undefined;
+        placed.forEach((boxes, rowIndex) => {
           const last = boxes[boxes.length - 1];
           const tickY = last.y + last.h / 2;
-          line(lines, [
-            [last.x + last.w, tickY],
-            [rightRail, tickY],
-          ]);
+          const rowActivity = anyLowerTier ? rowMaxTiers[rowIndex] : undefined;
+          if (rowActivity && (firstActiveTickY === undefined || tickY < firstActiveTickY)) {
+            firstActiveTickY = tickY;
+          }
+          line(
+            lines,
+            [
+              [last.x + last.w, tickY],
+              [rightRail, tickY],
+            ],
+            { activity: rowActivity },
+          );
           railTop = Math.min(railTop, tickY);
+        });
+        if (bridgeTier && firstActiveTickY !== undefined) {
+          if (railTop < firstActiveTickY) {
+            line(lines, [
+              [rightRail, railTop],
+              [rightRail, firstActiveTickY],
+            ]);
+          }
+          line(
+            lines,
+            [
+              [rightRail, firstActiveTickY],
+              [rightRail, collectY],
+            ],
+            { activity: bridgeTier },
+          );
+        } else {
+          line(lines, [
+            [rightRail, railTop],
+            [rightRail, collectY],
+          ]);
         }
-        line(lines, [
-          [rightRail, railTop],
-          [rightRail, collectY],
-        ]);
-        line(lines, [
-          [Math.min(...targets.map(centreX)), collectY],
-          [rightRail, collectY],
-        ]);
+        const activeTargetXs = targets
+          .map((box, index) => (targetTiers[index] ? centreX(box) : undefined))
+          .filter((value): value is number => value !== undefined);
+        drawHorizontalBus(
+          lines,
+          Math.min(...targets.map(centreX)),
+          rightRail,
+          collectY,
+          rightRail,
+          activeTargetXs,
+          bridgeTier ? maxTrafficTier(...targetTiers) : undefined,
+        );
       }
       targets.forEach((box, index) => {
         const group = lower[index];
@@ -887,20 +1187,43 @@ export function layoutServiceDiagram(diagram: ServiceDiagram, options: MapLayout
             [centreX(box), collectY],
             [centreX(box), box.y],
           ],
-          { arrow: true },
+          { arrow: true, activity: targetTiers[index] },
         );
         connectorLabel(labels, LOWER_LABEL[group.key], centreX(box), (collectY + box.y) / 2 + 3);
       });
       // A bottom layer too wide for one row wraps. The boxes on its later
       // rows are reached down the right edge, so none is left unconnected.
-      const wrapped = lowerBoxes.slice(targets.length);
       if (wrapped.length > 0) {
         const reach = Math.max(...wrapped.map((box) => box.y)) - BUS_DROP;
-        line(lines, [
-          [Math.max(...targets.map(centreX)), collectY],
-          [rightRail, collectY],
-          [rightRail, reach],
-        ]);
+        const maxTargetX = Math.max(...targets.map(centreX));
+        let lastActiveWrapped = -1;
+        for (let index = 0; index < wrappedTiers.length; index += 1) {
+          if (wrappedTiers[index]) lastActiveWrapped = index;
+        }
+        if (lastActiveWrapped >= 0 && wrappedMaxTier && allGroupsTier) {
+          const activeReach = wrapped[lastActiveWrapped].y - BUS_DROP;
+          line(
+            lines,
+            [
+              [maxTargetX, collectY],
+              [rightRail, collectY],
+              [rightRail, activeReach],
+            ],
+            { activity: maxTrafficTier(allGroupsTier, wrappedMaxTier) },
+          );
+          if (activeReach < reach) {
+            line(lines, [
+              [rightRail, activeReach],
+              [rightRail, reach],
+            ]);
+          }
+        } else {
+          line(lines, [
+            [maxTargetX, collectY],
+            [rightRail, collectY],
+            [rightRail, reach],
+          ]);
+        }
         wrapped.forEach((box, index) => {
           const busY = box.y - BUS_DROP;
           line(
@@ -910,7 +1233,7 @@ export function layoutServiceDiagram(diagram: ServiceDiagram, options: MapLayout
               [centreX(box), busY],
               [centreX(box), box.y],
             ],
-            { arrow: true },
+            { arrow: true, activity: wrappedTiers[index] },
           );
           connectorLabel(
             labels,
@@ -980,11 +1303,18 @@ export function fitServiceDiagram(
   diagram: ServiceDiagram,
   space: { width: number; height: number },
   density: MapLayoutOptions['density'],
+  options?: { liveTraffic?: boolean },
 ): FittedDiagram {
+  const liveTraffic = options?.liveTraffic;
   const widthAt = (step: number): number =>
     space.width * (1 + (step / FIT_STEPS) * (FIT_MAX_STRETCH - 1));
   const drawnAt = (step: number, names: NameRoom): FittedDiagram => {
-    const scene = layoutServiceDiagram(diagram, { width: widthAt(step), density, ...names });
+    const scene = layoutServiceDiagram(diagram, {
+      width: widthAt(step),
+      density,
+      ...(liveTraffic ? { liveTraffic: true } : {}),
+      ...names,
+    });
     const scale =
       scene.height > 0 ? Math.min(1, space.width / scene.width, space.height / scene.height) : 1;
     return { scene, scale };
@@ -1082,11 +1412,13 @@ export function flowServiceDiagram(
   diagram: ServiceDiagram,
   width: number,
   density: MapLayoutOptions['density'],
+  options?: { liveTraffic?: boolean },
 ): FittedDiagram {
   const scene = layoutServiceDiagram(diagram, {
     width,
     density,
     wrapNames: density === 'names',
+    ...(options?.liveTraffic ? { liveTraffic: true } : {}),
   });
   return { scene, scale: scene.width > 0 ? Math.min(1, width / scene.width) : 1 };
 }

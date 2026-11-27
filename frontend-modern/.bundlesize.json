@@ -136,7 +136,7 @@
   },
   "totals": {
     "js": {
-      "baselineGzip": 1383520
+      "baselineGzip": 1389520
     },
     "css": {
       "baselineGzip": 32734

@@ -25,6 +25,21 @@ import {
 
 export type MapHealth = 'ok' | 'attention' | 'critical' | 'off' | 'stale' | 'unknown';
 
+export type MapTrafficTier = 'low' | 'medium' | 'high';
+
+/** Minimum combined throughput (10 KB/s) before a tile or network counts as active. */
+export const MAP_TRAFFIC_ACTIVE_BYTES = 10 * 1024;
+
+export const resolveMapTrafficTier = (
+  bytesPerSec: number | undefined,
+): MapTrafficTier | undefined => {
+  if (typeof bytesPerSec !== 'number' || !Number.isFinite(bytesPerSec)) return undefined;
+  if (bytesPerSec < MAP_TRAFFIC_ACTIVE_BYTES) return undefined;
+  if (bytesPerSec < 1024 * 1024) return 'low';
+  if (bytesPerSec < 25 * 1024 * 1024) return 'medium';
+  return 'high';
+};
+
 export type MapPlatform =
   | 'proxmox'
   | 'vmware'
@@ -45,6 +60,18 @@ export interface MapItem {
   status: string;
   cpu?: number;
   memory?: number;
+  /** Live inbound network rate in bytes per second, when collected. */
+  netRxBytes?: number;
+  /** Live outbound network rate in bytes per second, when collected. */
+  netTxBytes?: number;
+  /** Availability probe latency in milliseconds, when the check is reachable. */
+  latencyMs?: number;
+  /** Fastest reported physical link speed in Mbps across non-host-local interfaces. */
+  linkSpeedMbps?: number;
+  /** Number of non-host-local interfaces currently reporting link down. */
+  linkDownCount?: number;
+  /** True when a Proxmox guest has firewall enabled on any network interface. */
+  firewallEnabled?: boolean;
   /** The address the item answers on, when Pulse knows one. */
   address?: string;
   /** Published ports, for a container. */
@@ -107,6 +134,14 @@ export interface MapHost {
   status: string;
   cpu?: number;
   memory?: number;
+  /** Live inbound network rate in bytes per second, when collected. */
+  netRxBytes?: number;
+  /** Live outbound network rate in bytes per second, when collected. */
+  netTxBytes?: number;
+  /** Fastest reported physical link speed in Mbps across non-host-local interfaces. */
+  linkSpeedMbps?: number;
+  /** Number of non-host-local interfaces currently reporting link down. */
+  linkDownCount?: number;
   sections: MapSection[];
   pools: MapPool[];
   /** The address the host itself answers on. */
@@ -227,6 +262,74 @@ const finitePercent = (value: number | undefined): number | undefined =>
     ? Math.min(100, Math.max(0, value))
     : undefined;
 
+const finiteNonNegative = (value: number | undefined): number | undefined =>
+  typeof value === 'number' && Number.isFinite(value) && value >= 0 ? value : undefined;
+
+const HOST_LOCAL_INTERFACE =
+  /^(lo|docker\d*|podman\d*|br-[0-9a-f]{12}|veth.*|virbr\d*|cni.*|flannel.*|cali.*|kube-ipvs\d*)$/i;
+
+const networkRatesOf = (resource: Resource): { netRxBytes?: number; netTxBytes?: number } => {
+  const netRxBytes = finiteNonNegative(resource.network?.rxBytes);
+  const netTxBytes = finiteNonNegative(resource.network?.txBytes);
+  return {
+    ...(netRxBytes !== undefined ? { netRxBytes } : {}),
+    ...(netTxBytes !== undefined ? { netTxBytes } : {}),
+  };
+};
+
+const latencyOf = (resource: Resource): number | undefined => {
+  if (resource.type !== 'network-endpoint') return undefined;
+  if (resource.availability?.available === false) return undefined;
+  return finiteNonNegative(resource.availability?.latencyMillis);
+};
+
+const interfaceTelemetryOf = (
+  resource: Resource,
+  health: MapHealth,
+): { linkSpeedMbps?: number; linkDownCount?: number } => {
+  const lists = [
+    resource.agent?.networkInterfaces,
+    resource.docker?.networkInterfaces,
+    resource.proxmox?.networkInterfaces,
+  ];
+  let maxSpeed = 0;
+  const downNames = new Set<string>();
+  let unnamedDown = 0;
+  const countLinkDown =
+    health !== 'off' &&
+    health !== 'critical' &&
+    (health === 'ok' ||
+      health === 'attention' ||
+      resource.status === 'online' ||
+      resource.status === 'running');
+  for (const list of lists) {
+    for (const nic of list ?? []) {
+      const name = clean(nic.name);
+      if (HOST_LOCAL_INTERFACE.test(name)) continue;
+      if (
+        typeof nic.speedMbps === 'number' &&
+        Number.isFinite(nic.speedMbps) &&
+        nic.speedMbps > maxSpeed
+      ) {
+        maxSpeed = nic.speedMbps;
+      }
+      if (countLinkDown && nic.linkUp === false) {
+        if (name) downNames.add(name.toLowerCase());
+        else unnamedDown += 1;
+      }
+    }
+  }
+  const linkDownCount = downNames.size + unnamedDown;
+  return {
+    ...(maxSpeed > 0 ? { linkSpeedMbps: maxSpeed } : {}),
+    ...(linkDownCount > 0 ? { linkDownCount } : {}),
+  };
+};
+
+const proxmoxFirewallEnabled = (resource: Resource): boolean =>
+  resource.platformType === 'proxmox-pve' &&
+  (resource.proxmox?.networkInterfaces ?? []).some((nic) => nic.firewall === true);
+
 export const resolveMapHealth = (resource: Resource): MapHealth => {
   const verdict = resource.health?.verdict;
   if (verdict) return verdict;
@@ -285,14 +388,21 @@ const publishedPorts = (resource: Resource): string | undefined => {
 
 const toItem = (resource: Resource, typeLabel: string, attachments: Attachments): MapItem => {
   const attached = attachments.get(resource.id) ?? [];
+  const health = resolveMapHealth(resource);
+  const latencyMs = latencyOf(resource);
+  const firewallEnabled = proxmoxFirewallEnabled(resource);
   return {
     id: resource.id,
     name: displayName(resource),
     typeLabel,
-    health: resolveMapHealth(resource),
+    health,
     status: resource.status,
     cpu: finitePercent(resource.cpu?.current),
     memory: finitePercent(getMemoryPercent(resource)),
+    ...networkRatesOf(resource),
+    ...interfaceTelemetryOf(resource, health),
+    ...(latencyMs !== undefined ? { latencyMs } : {}),
+    ...(firewallEnabled ? { firewallEnabled: true } : {}),
     ...(attached[0]?.address ? { address: attached[0].address } : {}),
     ...(attached.length > 0 ? { segmentIds: attached.map((entry) => entry.segmentId) } : {}),
     ...(resource.type === 'app-container' && publishedPorts(resource)
@@ -465,6 +575,7 @@ export function buildInfrastructureMapModel(
     const parent = resource.parentId ? byId.get(resource.parentId) : undefined;
     if (resource.type === 'agent' && parent?.type === 'k8s-cluster') continue;
     const own = attachments.get(resource.id) ?? [];
+    const health = resolveMapHealth(resource);
     drafts.set(resource.id, {
       resource,
       sections: new Map(),
@@ -474,10 +585,12 @@ export function buildInfrastructureMapModel(
         name: displayName(resource),
         platform,
         typeLabel: HOST_TYPE_LABEL[platform],
-        health: resolveMapHealth(resource),
+        health,
         status: resource.status,
         cpu: finitePercent(resource.cpu?.current),
         memory: finitePercent(getMemoryPercent(resource)),
+        ...networkRatesOf(resource),
+        ...interfaceTelemetryOf(resource, health),
         sections: [],
         pools: [],
         ...(own[0]?.address ? { address: own[0].address } : {}),

@@ -11815,3 +11815,18 @@ feature-gated (`availabilityPushChecks` at stage `build`) push schedule labels,
 pending first-ping status, hidden outbound test actions for push checks, and
 mobile-safe wrapping (`min-w-0`, wrapped `curl` snippet) inside the shared
 availability editor dialog.
+
+### Infrastructure Map live traffic toggle and network drawer metrics (27 November 2026)
+
+`InfrastructureMapSurface.tsx` adds a **Live traffic** toolbar toggle using the
+shared `Button` primitive (`primaryFlat` when active, `secondary` when off)
+alongside scoped reduced-motion-safe SVG flow styles in
+`frontend-modern/src/features/infrastructureMap/infrastructureMap.css`
+(`prefers-reduced-motion: reduce` disables all motion) and an `Active traffic`
+legend entry. Hover and touch tooltips surface live `Net` rx/tx rates, check
+`Latency`, NIC link speed, link-down counts, and Proxmox `NIC firewall flag`.
+`InfrastructureMapDrawer.tsx` displays aggregate throughput, max link speed,
+and `Link down` / `NIC firewall` `MetadataBadge` pills, plus an `Attention` /
+`Traffic` sort control whenever drawer entries report live network throughput.
+Shared primitives are unchanged. Verified by `InfrastructureMapSurface.test.tsx`,
+`InfrastructureMapScale.test.tsx`, and Playwright browser verification.

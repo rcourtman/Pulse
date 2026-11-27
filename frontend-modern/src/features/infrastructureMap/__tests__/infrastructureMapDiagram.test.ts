@@ -1496,4 +1496,229 @@ describe('layoutServiceDiagram', () => {
       expect(scene.width * scale).toBeLessThanOrEqual(240.5);
     });
   });
+
+  describe('live network traffic visualization', () => {
+    const liveEstate = (): Resource[] => [
+      resource({
+        id: 'pve',
+        type: 'agent',
+        name: 'delly',
+        platformType: 'proxmox-pve',
+        network: { rxBytes: 12_000_000, txBytes: 4_000_000 },
+        agent: {
+          networkInterfaces: [
+            { name: 'vmbr0', addresses: ['192.168.10.11/24'], speedMbps: 10000, linkUp: true },
+            { name: 'enp2s0', addresses: [], speedMbps: 1000, linkUp: false },
+          ],
+        },
+      }),
+      guest('cloudflared', {
+        identity: { ips: ['192.168.10.20'] },
+        network: { rxBytes: 30_000_000, txBytes: 5_000_000 },
+      }),
+      guest('jellyfin', {
+        identity: { ips: ['192.168.10.50'] },
+        network: { rxBytes: 5_000_000, txBytes: 2_000_000 },
+        proxmox: {
+          networkInterfaces: [
+            { name: 'net0', addresses: ['192.168.10.50'], bridge: 'vmbr0', firewall: true },
+          ],
+        },
+      }),
+      // Idle guest on a second quiet subnet.
+      guest('grafana', {
+        identity: { ips: ['10.0.40.10'] },
+        network: { rxBytes: 512, txBytes: 256 },
+      }),
+      guest('prometheus', {
+        identity: { ips: ['10.0.40.11'] },
+      }),
+      resource({
+        id: 'check-router',
+        type: 'network-endpoint',
+        name: 'Edge',
+        platformType: 'availability',
+        availability: {
+          address: '192.168.10.1',
+          targetKind: 'router',
+          available: true,
+          latencyMillis: 2,
+        },
+      }),
+      resource({
+        id: 'zfs',
+        type: 'storage',
+        name: 'local-zfs',
+        platformType: 'proxmox-pve',
+        parentId: 'pve',
+      }),
+    ];
+
+    it('highlights active tiles, active network pills, and active connectors while keeping idle branches and Internet static', () => {
+      const diagram = buildServiceDiagram(buildInfrastructureMapModel(liveEstate()));
+      const liveScene = layoutServiceDiagram(diagram, {
+        width: 1400,
+        density: 'names',
+        liveTraffic: true,
+      });
+
+      // Hits carry truthful telemetry fields.
+      const jellyfinHit = ofKind(liveScene, 'hit').find((node) => node.hit.id === 'ct-jellyfin');
+      expect(jellyfinHit?.hit).toMatchObject({
+        netRxBytes: 5_000_000,
+        netTxBytes: 2_000_000,
+        firewallEnabled: true,
+      });
+      const hostHit = ofKind(liveScene, 'hit').find((node) => node.hit.id === 'pve');
+      expect(hostHit?.hit).toMatchObject({
+        netRxBytes: 12_000_000,
+        netTxBytes: 4_000_000,
+        linkSpeedMbps: 10000,
+        linkDownCount: 1,
+      });
+      const routerHit = ofKind(liveScene, 'hit').find((node) => node.hit.id === 'check-router');
+      expect(routerHit?.hit.latencyMs).toBe(2);
+
+      // Active tiles show compact speed in accent on the caption line; idle tiles keep host caption.
+      const drawnTexts = ofKind(liveScene, 'text');
+      expect(drawnTexts.some((node) => node.fill === 'accent' && node.text.endsWith('/s'))).toBe(
+        true,
+      );
+      expect(drawnTexts.some((node) => node.fill === 'muted' && node.text === 'delly')).toBe(true);
+
+      // Active network pill shows speed and activity highlight; quiet subnet pill does not.
+      expect(
+        drawnTexts.some((node) => node.text.startsWith('vmbr0') && node.text.endsWith('/s')),
+      ).toBe(true);
+      expect(drawnTexts.some((node) => node.text === '10.0.40.x · 2 addresses')).toBe(true);
+      const pillHighlights = ofKind(liveScene, 'rect').filter(
+        (node) => node.activity !== undefined && node.h === 24 && node.r === 12,
+      );
+      expect(pillHighlights).toHaveLength(1);
+      expect(pillHighlights[0].activity).toBe('high');
+
+      // Active tiles get activity highlight rects in both names and marks density.
+      const activeTileRects = ofKind(liveScene, 'rect').filter(
+        (node) => node.activity !== undefined && node.h > 24,
+      );
+      expect(activeTileRects.map((node) => node.activity).sort()).toEqual([
+        'high',
+        'medium',
+        'medium',
+      ]);
+
+      const compactLive = layoutServiceDiagram(diagram, {
+        width: 1400,
+        density: 'marks',
+        liveTraffic: true,
+      });
+      expect(
+        ofKind(compactLive, 'rect').filter((node) => node.activity !== undefined && node.h === 40),
+      ).toHaveLength(3);
+
+      // Connectors: active branches animate, idle branches and dashed Internet line never animate.
+      const lines = ofKind(liveScene, 'line');
+      const dashedLines = lines.filter((node) => node.dashed);
+      expect(dashedLines).toHaveLength(1);
+      expect(dashedLines[0].activity).toBeUndefined();
+      expect(lines.some((node) => node.activity !== undefined)).toBe(true);
+      expect(lines.some((node) => !node.dashed && node.activity === undefined)).toBe(true);
+
+      // fitServiceDiagram and flowServiceDiagram forward liveTraffic cleanly.
+      const fitted = fitServiceDiagram(diagram, { width: 1400, height: 900 }, 'names', {
+        liveTraffic: true,
+      });
+      expect(ofKind(fitted.scene, 'line').some((node) => node.activity !== undefined)).toBe(true);
+
+      const flowed = flowServiceDiagram(diagram, 374, 'names', { liveTraffic: true });
+      expect(ofKind(flowed.scene, 'line').some((node) => node.activity !== undefined)).toBe(true);
+
+      // Static mode (liveTraffic: false) omits all activity rects and active connector flags.
+      const staticScene = layoutServiceDiagram(diagram, {
+        width: 1400,
+        density: 'names',
+        liveTraffic: false,
+      });
+      expect(ofKind(staticScene, 'rect').filter((node) => node.activity !== undefined)).toEqual([]);
+      expect(ofKind(staticScene, 'line').filter((node) => node.activity !== undefined)).toEqual([]);
+    });
+
+    it('emits flow overlays and active tile classes on the live page, and never in exported SVG', () => {
+      const model = buildInfrastructureMapModel(liveEstate());
+      const diagram = buildServiceDiagram(model);
+      const liveScene = layoutServiceDiagram(diagram, {
+        width: 1400,
+        density: 'names',
+        liveTraffic: true,
+      });
+
+      const liveBody = renderMapSceneBody(liveScene, MAP_PAGE_PALETTES.dark, () => null);
+      expect(liveBody).toContain('class="pulse-map-flow pulse-map-flow-');
+      expect(liveBody).toContain('stroke-dasharray="5 10"');
+      expect(liveBody).toContain('stroke-linecap="round"');
+      expect(liveBody).toContain('class="pulse-map-active pulse-map-active-');
+
+      // Direct renderMapSceneToSvg on a live scene stays completely static with zero animation classes.
+      const staticSvgFromLive = renderMapSceneToSvg(liveScene, MAP_PALETTES.dark);
+      expect(staticSvgFromLive).not.toContain('pulse-map-flow');
+      expect(staticSvgFromLive).not.toContain('pulse-map-active');
+      expect(staticSvgFromLive).not.toContain('class=');
+
+      // Exported poster lays out with liveTraffic: false and emits no animation classes.
+      const exported = buildMapExportSvg(model, {
+        title: 'Infrastructure map',
+        density: 'names',
+        palette: MAP_PALETTES.light,
+        now: new Date('2026-11-26T12:00:00Z'),
+      });
+      expect(exported.svg).not.toContain('pulse-map-flow');
+      expect(exported.svg).not.toContain('pulse-map-active');
+      expect(exported.svg).not.toContain('class=');
+    });
+
+    it('keeps stated connection captions intact in live traffic mode while retaining the activity halo', () => {
+      const resources: Resource[] = [
+        resource({ id: 'docker-1', type: 'docker-host', name: 'docker-1', status: 'online' }),
+        resource({
+          id: 'vpn',
+          type: 'app-container',
+          name: 'gluetun',
+          parentId: 'docker-1',
+          status: 'running',
+          docker: { containerId: 'aaaaaaaaaaaaaaaa', image: 'qmcgaw/gluetun:latest' },
+          network: { rxBytes: 2_000_000, txBytes: 0 },
+        }),
+        resource({
+          id: 'dl',
+          type: 'app-container',
+          name: 'qbittorrent',
+          parentId: 'docker-1',
+          status: 'running',
+          docker: {
+            containerId: 'bbbbbbbbbbbbbbbb',
+            image: 'lscr.io/linuxserver/qbittorrent',
+            networkMode: 'container:aaaaaaaaaaaaaaaa',
+          },
+          network: { rxBytes: 8_000_000, txBytes: 0 },
+        }),
+      ];
+
+      const diagram = buildServiceDiagram(buildInfrastructureMapModel(resources));
+      const scene = layoutServiceDiagram(diagram, {
+        width: 1400,
+        density: 'names',
+        liveTraffic: true,
+      });
+      const texts = scene.nodes
+        .filter((node): node is Extract<typeof node, { kind: 'text' }> => node.kind === 'text')
+        .map((node) => node.text);
+      expect(texts).toContain('via gluetun');
+      expect(texts).toContain('1.9M/s');
+      expect(texts).not.toContain('7.6M/s');
+      const activeRects = scene.nodes.filter(
+        (node) => node.kind === 'rect' && node.activity !== undefined,
+      );
+      expect(activeRects.length).toBeGreaterThanOrEqual(2);
+    });
+  });
 });

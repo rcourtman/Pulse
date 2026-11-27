@@ -1,5 +1,10 @@
 import { estimateTextWidth } from '@/utils/format';
-import type { InfrastructureMapModel, MapHealth, MapPlatform } from './infrastructureMapModel';
+import type {
+  InfrastructureMapModel,
+  MapHealth,
+  MapPlatform,
+  MapTrafficTier,
+} from './infrastructureMapModel';
 
 /**
  * What a laid-out map is made of: a flat list of marks at fixed positions.
@@ -38,6 +43,12 @@ export interface MapHit {
   health: MapHealth;
   cpu?: number;
   memory?: number;
+  netRxBytes?: number;
+  netTxBytes?: number;
+  latencyMs?: number;
+  linkSpeedMbps?: number;
+  linkDownCount?: number;
+  firewallEnabled?: boolean;
   address?: string;
   detail?: string;
   /** What the thing's connections say about it, one sentence each. */
@@ -63,6 +74,7 @@ export type SceneNode =
       fill: MapTone | MapHealth | 'none';
       stroke?: MapTone | MapHealth;
       dashed?: boolean;
+      activity?: MapTrafficTier;
     }
   | {
       kind: 'text';
@@ -96,6 +108,7 @@ export type SceneNode =
       tone: MapTone;
       dashed?: boolean;
       arrow?: boolean;
+      activity?: MapTrafficTier;
     }
   | {
       /** Clickable header or network pill target that opens the inspector drawer. */
@@ -132,6 +145,8 @@ export interface MapLayoutOptions {
    * line of the usual tile would cut is written whole.
    */
   nameWidth?: number;
+  /** Highlight active tiles, network pills, and live connectors on the interactive page. */
+  liveTraffic?: boolean;
 }
 
 export interface MapCursor {

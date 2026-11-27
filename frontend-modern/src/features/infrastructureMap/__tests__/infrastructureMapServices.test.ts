@@ -11,7 +11,15 @@ import {
   anonymizeInfrastructureMapModel,
   buildInfrastructureMapModel,
 } from '../infrastructureMapModel';
-import { buildServiceDiagram, type DiagramGroup } from '../infrastructureMapServices';
+import {
+  buildServiceDiagram,
+  collectNetworkTiles,
+  compareDiagramTilesByTraffic,
+  formatMapLatency,
+  formatMapLinkSpeed,
+  type DiagramGroup,
+  type DiagramTile,
+} from '../infrastructureMapServices';
 
 const resource = (partial: Partial<Resource> & Pick<Resource, 'id' | 'type' | 'name'>): Resource =>
   ({
@@ -428,7 +436,7 @@ describe('buildServiceDiagram', () => {
     ]);
     // Ids are lookups and are never drawn.
     const drawn = JSON.stringify(diagram, (key, value) =>
-      ['id', 'segmentId', 'fromId', 'toId'].includes(key) ? undefined : value,
+      ['id', 'segmentId', 'segmentIds', 'fromId', 'toId'].includes(key) ? undefined : value,
     );
     expect(drawn).not.toMatch(/delly|minipc|Tower|rstack|ps4|authentik|192\.168/);
   });
@@ -1146,6 +1154,318 @@ describe('buildServiceDiagram', () => {
       networks: [],
       groups: [],
       serviceCount: 0,
+    });
+  });
+
+  describe('live network telemetry helpers and aggregation', () => {
+    it('formats link speeds and probe latencies concisely', () => {
+      expect(formatMapLinkSpeed(100)).toBe('100M');
+      expect(formatMapLinkSpeed(1000)).toBe('1G');
+      expect(formatMapLinkSpeed(2500)).toBe('2.5G');
+      expect(formatMapLinkSpeed(10000)).toBe('10G');
+
+      expect(formatMapLatency(0)).toBe('<1 ms');
+      expect(formatMapLatency(0.4)).toBe('<1 ms');
+      expect(formatMapLatency(2)).toBe('2 ms');
+      expect(formatMapLatency(2.34)).toBe('2.3 ms');
+      expect(formatMapLatency(12.6)).toBe('13 ms');
+    });
+
+    it('sorts tiles by combined live traffic descending and falls back to attention', () => {
+      const tile = (name: string, partial: Partial<DiagramTile>): DiagramTile => ({
+        id: name,
+        name,
+        caption: '',
+        typeLabel: 'LXC',
+        status: 'running',
+        health: 'ok',
+        navigable: true,
+        ...partial,
+      });
+      const sorted = [
+        tile('unmeasured-ok', {}),
+        tile('unmeasured-crit', { health: 'critical' }),
+        tile('idle-zero', { netTotalBytes: 0 }),
+        tile('busy', { netTotalBytes: 4_000_000 }),
+        tile('moderate', { netTotalBytes: 500_000 }),
+      ].sort(compareDiagramTilesByTraffic);
+      expect(sorted.map((entry) => entry.name)).toEqual([
+        'busy',
+        'moderate',
+        'idle-zero',
+        'unmeasured-crit',
+        'unmeasured-ok',
+      ]);
+    });
+
+    it('populates telemetry on tiles and appends latency to network gear captions', () => {
+      const diagram = diagramOf([
+        resource({
+          id: 'pve',
+          type: 'agent',
+          name: 'delly',
+          platformType: 'proxmox-pve',
+          network: { rxBytes: 8_000_000, txBytes: 4_000_000 },
+          agent: {
+            networkInterfaces: [
+              { name: 'vmbr0', addresses: ['192.168.10.11/24'], speedMbps: 10000, linkUp: true },
+              { name: 'enp2s0', addresses: [], speedMbps: 1000, linkUp: false },
+            ],
+          },
+        }),
+        guest('jellyfin', 'pve', {
+          identity: { ips: ['192.168.10.50'] },
+          network: { rxBytes: 2_000_000, txBytes: 500_000 },
+          proxmox: {
+            networkInterfaces: [
+              { name: 'net0', addresses: ['192.168.10.50'], bridge: 'vmbr0', firewall: true },
+            ],
+          },
+        }),
+        resource({
+          id: 'check-router',
+          type: 'network-endpoint',
+          name: 'Edge',
+          platformType: 'availability',
+          availability: {
+            address: '192.168.10.1',
+            targetKind: 'router',
+            available: true,
+            latencyMillis: 2,
+          },
+        }),
+        resource({
+          id: 'check-site',
+          type: 'network-endpoint',
+          name: 'Status',
+          platformType: 'availability',
+          availability: {
+            address: '192.168.10.80',
+            targetKind: 'service',
+            available: true,
+            latencyMillis: 14.4,
+          },
+        }),
+      ]);
+
+      const jellyfin = diagram.groups.find((group) => group.key === 'media')?.tiles[0];
+      expect(jellyfin).toMatchObject({
+        netRxBytes: 2_000_000,
+        netTxBytes: 500_000,
+        netTotalBytes: 2_500_000,
+        trafficTier: 'medium',
+        firewallEnabled: true,
+      });
+
+      const hostTile = diagram.hardware?.tiles.find((tile) => tile.id === 'pve');
+      expect(hostTile).toMatchObject({
+        netRxBytes: 8_000_000,
+        netTxBytes: 4_000_000,
+        netTotalBytes: 12_000_000,
+        trafficTier: 'medium',
+        linkSpeedMbps: 10000,
+        linkDownCount: 1,
+      });
+
+      const router = diagram.access?.tiles.find((tile) => tile.id === 'check-router');
+      expect(router).toMatchObject({
+        caption: 'router · 2 ms',
+        latencyMs: 2,
+      });
+
+      const check = diagram.groups.find((group) => group.key === 'checks')?.tiles[0];
+      expect(check).toMatchObject({
+        caption: '192.168.10.80',
+        latencyMs: 14.4,
+      });
+    });
+
+    it('aggregates network traffic without double-counting Proxmox hosts and guests, and falls back to hosts when workloads report none', () => {
+      const diagram = diagramOf([
+        // Network A: Proxmox host + two guests with rates -> sum guests only (no double-count).
+        resource({
+          id: 'pve',
+          type: 'agent',
+          name: 'delly',
+          platformType: 'proxmox-pve',
+          network: { rxBytes: 10_000_000, txBytes: 10_000_000 },
+          agent: {
+            networkInterfaces: [
+              { name: 'eno1', addresses: ['192.168.10.11/24'], speedMbps: 10000, linkUp: true },
+              { name: 'eno2', addresses: [], speedMbps: 1000, linkUp: false },
+            ],
+          },
+        }),
+        guest('jellyfin', 'pve', {
+          identity: { ips: ['192.168.10.50'] },
+          network: { rxBytes: 2_000_000, txBytes: 1_000_000 },
+        }),
+        guest('sonarr', 'pve', {
+          identity: { ips: ['192.168.10.51'] },
+          network: { rxBytes: 500_000, txBytes: 500_000 },
+        }),
+        // Network B: Docker host with rates, container with no rate -> use host rate.
+        resource({
+          id: 'tower',
+          type: 'docker-host',
+          name: 'Tower',
+          platformType: 'docker',
+          network: { rxBytes: 20_000_000, txBytes: 10_000_000 },
+          agent: {
+            networkInterfaces: [
+              { name: 'eth0', addresses: ['10.0.50.10/24'], speedMbps: 2500, linkUp: true },
+            ],
+          },
+        }),
+        resource({
+          id: 'c-radarr',
+          type: 'app-container',
+          name: 'radarr',
+          platformType: 'docker',
+          parentId: 'tower',
+          status: 'running',
+        }),
+      ]);
+
+      const lan = diagram.networks.find((network) => network.id === 'net:192.168.10.0/24');
+      expect(lan).toMatchObject({
+        netTotalBytes: 4_000_000,
+        trafficTier: 'medium',
+        linkSpeedMbps: 10000,
+        linkDownCount: 1,
+      });
+
+      const dockerNet = diagram.networks.find((network) => network.id === 'net:10.0.50.0/24');
+      expect(dockerNet).toMatchObject({
+        netTotalBytes: 30_000_000,
+        trafficTier: 'high',
+        linkSpeedMbps: 2500,
+      });
+      expect(dockerNet?.linkDownCount).toBeUndefined();
+    });
+
+    it('propagates aggregated metrics when folding VLANs of one bridge without double-counting multi-VLAN guests', () => {
+      const plugged = (
+        name: string,
+        vlans: number[],
+        network?: { rxBytes: number; txBytes: number },
+      ): Resource =>
+        guest(name, 'pve', {
+          ...(network ? { network } : {}),
+          proxmox: {
+            clusterName: 'homelab',
+            networkInterfaces: vlans.map((vlan, index) => ({
+              name: `net${index}`,
+              addresses: [],
+              bridge: 'vmbr0',
+              ...(vlan ? { vlan } : {}),
+            })),
+          },
+        });
+
+      const diagram = diagramOf(
+        [
+          ...homelab(),
+          plugged('svc-0', [0], { rxBytes: 600_000, txBytes: 0 }),
+          plugged('svc-10', [10], { rxBytes: 400_000, txBytes: 0 }),
+          plugged('svc-20', [20]),
+          plugged('svc-30', [30]),
+          plugged('svc-40', [40]),
+          plugged('svc-50', [50]),
+          plugged('svc-60', [60]),
+          // Multi-VLAN guest on the same bridge should contribute its rate once.
+          plugged('multi-homed', [10, 20], { rxBytes: 500_000, txBytes: 0 }),
+        ],
+        60,
+      );
+
+      const folded = diagram.networks.find((network) => network.id === 'bridge:homelab:vmbr0');
+      expect(folded).toMatchObject({
+        label: 'vmbr0',
+        netTotalBytes: 1_500_000,
+        trafficTier: 'medium',
+      });
+    });
+
+    it('attaches planned network membership to network gear and plain checks so drawer lists match pill counts', () => {
+      const resources: Resource[] = [
+        resource({
+          id: 'pve-1',
+          type: 'agent',
+          platformType: 'proxmox-pve',
+          name: 'pve-1',
+          status: 'online',
+          agent: {
+            networkInterfaces: [{ name: 'vmbr0', addresses: ['10.30.0.10/24'], speedMbps: 10000 }],
+          },
+        }),
+        resource({
+          id: 'router-check',
+          type: 'network-endpoint',
+          name: 'Edge Router',
+          status: 'online',
+          availability: {
+            targetKind: 'router',
+            address: '10.30.0.1',
+            available: true,
+            latencyMillis: 2.3,
+          },
+        }),
+        resource({
+          id: 'printer-check',
+          type: 'network-endpoint',
+          name: 'Office Printer',
+          status: 'online',
+          availability: {
+            targetKind: 'device',
+            address: '10.30.0.50',
+            available: true,
+            latencyMillis: 4,
+          },
+        }),
+      ];
+
+      const diagram = diagramOf(resources);
+      const net = diagram.networks.find((entry) => entry.label === '10.30.0.0/24');
+      expect(net).toBeDefined();
+      expect(net?.memberCount).toBe(3);
+      const members = collectNetworkTiles(diagram, net!.id).map(({ tile }) => tile.id);
+      expect(members.sort()).toEqual(['printer-check', 'pve-1', 'router-check']);
+    });
+
+    it('marks tiles with stated via or route captions so live traffic keeps connection labels intact', () => {
+      const resources: Resource[] = [
+        resource({ id: 'docker-1', type: 'docker-host', name: 'docker-1', status: 'online' }),
+        resource({
+          id: 'vpn',
+          type: 'app-container',
+          name: 'gluetun',
+          parentId: 'docker-1',
+          status: 'running',
+          docker: { containerId: 'aaaaaaaaaaaaaaaa', image: 'qmcgaw/gluetun:latest' },
+          network: { rxBytes: 2_000_000, txBytes: 500_000 },
+        }),
+        resource({
+          id: 'dl',
+          type: 'app-container',
+          name: 'qbittorrent',
+          parentId: 'docker-1',
+          status: 'running',
+          docker: {
+            containerId: 'bbbbbbbbbbbbbbbb',
+            image: 'lscr.io/linuxserver/qbittorrent',
+            networkMode: 'container:aaaaaaaaaaaaaaaa',
+          },
+          network: { rxBytes: 5_000_000, txBytes: 1_000_000 },
+        }),
+      ];
+
+      const diagram = diagramOf(resources);
+      const media = diagram.groups.find((group) => group.key === 'media');
+      const dlTile = media?.tiles.find((tile) => tile.id === 'dl');
+      expect(dlTile?.caption).toBe('via gluetun');
+      expect(dlTile?.hasConnectionCaption).toBe(true);
+      expect(dlTile?.trafficTier).toBe('medium');
     });
   });
 });

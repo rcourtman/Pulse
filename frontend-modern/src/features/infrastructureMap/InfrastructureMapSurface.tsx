@@ -8,6 +8,7 @@ import {
   onCleanup,
   onMount,
 } from 'solid-js';
+import ActivityIcon from 'lucide-solid/icons/activity';
 import DownloadIcon from 'lucide-solid/icons/download';
 import EyeOffIcon from 'lucide-solid/icons/eye-off';
 import MapIcon from 'lucide-solid/icons/map';
@@ -41,8 +42,10 @@ import {
   sessionCanReadInfrastructureSettings,
 } from '@/stores/sessionSettingsCapabilities';
 import { MAP_DOC_URL } from '@/utils/docsLinks';
+import { formatSpeed } from '@/utils/format';
 import type { StatusIndicatorVariant } from '@/utils/status';
 import { showError, showSuccess } from '@/utils/toast';
+import './infrastructureMap.css';
 import { InfrastructureMapDrawer } from './InfrastructureMapDrawer';
 import {
   fitServiceDiagram,
@@ -79,6 +82,8 @@ import {
 import {
   buildServiceDiagram,
   countDiagramResources,
+  formatMapLatency,
+  formatMapLinkSpeed,
   type ServiceDiagramFilter,
 } from './infrastructureMapServices';
 
@@ -121,6 +126,16 @@ const DRAG_THRESHOLD_PX = 4;
 // The name a new check for the gateway starts with. The owner can change it.
 const UNMONITORED_CHECK_NAME = 'Gateway';
 
+const formatNetTelemetry = (rxBytes?: number, txBytes?: number): string => {
+  if (rxBytes === undefined && txBytes === undefined) return '';
+  const rx = rxBytes ?? 0;
+  const tx = txBytes ?? 0;
+  const total = rx + tx;
+  if (total <= 0) return '';
+  if (total < 1024) return 'Net <1 KB/s';
+  return `Net ↓ ${formatSpeed(rx)} ↑ ${formatSpeed(tx)}`;
+};
+
 /** What a tile's card says under its name: what it is, where, what it is connected to, how busy. */
 const hitLines = (hit: MapHit, density?: MapDensity): string[] =>
   [
@@ -134,6 +149,9 @@ const hitLines = (hit: MapHit, density?: MapDensity): string[] =>
       // A plain check's caption is its address, so the line above has said it.
       hit.address && !hit.meta.includes(hit.address) ? hit.address : '',
       hit.detail ? `Published ${hit.detail}` : '',
+      hit.linkSpeedMbps ? `Link ${formatMapLinkSpeed(hit.linkSpeedMbps)}` : '',
+      hit.linkDownCount && hit.linkDownCount > 0 ? `${hit.linkDownCount} link down` : '',
+      hit.firewallEnabled ? 'NIC firewall flag' : '',
     ]
       .filter(Boolean)
       .join(' · '),
@@ -141,6 +159,8 @@ const hitLines = (hit: MapHit, density?: MapDensity): string[] =>
     [
       hit.cpu !== undefined ? `CPU ${Math.round(hit.cpu)}%` : '',
       hit.memory !== undefined ? `Memory ${Math.round(hit.memory)}%` : '',
+      formatNetTelemetry(hit.netRxBytes, hit.netTxBytes),
+      hit.latencyMs !== undefined ? `Latency ${formatMapLatency(hit.latencyMs)}` : '',
     ]
       .filter(Boolean)
       .join(' · '),
@@ -158,6 +178,7 @@ export function InfrastructureMapSurface() {
   const canAddSystem = () => !kioskMode() && sessionCanReadInfrastructureSettings();
 
   const [densityChoice, setDensityChoice] = createSignal<MapDensity | null>(null);
+  const [liveTraffic, setLiveTraffic] = createSignal(true);
   const [namesHidden, setNamesHidden] = createSignal(false);
   const [exporting, setExporting] = createSignal(false);
   const [attentionOnly, setAttentionOnly] = createSignal(false);
@@ -282,6 +303,7 @@ export function InfrastructureMapSurface() {
     const room = space();
     if (!room || model().isEmpty) return null;
     const filter = activeFilter();
+    const traffic = liveTraffic();
     const fit = (chosen: MapDensity) => {
       const diagram = buildServiceDiagram(model(), {
         maxTilesPerGroup: resolveDiagramTileLimit(chosen),
@@ -291,8 +313,10 @@ export function InfrastructureMapSurface() {
         density: chosen,
         diagram,
         ...(room.phone
-          ? flowServiceDiagram(diagram, room.width, chosen)
-          : fitServiceDiagram(diagram, { width: room.width, height: room.height }, chosen)),
+          ? flowServiceDiagram(diagram, room.width, chosen, { liveTraffic: traffic })
+          : fitServiceDiagram(diagram, { width: room.width, height: room.height }, chosen, {
+              liveTraffic: traffic,
+            })),
       };
     };
     const chosen = densityChoice();
@@ -914,6 +938,18 @@ export function InfrastructureMapSurface() {
               </Button>
             </Show>
             <Button
+              variant={liveTraffic() ? 'primaryFlat' : 'secondary'}
+              size="sm"
+              class="gap-1.5"
+              aria-pressed={liveTraffic()}
+              data-testid="infrastructure-map-live-traffic"
+              title="Highlight live network traffic on active tiles, networks, and connectors"
+              onClick={() => setLiveTraffic((active) => !active)}
+            >
+              <ActivityIcon class="h-3.5 w-3.5" aria-hidden="true" />
+              Live traffic
+            </Button>
+            <Button
               variant={namesHidden() ? 'primaryFlat' : 'secondary'}
               size="sm"
               class="gap-1.5"
@@ -1155,6 +1191,18 @@ export function InfrastructureMapSurface() {
             />
             Off
           </li>
+          <Show when={liveTraffic()}>
+            <li
+              class="inline-flex items-center gap-1.5"
+              data-testid="infrastructure-map-legend-traffic"
+            >
+              <span
+                class="inline-block w-4 shrink-0 border-t-2 border-dashed border-blue-600 dark:border-blue-400"
+                aria-hidden="true"
+              />
+              Active traffic
+            </li>
+          </Show>
           {/* How a thing gets onto the map is not something the map can show. */}
           <li class="ml-auto">
             Apps are recognised by name, checks are drawn by their type.{' '}

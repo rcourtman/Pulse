@@ -4,7 +4,7 @@ import { PROXMOX_ICON_PATH } from '@/components/icons/ProxmoxIcon';
 import { TRUENAS_ICON_PATH } from '@/components/icons/TrueNASIcon';
 import { resolveMapAppLogo } from './infrastructureMapCatalogue';
 import type { MapGlyphKey, MapHit, MapScene, MapTone, SceneNode } from './infrastructureMapLayout';
-import type { MapHealth } from './infrastructureMapModel';
+import type { MapHealth, MapTrafficTier } from './infrastructureMapModel';
 
 /**
  * What the page and the exported image share: the colours, one glyph per
@@ -186,7 +186,23 @@ const appToSvg = (node: Extract<SceneNode, { kind: 'app' }>, palette: MapPalette
 const ARROW_LENGTH = 7;
 const ARROW_HALF_WIDTH = 3.5;
 
-const lineToSvg = (node: Extract<SceneNode, { kind: 'line' }>, palette: MapPalette): string => {
+const ACTIVITY_FILL_OPACITY: Record<MapTrafficTier, string> = {
+  low: '0.07',
+  medium: '0.1',
+  high: '0.14',
+};
+
+const ACTIVITY_STROKE_OPACITY: Record<MapTrafficTier, string> = {
+  low: '0.35',
+  medium: '0.55',
+  high: '0.8',
+};
+
+const lineToSvg = (
+  node: Extract<SceneNode, { kind: 'line' }>,
+  palette: MapPalette,
+  live: boolean,
+): string => {
   if (node.points.length < 2) return '';
   const colour = palette[node.tone];
   const d = node.points
@@ -195,7 +211,11 @@ const lineToSvg = (node: Extract<SceneNode, { kind: 'line' }>, palette: MapPalet
   const path = `<path d="${d}" fill="none" stroke="${colour}" stroke-width="1.5" stroke-linejoin="round"${
     node.dashed ? ' stroke-dasharray="5 4"' : ''
   }/>`;
-  if (!node.arrow) return path;
+  const flow =
+    live && node.activity && !node.dashed
+      ? `<path d="${d}" fill="none" stroke="${colour}" stroke-width="2" stroke-dasharray="5 10" stroke-linecap="round" stroke-linejoin="round" class="pulse-map-flow pulse-map-flow-${node.activity}"/>`
+      : '';
+  if (!node.arrow) return path + flow;
   const [tipX, tipY] = node.points[node.points.length - 1];
   const [fromX, fromY] = node.points[node.points.length - 2];
   const length = Math.hypot(tipX - fromX, tipY - fromY) || 1;
@@ -204,12 +224,21 @@ const lineToSvg = (node: Extract<SceneNode, { kind: 'line' }>, palette: MapPalet
   const baseX = tipX - ux * ARROW_LENGTH;
   const baseY = tipY - uy * ARROW_LENGTH;
   const head = `<path d="M${n(tipX)} ${n(tipY)}L${n(baseX - uy * ARROW_HALF_WIDTH)} ${n(baseY + ux * ARROW_HALF_WIDTH)}L${n(baseX + uy * ARROW_HALF_WIDTH)} ${n(baseY - ux * ARROW_HALF_WIDTH)}z" fill="${colour}"/>`;
-  return path + head;
+  return path + flow + head;
 };
 
-const nodeToSvg = (node: SceneNode, palette: MapPalette): string => {
+const nodeToSvg = (node: SceneNode, palette: MapPalette, live: boolean): string => {
   switch (node.kind) {
     case 'rect':
+      if (node.activity) {
+        if (!live) {
+          if (node.fill === 'none' && !node.stroke) return '';
+          return `<rect x="${n(node.x)}" y="${n(node.y)}" width="${n(node.w)}" height="${n(node.h)}" rx="${n(node.r)}" fill="${palette[node.fill]}"${
+            node.stroke ? ` stroke="${palette[node.stroke]}"` : ''
+          }${node.dashed ? ' stroke-dasharray="4 3"' : ''}/>`;
+        }
+        return `<rect x="${n(node.x)}" y="${n(node.y)}" width="${n(node.w)}" height="${n(node.h)}" rx="${n(node.r)}" fill="${palette.accent}" fill-opacity="${ACTIVITY_FILL_OPACITY[node.activity]}" stroke="${palette.accent}" stroke-opacity="${ACTIVITY_STROKE_OPACITY[node.activity]}" stroke-width="1.25" class="pulse-map-active pulse-map-active-${node.activity}"/>`;
+      }
       return `<rect x="${n(node.x)}" y="${n(node.y)}" width="${n(node.w)}" height="${n(node.h)}" rx="${n(node.r)}" fill="${palette[node.fill]}"${
         node.stroke ? ` stroke="${palette[node.stroke]}"` : ''
       }${node.dashed ? ' stroke-dasharray="4 3"' : ''}/>`;
@@ -224,7 +253,7 @@ const nodeToSvg = (node: SceneNode, palette: MapPalette): string => {
     case 'app':
       return appToSvg(node, palette);
     case 'line':
-      return lineToSvg(node, palette);
+      return lineToSvg(node, palette, live);
     case 'dot':
       return node.health === 'off'
         ? `<circle cx="${n(node.x)}" cy="${n(node.y)}" r="${n(node.r - 0.75)}" fill="none" stroke="${palette.off}" stroke-width="1.5"/>`
@@ -285,7 +314,7 @@ export function renderMapSceneBody(
         const label = escapeXml(node.label);
         return `<rect x="${n(node.x)}" y="${n(node.y)}" width="${n(node.w)}" height="${n(node.h)}" rx="${n(node.r)}" pointer-events="all" class="${INSPECT_CLASS}" ${MAP_INSPECT_ATTRIBUTE}="${index}" role="button" aria-label="${label}"><title>${label}</title></rect>`;
       }
-      if (node.kind !== 'hit') return nodeToSvg(node, palette);
+      if (node.kind !== 'hit') return nodeToSvg(node, palette, true);
       const index = hitIndex;
       hitIndex += 1;
       const href = node.hit.navigable || node.hit.checkAddress ? hrefFor(index) : null;
@@ -338,7 +367,7 @@ export function renderMapTappedTile(scene: MapScene, of: MapHit, palette: MapPal
 
 /** A complete, self-contained SVG document for a scene. */
 export function renderMapSceneToSvg(scene: MapScene, palette: MapPalette): string {
-  const body = scene.nodes.map((node) => nodeToSvg(node, palette)).join('');
+  const body = scene.nodes.map((node) => nodeToSvg(node, palette, false)).join('');
   return (
     `<svg xmlns="http://www.w3.org/2000/svg" width="${scene.width}" height="${scene.height}" ` +
     `viewBox="0 0 ${scene.width} ${scene.height}" font-family="${escapeXml(MAP_FONT_FAMILY)}">` +

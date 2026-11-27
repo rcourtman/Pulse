@@ -3126,7 +3126,9 @@ the same network; a bridge carrying several ranges, or none, is a network of
 its own, and is not folded away for having one member. A bridge counts what
 is plugged in, not addresses, and says which subnet it carries or whose
 bridge it is. The per-device firewall flag is carried on the resource and is
-not drawn, since it does not show that filtering is active.
+not drawn on the canvas, since it does not prove active firewall rule
+enforcement (tooltips and the inspector drawer may note it as a NIC-level
+flag).
 An address nothing else shares makes no network, and a
 host's own container bridges place nothing. A macvlan or ipvlan container
 network is the host's own network and hides no address. Networks are drawn as
@@ -10704,3 +10706,22 @@ and `AvailabilityChecksTable.test.tsx`.
 and result formatting (`waiting for ping`, `missed`, `failed`, `ok`, or measured
 duration) for unified availability resources backed by `protocol: "push"` checks
 without exposing ping tokens in unified resource payloads.
+
+### Infrastructure Map live network telemetry and traffic view (27 November 2026)
+
+`frontend-modern/src/features/infrastructureMap/` reads already-collected
+resource network throughput (`resource.network.rxBytes` and `txBytes`), check
+latency (`resource.availability.latencyMillis`), non-host-local interface link
+speed (`speedMbps`) and link-down counts (`linkUp === false` on online hosts),
+and Proxmox guest NIC firewall flags (`firewall === true`) directly from
+`useResources()`. Network pills aggregate workload throughput when workloads on
+that network report traffic, falling back to host throughput otherwise so
+Proxmox hosts and their guests are never double-counted, and every attached
+tile (including network gear and availability checks) carries its planned
+network membership so drawer counts match pill counts. `Live traffic` mode
+(`MapLayoutOptions.liveTraffic`) adds activity halos and rate-tiered connector
+flow strictly on branches carrying real traffic (`>= 10 KB/s`), keeps stated
+connection captions (`via` a container or a Traefik route) visible at rest, and
+omits all animation marks from exported images (`infrastructureMapExport.ts`).
+Verified by the 7-file Infrastructure Map Vitest suite, `tsc --noEmit`,
+`vite build`, and `frontend-modern/browser-verification/64a918d04bbc8fea.json`.

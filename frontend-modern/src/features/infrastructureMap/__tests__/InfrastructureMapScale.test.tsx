@@ -435,4 +435,129 @@ describe('InfrastructureMapSurface scale interactions', () => {
       rafSpy.mockRestore();
     }
   });
+
+  it('shows live network metrics, badges, and Traffic sort order inside group and network drawers', () => {
+    resourcesMock.value = [
+      resource({
+        id: 'pve-edge',
+        type: 'agent',
+        name: 'pve-edge',
+        platformType: 'proxmox-pve',
+        network: { rxBytes: 1_048_576, txBytes: 1_048_576 },
+        agent: {
+          networkInterfaces: [
+            { name: 'eno1', addresses: ['10.30.0.11/24'], speedMbps: 10000, linkUp: true },
+            { name: 'eno2', speedMbps: 1000, linkUp: false },
+          ],
+        },
+      }),
+      resource({
+        id: 'vm-critical-idle',
+        type: 'vm',
+        name: 'critical-idle',
+        platformType: 'proxmox-pve',
+        parentId: 'pve-edge',
+        status: 'offline',
+        identity: { ips: ['10.30.0.20'] },
+        network: { rxBytes: 0, txBytes: 0 },
+      }),
+      resource({
+        id: 'vm-heavy',
+        type: 'vm',
+        name: 'heavy-talker',
+        platformType: 'proxmox-pve',
+        parentId: 'pve-edge',
+        status: 'running',
+        identity: { ips: ['10.30.0.21'] },
+        network: { rxBytes: 10_485_760, txBytes: 2_097_152 },
+        proxmox: {
+          networkInterfaces: [{ name: 'net0', bridge: 'vmbr0', firewall: true }],
+        },
+      }),
+      resource({
+        id: 'vm-light',
+        type: 'vm',
+        name: 'light-talker',
+        platformType: 'proxmox-pve',
+        parentId: 'pve-edge',
+        status: 'running',
+        identity: { ips: ['10.30.0.22'] },
+        network: { rxBytes: 204_800, txBytes: 102_400 },
+      }),
+      resource({
+        id: 'chk-edge-router',
+        type: 'network-endpoint',
+        name: 'edge-router',
+        platformType: 'availability',
+        status: 'online',
+        availability: {
+          targetKind: 'router',
+          address: '10.30.0.1',
+          available: true,
+          latencyMillis: 4.5,
+        },
+      }),
+    ];
+
+    const { container } = render(() => <InfrastructureMapSurface />);
+
+    // Open the Other group drawer via its header inspect target.
+    const otherHeader = container.querySelector(
+      `[${MAP_INSPECT_ATTRIBUTE}][aria-label^="Inspect Other"]`,
+    );
+    expect(otherHeader).not.toBeNull();
+    fireEvent.click(otherHeader!);
+
+    const list = screen.getByTestId('infrastructure-map-drawer-list');
+    // Default sort is Attention: critical-idle appears before heavy-talker.
+    expect(list.querySelectorAll('li')[0]?.textContent).toContain('critical-idle');
+    expect(list.textContent).toContain('Net ↓ 10.0 MB/s ↑ 2.00 MB/s');
+    expect(list.textContent).toContain('NIC firewall');
+
+    const sortGroup = screen.getByTestId('infrastructure-map-drawer-sort');
+    const attentionBtn = sortGroup.querySelectorAll('button')[0]!;
+    const trafficBtn = sortGroup.querySelectorAll('button')[1]!;
+    expect(attentionBtn).toHaveAttribute('aria-pressed', 'true');
+    expect(trafficBtn).toHaveAttribute('aria-pressed', 'false');
+
+    // Switching to Traffic sorts the busiest talker first.
+    fireEvent.click(trafficBtn);
+    expect(trafficBtn).toHaveAttribute('aria-pressed', 'true');
+    expect(list.querySelectorAll('li')[0]?.textContent).toContain('heavy-talker');
+    expect(list.querySelectorAll('li')[1]?.textContent).toContain('light-talker');
+
+    // Close and open the Ways in group drawer to verify check latency metric.
+    fireEvent.keyDown(document, { key: 'Escape' });
+    const waysInHeader = container.querySelector(
+      `[${MAP_INSPECT_ATTRIBUTE}][aria-label^="Inspect Ways in"]`,
+    );
+    expect(waysInHeader).not.toBeNull();
+    fireEvent.click(waysInHeader!);
+    expect(screen.getByTestId('infrastructure-map-drawer-list').textContent).toContain(
+      'Latency 4.5 ms',
+    );
+
+    // Close and open the Hardware group drawer to verify link speed and Link down badge.
+    fireEvent.keyDown(document, { key: 'Escape' });
+    const hardwareHeader = container.querySelector(
+      `[${MAP_INSPECT_ATTRIBUTE}][aria-label^="Inspect Hardware"]`,
+    );
+    expect(hardwareHeader).not.toBeNull();
+    fireEvent.click(hardwareHeader!);
+    const hardwareList = screen.getByTestId('infrastructure-map-drawer-list');
+    expect(hardwareList.textContent).toContain('10G link');
+    expect(hardwareList.textContent).toContain('Link down');
+
+    // Close and inspect the network pill to verify aggregate throughput, link speed, and Link down badge.
+    fireEvent.keyDown(document, { key: 'Escape' });
+    const networkPill = container.querySelector(
+      `[${MAP_INSPECT_ATTRIBUTE}][aria-label^="Inspect network "]`,
+    );
+    expect(networkPill).not.toBeNull();
+    fireEvent.click(networkPill!);
+    const drawer = screen.getByTestId('infrastructure-map-drawer');
+    expect(drawer.textContent).toContain('12.3 MB/s');
+    expect(drawer.textContent).toContain('10G');
+    expect(drawer.textContent).toContain('Link down');
+  });
 });
