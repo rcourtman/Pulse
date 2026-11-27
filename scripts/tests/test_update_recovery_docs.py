@@ -463,6 +463,41 @@ class UpdateRecoveryDocsTest(unittest.TestCase):
             self.assertIn(phrase, text)
         self.assertNotRegex(text, r"docker logs\b|```")
 
+    def test_upgrade_checks_and_ephemeral_docker_data_warning_match_runtime(self):
+        checks_text = " ".join(section("AUTO_UPDATE", "Upgrade checks", "###").split())
+        docker_text = " ".join(section("AUTO_UPDATE", "Docker", "###").split())
+        readiness = (ROOT / "internal/api/update_readiness.go").read_text(encoding="utf-8")
+        ephemeral = (ROOT / "internal/updates/ephemeral_data.go").read_text(encoding="utf-8")
+        guide_ui = (ROOT / "frontend-modern/src/components/Settings/UpdateInstallGuide.tsx").read_text(
+            encoding="utf-8"
+        )
+
+        self.assertIn("Upgrade checks", guide_ui)
+        self.assertIn("PULSE_SUPPRESS_EPHEMERAL_DATA_WARNING", ephemeral)
+        self.assertIn("container-data-persistence", readiness)
+
+        for check_id, title in (
+            ("server-update-path", "Server update path"),
+            ("agent-continuity", "Agent continuity"),
+            ("agent-migration-security", "Agent migration security"),
+            ("agent-token-scopes", "Agent token scopes"),
+            ("container-data-persistence", "Container data persistence"),
+        ):
+            with self.subTest(check=check_id):
+                self.assertIn(f'ID:      "{check_id}"', readiness)
+                self.assertIn(f'Title:   "{title}"', readiness)
+                self.assertIn(f"**{title}** (`{check_id}`)", checks_text)
+
+        for phrase in (
+            "**Container data persistence** warning",
+            "Settings → System → Updates",
+            "Settings → System → Recovery",
+            "-v pulse-data:/data",
+            "PULSE_SUPPRESS_EPHEMERAL_DATA_WARNING=true",
+        ):
+            with self.subTest(docker_phrase=phrase):
+                self.assertIn(phrase, docker_text)
+
 
 if __name__ == "__main__":
     unittest.main()
