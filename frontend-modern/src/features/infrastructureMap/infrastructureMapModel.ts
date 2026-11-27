@@ -556,6 +556,7 @@ const hostVersionLabelOf = (resource: Resource): string | undefined => {
     .replace(/\s+/g, ' ')
     .trim();
   if (!rawOsName) return undefined;
+  if (/^darwin$/i.test(rawOsName)) return 'macOS';
   const osMajor = clean(resource.agent?.osVersion).match(/(\d+)/)?.[1];
   const hasMajor = osMajor !== undefined && new RegExp(`(^|\\D)${osMajor}(\\D|$)`).test(rawOsName);
   const combined = osMajor && !hasMajor ? `${rawOsName} ${osMajor}` : rawOsName;

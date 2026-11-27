@@ -203,6 +203,18 @@ const appToSvg = (
 const ARROW_LENGTH = 7;
 const ARROW_HALF_WIDTH = 3.5;
 
+/** Live throughput threshold (5 MB/s) at which active connectors emit a soft outer glow. */
+export const MAP_FLOW_GLOW_MIN_BYTES = 5 * 1024 * 1024;
+
+/** Maps live throughput (bytes/sec) smoothly onto a CSS dash animation duration in seconds. */
+export const flowDurationForBytes = (bytesPerSec?: number): number | undefined => {
+  if (bytesPerSec === undefined || !Number.isFinite(bytesPerSec) || bytesPerSec < 10_000) {
+    return undefined;
+  }
+  const normalized = Math.max(0, Math.min(1, (Math.log10(bytesPerSec) - 4) / 4));
+  return Math.round((3.4 - normalized * 2.95) * 100) / 100;
+};
+
 const ACTIVITY_FILL_OPACITY: Record<MapTrafficTier, string> = {
   low: '0.07',
   medium: '0.1',
@@ -227,14 +239,25 @@ const lineToSvg = (
     .join('');
   const strokeWidth = node.strokeWidth ?? 1.5;
   const flowWidth = Math.max(2, strokeWidth + 0.5);
+  const duration = flowDurationForBytes(node.flowBytes);
+  const glow =
+    live &&
+    node.activity &&
+    !node.dashed &&
+    node.flowBytes !== undefined &&
+    node.flowBytes >= MAP_FLOW_GLOW_MIN_BYTES
+      ? `<path d="${d}" fill="none" stroke="${colour}" stroke-width="${n(flowWidth + 3)}" stroke-opacity="0.22" stroke-linecap="round" stroke-linejoin="round" class="pulse-map-flow-glow"/>`
+      : '';
   const path = `<path d="${d}" fill="none" stroke="${colour}" stroke-width="${n(strokeWidth)}" stroke-linejoin="round"${
     node.dashed ? ' stroke-dasharray="5 4"' : ''
   }/>`;
   const flow =
     live && node.activity && !node.dashed
-      ? `<path d="${d}" fill="none" stroke="${colour}" stroke-width="${n(flowWidth)}" stroke-dasharray="5 10" stroke-linecap="round" stroke-linejoin="round" class="pulse-map-flow pulse-map-flow-${node.activity}"/>`
+      ? `<path d="${d}" fill="none" stroke="${colour}" stroke-width="${n(flowWidth)}" stroke-dasharray="5 10" stroke-linecap="round" stroke-linejoin="round" class="pulse-map-flow pulse-map-flow-${node.activity}"${
+          duration !== undefined ? ` style="animation-duration:${n(duration)}s"` : ''
+        }/>`
       : '';
-  if (!node.arrow) return path + flow;
+  if (!node.arrow) return glow + path + flow;
   const [tipX, tipY] = node.points[node.points.length - 1];
   const [fromX, fromY] = node.points[node.points.length - 2];
   const length = Math.hypot(tipX - fromX, tipY - fromY) || 1;
@@ -243,7 +266,7 @@ const lineToSvg = (
   const baseX = tipX - ux * ARROW_LENGTH;
   const baseY = tipY - uy * ARROW_LENGTH;
   const head = `<path d="M${n(tipX)} ${n(tipY)}L${n(baseX - uy * ARROW_HALF_WIDTH)} ${n(baseY + ux * ARROW_HALF_WIDTH)}L${n(baseX + uy * ARROW_HALF_WIDTH)} ${n(baseY - ux * ARROW_HALF_WIDTH)}z" fill="${colour}"/>`;
-  return path + flow + head;
+  return glow + path + flow + head;
 };
 
 const nodeToSvg = (node: SceneNode, palette: MapPalette, live: boolean): string => {
@@ -257,7 +280,11 @@ const nodeToSvg = (node: SceneNode, palette: MapPalette, live: boolean): string 
             node.stroke ? ` stroke="${palette[node.stroke]}"` : ''
           }${node.dashed ? ' stroke-dasharray="4 3"' : ''}/>`;
         }
-        return `<rect x="${n(node.x)}" y="${n(node.y)}" width="${n(node.w)}" height="${n(node.h)}" rx="${n(node.r)}" fill="${palette.accent}" fill-opacity="${ACTIVITY_FILL_OPACITY[node.activity]}" stroke="${palette.accent}" stroke-opacity="${ACTIVITY_STROKE_OPACITY[node.activity]}" stroke-width="1.25" class="pulse-map-active pulse-map-active-${node.activity}"${attr}/>`;
+        const fillOpacity = node.spike ? '0.18' : ACTIVITY_FILL_OPACITY[node.activity];
+        const strokeOpacity = node.spike ? '0.92' : ACTIVITY_STROKE_OPACITY[node.activity];
+        const strokeW = node.spike ? '1.75' : '1.25';
+        const spikeClass = node.spike ? ' pulse-map-spike' : '';
+        return `<rect x="${n(node.x)}" y="${n(node.y)}" width="${n(node.w)}" height="${n(node.h)}" rx="${n(node.r)}" fill="${palette.accent}" fill-opacity="${fillOpacity}" stroke="${palette.accent}" stroke-opacity="${strokeOpacity}" stroke-width="${strokeW}" class="pulse-map-active pulse-map-active-${node.activity}${spikeClass}"${attr}/>`;
       }
       return `<rect x="${n(node.x)}" y="${n(node.y)}" width="${n(node.w)}" height="${n(node.h)}" rx="${n(node.r)}" fill="${palette[node.fill]}"${
         node.opacity !== undefined ? ` fill-opacity="${n(node.opacity)}"` : ''

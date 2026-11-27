@@ -1706,4 +1706,17 @@ describe('live network telemetry extraction', () => {
     expect(serialized).not.toContain('secret-db');
     expect(serialized).not.toContain('secret-tank-deg');
   });
+
+  it('normalizes raw darwin OS names to macOS in host version labels', () => {
+    const model = buildInfrastructureMapModel([
+      resource({
+        id: 'mac-mini',
+        type: 'agent',
+        name: 'mac-mini.local',
+        platformType: 'generic',
+        agent: { osName: 'darwin', osVersion: '27.0.1' },
+      }),
+    ]);
+    expect(hostNamed(model.blocks, 'mac-mini.local').versionLabel).toBe('macOS');
+  });
 });

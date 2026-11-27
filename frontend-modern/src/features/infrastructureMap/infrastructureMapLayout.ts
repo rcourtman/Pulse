@@ -106,6 +106,7 @@ export type SceneNode =
       stroke?: MapTone | MapHealth;
       dashed?: boolean;
       activity?: MapTrafficTier;
+      spike?: boolean;
       tileId?: string;
     }
   | {
@@ -144,6 +145,7 @@ export type SceneNode =
       dashed?: boolean;
       arrow?: boolean;
       activity?: MapTrafficTier;
+      flowBytes?: number;
     }
   | {
       /** Clickable header or network pill target that opens the inspector drawer. */

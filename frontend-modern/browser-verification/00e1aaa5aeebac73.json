@@ -1,0 +1,45 @@
+{
+  "version": 1,
+  "base_sha": "965e6baebd327d3bc91ce89b8d5d7ba6377c1c88",
+  "verified_at": "2026-11-27T17:23:41Z",
+  "result": "passed",
+  "changed_paths": [
+    "frontend-modern/src/features/infrastructureMap/infrastructureMap.css",
+    "frontend-modern/src/features/infrastructureMap/infrastructureMapHostDiagram.ts",
+    "frontend-modern/src/features/infrastructureMap/infrastructureMapLayout.ts",
+    "frontend-modern/src/features/infrastructureMap/infrastructureMapModel.ts",
+    "frontend-modern/src/features/infrastructureMap/infrastructureMapRender.ts",
+    "frontend-modern/src/features/infrastructureMap/infrastructureMapServices.ts"
+  ],
+  "content_sha256": {
+    "frontend-modern/src/features/infrastructureMap/infrastructureMap.css": "93b284ac2935c80cecde8752f5637f969c92ca95290076cb9388ad02aa60b6e2",
+    "frontend-modern/src/features/infrastructureMap/infrastructureMapHostDiagram.ts": "e052155c7a7711f80e87a04e1e5bfee69d127afe80891a56ed3c39ab97eaf486",
+    "frontend-modern/src/features/infrastructureMap/infrastructureMapLayout.ts": "f6a41d0c18027100271b0f2fcdeda67225ed3c465b2a439a2a22c51bc914d3ae",
+    "frontend-modern/src/features/infrastructureMap/infrastructureMapModel.ts": "068c1eca8af1f950d4cd7884a4b3356db878b7febf147b2b0ecbea1cb8c19051",
+    "frontend-modern/src/features/infrastructureMap/infrastructureMapRender.ts": "66f99cfb8420f0347ddd24c5b0ea6ff567cce6aeae397db7c74587ff584538df",
+    "frontend-modern/src/features/infrastructureMap/infrastructureMapServices.ts": "c7cf01f42190a539e89855bab2a45c58103e418db7bc0b91543f8e6be2ffc18a"
+  },
+  "routes": [
+    "/map"
+  ],
+  "viewports": [
+    {
+      "width": 1440,
+      "height": 900
+    },
+    {
+      "width": 390,
+      "height": 844
+    }
+  ],
+  "states": [
+    "live 43-node homelab By host Names mode verifying rate-scaled connector flow, heavy flow glow (>= 5 MB/s) on RICHARD-MAC-MINI.local and Tower, 2px proportional bottom traffic bars on active services, elevated-only 2px amber top load strips on delly2/Tower/msp-eval-lab, capacity-scaled storage bars with intact capacity units, aligned cluster footers, dashed default gateway elbow, macOS label, and 10 workloads on Tower",
+    "desktop dark mode 1440x900 verifying spiking service highlight on plex-media (45M/s) and gluetun/qbittorrent, flow glow on heavy connectors, and dashed beside-gateway elbow",
+    "desktop light mode 1440x900 verifying contrast across glowing connectors, bottom traffic strips, top load bars, and proportional storage tracks",
+    "mobile dark mode 390x844 verifying responsive layout, dashed gateway elbow, and compact headers"
+  ],
+  "interactions": [
+    "hard-reloaded live homelab preview at /map in By host + Names + Live traffic mode and inspected full-page rendered SVG",
+    "verified desktop dark, desktop light, hover spotlight, All networks drawer, Hide names privacy check, and 390x844 mobile viewports in Playwright"
+  ]
+}

@@ -17,7 +17,21 @@
   }
 }
 
+@keyframes pulse-map-spike-pulse {
+  0%,
+  100% {
+    opacity: 1;
+  }
+  50% {
+    opacity: 0.52;
+  }
+}
+
 .pulse-map-flow {
+  pointer-events: none;
+}
+
+.pulse-map-flow-glow {
   pointer-events: none;
 }
 
@@ -42,6 +56,10 @@
 
 .pulse-map-active-high {
   animation: pulse-map-active-pulse 2.4s ease-in-out infinite;
+}
+
+.pulse-map-spike {
+  animation: pulse-map-spike-pulse 1.45s ease-in-out infinite;
 }
 
 .pulse-map-link-arc {
@@ -78,6 +96,7 @@ svg.pulse-map-spotlight [data-map-tile].pulse-map-spotlight-lit {
   .pulse-map-flow-high,
   .pulse-map-active,
   .pulse-map-active-high,
+  .pulse-map-spike,
   .pulse-map-link-flow {
     animation: none !important;
   }

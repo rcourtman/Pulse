@@ -82,6 +82,7 @@ export interface DiagramTile {
   diskMaxTempC?: number;
   unhealthyDiskCount?: number;
   usedPercent?: number;
+  totalBytes?: number;
   sizeLabel?: string;
   vdevLayout?: string;
   storageType?: string;
@@ -847,6 +848,12 @@ const poolTiles = (
               : Math.max(acc, member.usedPercent),
         undefined,
       );
+      const totalBytes = members.reduce<number | undefined>((maxBytes, member) => {
+        if (member.totalBytes === undefined || !(member.totalBytes > 0)) return maxBytes;
+        return maxBytes === undefined || member.totalBytes > maxBytes
+          ? member.totalBytes
+          : maxBytes;
+      }, undefined);
       const sizeLabel = members.find((member) => member.sizeLabel)?.sizeLabel;
       const vdevLayout = members.find((member) => member.vdevLayout)?.vdevLayout;
       const storageType = members.find((member) => member.storageType)?.storageType;
@@ -868,6 +875,7 @@ const poolTiles = (
           health,
           platform,
           ...(usedPercent !== undefined ? { usedPercent } : {}),
+          ...(totalBytes !== undefined ? { totalBytes } : {}),
           ...(sizeLabel ? { sizeLabel } : {}),
           ...(vdevLayout ? { vdevLayout } : {}),
           ...(storageType ? { storageType } : {}),
@@ -912,6 +920,9 @@ const localPoolTile = (
     hostId: host.id,
     hostName: host.name,
     ...(pool.usedPercent !== undefined ? { usedPercent: pool.usedPercent } : {}),
+    ...(pool.totalBytes !== undefined && pool.totalBytes > 0
+      ? { totalBytes: pool.totalBytes }
+      : {}),
     ...(pool.sizeLabel ? { sizeLabel: pool.sizeLabel } : {}),
     ...(pool.vdevLayout ? { vdevLayout: pool.vdevLayout } : {}),
     ...(pool.storageType ? { storageType: pool.storageType } : {}),
