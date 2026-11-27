@@ -305,8 +305,78 @@ class StaleReadingAndAgentHelpDocsTest(unittest.TestCase):
         ):
             self.assertIn(marker, installer)
 
+    def test_faq_truenas_and_recovery_document_truenas_protection_stale_readings(self):
+        faq = doc_text("docs/FAQ.md")
+        truenas_faq = norm(
+            faq.split("### Does Pulse monitor TrueNAS?\n", 1)[1].split("\n### ", 1)[0]
+        )
+        for phrase in (
+            "**TrueNAS → Protection** (`/truenas/protection`)",
+            "**Stale data** (**Stale** on phones for stale **Healthy** rows)",
+            "excludes stale **Healthy** and **Running** events from those filters",
+            "dynamic amber **Stale** filter chip",
+            "**Status** and **Last reported**",
+            "[Read TrueNAS protection evidence](TRUENAS.md#read-truenas-protection-evidence)",
+        ):
+            with self.subTest(section="Does Pulse monitor TrueNAS?", phrase=phrase):
+                self.assertIn(phrase, truenas_faq)
+
+        no_data_section = norm(
+            faq.split("### No data showing?\n", 1)[1].split("\n### ", 1)[0]
+        )
+        for phrase in (
+            "**TrueNAS protection** (`/truenas/protection`)",
+            "by connection ID or provider scope first, then unambiguous hostname",
+            "Stale **Healthy** and **Running** events leave those filters, join **Attention** and the dynamic amber **Stale** filter chip",
+            "Stale **Healthy** rows show an amber **Stale data** badge (**Stale** on phones)",
+            "muted non-pulsing **Running**, and **Unknown** rows keep their outcome badge with an amber **Stale data** cue beneath the dataset name",
+            "`Readings from <system> may be out of date.`",
+            "`Showing the last reported protection event. Newer snapshots, replication runs, or failures may be missing.`",
+            "**Status** (`Stale data`) and **Last reported**",
+        ):
+            with self.subTest(section="No data showing?", phrase=phrase):
+                self.assertIn(phrase, no_data_section)
+
+        recovery = doc_text("docs/RECOVERY.md")
+        where_to_look = norm(
+            recovery.split("## Where to look\n", 1)[1].split("\n## ", 1)[0]
+        )
+        for phrase in (
+            "**TrueNAS → Protection** (`/truenas/protection`)",
+            "**Stale data** indicators (**Stale** on phones for stale **Healthy** rows)",
+            "move out of **Healthy** and **Running** into **Attention** and the dynamic **Stale** filter chip",
+            "[Read TrueNAS protection evidence](TRUENAS.md#read-truenas-protection-evidence)",
+        ):
+            with self.subTest(doc="RECOVERY.md", phrase=phrase):
+                self.assertIn(phrase, where_to_look)
+
+        surface = doc_text("frontend-modern/src/features/truenas/TrueNASPageSurface.tsx")
+        table = doc_text("frontend-modern/src/features/truenas/TrueNASProtectionTable.tsx")
+        model = doc_text("frontend-modern/src/features/truenas/truenasPageModel.ts")
+        self.assertIn("systems={model().systems}", surface)
+        for marker in (
+            "const TRUENAS_PROTECTION_STALE_OPTION",
+            "label: 'Stale'",
+            'compact="Stale" full="Stale data"',
+            "detailRow('Status', staleNotice.badge, { tone: 'warning' })",
+            "detailRow('Last reported', outcomeLabel, { tone: outcomeTone(point) })",
+            "pulse={!staleNotice() && statusBucket() === 'running'}",
+            "Readings from {notice().systemName} may be out of date.",
+            "Showing the last reported protection event.",
+            "Newer snapshots, replication runs, or failures may be missing.",
+        ):
+            self.assertIn(marker, table)
+        for marker in (
+            "export function buildTrueNASProtectionStaleNoticeMap(",
+            "if (status === 'stale' && !isStale) return false;",
+            "if (status === 'success' && (pointStatus !== 'success' || isStale)) return false;",
+            "if (status === 'running' && (pointStatus !== 'running' || isStale)) return false;",
+            "if (staleNotices?.has(point.id)) return 2;",
+        ):
+            self.assertIn(marker, model)
+
     def test_shipped_public_docs_mirrors_match_byte_for_byte(self):
-        for name in ("FAQ.md", "KUBERNETES.md", "UNIFIED_AGENT.md"):
+        for name in ("FAQ.md", "KUBERNETES.md", "RECOVERY.md", "TRUENAS.md", "UNIFIED_AGENT.md"):
             with self.subTest(doc=name):
                 self.assertEqual(
                     (ROOT / "docs" / name).read_bytes(),

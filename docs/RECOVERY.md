@@ -42,7 +42,13 @@ There is no top-level Recovery page. Open the existing platform view:
   replication jobs between Proxmox VE nodes, read separately from PBS backups.
   See [Proxmox replication freshness](#proxmox-replication-freshness).
 - **TrueNAS → Protection** (`/truenas/protection`): snapshots and replication
-  activity reported by the TrueNAS connection.
+  activity reported by the TrueNAS connection. When the owning TrueNAS system
+  has a collection error, stale telemetry, or goes offline in Pulse, cached
+  events surface amber **Stale data** indicators (**Stale** on phones for stale
+  **Healthy** rows), move out of **Healthy** and **Running** into **Attention**
+  and the dynamic **Stale** filter chip, and show **Status** and **Last
+  reported** with a stale warning notice in expanded details. See
+  [Read TrueNAS protection evidence](TRUENAS.md#read-truenas-protection-evidence).
 - **Kubernetes**: recovery records depend on the agent reporting VolumeSnapshot
   or Velero inventory. An installed agent or a connected cluster does not
   establish that either is available.

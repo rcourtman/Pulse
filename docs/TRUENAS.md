@@ -78,11 +78,40 @@ testing the connection or restarting.
 
 ## Read TrueNAS protection evidence
 
-Open **TrueNAS → Protection** and clear the search and outcome filter to
-**All**. The **Healthy** filter selects successful events; it does not certify
-that every dataset is protected. The event count is not a complete backup
-inventory: collection is bounded to 500 snapshots and 200 replication tasks
-per collection, and retained events can outlive their source artifact.
+Open **TrueNAS → Protection** (`/truenas/protection`) and clear the search and
+outcome filter to **All**. The **Healthy** filter selects fresh successful
+events. It does not certify that every dataset is protected. The event count is
+not a complete backup inventory: collection is bounded to 500 snapshots and 200
+replication tasks per collection, and retained events can outlive their source
+artifact.
+
+When an owning TrueNAS system hits a collection error, stops reporting fresh
+telemetry, or goes offline in Pulse, **TrueNAS → Protection** marks its cached
+snapshots and replication tasks as stale instead of leaving them green
+**Healthy** or pulsing **Running**:
+
+- **Owning-system matching:** Pulse matches each event to its TrueNAS system by
+  connection ID or provider scope first (keeping appliances that share a
+  hostname isolated), then by unambiguous hostname, falling back only when host
+  metadata is absent and every connected TrueNAS system is stale.
+- **Filters, ranking and search:** Stale **Healthy** and stale **Running**
+  events are excluded from the **Healthy** and **Running** filter counts,
+  included in **Attention**, and selectable with the amber **Stale** filter
+  chip that appears alongside **Attention** whenever stale events exist.
+  Default ordering ranks stale events ahead of fresh ones (behind **Failed**
+  and **Warning**), and search matches stale labels, detail text and system
+  names.
+- **Row badges:** Stale **Healthy** rows display an amber **Stale data**
+  outcome badge (**Stale** on phones). Stale **Failed**, **Warning**, muted
+  non-pulsing **Running**, and **Unknown** rows keep their primary outcome
+  badge and add an amber **Stale data** cue beneath the dataset name.
+- **Expanded detail and live recovery:** Expanding a stale row shows an amber
+  warning notice (`Readings from <system> may be out of date.` / `Showing the
+  last reported protection event. Newer snapshots, replication runs, or
+  failures may be missing.`) and replaces **Outcome** with **Status**
+  (`Stale data`) and **Last reported** (the last reported outcome). Live
+  WebSocket updates clear these stale indicators automatically once TrueNAS
+  polling recovers.
 
 | Row kind | What it records | What to check separately |
 |---|---|---|
