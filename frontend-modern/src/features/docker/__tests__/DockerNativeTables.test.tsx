@@ -2721,4 +2721,199 @@ describe('Docker native tables', () => {
       cleanup();
     }
   });
+
+  it('surfaces stale readings across Swarm services, tasks, nodes, configs, and secrets while preserving last-reported values', () => {
+    const staleMeta = {
+      status: 'online' as const,
+      health: {
+        verdict: 'stale' as const,
+        reasons: [{ code: 'telemetry_stale', detail: '16m' }],
+      },
+      sourceStatus: {
+        docker: { status: 'stale', lastSeen: '2026-11-27T10:00:00Z' },
+      },
+    };
+
+    renderInRouter(() => (
+      <DockerServicesTable
+        resources={[
+          makeResource({
+            id: 'svc-stale',
+            type: 'docker-service',
+            name: 'orders-api',
+            ...staleMeta,
+            docker: {
+              hostname: 'mgr-1',
+              image: 'ghcr.io/acme/orders:1.4',
+              mode: 'replicated',
+              desiredTasks: 3,
+              runningTasks: 3,
+            },
+          }),
+          makeResource({
+            id: 'svc-fresh',
+            type: 'docker-service',
+            name: 'edge-gateway',
+            status: 'online',
+            docker: {
+              hostname: 'mgr-2',
+              image: 'ghcr.io/acme/gateway:2.0',
+              mode: 'replicated',
+              desiredTasks: 2,
+              runningTasks: 2,
+            },
+          }),
+        ]}
+        emptyIcon={<span />}
+        emptyTitle="No services"
+        emptyDescription="No services"
+      />
+    ));
+
+    // Stale service moves from Healthy into Degraded and preserves replica counts.
+    expect(screen.getByRole('button', { name: /^Healthy,\s*1$/i })).toBeInTheDocument();
+    expect(screen.getByRole('button', { name: /^Degraded,\s*1$/i })).toBeInTheDocument();
+    const staleSvcRow = document.querySelector('[data-docker-service-row="svc-stale"]')!;
+    expect(staleSvcRow.querySelector('[data-docker-stale="service"]')).toHaveTextContent(
+      'Stale data',
+    );
+    expect(staleSvcRow.textContent).toContain('3');
+    expect(staleSvcRow.textContent).toContain('Stable');
+
+    fireEvent.click(staleSvcRow);
+    const svcDetail = within(
+      document.querySelector<HTMLElement>('[data-testid="docker-service-detail"]')!,
+    );
+    expect(svcDetail.getByLabelText('Stale data')).toBeInTheDocument();
+    expect(svcDetail.getByTestId('docker-stale-readings-notice')).toHaveTextContent(
+      'No Docker report for 16m',
+    );
+    cleanup();
+
+    renderInRouter(() => (
+      <DockerTasksTable
+        resources={[
+          makeResource({
+            id: 'task-stale',
+            type: 'docker-task',
+            name: 'orders-api.1',
+            ...staleMeta,
+            docker: {
+              hostname: 'mgr-1',
+              serviceName: 'orders-api',
+              slot: 1,
+              desiredState: 'running',
+              currentState: 'running',
+              nodeName: 'worker-01',
+            },
+          }),
+        ]}
+        emptyIcon={<span />}
+        emptyTitle="No tasks"
+        emptyDescription="No tasks"
+        showToolbar={false}
+      />
+    ));
+
+    const staleTaskRow = document.querySelector('[data-docker-task-row="task-stale"]')!;
+    expect(staleTaskRow.querySelector('[data-docker-stale="task"]')).toHaveTextContent(
+      'Stale data',
+    );
+    // Current column preserves the last-reported task state instead of replacing it.
+    expect(staleTaskRow.querySelector('[data-docker-task-state="success"]')).toHaveTextContent(
+      'Running',
+    );
+    fireEvent.click(staleTaskRow);
+    const taskDetail = within(
+      document.querySelector<HTMLElement>('[data-testid="docker-task-detail"]')!,
+    );
+    expect(taskDetail.getByLabelText('Stale data')).toBeInTheDocument();
+    expect(taskDetail.getByTestId('docker-stale-readings-notice')).toHaveTextContent(
+      'No Docker report for 16m',
+    );
+    expect(taskDetail.getAllByText('Running').length).toBeGreaterThan(0);
+    cleanup();
+
+    renderInRouter(() => (
+      <DockerSwarmNodesTable
+        resources={[
+          makeResource({
+            id: 'node-stale',
+            type: 'docker-swarm-node',
+            name: 'mgr-1',
+            ...staleMeta,
+            docker: {
+              hostname: 'mgr-1',
+              nodeRole: 'manager',
+              availability: 'active',
+              leader: true,
+              engineVersion: '27.5.1',
+              address: '10.0.0.10',
+            },
+          }),
+        ]}
+        emptyIcon={<span />}
+        emptyTitle="No nodes"
+        emptyDescription="No nodes"
+        showToolbar={false}
+      />
+    ));
+
+    const staleNodeRow = document.querySelector('[data-docker-swarm-node-row="node-stale"]')!;
+    expect(staleNodeRow.querySelector('[data-docker-stale="swarm-node"]')).toHaveTextContent(
+      'Stale data',
+    );
+    expect(staleNodeRow.textContent).toContain('leader');
+    fireEvent.click(staleNodeRow);
+    const nodeDetail = within(
+      document.querySelector<HTMLElement>('[data-testid="docker-swarm-node-detail"]')!,
+    );
+    expect(nodeDetail.getByLabelText('Stale data')).toBeInTheDocument();
+    expect(nodeDetail.getByTestId('docker-stale-readings-notice')).toHaveTextContent(
+      'No Docker report for 16m',
+    );
+    cleanup();
+
+    renderInRouter(() => (
+      <>
+        <DockerConfigsTable
+          resources={[
+            makeResource({
+              id: 'cfg-stale',
+              type: 'docker-config',
+              name: 'envoy-cfg',
+              ...staleMeta,
+              docker: { hostname: 'mgr-1', templatingDriver: 'golang' },
+            }),
+          ]}
+          emptyIcon={<span />}
+          emptyTitle="No configs"
+          emptyDescription="No configs"
+          showToolbar={false}
+        />
+        <DockerSecretsTable
+          resources={[
+            makeResource({
+              id: 'sec-stale',
+              type: 'docker-secret',
+              name: 'db-pass',
+              ...staleMeta,
+              docker: { hostname: 'mgr-1', driver: 'vault' },
+            }),
+          ]}
+          emptyIcon={<span />}
+          emptyTitle="No secrets"
+          emptyDescription="No secrets"
+          showToolbar={false}
+        />
+      </>
+    ));
+
+    expect(document.querySelector('[data-docker-stale="config"]')).toHaveTextContent('Stale data');
+    expect(document.querySelector('[data-docker-stale="secret"]')).toHaveTextContent('Stale data');
+    fireEvent.click(document.querySelector('[data-docker-config-row="cfg-stale"]')!);
+    expect(screen.getByTestId('docker-stale-readings-notice')).toHaveTextContent(
+      'No Docker report for 16m',
+    );
+  });
 });

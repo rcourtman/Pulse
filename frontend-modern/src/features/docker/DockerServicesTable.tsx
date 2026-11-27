@@ -30,6 +30,7 @@ import {
 } from '@/components/shared/DetailSectionTable';
 import {
   DockerNativeDetailPanel,
+  DockerStaleDataCue,
   dockerDetailTimestampRow,
   dockerDetailToneForVariant,
   dockerLabelsSection,
@@ -44,6 +45,7 @@ import {
   dockerServiceStack,
   dockerServiceUpdateAttention,
   filterDockerResources,
+  getDockerStaleNotice,
   mapDockerServiceStatus,
   type DockerResourceStatusFilter,
 } from './dockerPageModel';
@@ -413,6 +415,10 @@ export const DockerServicesTable: Component<{
                               <span class="truncate font-semibold text-base-content" title={name()}>
                                 {name()}
                               </span>
+                              <DockerStaleDataCue
+                                notice={getDockerStaleNotice(service)}
+                                scope="service"
+                              />
                             </div>
                           </TableCell>
                           <TableCell

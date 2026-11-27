@@ -31,6 +31,7 @@ import { getSimpleStatusIndicator } from '@/utils/status';
 import {
   DockerNativeDetailPanel,
   DockerResourceNameCell,
+  DockerStaleDataCue,
   dockerDetailTimestampRow,
   dockerLabelsSection,
   dockerReportedBySection,
@@ -41,7 +42,11 @@ import {
   type DockerNativeTableProps,
 } from './DockerNativeTableShared';
 import { useDockerHostIdentities } from './dockerHostIdentity';
-import { filterDockerResources, type DockerResourceStatusFilter } from './dockerPageModel';
+import {
+  filterDockerResources,
+  getDockerStaleNotice,
+  type DockerResourceStatusFilter,
+} from './dockerPageModel';
 import type { Resource } from '@/types/resource';
 
 const DOCKER_SECRET_SORT_KEYS = ['secret', 'driver', 'template', 'created', 'host'] as const;
@@ -218,6 +223,12 @@ export const DockerSecretsTable: Component<DockerNativeTableProps> = (props) => 
                         >
                           <DockerResourceNameCell
                             resource={resource}
+                            detail={
+                              <DockerStaleDataCue
+                                notice={getDockerStaleNotice(resource)}
+                                scope="secret"
+                              />
+                            }
                             detailToggle={
                               <PlatformResourceDetailToggleButton
                                 expanded={isExpanded()}

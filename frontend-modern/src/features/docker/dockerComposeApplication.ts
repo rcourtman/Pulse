@@ -1,6 +1,11 @@
 import type { Resource } from '@/types/resource';
 import { hasFailedAttachedAvailabilityCheck } from '@/utils/availabilityProbePresentation';
-import { dockerComposeMembership, mapDockerContainerStatus } from './dockerPageModel';
+import {
+  dockerComposeMembership,
+  getDockerStaleNotice,
+  mapDockerContainerStatus,
+  type DockerStaleNotice,
+} from './dockerPageModel';
 
 export interface DockerComposeApplication {
   project: string;
@@ -28,6 +33,18 @@ export function buildDockerComposeApplications(hosts: Resource[], containers: Re
     (left, right) =>
       left.project.localeCompare(right.project) || left.hostId.localeCompare(right.hostId),
   );
+}
+
+export function getDockerComposeApplicationStaleness(
+  app: DockerComposeApplication,
+): DockerStaleNotice | null {
+  const hostNotice = getDockerStaleNotice(app.host);
+  if (hostNotice) return hostNotice;
+  for (const container of app.containers) {
+    const notice = getDockerStaleNotice(container);
+    if (notice) return notice;
+  }
+  return null;
 }
 
 export function composeAttentionCount(app: DockerComposeApplication) {

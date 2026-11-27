@@ -30,6 +30,7 @@ import { titleCaseDelimitedLabel } from '@/utils/textPresentation';
 import {
   DockerNativeDetailPanel,
   DockerResourceNameCell,
+  DockerStaleDataCue,
   dockerDetailToneForVariant,
   dockerLabelsSection,
   dockerReportedBySection,
@@ -43,6 +44,7 @@ import {
 import {
   compareDockerSwarmNodes,
   filterDockerResources,
+  getDockerStaleNotice,
   mapDockerSwarmNodeStatus,
   type DockerResourceStatusFilter,
 } from './dockerPageModel';
@@ -322,6 +324,12 @@ export const DockerSwarmNodesTable: Component<DockerNativeTableProps> = (props) 
                           <DockerResourceNameCell
                             resource={resource}
                             indicator={verdict()}
+                            detail={
+                              <DockerStaleDataCue
+                                notice={getDockerStaleNotice(resource)}
+                                scope="swarm-node"
+                              />
+                            }
                             detailToggle={
                               <PlatformResourceDetailToggleButton
                                 expanded={isExpanded()}
