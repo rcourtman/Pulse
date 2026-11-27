@@ -36,7 +36,12 @@ Generated Proxmox API setup uses a separate `pulse-monitor` account and token
 with monitoring ACLs. Review the generated script before running it, especially
 if your organization maintains its own Proxmox roles. Do not reuse an
 administrator's interactive account or a token that has unrelated write
-permissions.
+permissions. On Proxmox VE 9+, Pulse setup intentionally omits
+`VM.GuestAgent.FileRead` because Proxmox cannot restrict it to `/proc/meminfo`,
+and granting it on `/` exposes arbitrary guest files to the API token. Prefer
+QEMU memory ballooning or a guest-local Pulse agent for Linux cache-aware
+memory, and see [Proxmox Deployment Choices](AGENT_SECURITY.md#proxmox-deployment-choices)
+to tighten an older `PulseMonitor` role.
 
 ## What trusting a root agent means
 
@@ -151,6 +156,18 @@ and management API.
 - Restrict the Pulse data directory and backups as secrets. They contain
   encrypted credentials as well as sessions, API-token state, and the key
   material needed by the installation.
+- Browser session writes require the `X-CSRF-Token` header (query parameters
+  and form fields are not accepted), and Pulse issues CSRF cookies only for
+  validated live sessions. Proxy-authenticated, Basic-authenticated and
+  proxy-attached API-token browser writes also enforce exact-origin checks (see
+  [Proxy Authentication](PROXY_AUTH.md#-header-trust-boundary)).
+- Failed-login lockout is enforced atomically across login, Basic
+  authentication, password changes and configuration transfer. Admitted
+  sessions and API tokens are rechecked as request bodies arrive, and
+  quick-setup credential rotation invalidates prior administrator sessions.
+- SSO provider changes and RBAC administration require full-access instance
+  authority rather than narrowly scoped or tenant-bound tokens. In hosted
+  multi-organization deployments, credential-less loopback trust is disabled.
 
 The canonical disclosure, reporting process, and hardening checklist are in
 the [Security Policy](../SECURITY.md). Data and optional telemetry behavior are
