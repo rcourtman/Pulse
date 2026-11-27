@@ -908,7 +908,7 @@ JSON
 **Export blocked?** Check the [transfer access and direct-loopback requirements](#exportimport-protection). Do not enable unprotected network export just to clear an error.<br>
 **Rate limited?** Wait 1 minute and try again  
 **Can't login?** Check `PULSE_AUTH_USER` and `PULSE_AUTH_PASS` environment variables  
-**API access denied?** Verify the token you supplied matches one of the values created in *Settings → Security → API Access* (use the original token, not the hash)  
+**API access denied?** Verify the token you supplied matches one of the values created in *Settings → Security → API Access* (use the original token, not the hash)<br>
 **CORS errors?** Configure Allowed Origins in the UI or set `ALLOWED_ORIGINS` for your domain  
 **Forgot password?** Follow the [deployment-specific recovery guide](docs/TROUBLESHOOTING.md#i-forgot-my-password). Deployment-managed credentials and identity-provider accounts need their own recovery path; deleting `.env` is not a universal reset.
 
