@@ -27,6 +27,79 @@ import (
 	"github.com/rcourtman/pulse-go-rewrite/pkg/metrics"
 )
 
+func TestTrueNASPollerReplacementCancelsStalledUpgrade(t *testing.T) {
+	previous := truenas.IsFeatureEnabled()
+	truenas.SetFeatureEnabled(true)
+	t.Cleanup(func() { truenas.SetFeatureEnabled(previous) })
+
+	entered := make(chan struct{})
+	disconnected := make(chan struct{})
+	release := make(chan struct{})
+	old := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		if r.URL.Path != "/api/current" {
+			t.Errorf("retired endpoint received another request: %s", r.URL.Path)
+			http.NotFound(w, r)
+			return
+		}
+		close(entered)
+		select {
+		case <-r.Context().Done():
+			close(disconnected)
+		case <-release:
+		}
+	}))
+	defer old.Close()
+	defer close(release)
+	replacement := newTrueNASMockServer(t, "replacement-nas")
+	defer replacement.Close()
+
+	mtp, persistence := newTestTenantPersistence(t)
+	connection := trueNASInstanceForServer(t, "conn-1", old.URL, true)
+	if err := persistence.SaveTrueNASConfig([]config.TrueNASInstance{connection}); err != nil {
+		t.Fatal(err)
+	}
+	poller := NewTrueNASPoller(mtp, 0, nil)
+	poller.syncConnections()
+	ctx, cancel := context.WithCancel(context.Background())
+	defer cancel()
+	pollDone := make(chan struct{})
+	go func() {
+		defer close(pollDone)
+		poller.pollAll(ctx)
+	}()
+
+	await := func(done <-chan struct{}, phase string) {
+		t.Helper()
+		select {
+		case <-done:
+		case <-time.After(3 * time.Second):
+			t.Fatalf("%s did not complete with the old server still withholding its upgrade response", phase)
+		}
+	}
+	await(entered, "old handshake")
+	connection = trueNASInstanceForServer(t, connection.ID, replacement.URL(), true)
+	if err := persistence.SaveTrueNASConfig([]config.TrueNASInstance{connection}); err != nil {
+		t.Fatal(err)
+	}
+	syncDone := make(chan struct{})
+	go func() {
+		defer close(syncDone)
+		poller.syncConnections()
+	}()
+	await(syncDone, "provider replacement")
+	await(disconnected, "old transport disconnect")
+	await(pollDone, "retired refresh exit")
+
+	summary := poller.ConnectionSummaries("default", []config.TrueNASInstance{connection})[connection.ID]
+	if summary.Poll.LastAttemptAt != nil || summary.Poll.LastError != nil {
+		t.Fatalf("old cancellation changed the replacement's poll status: %+v", summary.Poll)
+	}
+	poller.pollAll(ctx)
+	if !hasTrueNASHostForOrg(poller, "default", "replacement-nas") {
+		t.Fatal("replacement could not publish a refresh")
+	}
+}
+
 func TestTrueNASPollerPollsConfiguredConnections(t *testing.T) {
 	previous := truenas.IsFeatureEnabled()
 	truenas.SetFeatureEnabled(true)

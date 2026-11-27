@@ -38,8 +38,8 @@ func (c *Client) getCORE13RealtimeMemory(ctx context.Context) (*SystemInfo, erro
 		return nil, err
 	}
 	defer c.rpcMu.Unlock()
-	if c.closed {
-		return nil, errors.New("truenas client is closed")
+	if err := ctx.Err(); err != nil {
+		return nil, err
 	}
 	if c.mode != TransportLegacyREST || !supportsCORE13RealtimeMemory(c.TransportStatus().ApplianceVersion) || !c.config.UseHTTPS {
 		return nil, nil

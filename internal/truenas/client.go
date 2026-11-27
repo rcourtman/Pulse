@@ -98,8 +98,11 @@ type Client struct {
 	rpcMu     rpcSessionMutex
 	rpc       *trueNASRPCClient
 	mode      TransportMode
-	closed    bool
 	reconnect int
+
+	rpcLifetimeOnce sync.Once
+	rpcLifetime     context.Context
+	cancelRPC       context.CancelFunc
 
 	statusMu sync.RWMutex
 	status   TransportStatus
@@ -210,19 +213,17 @@ func (c *Client) TestConnection(ctx context.Context) error {
 	return nil
 }
 
-// Close releases the persistent websocket session and idle HTTP transport
-// connections held by the client.
+// Close cancels RPC work and releases the persistent websocket session and idle
+// HTTP connections. A legacy REST read already dispatched can still finish.
 func (c *Client) Close() {
 	if c == nil {
 		return
 	}
+	c.rpcLifetimeContext()
+	c.cancelRPC()
 	c.rpcMu.Lock()
-	c.closed = true
 	c.closeRPCLocked()
 	c.rpcMu.Unlock()
-	c.updateTransportStatus(func(status *TransportStatus) {
-		status.Connected = false
-	})
 	if c.httpClient != nil && c.httpClient.Transport != nil {
 		if transport, ok := c.httpClient.Transport.(interface{ CloseIdleConnections() }); ok {
 			transport.CloseIdleConnections()
@@ -2624,9 +2625,10 @@ func (c *Client) dialRPCEndpoint(ctx context.Context, rpcURL string, useTLS bool
 	dialer := websocket.Dialer{
 		Proxy: http.ProxyFromEnvironment,
 	}
+	dial := (&net.Dialer{}).DialContext
 	if c.outboundDialContext != nil {
 		dialer.Proxy = nil
-		dialer.NetDialContext = c.outboundDialContext
+		dial = c.outboundDialContext
 	}
 	if useTLS {
 		tlsConfig, err := buildTLSConfig(c.config.InsecureSkipVerify, c.config.Fingerprint)
@@ -2642,7 +2644,30 @@ func (c *Client) dialRPCEndpoint(ctx context.Context, rpcURL string, useTLS bool
 		}
 	}
 
+	// Gorilla uses the context deadline for handshake I/O, but cancellation
+	// alone does not interrupt that I/O after connecting. Watch the raw socket
+	// through TLS, any proxy CONNECT, and the upgrade. Use the outer context:
+	// Gorilla cancels its derived handshake context even on success.
+	var stopUpgrade func()
+	dialer.NetDialContext = func(dialCtx context.Context, network, addr string) (net.Conn, error) {
+		conn, err := dial(dialCtx, network, addr)
+		if err == nil {
+			stopUpgrade = closeSocketOnCancel(ctx, conn.Close)
+		}
+		return conn, err
+	}
 	conn, response, err := dialer.DialContext(ctx, rpcURL, nil)
+	if stopUpgrade != nil {
+		stopUpgrade()
+	}
+	if ctxErr := ctx.Err(); ctxErr != nil {
+		if conn != nil {
+			_ = conn.Close()
+		}
+		// Keep handshake diagnostics typed, but don't use any response that
+		// raced with cancellation to authorize a redirect or REST fallback.
+		return nil, &RPCHandshakeError{Err: ctxErr}
+	}
 	if err != nil {
 		statusCode := 0
 		location := ""
@@ -2783,7 +2808,7 @@ func (c *trueNASRPCClient) call(ctx context.Context, method string, params any, 
 		_ = c.conn.SetWriteDeadline(deadline)
 	}
 	if err := c.conn.WriteJSON(request); err != nil {
-		return &RPCTransportError{Method: method, Phase: "write", Err: err}
+		return &RPCTransportError{Method: method, Phase: "write", Err: rpcIOError(ctx, err)}
 	}
 
 	for {
@@ -2793,7 +2818,7 @@ func (c *trueNASRPCClient) call(ctx context.Context, method string, params any, 
 
 		var message trueNASRPCResponse
 		if err := c.conn.ReadJSON(&message); err != nil {
-			return &RPCTransportError{Method: method, Phase: "read", Err: err}
+			return &RPCTransportError{Method: method, Phase: "read", Err: rpcIOError(ctx, err)}
 		}
 		if message.Method != "" {
 			// A rejection can race with the subscription acknowledgement.
@@ -2843,7 +2868,7 @@ func (c *trueNASRPCClient) readAppStatsEvent(ctx context.Context, intervalSecond
 
 		var message trueNASRPCResponse
 		if err := c.conn.ReadJSON(&message); err != nil {
-			return nil, &RPCTransportError{Method: "app.stats", Phase: "read", Err: err}
+			return nil, &RPCTransportError{Method: "app.stats", Phase: "read", Err: rpcIOError(ctx, err)}
 		}
 		if ended, err := rpcSubscriptionTermination(message, collection, "app.stats"); ended || err != nil {
 			if err == nil {
@@ -2947,7 +2972,7 @@ func (c *trueNASRPCClient) readAppLogEvents(ctx context.Context, tailLines int, 
 				// the caller discard this stream session instead of reusing it.
 				return trimAppLogLines(lines, tailLines), false, nil
 			}
-			return nil, false, &RPCTransportError{Method: "app.container_log_follow", Phase: "read", Err: err}
+			return nil, false, &RPCTransportError{Method: "app.container_log_follow", Phase: "read", Err: rpcIOError(ctx, err)}
 		}
 		if ended, err := rpcSubscriptionTermination(message, collection, "app.container_log_follow"); ended || err != nil {
 			if err != nil {
@@ -3057,10 +3082,31 @@ func isTimeoutError(err error) bool {
 	return errors.As(err, &netErr) && netErr.Timeout()
 }
 
-// armContext makes websocket I/O observe cancellation even when a caller
-// supplies a cancellable context without a deadline. The cleanup waits for the
-// cancellation watcher before clearing deadlines, preventing a completed call
-// from poisoning the next serialized exchange on this connection.
+func rpcIOError(ctx context.Context, err error) error {
+	if ctxErr := ctx.Err(); ctxErr != nil {
+		return ctxErr
+	}
+	return err
+}
+
+// closeSocketOnCancel interrupts both reads and writes without calling a
+// Gorilla reader/writer method from a second goroutine. Its cleanup joins an
+// already-started callback before the caller can reuse the socket.
+func closeSocketOnCancel(ctx context.Context, closeSocket func() error) func() {
+	done := make(chan struct{})
+	stop := context.AfterFunc(ctx, func() {
+		defer close(done)
+		_ = closeSocket()
+	})
+	return func() {
+		if !stop() {
+			<-done
+		}
+	}
+}
+
+// armContext interrupts an exchange on cancellation. An interrupted exchange
+// cannot safely reuse the session; normal transport handling owns disposal.
 func (c *trueNASRPCClient) armContext(ctx context.Context) func() {
 	if c == nil || c.conn == nil {
 		return func() {}
@@ -3076,29 +3122,19 @@ func (c *trueNASRPCClient) armContext(ctx context.Context) func() {
 		_ = c.conn.SetWriteDeadline(time.Time{})
 	}
 
-	cancelled := ctx.Done()
-	if cancelled == nil {
-		return func() {
-			_ = c.conn.SetReadDeadline(time.Time{})
-			_ = c.conn.SetWriteDeadline(time.Time{})
+	conn := c.conn.NetConn()
+	// Abort the transport without waiting for TLS close-notify on a stalled
+	// peer. An interrupted exchange will not reuse this connection.
+	for {
+		tlsConn, ok := conn.(*tls.Conn)
+		if !ok {
+			break
 		}
+		conn = tlsConn.NetConn()
 	}
-
-	stop := make(chan struct{})
-	stopped := make(chan struct{})
-	go func() {
-		defer close(stopped)
-		select {
-		case <-cancelled:
-			now := time.Now()
-			_ = c.conn.SetReadDeadline(now)
-			_ = c.conn.SetWriteDeadline(now)
-		case <-stop:
-		}
-	}()
+	stop := closeSocketOnCancel(ctx, conn.Close)
 	return func() {
-		close(stop)
-		<-stopped
+		stop()
 		_ = c.conn.SetReadDeadline(time.Time{})
 		_ = c.conn.SetWriteDeadline(time.Time{})
 	}
@@ -3327,7 +3363,7 @@ func (c *trueNASRPCClient) readSystemTelemetryEvent(ctx context.Context, interva
 
 		var message trueNASRPCResponse
 		if err := c.conn.ReadJSON(&message); err != nil {
-			return nil, &RPCTransportError{Method: "reporting.realtime", Phase: "read", Err: err}
+			return nil, &RPCTransportError{Method: "reporting.realtime", Phase: "read", Err: rpcIOError(ctx, err)}
 		}
 		if ended, err := rpcSubscriptionTermination(message, collection, "reporting.realtime"); ended || err != nil {
 			if err == nil {
