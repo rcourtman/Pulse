@@ -449,7 +449,7 @@ approved ones.
 ## Weekly summary and email
 
 Pulse's **This week** summary adds up retained Patrol activity over the last
-seven days. Open **Patrol → Activity** to read it; use **Settings → Data & Reports**
+seven days. Open **Patrol → Activity** to read it. Use **Settings → Support → Data & Reports** (`/settings/support/reporting`)
 to schedule the same summary by email. The card, weekly email and **Report type**
 selector are included in **v6.5.0**. An older build can lack these controls.
 
@@ -486,7 +486,7 @@ grant scheduling access. See [Plans and entitlements](PULSE_PRO.md).
 1. Check that email notifications are **enabled and configured** under
    **Alerts → Notifications**. Listing recipients on a schedule does not
    configure a mail provider or enable email.
-2. Open **Settings → Data & Reports**, choose **Create schedule**, then set
+2. Open **Settings → Support → Data & Reports** (`/settings/support/reporting`), choose **Create schedule**, then set
    **Report type** to **Patrol weekly summary**.
 3. Enter a schedule name, weekday, time and an IANA **Timezone**, such as
    `Europe/London`. The summary is weekly, covers the last seven days, and is

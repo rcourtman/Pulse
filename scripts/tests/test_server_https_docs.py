@@ -59,6 +59,26 @@ class ServerHttpsDocsTest(unittest.TestCase):
         self.assertEqual(result.returncode, 0, result.stderr)
         self.assertEqual(result.stderr, "", result.stderr)
 
+    def test_reverse_proxy_help_matches_security_overview_and_cors_labels(self):
+        canonical = ROOT / "docs/REVERSE_PROXY.md"
+        shipped = ROOT / "frontend-modern/public/docs/REVERSE_PROXY.md"
+        self.assertEqual(canonical.read_bytes(), shipped.read_bytes())
+        text = " ".join(canonical.read_text(encoding="utf-8").split())
+        self.assertIn(
+            "**Security Posture** card under **Settings → Security → Security Overview** (`/settings/security-overview`) shows **HTTPS** as **HTTP only**",
+            text,
+        )
+        self.assertIn(
+            "**Settings → System → Network → CORS Allowed Origins** (`/settings/system-network`)",
+            text,
+        )
+        self.assertNotIn("Settings → System → Network → Allowed Origins", text)
+        posture = (ROOT / "frontend-modern/src/utils/securityScorePresentation.ts").read_text(encoding="utf-8")
+        self.assertIn("label: 'HTTPS'", posture)
+        self.assertIn("'HTTP only'", posture)
+        network = (ROOT / "frontend-modern/src/components/Settings/NetworkBoundarySettingsSection.tsx").read_text(encoding="utf-8")
+        self.assertIn("CORS Allowed Origins", network)
+
 
 if __name__ == "__main__":
     unittest.main()

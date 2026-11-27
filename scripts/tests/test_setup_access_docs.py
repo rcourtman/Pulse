@@ -352,6 +352,22 @@ class MetricsAccessDocsHTTPTest(unittest.TestCase):
         self.assertFalse(any("curl " in block for block in blocks("METRICS_HISTORY")),
                          "history examples must use the existing private-response helper")
 
+    def test_metrics_history_error_guidance_matches_free_plan_handler(self):
+        content = " ".join(guide("METRICS_HISTORY").split())
+        self.assertIn(
+            "Metric history is free on every plan: on current releases an invalid or longer-than-`365d` range returns **HTTP 400** (not 402).",
+            content,
+        )
+        self.assertIn(
+            "If an older pre-v6.9.0 server returns **HTTP 402**, that is an old range limit",
+            content,
+        )
+        self.assertNotIn("A 402 is a history-range entitlement failure", content)
+        router = (ROOT / "internal/api/router.go").read_text(encoding="utf-8")
+        handler = router.split("func (r *Router) handleMetricsHistory(", 1)[1].split("\nfunc (", 1)[0]
+        self.assertIn("http.StatusBadRequest", handler)
+        self.assertNotIn("StatusPaymentRequired", handler)
+
 
 if __name__ == "__main__":
     unittest.main()

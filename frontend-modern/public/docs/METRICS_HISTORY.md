@@ -22,9 +22,10 @@ This button changes only the layout, preserving **History range**; it does not
 refresh history or collect new measurements. A collapsed panel is not missing
 data or measured zero. After revealing it, **No stored history in this range**
 means that panel has no plotted stored samples for the selected range, not zero
-usage or proof that collection stopped. Loading, an access error, a locked range
-and **History unavailable** are different states: retain the existing message
-and range. Do not refresh, run Diagnostics or restart just to reveal a chart.
+usage or proof that collection stopped. Loading, an access error, **History
+unavailable** and (on older pre-v6.9.0 builds) a locked range are different
+states: retain the existing message and range. Do not refresh, run Diagnostics
+or restart just to reveal a chart.
 
 These charts are separate from **Alerts → History**, table sparklines and
 current summary cards. A current card or a short trend preview does not
@@ -266,7 +267,7 @@ query value (`:` becomes `%3A`; an ID's `&` must be `%26`, not another query
 parameter). Do not substitute a hostname or strip a provider prefix to guess
 an ID. The helper saves each response, including an error body, in a new
 owner-only file and prints only the HTTP status and file location. Open that
-file privately; do not print or post it. HTTP 401, 402, 403 and server errors,
+file privately. Do not print or post it. HTTP 400, 401, 403 and server errors,
 redirects, or incomplete transport are not an empty history or zero usage.
 There is no automatic retry. Never put a token in a command, URL or report;
 share only the relevant manually redacted error and bounded observations.
@@ -297,9 +298,11 @@ every historical interval is present.
   `metrics.db` does not establish this metric's collection or display.
 - **Access or query error**: keep it separate from an empty result. Check the
   selected organisation, `monitoring:read` access, exact query type/ID and the
-  requested range. A 402 is a history-range entitlement failure, not evidence
-  that storage is empty; try an allowed range without buying another licence
-  or resetting data.
+  requested range. Metric history is free on every plan: on current releases an
+  invalid or longer-than-`365d` range returns **HTTP 400** (not 402). If an
+  older pre-v6.9.0 server returns **HTTP 402**, that is an old range limit, not
+  evidence that storage is empty. Try a shorter range without buying another
+  licence or resetting data.
 - **Storage warning**: inspect a bounded existing startup/runtime error and
   the deployment's persistent mount and service-account access privately.
   Follow the [safe troubleshooting guide](TROUBLESHOOTING.md#excessive-cpu-writes-or-database-growth)

@@ -98,6 +98,21 @@ class MSPConnectionDocsTest(unittest.TestCase):
             (ROOT / "frontend-modern/public/docs/MSP.md").read_bytes(),
         )
 
+    def test_reporting_help_uses_support_settings_group_in_msp_and_ai_guides(self):
+        for name in ("MSP", "AI"):
+            with self.subTest(guide=name):
+                canonical = ROOT / f"docs/{name}.md"
+                shipped = ROOT / f"frontend-modern/public/docs/{name}.md"
+                self.assertEqual(canonical.read_bytes(), shipped.read_bytes())
+                text = " ".join(canonical.read_text(encoding="utf-8").split())
+                self.assertIn("**Settings → Support → Data & Reports** (`/settings/support/reporting`)", text)
+                self.assertNotIn("Settings → Data & Reports", text)
+        catalog = (ROOT / "frontend-modern/src/components/Settings/settingsNavCatalog.ts").read_text(encoding="utf-8")
+        self.assertIn("id: 'support-reporting'", catalog)
+        self.assertIn("label: 'Data & Reports'", catalog)
+        nav = (ROOT / "frontend-modern/src/components/Settings/settingsNavigationModel.ts").read_text(encoding="utf-8")
+        self.assertIn("const SUPPORT_REPORTING_PREFIX = `${SUPPORT_PREFIX}/reporting`;", nav)
+
 
 if __name__ == "__main__":
     unittest.main()
