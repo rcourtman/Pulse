@@ -73,6 +73,65 @@ class StaleReadingAndAgentHelpDocsTest(unittest.TestCase):
         ):
             self.assertIn(marker, table)
 
+    def test_faq_documents_proxmox_ceph_stale_readings(self):
+        faq = doc_text("docs/FAQ.md")
+        ceph_section = norm(
+            faq.split("### Does Pulse monitor Ceph?\n", 1)[1].split("\n### ", 1)[0]
+        )
+        for phrase in (
+            "**Proxmox → Ceph**",
+            "**Stale data** beneath the cluster name on both desktop and phones",
+            "switches stale **Healthy** or **Unknown** rows to amber **Stale**",
+            "out of **Healthy** into **Warning**",
+            "keeping worse **Warning** and **Critical** verdicts visible",
+            "[No data showing?](#no-data-showing)",
+        ):
+            with self.subTest(section="Does Pulse monitor Ceph?", phrase=phrase):
+                self.assertIn(phrase, ceph_section)
+
+        no_data_section = norm(
+            faq.split("### No data showing?\n", 1)[1].split("\n### ", 1)[0]
+        )
+        for phrase in (
+            "**Proxmox Ceph clusters** (`/proxmox/ceph`)",
+            "**Stale data** beneath the cluster name on desktop and phones",
+            "moving stale **Healthy** or **Unknown** clusters out of **Healthy** into **Warning** with an amber **Stale** indicator",
+            "keeping worse **Warning** and **Critical** verdicts ahead of staleness",
+            "`Proxmox collection error`",
+            "`Proxmox has not updated this cluster recently`",
+            "**Readings** under **Worth checking** (`Shown figures are last reported values.`)",
+            "withholds stale snapshot values as live chart readings until fresh Proxmox updates arrive",
+        ):
+            with self.subTest(section="No data showing?", phrase=phrase):
+                self.assertIn(phrase, no_data_section)
+
+        model = doc_text(
+            "frontend-modern/src/features/proxmox/proxmoxCephClusterDrawerModel.ts"
+        )
+        for marker in (
+            "badge: 'Stale data'",
+            "'Proxmox collection error'",
+            "'Proxmox has not updated this cluster recently'",
+            "makeDetailRow('Readings', `${staleNotice.detail}. Shown figures are last reported values.`",
+        ):
+            self.assertIn(marker, model)
+
+        table = doc_text("frontend-modern/src/features/proxmox/ProxmoxCephTable.tsx")
+        for marker in (
+            "if (reported === 'critical') return 'critical';",
+            "return getCephClusterStaleNotice(resource) ? 'warning' : reported;",
+            "label: 'Stale'",
+            "if (staleNotice && (reported === 'healthy' || reported === 'unknown')) {",
+            'data-proxmox-ceph-stale="cluster"',
+            "healthMessageCell(cluster, staleNotice())",
+        ):
+            self.assertIn(marker, table)
+
+        drawer = doc_text(
+            "frontend-modern/src/features/proxmox/ProxmoxCephClusterDrawer.tsx"
+        )
+        self.assertIn("liveReadingsAvailable={!staleNotice()}", drawer)
+
     def test_faq_documents_vsphere_datastore_stale_readings_and_unknown_capacity(self):
         faq = doc_text("docs/FAQ.md")
         section = norm(

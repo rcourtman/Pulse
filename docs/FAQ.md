@@ -148,6 +148,14 @@ topology or capacity without a recognised health verdict, Pulse shows **Unknown*
 in both the table and cluster drawer and keeps that row out of the **Healthy**
 filter (visible under **All**).
 
+When Proxmox polling goes quiet or hits a collection error, **Proxmox → Ceph**
+marks affected clusters **Stale data** beneath the cluster name on both desktop
+and phones, switches stale **Healthy** or **Unknown** rows to amber **Stale**
+and moves them out of **Healthy** into **Warning** while keeping worse
+**Warning** and **Critical** verdicts visible. Retained quorum, OSD, pool and
+capacity figures stay on screen. See [No data showing?](#no-data-showing) for
+the drawer warning and withheld live chart readings.
+
 ### Does Pulse monitor TrueNAS?
 Yes. Pulse includes first-class TrueNAS SCALE/CORE integration. Add your
 TrueNAS server under **Settings → Infrastructure** (**Add infrastructure**) with
@@ -314,6 +322,17 @@ does not prove that every reading is fresh. Missing or unavailable is not zero.
   failed), **Stale · Degraded** (the Proxmox provider is degraded), **Stale**
   (Pulse has no recent Proxmox readings), and **Degraded** (a node warning with
   current Proxmox readings).
+- **Proxmox Ceph clusters** (`/proxmox/ceph`) show **Stale data** beneath the
+  cluster name on desktop and phones when Proxmox polling goes quiet or hits a
+  collection error, moving stale **Healthy** or **Unknown** clusters out of
+  **Healthy** into **Warning** with an amber **Stale** indicator while keeping
+  worse **Warning** and **Critical** verdicts ahead of staleness. Retained
+  quorum, OSD, pool and capacity figures remain visible, **Detail** surfaces
+  `Proxmox collection error` or `Proxmox has not updated this cluster recently`
+  when no Ceph health message is present, the cluster drawer lists **Readings**
+  under **Worth checking** (`Shown figures are last reported values.`), and
+  inline History withholds stale snapshot values as live chart readings until
+  fresh Proxmox updates arrive.
 - **vSphere datastores** keep their last reported capacity, active alarms,
   maintenance state and **Last reported inaccessible** status visible while
   marking stale rows **Stale data** beside the name (and noting `vCenter has not
