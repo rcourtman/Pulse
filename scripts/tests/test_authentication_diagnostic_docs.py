@@ -209,6 +209,33 @@ class AuthenticationDiagnosticDocsTest(unittest.TestCase):
         self.assertIn("investigationFixRetryCooldown", source)
         self.assertIn("investigationTimeoutCooldown", source)
 
+    def test_ai_overview_help_matches_patrol_signals_retired_chat_and_assistant_docs(self):
+        doc_path = ROOT / "docs/AI.md"
+        shipped_path = ROOT / "frontend-modern/public/docs/AI.md"
+        source = doc_path.read_text(encoding="utf-8")
+        self.assertEqual(source, shipped_path.read_text(encoding="utf-8"))
+        guide = " ".join(source.split())
+
+        for stale in (
+            "FSM enforcement",
+            "Detailed FSM states",
+            "focused LLM evaluation pass",
+            "Evaluation pass",
+            "usable for ordinary Assistant chat",
+            "- Chat (`chat_model`)",
+        ):
+            with self.subTest(stale=stale):
+                self.assertNotIn(stale, source)
+
+        signals_go = (ROOT / "internal/ai/patrol_signals.go").read_text(encoding="utf-8")
+        self.assertIn('SignalGuestUnreachable SignalType = "guest_unreachable"', signals_go)
+        self.assertIn("| `guest_unreachable` |", source)
+        self.assertIn("PATROL_ARCHITECTURE.md#deterministic-signal-detection-and-verification", source)
+        self.assertIn("continuing Relay subscribers receive Pro capabilities", guide)
+        self.assertIn("Web settings no longer expose a `chat_model` override", guide)
+        self.assertIn("Three-phase tool execution pipeline", guide)
+        self.assertIn("`ActionResultV2` evidence and verification boundaries", guide)
+
     def test_ai_recipes_send_only_the_intended_method_path_and_body(self):
         recipes = blocks("AI_AUTONOMY")
         self.assertEqual(len(recipes), len(EXPECTED_AI))

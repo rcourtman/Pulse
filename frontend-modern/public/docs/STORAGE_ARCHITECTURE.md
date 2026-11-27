@@ -1,5 +1,7 @@
 # Storage Architecture Proposal
 
+> **Status:** This document is a historical pre-v6 design proposal kept for architecture context, not a guide to current shipped behaviour. For current storage, disk, and recovery documentation, see [Recovery data](RECOVERY.md), [TrueNAS SCALE and CORE](TRUENAS.md), [ZFS monitoring](ZFS_MONITORING.md), [VM disk monitoring](VM_DISK_MONITORING.md), and [Unified resources](UNIFIED_RESOURCES.md).
+
 This document defines the intended storage model for Pulse beyond the current "show storage resources and raw S.M.A.R.T. fields" behavior.
 
 The goal is to make storage genuinely useful for operators, not merely visible.

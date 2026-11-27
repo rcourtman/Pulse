@@ -66,6 +66,7 @@ integration against their own vCenter before production use.
 - [Webhooks](WEBHOOKS.md)
 - [Automatic updates](AUTO_UPDATE.md)
 - [Centralized agent management](CENTRALIZED_MANAGEMENT.md) (Pro)
+- [Unified resources](UNIFIED_RESOURCES.md)
 - [Operational trust model](OPERATIONAL_TRUST.md)
 - [Live demo (online)](https://demo.pulserelay.pro) — generated sample data,
   not a real deployment.
@@ -73,7 +74,9 @@ integration against their own vCenter before production use.
 ## Pulse Intelligence
 
 - [Patrol and external-agent overview](AI.md)
+- [Patrol architecture](PATROL_ARCHITECTURE.md)
 - [Patrol modes and safety](AI_AUTONOMY.md)
+- [Pulse Assistant deep dive](ASSISTANT_ARCHITECTURE.md)
 - [Shared AI runtime safety model](ASSISTANT_SAFETY.md)
 - [External agent HTTP and MCP substrate](AGENT_SUBSTRATE.md)
 - [Walkthrough: what happened overnight on my Proxmox and Docker fleet?](WHAT_HAPPENED_OVERNIGHT.md)
@@ -98,8 +101,9 @@ Pulse Pro capabilities.
 
 ## Plans and managed access
 
-- [Community, Relay, and Pro capabilities](PULSE_PRO.md)
-- [Relay and Pulse Mobile handoff](RELAY.md)
+- [Plans and entitlements](PULSE_PRO.md) (Community, Pro, and continuing Relay subscribers)
+- [Relay and Pulse Mobile retirement](RELAY.md) (retiring on 31 March 2027)
+- [Pulse Cloud (hosted)](CLOUD.md)
 - [Multi-tenant organizations](MULTI_TENANT.md) (Enterprise/custom)
 - [Provider-hosted MSP operations](MSP.md) (self-serve evaluation and purchase)
 
