@@ -5,6 +5,7 @@ import (
 	"errors"
 	"net/http"
 	"net/http/httptest"
+	"strconv"
 	"strings"
 	"testing"
 	"testing/synctest"
@@ -81,6 +82,8 @@ func TestPollStalenessGaugesAgeWithoutNewResults(t *testing.T) {
 		handler := promhttp.HandlerFor(reg, promhttp.HandlerOpts{})
 		const connection = `pulse_monitor_poll_staleness_seconds{instance="fixture-pve",instance_type="pve"}`
 		const node = `pulse_monitor_node_poll_staleness_seconds{instance="fixture-pve",instance_type="pve",node="fixture-node"}`
+		const connectionTime = `pulse_monitor_poll_last_success_timestamp{instance="fixture-pve",instance_type="pve"}`
+		const nodeTime = `pulse_monitor_node_poll_last_success_timestamp{instance="fixture-pve",instance_type="pve",node="fixture-node"}`
 		const never = `pulse_monitor_poll_staleness_seconds{instance="fixture-pbs",instance_type="pbs"}`
 		const neverNode = `pulse_monitor_node_poll_staleness_seconds{instance="fixture-pve",instance_type="pve",node="fixture-never"}`
 		scrape := func(phase string, want ...string) string {
@@ -115,12 +118,17 @@ func TestPollStalenessGaugesAgeWithoutNewResults(t *testing.T) {
 		now := time.Now()
 		pm.RecordResult(PollResult{InstanceType: "pbs", InstanceName: "fixture-pbs", StartTime: now.Add(-time.Second), EndTime: now})
 		pm.RecordNodeResult(NodePollResult{InstanceType: "pve", InstanceName: "fixture-pve", NodeName: "fixture-never", StartTime: now.Add(-time.Second), EndTime: now})
-		scrape("first failure", never+" -1", neverNode+" -1")
+		body := scrape("first failure", never+" -1", neverNode+" -1")
+		if strings.Contains(body, "_last_success_timestamp") {
+			t.Fatal("a first failure must not export a success timestamp")
+		}
 		if _, ok := pm.lastSuccessFor("pbs", "fixture-pbs"); ok {
 			t.Fatal("a failure without a success must not supply a scheduler timestamp")
 		}
 		record(true, now)
-		scrape("first success", connection+" 0", node+" 0", never+" -1", neverNode+" -1")
+		stamp := strconv.FormatFloat(float64(now.Unix()), 'g', -1, 64)
+		scrape("first success", connection+" 0", node+" 0", never+" -1", neverNode+" -1",
+			connectionTime+" "+stamp, nodeTime+" "+stamp)
 
 		time.Sleep(45 * time.Second) // virtual time, no new poll results
 		oneSuccess := `pulse_monitor_poll_total{instance="fixture-pve",instance_type="pve",result="success"} 1`
@@ -632,13 +640,6 @@ func TestRecordResult_SuccessUpdatesLastSuccess(t *testing.T) {
 		Success:      true,
 	})
 
-	// Check lastSuccess is set to EndTime
-	gotLastSuccess := getGaugeVecValue(pm.lastSuccess, "pve", "my-instance")
-	wantLastSuccess := float64(endTime.Unix())
-	if gotLastSuccess != wantLastSuccess {
-		t.Errorf("lastSuccess = %v, want %v", gotLastSuccess, wantLastSuccess)
-	}
-
 	// Check success counter incremented
 	gotSuccessCount := getCounterVecValue(pm.pollResults, "pve", "my-instance", "success")
 	if gotSuccessCount != 1 {
@@ -1102,13 +1103,6 @@ func TestRecordNodeResult_SuccessUpdatesMetrics(t *testing.T) {
 		EndTime:      endTime,
 		Success:      true,
 	})
-
-	// Check lastSuccess is set
-	gotLastSuccess := getGaugeVecValue(pm.nodeLastSuccess, "pve", "my-pve", "node1")
-	wantLastSuccess := float64(endTime.Unix())
-	if gotLastSuccess != wantLastSuccess {
-		t.Errorf("nodeLastSuccess = %v, want %v", gotLastSuccess, wantLastSuccess)
-	}
 
 	// Check success counter incremented
 	gotSuccessCount := getCounterVecValue(pm.nodePollResults, "pve", "my-pve", "node1", "success")

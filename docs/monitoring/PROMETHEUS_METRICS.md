@@ -87,8 +87,11 @@ connection name, not a label you can match to `up`.
 
 The staleness gauges above measure age on every scrape, including when polls
 stop finishing. They show `-1` after an observed failure before the first
-success. An older exporter may update these gauges only when a result is
-recorded, so its gauges can stay at zero during a stall. For queries that work
+success; the corresponding last-success timestamp is absent until a success.
+The age and timestamp for each label set on a scrape use the same successful
+completion. A delayed older result still counts as a poll but does not move
+that completion backwards. An older exporter may update the age gauges only
+when a result is recorded, so its gauges can stay at zero during a stall. For queries that work
 with either exporter, subtract the last successful poll time from query time:
 
 - **Per connection:** `time() - pulse_monitor_poll_last_success_timestamp`
