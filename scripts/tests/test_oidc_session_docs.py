@@ -576,8 +576,102 @@ class OIDCSessionDocsTest(unittest.TestCase):
         presentation = (ROOT / "frontend-modern/src/utils/ssoProviderPresentation.ts").read_text()
         self.assertIn("Could not open settings. Try Edit again.", presentation)
 
+    def test_enabled_oidc_openid_scope_requirement_matches_source(self):
+        config_section = guide_section("## ⚙️ Configuration", "### Access Control")
+        for expected in (
+            "Enabled providers with custom scopes must include the exact `openid` token.",
+            "Include openid in Scopes, or clear Scopes to use the defaults. Nothing was saved.",
+            "Leaving **Scopes** blank uses the defaults.",
+            "Disabled drafts and unchanged scopes on already-enabled providers remain editable.",
+        ):
+            self.assertIn(expected, config_section)
+
+        handlers = (ROOT / "internal/api/identity_sso_handlers.go").read_text()
+        scope_check = handlers.split("func validateSSOOIDCScopeWrite(", 1)[1].split(
+            "// providerIDRegex", 1
+        )[0]
+        for marker in (
+            'var errSSOOIDCOpenIDScopeRequired = errors.New("Include openid in Scopes, or clear Scopes to use the defaults. Nothing was saved.")',
+        ):
+            self.assertIn(marker, handlers)
+        for marker in (
+            "!next.Enabled || next.Type != config.SSOProviderTypeOIDC || next.OIDC == nil || len(next.OIDC.Scopes) == 0",
+            "slices.Equal(previous.OIDC.Scopes, next.OIDC.Scopes)",
+            'if token == "openid"',
+            "return errSSOOIDCOpenIDScopeRequired",
+        ):
+            self.assertIn(marker, scope_check)
+
+    def test_sso_issuer_binding_and_mapping_revocation_match_source(self):
+        mapping = guide_section("### Group-to-Role Mapping", "### Sessions and `offline_access`")
+        for expected in (
+            "replaces the user's saved roles with only the mapped roles that still exist",
+            "sign-in is refused (`session_failed`)",
+            "Clearing all **Group Role Mappings** on a provider withdraws roles that an earlier mapping saved",
+            "preserving roles assigned manually by an administrator",
+            "refuses the stale callback (`invalid_state`)",
+        ):
+            self.assertIn(expected, mapping)
+
+        changing = guide_section("#### Changing or removing access", "## 📚 Provider Examples")
+        for expected in (
+            "binds to its original verified issuer",
+            "separate issuer-scoped principals rather than inheriting saved roles from the previous identity provider",
+            "never migrated from an unverified OIDC address (`email_verified: false`)",
+        ):
+            self.assertIn(expected, changing)
+
+        rbac = " ".join((ROOT / "docs/RBAC.md").read_text(encoding="utf-8").split())
+        for expected in (
+            "binds that principal to its original verified issuer",
+            "separate issuer-scoped principals on subsequent logins instead of transferring saved manual roles",
+            "replaces the user's saved roles with only the mapped roles that exist, and refuses sign-in (`session_failed`)",
+            "Removing all group role mappings from a provider clears roles that an earlier mapping saved",
+            "keeping roles assigned manually by an administrator",
+        ):
+            self.assertIn(expected, rbac)
+
+        identity = (ROOT / "internal/api/auth_principal_identity.go").read_text()
+        for marker in (
+            "func stableSSOPrincipalForIssuer(",
+            "registry.GetOrBindProviderOriginalIssuer(",
+            "if originalIssuer != iss {",
+            "return stableSSOPrincipalWithIssuer(providerType, providerID, iss, subject)",
+            "ssoUnknownOriginalIssuerSentinel",
+            "principalAssignment.RolesFromMapping",
+            "errSSORolesNotReplaced",
+        ):
+            self.assertIn(marker, identity)
+
+        handlers = (ROOT / "internal/api/identity_sso_handlers.go").read_text()
+        self.assertIn("retargetedOrRemoved := updated == nil || ssoProviderIssuerChanged(prev, updated)", handlers)
+        self.assertIn("r.bindSSOProviderOriginalIssuer(prev, retargetedOrRemoved)", handlers)
+
+        oidc_cb = (ROOT / "internal/api/oidc_handlers.go").read_text()
+        for marker in (
+            "if emailUnverified {",
+            "errors.Is(err, errSSORolesNotReplaced)",
+            'err == errSSOCallbackPolicyChanged',
+            'r.redirectOIDCError(w, req, entry.ReturnTo, "invalid_state")',
+            'r.redirectOIDCError(w, req, entry.ReturnTo, "session_failed")',
+        ):
+            self.assertIn(marker, oidc_cb)
+
+        saml_cb = (ROOT / "internal/api/saml_handlers.go").read_text()
+        for marker in (
+            "errors.Is(roleErr, errSSORolesNotReplaced)",
+            "errors.Is(err, errSSOCallbackPolicyChanged)",
+            'r.redirectSAMLError(w, req, relayState, "invalid_state")',
+            'r.redirectSAMLError(w, req, relayState, "session_failed")',
+        ):
+            self.assertIn(marker, saml_cb)
+
     def test_served_guide_matches_source(self):
         self.assertEqual(GUIDE.read_bytes(), (ROOT / "frontend-modern/public/docs/OIDC.md").read_bytes())
+        self.assertEqual(
+            (ROOT / "docs/RBAC.md").read_bytes(),
+            (ROOT / "frontend-modern/public/docs/RBAC.md").read_bytes(),
+        )
 
 
 if __name__ == "__main__":
