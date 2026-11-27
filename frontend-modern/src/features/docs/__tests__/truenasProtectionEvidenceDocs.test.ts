@@ -35,7 +35,7 @@ describe('TrueNAS protection evidence help', () => {
     const section = protectionSection();
     const text = prose(section);
     expect(section.querySelectorAll('tbody tr')).toHaveLength(2);
-    expect(text).toContain('The Healthy filter selects successful events');
+    expect(text).toContain('The Healthy filter selects fresh successful events');
     expect(text).toContain('does not certify that every dataset is protected');
     expect(text).toContain('It is not an independent copy');
     expect(text).toContain('Running or Unknown is not a completed copy');
