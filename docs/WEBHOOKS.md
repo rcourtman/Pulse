@@ -336,7 +336,7 @@ actions. Do not cause a production outage or notification storm for this test.
 - **Headers**: Add custom headers (e.g., `Authorization: Bearer ...`) in the webhook config.
 - **Signing**: Prefer `signingSecret` (above) over bare bearer headers when the receiver supports verification — it authenticates the payload itself, not just the connection.
 - **Saved headers and custom fields**: Masked values in custom headers and custom fields stay preserved only while editing the same webhook URL origin. Changing the webhook address to a different scheme, host, or port requires entering those saved values again. A masked `signingSecret` can still be kept across URL edits because it only signs the payload and is never sent to the receiver.
-- **Same-origin redirects**: Alert webhooks follow redirects only within the same scheme, host, and port, up to 3 redirects. Cross-origin redirects fail immediately as configuration errors without forwarding alert bodies, custom headers, or signatures.
+- **Same-origin redirects**: Alert webhooks follow redirects only within the same scheme, host, and port, stopping on a third redirect (at most 2 redirects across 3 requests). Cross-origin redirects fail immediately as configuration errors without forwarding alert bodies, custom headers, or signatures.
 
 ## 🧾 Audit Webhooks (Pro/legacy Pro+/Cloud)
 

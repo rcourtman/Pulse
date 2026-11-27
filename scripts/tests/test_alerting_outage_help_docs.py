@@ -377,7 +377,7 @@ class AlertingOutageHelpDocsTest(unittest.TestCase):
             "Changing the Apprise server origin or turning off its certificate check requires entering the Apprise API key again",
             "blank SMTP server host is refused as a configuration error instead of dialing loopback",
             "automatically re-queues up to 25 recent (24-hour) retryable retained failures for that destination once, subject to a five-minute cooldown per destination",
-            "Authentication, configuration, rejected, and TLS failures, edited destinations, rehearsals, and **Test** sends do not trigger automatic replay",
+            "Authentication, configuration, rejected, and TLS failures, edited destinations, rehearsals, and deliveries older than 24 hours are not automatically re-queued, and a successful **Test** send does not trigger this recovery",
         ):
             with self.subTest(phrase=phrase):
                 self.assertIn(phrase, text)
