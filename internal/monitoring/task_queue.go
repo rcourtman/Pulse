@@ -121,7 +121,6 @@ func (q *TaskQueue) upsertPlan(task ScheduledTask, availabilityRevision uint64) 
 
 func (q *TaskQueue) upsertLocked(task ScheduledTask, fromPlanner bool) {
 	key := schedulerKey(task.InstanceType, task.InstanceName)
-	previous, hadHead := q.headTimeLocked()
 	if entry, ok := q.entries[key]; ok {
 		if entry.index < 0 {
 			if !fromPlanner {
@@ -144,6 +143,16 @@ func (q *TaskQueue) upsertLocked(task ScheduledTask, fromPlanner bool) {
 				}
 			}
 		}
+		// Skip heap work only when all ordering fields are unchanged.
+		// Compare the exact time value to preserve its monotonic clock
+		// reading, not just equality of the represented instant.
+		if task.NextRun == entry.task.NextRun && task.Priority == entry.task.Priority &&
+			task.InstanceName == entry.task.InstanceName {
+			entry.task = task
+			entry.keepSchedule = !fromPlanner
+			return
+		}
+		previous, hadHead := q.headTimeLocked()
 		entry.task = task
 		entry.keepSchedule = !fromPlanner
 		heap.Fix(&q.heap, entry.index)
@@ -151,6 +160,7 @@ func (q *TaskQueue) upsertLocked(task ScheduledTask, fromPlanner bool) {
 		return
 	}
 
+	previous, hadHead := q.headTimeLocked()
 	entry := &scheduledTaskEntry{task: task, keepSchedule: !fromPlanner}
 	q.pushLocked(entry)
 	q.entries[key] = entry

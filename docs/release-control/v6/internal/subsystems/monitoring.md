@@ -212,6 +212,14 @@ checks equal queue counts before and after a scheduled time, selection of the
 oldest, claim exclusion and retry boundaries. `TestHandleSchedulerHealth_ReturnsQueuedOverdueAge`
 checks the same distinction through the HTTP response.
 
+Refreshing an already queued poll updates its cadence and metadata without
+repairing the heap when its effective deadline and priority stay the same.
+This shortens the queue critical section during periodic planning without
+changing eligibility or claim order. `TestTaskQueue_RefreshWithoutChangingHeapOrder`
+checks a metadata and cadence refresh, priority reordering at equal deadlines,
+and retention of explicit scheduling intent. `TestWaitNext_RearmsForShorterCadence`
+checks that an earlier deadline still wakes the worker in time.
+
 `TestScheduledPollWorkProgressInExporter` drives the ordinary PVE
 poll path with controlled slot and provider holds, a healthy sibling, a
 returned failure and the next successful read. Cancellation, scraping during
