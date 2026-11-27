@@ -140,6 +140,12 @@ func TestScheduledPollDeadLetterTracksLatestOutcome(t *testing.T) {
 			t.Fatalf("refresh captured %d terminal entries, want 2", n)
 		}
 
+		// Ordinary scrapes keep reporting both parked polls while the breaker
+		// waits. Sample near the retry so the recovered label is still within
+		// the brief zero window, rather than already expired by a scrape gap.
+		time.Sleep(time.Until(*target.Breaker.RetryAt) - time.Second)
+		gauges("before-recovery", 1, 1)
+
 		if task := runNext(); task.InstanceName != scheduleFixtureNode {
 			t.Fatalf("expected the target to be the first eligible probe, got %+v", task)
 		}
