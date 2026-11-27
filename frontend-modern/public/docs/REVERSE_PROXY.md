@@ -42,10 +42,26 @@ hop, so they share one login lockout and rate limit.
 `PULSE_TRUSTED_NETWORKS` is not a
 substitute for proxy trust, and proxy trust is not an authentication bypass.
 
+Direct loopback trust requires a loopback peer, no reverse-proxy forwarding
+headers (`X-Forwarded-For`, `Forwarded`, `X-Real-IP`, `X-Forwarded-Host`,
+`X-Forwarded-Proto`, `Via` and similar headers), a local `Host` (`localhost`,
+`*.localhost` or a loopback IP) and a same-origin or non-browser request.
 A proxy on the same host that sends Pulse a `localhost` or loopback `Host`
 must also send `X-Forwarded-For` (all the configs below do). With no forwarding
 headers at all, Pulse cannot tell the proxy's requests from a local user's.
 See [configuration overrides](CONFIGURATION.md#common-overrides-environment-variables).
+
+If a reverse proxy attaches `Authorization: Basic`, `X-API-Token` or
+`Authorization: Bearer` headers on forwarded requests, Pulse rejects cross-site
+browser writes under `/api/` with **403 `CSRF origin validation failed`** unless
+the browser origin has a matching CORS grant. For Basic credentials, only an
+exact listed origin in `ALLOWED_ORIGINS` is accepted (`*` does not grant
+credentialed browser writes). For API tokens, an exact listed origin or `*`
+admits the write. Never strip `Origin`, `Referer` or `Sec-Fetch-Site` headers in
+a proxy that injects credentials for all users, because that removes cross-site
+write protection. Non-browser API clients using Basic authentication do not
+receive browser session cookies, so script calls do not consume browser session
+slots.
 
 ## ⚡ Quick Configs
 
@@ -168,6 +184,7 @@ HTTP/error status, not cookies, proxy secrets or a full network export.
 
 - **"Connection lost" (Workloads), "Disconnected", "Reconnecting...", "Sync reconnecting", "Backend healthy" or a stuck "Connecting to Pulse" screen:** separate the WebSocket upgrade from state delivery. If an already-observed upgrade failed through this proxy, check its `Upgrade` and `Connection` forwarding. An HTTP 101 or welcome message without subsequent state is a different failure; changing those headers is not an established remedy. Use the [stalled-dashboard guidance](TROUBLESHOOTING.md#health-is-green-but-the-dashboard-is-stalled), even if `/api/health` returns 200. Keep authentication, TLS and origin checks enabled; do not expose the backend to test a bypass.
 - **502 Bad Gateway**: Check Pulse's actual listener and the proxy's upstream address, port and network reachability; this does not by itself prove Pulse is stopped. Container `localhost` refers to that container, not another service.
+- **403 CSRF origin validation failed**: Pulse blocked a browser write whose origin did not match its expected scheme, host and port, or arrived cross-site through a proxy attaching proxy-auth, Basic or API-token credentials. Check that the proxy preserves the public `Host` header, sends `X-Forwarded-Proto: https` on TLS routes and is listed in `PULSE_TRUSTED_PROXY_CIDRS`. Do not strip browser origin headers in a credential-injecting proxy.
 - **CORS Errors**: Do not add CORS headers in the proxy. Pulse handles them. Set **Settings → System → Network → CORS Allowed Origins** (`/settings/system-network`) or use `ALLOWED_ORIGINS` if needed.
 - **OIDC redirects fail**: [Check the saved callback address](OIDC.md#check-the-callback-address)
   against the identity provider's registration before changing proxy headers.

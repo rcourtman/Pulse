@@ -79,6 +79,37 @@ class ServerHttpsDocsTest(unittest.TestCase):
         network = (ROOT / "frontend-modern/src/components/Settings/NetworkBoundarySettingsSection.tsx").read_text(encoding="utf-8")
         self.assertIn("CORS Allowed Origins", network)
 
+    def test_reverse_proxy_help_matches_loopback_and_credential_origin_runtime(self):
+        canonical = ROOT / "docs/REVERSE_PROXY.md"
+        shipped = ROOT / "frontend-modern/public/docs/REVERSE_PROXY.md"
+        self.assertEqual(canonical.read_bytes(), shipped.read_bytes())
+        text = " ".join(canonical.read_text(encoding="utf-8").split())
+        for phrase in (
+            "Direct loopback trust requires a loopback peer",
+            "no reverse-proxy forwarding headers",
+            "`localhost`, `*.localhost` or a loopback IP",
+            "same-origin or non-browser request",
+            "Authorization: Basic",
+            "X-API-Token",
+            "Authorization: Bearer",
+            "403 `CSRF origin validation failed`",
+            "exact listed origin in `ALLOWED_ORIGINS`",
+            "Never strip `Origin`, `Referer` or `Sec-Fetch-Site` headers",
+            "Non-browser API clients using Basic authentication do not receive browser session cookies",
+            "**403 CSRF origin validation failed**:",
+        ):
+            with self.subTest(phrase=phrase):
+                self.assertIn(phrase, text)
+
+        loopback = (ROOT / "internal/api/loopback_trust.go").read_text(encoding="utf-8")
+        self.assertIn("func isDirectLoopbackRequest(req *http.Request) bool", loopback)
+        self.assertIn("isLocalRequestHost(req.Host)", loopback)
+        router = (ROOT / "internal/api/router.go").read_text(encoding="utf-8")
+        self.assertIn("!originMayUseCredentials && isCrossSiteBasicAuthWrite(req)", router)
+        self.assertIn("!originHasCORSGrant && isCrossSiteAPITokenWrite(req)", router)
+        basic = (ROOT / "internal/api/basic_auth_session.go").read_text(encoding="utf-8")
+        self.assertIn("func issueBasicBrowserSession(", basic)
+
 
 if __name__ == "__main__":
     unittest.main()

@@ -493,6 +493,40 @@ class AuthenticationDiagnosticDocsTest(unittest.TestCase):
             self.assertEqual(result.returncode, 73)
             self.assertEqual(requests, [])
 
+    def test_proxy_origin_checks_and_csrf_boundary_match_runtime(self):
+        source = DOCUMENTS["PROXY_AUTH"].read_text(encoding="utf-8")
+        boundary = markdown_section(source, "⚠ Header Trust Boundary")
+        troubleshooting = markdown_section(source, "🔧 Troubleshooting")
+        for phrase in (
+            "### Origin checks on proxy-authenticated writes",
+            "403 `CSRF origin validation failed`",
+            "csrf_failure",
+            "Sec-Fetch-Site: same-site",
+            "matches Pulse's exact scheme, host and port",
+            "opaque `null` origin is rejected",
+            "PULSE_TRUSTED_PROXY_CIDRS",
+            "REVERSE_PROXY.md#before-configuring-the-proxy",
+            "X-CSRF-Token",
+        ):
+            with self.subTest(phrase=phrase):
+                self.assertIn(phrase, boundary)
+        for phrase in (
+            "403 CSRF origin validation failed",
+            "X-Forwarded-Proto: https",
+            "PULSE_TRUSTED_PROXY_CIDRS",
+            "ALLOWED_ORIGINS=*",
+        ):
+            with self.subTest(troubleshooting=phrase):
+                self.assertIn(phrase, troubleshooting)
+
+        router = (ROOT / "internal/api/router.go").read_text(encoding="utf-8")
+        self.assertIn("isValidProxyAuthRequest(r.config, req) && isCrossSiteBrowserRequest(req)", router)
+        self.assertIn('http.Error(w, "CSRF origin validation failed", http.StatusForbidden)', router)
+        self.assertIn('"Cross-site browser mutation blocked for proxy auth"', router)
+        origin_test = (ROOT / "internal/api/proxy_csrf_origin_test.go").read_text(encoding="utf-8")
+        self.assertIn("TestProxyAuthOriginComparisonUsesOnlyTrustedForwardedScheme", origin_test)
+        self.assertIn("TestSessionCSRFTokenStillRequiredForSameSiteWrites", origin_test)
+
 
 if __name__ == "__main__":
     unittest.main()

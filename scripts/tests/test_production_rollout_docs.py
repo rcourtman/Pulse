@@ -255,6 +255,42 @@ class ProductionRolloutDocsTest(unittest.TestCase):
         self.assertEqual(TRUST_DOC.read_bytes(),
                          (ROOT / "frontend-modern/public/docs/OPERATIONAL_TRUST.md").read_bytes())
 
+    def test_pve9_fileread_omission_and_auth_hardening_boundaries_match_runtime(self):
+        collection = section("## Choose the least-privileged collection path")
+        for phrase in (
+            "On Proxmox VE 9+, Pulse setup intentionally omits `VM.GuestAgent.FileRead`",
+            "cannot restrict it to `/proc/meminfo`",
+            "exposes arbitrary guest files to the API token",
+            "AGENT_SECURITY.md#proxmox-deployment-choices",
+        ):
+            with self.subTest(collection=phrase):
+                self.assertIn(phrase, collection)
+
+        creds = section("## Credentials, authentication, and data")
+        for phrase in (
+            "Browser session writes require the `X-CSRF-Token` header",
+            "query parameters and form fields are not accepted",
+            "issues CSRF cookies only for validated live sessions",
+            "PROXY_AUTH.md#-header-trust-boundary",
+            "Failed-login lockout is enforced atomically across login, Basic authentication, password changes and configuration transfer",
+            "Admitted sessions and API tokens are rechecked as request bodies arrive",
+            "quick-setup credential rotation invalidates prior administrator sessions",
+            "SSO provider changes and RBAC administration require full-access instance authority",
+            "credential-less loopback trust is disabled",
+        ):
+            with self.subTest(creds=phrase):
+                self.assertIn(phrase, creds)
+
+        security = (ROOT / "internal/api/security.go").read_text(encoding="utf-8")
+        self.assertIn('csrfToken := r.Header.Get("X-CSRF-Token")', security)
+        self.assertIn("if !ValidateSession(sessionID)", security)
+        body_auth = (ROOT / "internal/api/request_body_authority.go").read_text(encoding="utf-8")
+        self.assertIn("func retainRequestBodyAuthority(cfg *config.Config, r *http.Request)", body_auth)
+        auth_go = (ROOT / "internal/api/auth.go").read_text(encoding="utf-8")
+        self.assertIn("RecordLoginAttempt(", auth_go)
+        router_go = (ROOT / "internal/api/router.go").read_text(encoding="utf-8")
+        self.assertIn("InvalidateUserSessions(r.config.AuthUser)", router_go)
+
 
 if __name__ == "__main__":
     unittest.main()
