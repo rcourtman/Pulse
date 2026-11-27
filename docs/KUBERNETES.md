@@ -534,3 +534,27 @@ redacted error if help is needed; use consistent aliases for cluster, namespace
 and pod names. Do not publish `kubectl get secret -o yaml`, full pod descriptions
 or a broad label-selected log dump. Existing observations or unknowns are
 valid evidence; see [safe evidence collection](TROUBLESHOOTING.md#collect-diagnostics-safely).
+
+### Stale Kubernetes readings
+
+A merged host agent or an attached availability check can keep a node or cluster
+online in Pulse even after Kubernetes reporting stops. When Kubernetes readings
+go stale, Pulse marks affected clusters, nodes, pods, Deployments and
+controllers with **Stale data** instead of presenting retained healthy states as
+current.
+
+- **Worse states stay first.** Failure and attention states such as **Offline**,
+  **NotReady**, **Unschedulable**, **Failed**, **CrashLoopBackOff** and replica
+  shortfalls remain visible ahead of **Stale data**.
+- **Filters and overview placement.** Stale Kubernetes resources leave
+  **Healthy** and appear under **Degraded**. Stale nodes also appear in
+  **Nodes needing attention** on **Kubernetes → Overview**.
+- **Inline drawer context.** Expanding a stale Kubernetes row shows a
+  **Stale data** notice
+  (`Showing the last Kubernetes report — no fresh update received recently.`,
+  followed by `Last error:` when Pulse recorded a source error) while keeping
+  the last reported metrics and counts visible.
+
+Check the existing agent pod status, recent agent logs and the Pulse connection
+error before changing configuration. Do not restart pods, reapply the Secret or
+widen RBAC permissions just to clear a **Stale data** notice.

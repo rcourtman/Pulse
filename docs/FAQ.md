@@ -319,8 +319,26 @@ does not prove that every reading is fresh. Missing or unavailable is not zero.
   marking stale rows **Stale data** beside the name (and noting `vCenter has not
   updated this datastore recently.` on inline Capacity History). Missing or
   unreadable capacity displays as a dash (`—`), not `0%`.
+- **vSphere ESXi hosts and networks** also show **Stale data** beneath stale
+  names on desktop and phones while preserving severe failure states (including
+  **Last reported offline** for offline networks with stale vCenter reads) and
+  retained metrics, uptime and counts. Expanded vSphere drawers surface the
+  stale or collection-error detail under **Worth checking** (**Readings**), and
+  inline host History defers live metrics with `vCenter has not updated this
+  host recently.` while keeping last-known values visible until live polling
+  recovers.
+- **Kubernetes clusters, nodes, pods, Deployments and controllers** show
+  **Stale data** when Kubernetes reporting goes quiet, even if a merged host
+  agent or attached availability check keeps the host online. Worse states such
+  as **Offline**, **NotReady**, **Unschedulable**, **Failed**,
+  **CrashLoopBackOff** and replica shortfalls stay ahead of staleness. Stale
+  resources move out of **Healthy** into **Degraded** and **Nodes needing
+  attention**, and expanded object drawers show
+  `Showing the last Kubernetes report — no fresh update received recently.`
+  without hiding retained metrics or counts.
 
 Use the relevant checks for [stale TrueNAS data](TRUENAS.md#stale-truenas-data),
+[stale Kubernetes readings](KUBERNETES.md#stale-kubernetes-readings),
 [empty PBS History](PBS.md#pbs-is-connected-but-history-stays-empty),
 [missing or stale PVE replication jobs](TROUBLESHOOTING.md#replication-jobs-are-pending-stale-or-missing) or
 [missing VM disk usage](VM_DISK_MONITORING.md#a-missing-reading-is-not-an-installation-diagnosis). Check Proxmox

@@ -69,7 +69,10 @@ describe('shipped missing-data FAQ', () => {
   it('routes each symptom to a real heading in a shipped guide', () => {
     const sections = [section('no-data-showing'), section('connection-refused')];
     const links = sections.flatMap((element) => [...element.querySelectorAll('a[href]')]);
-    expect(links).toHaveLength(11);
+    expect(links).toHaveLength(12);
+    expect(
+      sections[0].querySelector('a[href="/docs/KUBERNETES#stale-kubernetes-readings"]'),
+    ).not.toBeNull();
     expect(
       sections[0].querySelector(
         'a[href="/docs/TROUBLESHOOTING#replication-jobs-are-pending-stale-or-missing"]',
