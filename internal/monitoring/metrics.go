@@ -236,17 +236,32 @@ func (c *pollFreshnessCollector) Describe(ch chan<- *prometheus.Desc) {
 
 func (c *pollFreshnessCollector) Collect(ch chan<- prometheus.Metric) {
 	c.metrics.mu.RLock()
-	connections := maps.Clone(c.metrics.lastSuccessByKey)
-	nodes := maps.Clone(c.metrics.nodeLastSuccessByKey)
+	connections := copyPollFreshnessSamples(c.metrics.lastSuccessByKey)
+	nodes := copyPollFreshnessSamples(c.metrics.nodeLastSuccessByKey)
 	c.metrics.mu.RUnlock()
 
 	now := time.Now()
-	for key, last := range connections {
-		emitPollFreshness(ch, c.connectionAge, c.connectionTime, now, last, key.instanceType, key.instance)
+	for _, sample := range connections {
+		emitPollFreshness(ch, c.connectionAge, c.connectionTime, now, sample.last, sample.key.instanceType, sample.key.instance)
 	}
-	for key, last := range nodes {
-		emitPollFreshness(ch, c.nodeAge, c.nodeTime, now, last, key.instanceType, key.instance, key.node)
+	for _, sample := range nodes {
+		emitPollFreshness(ch, c.nodeAge, c.nodeTime, now, sample.last, sample.key.instanceType, sample.key.instance, sample.key.node)
 	}
+}
+
+type pollFreshnessSample[K comparable] struct {
+	key  K
+	last time.Time
+}
+
+// Scrapes iterate the snapshot once and never look up a key. Copy just the
+// samples, without the hash tables, and keep emission outside the poll lock.
+func copyPollFreshnessSamples[K comparable](lastSuccess map[K]time.Time) []pollFreshnessSample[K] {
+	samples := make([]pollFreshnessSample[K], 0, len(lastSuccess))
+	for key, last := range lastSuccess {
+		samples = append(samples, pollFreshnessSample[K]{key: key, last: last})
+	}
+	return samples
 }
 
 func emitPollFreshness(ch chan<- prometheus.Metric, age, timestamp *prometheus.Desc, now, last time.Time, labels ...string) {
