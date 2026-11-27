@@ -1,0 +1,42 @@
+{
+  "version": 1,
+  "base_sha": "732a43fc7490502f500f0536c3cea881149df8e0",
+  "verified_at": "2026-11-27T15:52:12Z",
+  "result": "passed",
+  "changed_paths": [
+    "frontend-modern/src/features/truenas/TrueNASPageSurface.tsx",
+    "frontend-modern/src/features/truenas/TrueNASProtectionTable.tsx",
+    "frontend-modern/src/features/truenas/TrueNASTableFrame.tsx",
+    "frontend-modern/src/features/truenas/truenasPageModel.ts"
+  ],
+  "content_sha256": {
+    "frontend-modern/src/features/truenas/TrueNASPageSurface.tsx": "2607c299c5581f8a5e9b1370e8a6df9786c2e66d26a17d4e3f2c72084f0082a7",
+    "frontend-modern/src/features/truenas/TrueNASProtectionTable.tsx": "4dcaf4998deafe4cb2febaf2f3953baf0046ef881d5246e855ae28de2560c3ad",
+    "frontend-modern/src/features/truenas/TrueNASTableFrame.tsx": "dac0de9ae517f8e1fac4ccf9f0205c81268210a955cd5ba584b421be9ddac785",
+    "frontend-modern/src/features/truenas/truenasPageModel.ts": "cef8ff4b77c9be5dba3fa14b043ebd94f89f02e90a09379eb98d455e05ad5f23"
+  },
+  "routes": [
+    "/truenas/protection"
+  ],
+  "viewports": [
+    {
+      "width": 1440,
+      "height": 940
+    },
+    {
+      "width": 360,
+      "height": 820
+    }
+  ],
+  "states": [
+    "Playwright 1.56.1 paired production builds (before a366d7c0a708 vs after 732a43fc7490) on desktop Chromium 141.0.7390.37 (1440x940 light) and touch WebKit 26.0 (360x820 dark); all 8 paired screenshots visually inspected with 0 console errors, 0 page errors, 0 failed requests, 0 off-origin requests, and 0px horizontal overflow.",
+    "/truenas/protection stale appliance nas-east (18m telemetry_stale, API connection timed out) alongside fresh nas-west: chips shift from false All 4 / Attention 1 / Healthy 2 / Failed 1 / Running 1 to All 4 / Attention 3 / Stale 3 / Healthy 1 / Failed 1 / Running 0; tank/billing moves from false green Healthy to amber Stale data (compact Stale on 360px phone) above fresh vault/docs; tank/archive preserves red Failed pill and tank/media preserves non-pulsing muted Running pill alongside amber Stale data cue beneath dataset name; expanded tank/billing drawer renders amber warning banner, amber Status: Stale data, and preserved green Last reported: Healthy.",
+    "/truenas/protection live WebSocket rawData recovery frame (top-level sourceStatus.truenas online and health.verdict ok while platformData.sourceStatus remains stale) without reload: immediately clears all Stale data cues, Stale filter chip, and open drawer warning banner, restores green Healthy on tank/billing and pulsing blue Running on tank/media, and restores All 4 / Attention 1 / Healthy 2 / Failed 1 / Running 1.",
+    "/truenas/protection touch WebKit phone (360x820 dark): exact 32px row height on all 4 rows, 0px horizontal overflow in both collapsed list and expanded stale drawer, clean wrapped dark-amber warning notice."
+  ],
+  "interactions": [
+    "Loaded /truenas/protection on desktop light (1440x940) and touch phone dark (360x820), verifying filter chip counts, row ordering, stale cues, non-pulsing stale running state, exact 32px phone row height, and 0px overflow.",
+    "Clicked/tapped tank/billing row on desktop and phone to expand its inline detail drawer and verified the amber stale warning banner, Status: Stale data, Last reported: Healthy, and preserved snapshot/target metadata.",
+    "Delivered live WebSocket rawData recovery frame on desktop while tank/billing drawer remained open and verified immediate clearance of stale cues, Stale filter chip, and open drawer banner without reload."
+  ]
+}

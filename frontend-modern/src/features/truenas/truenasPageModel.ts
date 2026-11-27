@@ -1,6 +1,7 @@
 import { resolveResourcePlatformType } from '@/utils/sourcePlatforms';
 import { asTrimmedString } from '@/utils/stringUtils';
 import { parseBackupTimestampMs } from '@/utils/backupTimestamp';
+import { getResourceStaleness } from '@/features/platformPage/resourceStaleness';
 import {
   getTrueNASDatasetStateSummary,
   getTrueNASStaleNotice,
@@ -32,10 +33,10 @@ export type TrueNASIncidentSeverityFilter = 'all' | 'critical' | 'warning' | 'in
 export type TrueNASStorageStatusFilter = 'all' | 'healthy' | 'attention' | 'offline';
 export type TrueNASStorageKindFilter = 'all' | 'volumes' | 'disks';
 export type TrueNASProtectionStatusFilter =
-  'all' | 'attention' | 'success' | 'warning' | 'failed' | 'running' | 'unknown';
+  'all' | 'attention' | 'stale' | 'success' | 'warning' | 'failed' | 'running' | 'unknown';
 export type TrueNASProtectionStatusBucket = Exclude<
   TrueNASProtectionStatusFilter,
-  'all' | 'attention'
+  'all' | 'attention' | 'stale'
 >;
 export type TrueNASProtectionKind = 'snapshot' | 'replication' | 'other';
 
@@ -900,12 +901,195 @@ export function getTrueNASStorageIssue(
   return { status, label: TRUENAS_STORAGE_ISSUE_LABELS[status], reasons };
 }
 
+export type TrueNASProtectionStaleNotice = TrueNASStaleNotice & {
+  systemName: string;
+  age?: string;
+};
+
+const addConnectionTokens = (target: Set<string>, value: unknown) => {
+  const normalized = normalize(value);
+  if (!normalized) return;
+  target.add(normalized);
+  const systemIndex = normalized.lastIndexOf('system:');
+  if (systemIndex >= 0) {
+    const suffix = normalized.slice(systemIndex + 'system:'.length).trim();
+    if (suffix) target.add(suffix);
+  }
+  if (normalized.startsWith('agent:')) {
+    const suffix = normalized.slice('agent:'.length).trim();
+    if (suffix) target.add(suffix);
+  }
+};
+
+const buildTrueNASSystemStaleNotice = (system: Resource): TrueNASProtectionStaleNotice | null => {
+  const systemName =
+    asTrimmedString(system.displayName) ||
+    asTrimmedString(system.name) ||
+    asTrimmedString(system.truenas?.hostname) ||
+    system.id;
+  const baseNotice = getTrueNASStaleNotice(system);
+  const staleness = getResourceStaleness(system);
+  const age = staleness?.age ?? undefined;
+  const ageSuffix = age ? ` (last report ${age} ago)` : '';
+  if (baseNotice) {
+    const detail =
+      age && !baseNotice.detail.includes(age)
+        ? `${baseNotice.detail}${ageSuffix}`
+        : baseNotice.detail;
+    return {
+      ...baseNotice,
+      detail,
+      systemName,
+      ...(age ? { age } : {}),
+    };
+  }
+  if (staleness) {
+    return {
+      badge: 'Stale data',
+      detail: age
+        ? `No TrueNAS report from ${systemName} for ${age}`
+        : `TrueNAS has not updated ${systemName} recently`,
+      systemName,
+      ...(age ? { age } : {}),
+    };
+  }
+  if (!system.sourceStatus?.truenas && normalize(system.status) === 'offline') {
+    return {
+      badge: 'Stale data',
+      detail: `TrueNAS system ${systemName} is offline in Pulse`,
+      systemName,
+    };
+  }
+  return null;
+};
+
+type IndexedTrueNASSystem = {
+  notice: TrueNASProtectionStaleNotice | null;
+  connectionIds: Set<string>;
+  hasExplicitConnectionId: boolean;
+  hostnames: Set<string>;
+};
+
+const indexTrueNASSystemsForProtection = (systems: readonly Resource[]): IndexedTrueNASSystem[] =>
+  systems.map((system) => {
+    const connectionIds = new Set<string>();
+    const explicitAgentId = normalize(system.agent?.agentId);
+    const explicitMetricId = normalize(system.metricsTarget?.resourceId);
+    addConnectionTokens(connectionIds, system.agent?.agentId);
+    addConnectionTokens(connectionIds, system.metricsTarget?.resourceId);
+    addConnectionTokens(connectionIds, system.platformId);
+    addConnectionTokens(connectionIds, system.canonicalIdentity?.platformId);
+    addConnectionTokens(connectionIds, system.id);
+    for (const alias of system.canonicalIdentity?.aliases ?? []) {
+      addConnectionTokens(connectionIds, alias);
+    }
+    const hostnames = new Set<string>();
+    for (const value of [
+      system.truenas?.hostname,
+      system.agent?.hostname,
+      system.canonicalIdentity?.hostname,
+      system.name,
+      system.displayName,
+    ]) {
+      const normalized = normalize(value);
+      if (normalized) hostnames.add(normalized);
+    }
+    return {
+      notice: buildTrueNASSystemStaleNotice(system),
+      connectionIds,
+      hasExplicitConnectionId: Boolean(explicitAgentId || explicitMetricId),
+      hostnames,
+    };
+  });
+
+const resolveStaleNoticeFromCandidates = (
+  candidates: readonly IndexedTrueNASSystem[],
+): TrueNASProtectionStaleNotice | null => {
+  if (candidates.length === 0) return null;
+  return candidates.every((entry) => entry.notice !== null) ? candidates[0].notice : null;
+};
+
+const resolveProtectionStaleNotice = (
+  point: RecoveryPoint,
+  indexedSystems: readonly IndexedTrueNASSystem[],
+): TrueNASProtectionStaleNotice | null => {
+  if (indexedSystems.length === 0) return null;
+
+  const pointConnIds = [
+    normalize(point.details?.connectionId),
+    (() => {
+      const scope = normalize(point.providerScope);
+      return scope && scope !== 'provider-default' ? scope : '';
+    })(),
+  ].filter(Boolean);
+
+  const pointHostnames = [
+    normalize(point.details?.hostname),
+    normalize(point.display?.nodeHostLabel),
+    normalize(point.display?.nodeAgentLabel),
+    normalize(point.display?.clusterLabel),
+    normalize(point.node),
+    normalize(point.cluster),
+  ].filter(Boolean);
+
+  if (pointConnIds.length > 0) {
+    const connMatches = indexedSystems.filter((entry) =>
+      pointConnIds.some((id) => entry.connectionIds.has(id)),
+    );
+    if (connMatches.length > 0) {
+      return resolveStaleNoticeFromCandidates(connMatches);
+    }
+    if (pointHostnames.length > 0) {
+      const hostMatches = indexedSystems.filter(
+        (entry) =>
+          !entry.hasExplicitConnectionId &&
+          pointHostnames.some((host) => entry.hostnames.has(host)),
+      );
+      return resolveStaleNoticeFromCandidates(hostMatches);
+    }
+    return null;
+  }
+
+  if (pointHostnames.length > 0) {
+    const hostMatches = indexedSystems.filter((entry) =>
+      pointHostnames.some((host) => entry.hostnames.has(host)),
+    );
+    return resolveStaleNoticeFromCandidates(hostMatches);
+  }
+
+  return resolveStaleNoticeFromCandidates(indexedSystems);
+};
+
+export function getTrueNASProtectionStaleNotice(
+  point: RecoveryPoint,
+  systems: readonly Resource[],
+): TrueNASProtectionStaleNotice | null {
+  if (systems.length === 0) return null;
+  return resolveProtectionStaleNotice(point, indexTrueNASSystemsForProtection(systems));
+}
+
+export function buildTrueNASProtectionStaleNoticeMap(
+  points: readonly RecoveryPoint[],
+  systems: readonly Resource[],
+): Map<string, TrueNASProtectionStaleNotice> {
+  const notices = new Map<string, TrueNASProtectionStaleNotice>();
+  if (points.length === 0 || systems.length === 0) return notices;
+  const indexed = indexTrueNASSystemsForProtection(systems);
+  if (!indexed.some((entry) => entry.notice !== null)) return notices;
+  for (const point of points) {
+    const notice = resolveProtectionStaleNotice(point, indexed);
+    if (notice) notices.set(point.id, notice);
+  }
+  return notices;
+}
+
 export function mapTrueNASProtectionStatus(point: RecoveryPoint): TrueNASProtectionStatusBucket {
   return normalizeProtectionOutcome(point.outcome);
 }
 
 export type TrueNASProtectionPosture = {
   healthy: number;
+  stale: number;
   warning: number;
   failed: number;
   running: number;
@@ -915,9 +1099,11 @@ export type TrueNASProtectionPosture = {
 
 export function buildTrueNASProtectionPosture(
   points: readonly RecoveryPoint[],
+  staleNotices?: ReadonlyMap<string, TrueNASProtectionStaleNotice>,
 ): TrueNASProtectionPosture {
   const posture: TrueNASProtectionPosture = {
     healthy: 0,
+    stale: 0,
     warning: 0,
     failed: 0,
     running: 0,
@@ -926,10 +1112,19 @@ export function buildTrueNASProtectionPosture(
   };
   for (const point of points) {
     const status = mapTrueNASProtectionStatus(point);
-    if (status === 'success') posture.healthy += 1;
-    else posture[status] += 1;
+    const isStale = Boolean(staleNotices?.get(point.id));
+    if (isStale) posture.stale += 1;
+    if (status === 'success') {
+      if (!isStale) posture.healthy += 1;
+    } else if (status === 'running') {
+      if (!isStale) posture.running += 1;
+    } else {
+      posture[status] += 1;
+    }
+    if (status === 'failed' || status === 'warning' || isStale) {
+      posture.attention += 1;
+    }
   }
-  posture.attention = posture.warning + posture.failed;
   return posture;
 }
 
@@ -949,7 +1144,10 @@ export function mapTrueNASProtectionKind(point: RecoveryPoint): TrueNASProtectio
   return 'other';
 }
 
-const trueNASProtectionSearchTokens = (point: RecoveryPoint): string => {
+const trueNASProtectionSearchTokens = (
+  point: RecoveryPoint,
+  staleNotice?: TrueNASProtectionStaleNotice,
+): string => {
   const details = point.details ?? {};
   const sourceDatasets = Array.isArray(details.sourceDatasets) ? details.sourceDatasets : [];
   return joinSearchTokens([
@@ -978,20 +1176,31 @@ const trueNASProtectionSearchTokens = (point: RecoveryPoint): string => {
     details.taskId,
     details.taskName,
     ...sourceDatasets,
+    staleNotice?.badge,
+    staleNotice?.detail,
+    staleNotice?.systemName,
   ]);
 };
 
-const trueNASProtectionAttentionRank = (point: RecoveryPoint): number => {
+const trueNASProtectionAttentionRank = (
+  point: RecoveryPoint,
+  staleNotices?: ReadonlyMap<string, TrueNASProtectionStaleNotice>,
+): number => {
   const status = mapTrueNASProtectionStatus(point);
   if (status === 'failed') return 0;
   if (status === 'warning') return 1;
-  return 2;
+  if (staleNotices?.has(point.id)) return 2;
+  return 3;
 };
 
-export function sortTrueNASProtectionPoints(points: readonly RecoveryPoint[]): RecoveryPoint[] {
+export function sortTrueNASProtectionPoints(
+  points: readonly RecoveryPoint[],
+  staleNotices?: ReadonlyMap<string, TrueNASProtectionStaleNotice>,
+): RecoveryPoint[] {
   return [...points].sort((left, right) => {
     const attentionDelta =
-      trueNASProtectionAttentionRank(left) - trueNASProtectionAttentionRank(right);
+      trueNASProtectionAttentionRank(left, staleNotices) -
+      trueNASProtectionAttentionRank(right, staleNotices);
     if (attentionDelta !== 0) return attentionDelta;
     const leftTime = getRecoveryPointTimestampMs(left);
     const rightTime = getRecoveryPointTimestampMs(right);
@@ -1013,17 +1222,37 @@ export function filterTrueNASProtectionPoints(
   points: RecoveryPoint[],
   search: string,
   status: TrueNASProtectionStatusFilter,
+  staleNotices?: ReadonlyMap<string, TrueNASProtectionStaleNotice>,
 ): RecoveryPoint[] {
   const needle = search.trim().toLowerCase();
   return points.filter((point) => {
     const pointStatus = mapTrueNASProtectionStatus(point);
-    if (status === 'attention' && pointStatus !== 'warning' && pointStatus !== 'failed') {
+    const staleNotice = staleNotices?.get(point.id);
+    const isStale = Boolean(staleNotice);
+    if (
+      status === 'attention' &&
+      pointStatus !== 'warning' &&
+      pointStatus !== 'failed' &&
+      !isStale
+    ) {
       return false;
     }
-    if (status !== 'all' && status !== 'attention' && pointStatus !== status) return false;
+    if (status === 'stale' && !isStale) return false;
+    if (status === 'success' && (pointStatus !== 'success' || isStale)) return false;
+    if (status === 'running' && (pointStatus !== 'running' || isStale)) return false;
+    if (
+      status !== 'all' &&
+      status !== 'attention' &&
+      status !== 'stale' &&
+      status !== 'success' &&
+      status !== 'running' &&
+      pointStatus !== status
+    ) {
+      return false;
+    }
     if (!needle) return true;
     if (mapTrueNASProtectionKind(point).includes(needle)) return true;
-    return trueNASProtectionSearchTokens(point).includes(needle);
+    return trueNASProtectionSearchTokens(point, staleNotice).includes(needle);
   });
 }
 

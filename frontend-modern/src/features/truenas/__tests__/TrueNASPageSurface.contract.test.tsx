@@ -90,8 +90,12 @@ vi.mock('../TrueNASNetworkSharesTable', () => ({
 }));
 
 vi.mock('../TrueNASProtectionTable', () => ({
-  TrueNASProtectionTable: (props: { points: unknown[] }) => (
-    <div data-testid="protection-table" data-rows={props.points.length} />
+  TrueNASProtectionTable: (props: { points: unknown[]; systems?: Resource[] }) => (
+    <div
+      data-testid="protection-table"
+      data-rows={props.points.length}
+      data-systems={props.systems?.length ?? 0}
+    />
   ),
 }));
 
@@ -210,6 +214,7 @@ describe('TrueNASPageSurface contract', () => {
       'protection',
     );
     expect(screen.getByTestId('protection-table')).toBeInTheDocument();
+    expect(screen.getByTestId('protection-table')).toHaveAttribute('data-systems', '1');
   });
 
   it('hydrates only the active TrueNAS workflow resource family', () => {

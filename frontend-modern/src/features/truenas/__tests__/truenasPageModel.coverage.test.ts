@@ -274,6 +274,7 @@ describe('truenasPageModel coverage', () => {
       ]);
       expect(posture).toEqual({
         healthy: 1,
+        stale: 0,
         warning: 0,
         failed: 1,
         running: 0,
@@ -285,6 +286,7 @@ describe('truenasPageModel coverage', () => {
     it('returns a fully zeroed posture for an empty recovery-point array', () => {
       expect(buildTrueNASProtectionPosture([])).toEqual({
         healthy: 0,
+        stale: 0,
         warning: 0,
         failed: 0,
         running: 0,

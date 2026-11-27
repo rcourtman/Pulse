@@ -252,7 +252,11 @@ export function TrueNASPageSurface() {
               />
             </Show>
             <Show when={activeTab() === 'protection'}>
-              <TrueNASProtection recoveryPoints={protection} {...tableSearch} />
+              <TrueNASProtection
+                recoveryPoints={protection}
+                systems={model().systems}
+                {...tableSearch}
+              />
             </Show>
           </Show>
         </Show>
@@ -289,13 +293,17 @@ function TrueNASStorage(props: TrueNASStorageProps) {
 }
 
 function TrueNASProtection(
-  props: { recoveryPoints: ReturnType<typeof useRecoveryPoints> } & TrueNASTableSearchProps,
+  props: {
+    recoveryPoints: ReturnType<typeof useRecoveryPoints>;
+    systems: Resource[];
+  } & TrueNASTableSearchProps,
 ) {
   return (
     <TrueNASProtectionTable
       search={props.search}
       onSearchChange={props.onSearchChange}
       points={props.recoveryPoints.points()}
+      systems={props.systems}
       loading={props.recoveryPoints.response.loading}
       error={props.recoveryPoints.response.error}
       onRefresh={() => void props.recoveryPoints.refetch()}
