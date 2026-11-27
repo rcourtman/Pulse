@@ -120,14 +120,22 @@ func (availabilityPollProvider) Type() InstanceType {
 	return InstanceTypeAvailability
 }
 
-func (availabilityPollProvider) ListInstances(m *Monitor) []string {
-	targets := m.localAvailabilityTargets()
+func (p availabilityPollProvider) ListInstances(m *Monitor) []string {
+	names, _ := p.listInstancesForCleanup(m)
+	return names
+}
+
+func (availabilityPollProvider) listInstancesForCleanup(m *Monitor) ([]string, error) {
+	targets, err := m.readLocalAvailabilityTargets()
+	if err != nil {
+		return nil, err
+	}
 	names := make([]string, 0, len(targets))
 	for _, target := range targets {
 		names = append(names, target.ID)
 	}
 	sort.Strings(names)
-	return names
+	return names, nil
 }
 
 func (availabilityPollProvider) pollPlanningRoster(m *Monitor) []pollPlanInstance {
@@ -142,11 +150,20 @@ func (availabilityPollProvider) pollPlanningRoster(m *Monitor) []pollPlanInstanc
 }
 
 func (m *Monitor) localAvailabilityTargets() []config.AvailabilityTarget {
+	targets, _ := m.readLocalAvailabilityTargets()
+	return targets
+}
+
+func (m *Monitor) readLocalAvailabilityTargets() ([]config.AvailabilityTarget, error) {
+	targets, err := m.readAvailabilityTargets()
+	if err != nil {
+		return nil, err
+	}
 	// A licensed probe assignment can move execution off the server. On
 	// entitlement lapse the existing policy makes a remote-only check local.
-	return slices.DeleteFunc(m.availabilityTargets(), func(target config.AvailabilityTarget) bool {
+	return slices.DeleteFunc(targets, func(target config.AvailabilityTarget) bool {
 		return !target.Enabled || !m.targetUsesLocalObservation(target)
-	})
+	}), nil
 }
 
 func (availabilityPollProvider) BaseInterval(m *Monitor) time.Duration {

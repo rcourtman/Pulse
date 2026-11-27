@@ -601,11 +601,17 @@ func builtinPollProvider(instanceType InstanceType) PollProvider {
 	}
 }
 
-func (m *Monitor) activeSchedulerKeysForProviders(providerTypes map[InstanceType]struct{}) map[string]struct{} {
+// pollCleanupRoster is for providers whose membership cannot always be read.
+// Cleanup needs to distinguish unknown membership from an empty roster.
+type pollCleanupRoster interface {
+	listInstancesForCleanup(m *Monitor) ([]string, error)
+}
+
+func (m *Monitor) activeSchedulerKeysForProviders(providerTypes map[InstanceType]struct{}) (activeKeys map[string]struct{}, unreadable map[InstanceType]struct{}) {
 	if len(providerTypes) == 0 {
-		return nil
+		return nil, nil
 	}
-	activeKeys := make(map[string]struct{})
+	activeKeys = make(map[string]struct{})
 	for _, provider := range m.pollProviderSnapshotWithBuiltins() {
 		if provider == nil {
 			continue
@@ -614,7 +620,21 @@ func (m *Monitor) activeSchedulerKeysForProviders(providerTypes map[InstanceType
 		if _, needed := providerTypes[instanceType]; !needed {
 			continue
 		}
-		for _, instanceName := range provider.ListInstances(m) {
+		var instances []string
+		if roster, ok := provider.(pollCleanupRoster); ok {
+			var err error
+			instances, err = roster.listInstancesForCleanup(m)
+			if err != nil {
+				if unreadable == nil {
+					unreadable = make(map[InstanceType]struct{})
+				}
+				unreadable[instanceType] = struct{}{}
+				continue
+			}
+		} else {
+			instances = provider.ListInstances(m)
+		}
+		for _, instanceName := range instances {
 			name := strings.TrimSpace(instanceName)
 			if name == "" {
 				continue
@@ -622,7 +642,7 @@ func (m *Monitor) activeSchedulerKeysForProviders(providerTypes map[InstanceType
 			activeKeys[schedulerKey(instanceType, name)] = struct{}{}
 		}
 	}
-	return activeKeys
+	return activeKeys, unreadable
 }
 
 func cloneProviderMetadata(in map[string]string) map[string]string {
