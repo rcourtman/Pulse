@@ -25,6 +25,7 @@ import {
   getAgentFirstReportStatusIndicator,
   isTrueNASSystemResource,
 } from '@/utils/agentResources';
+import { getVmwareStaleNotice } from '@/utils/vmwareDisplay';
 
 const finiteMetric = (value: number | undefined): number | undefined =>
   typeof value === 'number' && Number.isFinite(value) ? value : undefined;
@@ -226,8 +227,21 @@ const resourceTemperature = (resource: Resource): number | undefined =>
 const isResourceTemperatureCurrent = (resource: Resource): boolean =>
   isPhysicalDiskTemperatureCurrent(resource.physicalDisk?.collection);
 
-const hasRetainedVcenterCapacity = (resource: Resource): boolean =>
-  resource.type === 'storage' && resource.sourceStatus?.vmware?.status === 'stale';
+const getRetainedVcenterReading = (resource: Resource) => {
+  const isHost =
+    resource.type === 'agent' &&
+    (resource.platformType === 'vmware-vsphere' || Boolean(resource.vmware));
+  if (!isHost && resource.type !== 'storage') return null;
+  const stale = getVmwareStaleNotice(resource);
+  return stale
+    ? {
+        isHost,
+        message: stale.error
+          ? `${stale.detail}.`
+          : `vCenter has not updated this ${isHost ? 'host' : 'datastore'} recently.`,
+      }
+    : null;
+};
 
 export const getResourceMetricsHistoryDeferredMetrics = (
   resource: Resource,
@@ -252,11 +266,25 @@ export const getResourceMetricsHistoryDeferredMetrics = (
       message: disk.message,
     };
   }
-  if (hasRetainedVcenterCapacity(resource)) {
-    metrics.usage = {
-      lastKnownValue: finiteMetric(getDiskPercent(resource)),
-      message: 'vCenter has not updated this datastore recently.',
-    };
+  const retainedVcenter = getRetainedVcenterReading(resource);
+  if (retainedVcenter) {
+    const { isHost, message } = retainedVcenter;
+    if (isHost) {
+      for (const [metric, lastKnownValue] of Object.entries({
+        cpu: finiteMetric(resource.cpu?.current),
+        memory: resource.memory ? finiteMetric(getMemoryPercent(resource)) : undefined,
+        netin: finiteMetric(resource.network?.rxBytes),
+        netout: finiteMetric(resource.network?.txBytes),
+        diskread: finiteMetric(resource.diskIO?.readRate),
+        diskwrite: finiteMetric(resource.diskIO?.writeRate),
+      })) {
+        if (metric === 'cpu' || metric === 'memory' || lastKnownValue !== undefined) {
+          metrics[metric] = { lastKnownValue, message };
+        }
+      }
+    } else {
+      metrics.usage = { lastKnownValue: finiteMetric(getDiskPercent(resource)), message };
+    }
   }
   if (!isResourceTemperatureCurrent(resource)) {
     const temperature = resourceTemperature(resource);
@@ -278,6 +306,8 @@ export const getResourceMetricsHistoryCurrentMetrics = (
   resource: Resource,
 ): Record<string, number | undefined> => {
   if (getAgentFirstReportStatusIndicator(resource)) return {};
+  const retainedVcenter = getRetainedVcenterReading(resource);
+  const hideHost = retainedVcenter?.isHost === true;
   const disk = guestDiskReading(resource);
   const diskPercent =
     resource.disk && (!disk || disk.state === 'current')
@@ -288,17 +318,17 @@ export const getResourceMetricsHistoryCurrentMetrics = (
     : undefined;
   const memory = memoryReading(resource);
   return {
-    cpu: finiteMetric(resource.cpu?.current),
+    cpu: hideHost ? undefined : finiteMetric(resource.cpu?.current),
     memory:
-      resource.memory && (!memory || memory.state === 'current')
+      !hideHost && resource.memory && (!memory || memory.state === 'current')
         ? finiteMetric(getMemoryPercent(resource))
         : undefined,
     disk: diskPercent,
-    usage: hasRetainedVcenterCapacity(resource) ? undefined : diskPercent,
-    netin: finiteMetric(resource.network?.rxBytes),
-    netout: finiteMetric(resource.network?.txBytes),
-    diskread: finiteMetric(resource.diskIO?.readRate),
-    diskwrite: finiteMetric(resource.diskIO?.writeRate),
+    usage: retainedVcenter && !hideHost ? undefined : diskPercent,
+    netin: hideHost ? undefined : finiteMetric(resource.network?.rxBytes),
+    netout: hideHost ? undefined : finiteMetric(resource.network?.txBytes),
+    diskread: hideHost ? undefined : finiteMetric(resource.diskIO?.readRate),
+    diskwrite: hideHost ? undefined : finiteMetric(resource.diskIO?.writeRate),
     temperature,
     smart_temp: temperature,
     gpu: getResourceGPUUtilizationPercent(resource),

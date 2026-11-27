@@ -191,54 +191,54 @@ const getPreferredHostLabel = (resource: Resource): string =>
   getPreferredInfrastructureDisplayName(resource) ||
   resource.id;
 
+const buildUsageParts = (
+  total: number,
+  used: number,
+  free: number | undefined,
+  fallbackUsage: number,
+) => ({
+  total,
+  used,
+  free: free ?? Math.max(total - used, 0),
+  usage: total > 0 ? used / total : fallbackUsage,
+});
+
 export const buildMemory = (metric?: ResourceMetric, fallback?: Partial<Memory>): Memory => {
   const usageUnavailable = metric == null && fallback?.usageUnavailable === true;
   const total = metric?.total ?? fallback?.total ?? 0;
   const used = metric?.used ?? fallback?.used ?? 0;
-  const free = metric?.free ?? fallback?.free ?? (usageUnavailable ? 0 : Math.max(total - used, 0));
-  const usage = usageUnavailable ? 0 : total > 0 ? used / total : (fallback?.usage ?? 0);
-  return {
+  const parts = buildUsageParts(
     total,
     used,
-    free,
-    usage,
-    ...(usageUnavailable ? { usageUnavailable: true } : {}),
+    usageUnavailable ? (fallback?.free ?? 0) : (metric?.free ?? fallback?.free),
+    fallback?.usage ?? 0,
+  );
+  return {
+    ...parts,
+    ...(usageUnavailable ? { usage: 0, usageUnavailable: true } : {}),
   };
 };
 
-export const buildDisk = (metric?: ResourceMetric, fallback?: Partial<Disk>): Disk => {
-  const total = metric?.total ?? fallback?.total ?? 0;
-  const used = metric?.used ?? fallback?.used ?? 0;
-  const free = metric?.free ?? fallback?.free ?? Math.max(total - used, 0);
-  const usage = total > 0 ? used / total : (fallback?.usage ?? 0);
-  return {
-    total,
-    used,
-    free,
-    usage,
-    mountpoint: fallback?.mountpoint,
-    type: fallback?.type,
-    device: fallback?.device,
-  };
-};
+export const buildDisk = (metric?: ResourceMetric, fallback?: Partial<Disk>): Disk => ({
+  ...buildUsageParts(
+    metric?.total ?? fallback?.total ?? 0,
+    metric?.used ?? fallback?.used ?? 0,
+    metric?.free ?? fallback?.free,
+    fallback?.usage ?? 0,
+  ),
+  mountpoint: fallback?.mountpoint,
+  type: fallback?.type,
+  device: fallback?.device,
+});
 
 export const toAgentDisks = (disks?: AgentDiskInfo[]): Disk[] | undefined => {
-  if (!disks || disks.length === 0) return undefined;
-  return disks.map((disk) => {
-    const total = disk.total ?? 0;
-    const used = disk.used ?? 0;
-    const free = disk.free ?? Math.max(total - used, 0);
-    const usage = total > 0 ? used / total : 0;
-    return {
-      total,
-      used,
-      free,
-      usage,
-      mountpoint: disk.mountpoint ?? disk.device,
-      type: disk.filesystem ?? disk.type,
-      device: disk.device,
-    };
-  });
+  if (!disks?.length) return undefined;
+  return disks.map((disk) => ({
+    ...buildUsageParts(disk.total ?? 0, disk.used ?? 0, disk.free, 0),
+    mountpoint: disk.mountpoint ?? disk.device,
+    type: disk.filesystem ?? disk.type,
+    device: disk.device,
+  }));
 };
 
 export const toNodeFromProxmox = (resource: Resource): Node | null => {
@@ -332,14 +332,10 @@ export const formatSensorName = (name: string) => {
   return titleCaseDelimitedLabel(clean);
 };
 
-const formatSensorHardwareName = (name: string) => {
-  return titleCaseDelimitedLabel(name)
-    .replace(/\bCpu\b/g, 'CPU')
-    .replace(/\bDram\b/g, 'DRAM')
-    .replace(/\bGpu\b/g, 'GPU')
-    .replace(/\bVram\b/g, 'VRAM')
-    .replace(/\bVrm\b/g, 'VRM');
-};
+const formatSensorHardwareName = (name: string) =>
+  titleCaseDelimitedLabel(name).replace(/\b(Cpu|Dram|Gpu|Vram|Vrm)\b/g, (match) =>
+    match.toUpperCase(),
+  );
 
 const formatPowerSensorLabel = (name: string) => {
   const label = formatSensorHardwareName(name);
@@ -385,15 +381,17 @@ const formatPowerWatts = (value: number) => {
   return `${value.toFixed(1)} W`;
 };
 
+const sortedFiniteEntries = (record?: Record<string, number>) =>
+  Object.entries(record ?? {})
+    .filter(([, value]) => Number.isFinite(value))
+    .sort(([a], [b]) => a.localeCompare(b));
+
 export const buildPowerRows = (power?: HostSensorSummary['powerWatts']) =>
-  Object.entries(power ?? {})
-    .map(([name, value]) => [name, formatPowerWatts(value)] as const)
-    .filter(([, value]) => value)
-    .sort(([a], [b]) => a.localeCompare(b))
-    .map(([name, value]) => {
-      const label = formatPowerSensorLabel(name);
-      return { label, value, valueTitle: `${label} ${value}` };
-    });
+  sortedFiniteEntries(power).map(([name, raw]) => {
+    const label = formatPowerSensorLabel(name);
+    const value = formatPowerWatts(raw);
+    return { label, value, valueTitle: `${label} ${value}` };
+  });
 
 const formatFanRPM = (value: number) => {
   if (!Number.isFinite(value)) return '';
@@ -441,75 +439,36 @@ export const buildTemperatureRows = (
         : titleCaseDelimitedLabel(thermalState.pressure),
     });
   }
-  const limits = thermalState?.limitsPercent;
-  if (limits) {
-    Object.entries(limits)
-      .filter(([, value]) => Number.isFinite(value) && value < 100)
-      .sort(([a], [b]) => a.localeCompare(b))
-      .forEach(([name, value]) => {
-        rows.push({
-          label: formatSensorName(name),
-          value: `${Math.round(value)}%`,
-          valueTitle: `${formatSensorName(name)} ${Math.round(value)}%`,
-        });
-      });
+  for (const [name, value] of sortedFiniteEntries(thermalState?.limitsPercent)) {
+    if (value >= 100) continue;
+    const label = formatSensorName(name);
+    const pct = `${Math.round(value)}%`;
+    rows.push({ label, value: pct, valueTitle: `${label} ${pct}` });
   }
-  const gpus = sensors?.gpu;
-  if (gpus) {
-    gpus.forEach((gpu, index) => {
-      const value = formatGPUStatsValue(gpu);
-      if (!value) return;
-      rows.push({
-        label: formatGPUStatsLabel(gpu.id, index),
-        value,
-        valueTitle: value,
-      });
-    });
-  }
-  const temps = sensors?.temperatureCelsius;
-  if (temps) {
-    const entries = Object.entries(temps)
-      .filter(([name]) => !typedGPUTemperatureKeys.has(name))
-      .filter(([, temp]) => Number.isFinite(temp))
-      .sort(([a], [b]) => a.localeCompare(b));
-    entries.forEach(([name, temp]) => {
+  sensors?.gpu?.forEach((gpu, index) => {
+    const value = formatGPUStatsValue(gpu);
+    if (value) rows.push({ label: formatGPUStatsLabel(gpu.id, index), value, valueTitle: value });
+  });
+  for (const [name, temp] of sortedFiniteEntries(sensors?.temperatureCelsius)) {
+    if (!typedGPUTemperatureKeys.has(name)) {
       rows.push({
         label: formatSensorName(name),
         value: formatTemperature(temp),
         valueTitle: `${temp.toFixed(1)}°C`,
       });
+    }
+  }
+  for (const [name, value] of sortedFiniteEntries(sensors?.additional)) {
+    rows.push({
+      label: formatSensorHardwareName(name),
+      value: formatTemperature(value),
+      valueTitle: `${value.toFixed(1)}°C`,
     });
   }
-
-  const additional = sensors?.additional;
-  if (additional) {
-    Object.entries(additional)
-      .filter(([, value]) => Number.isFinite(value))
-      .sort(([a], [b]) => a.localeCompare(b))
-      .forEach(([name, value]) => {
-        const label = formatSensorHardwareName(name);
-        rows.push({
-          label,
-          value: formatTemperature(value),
-          valueTitle: `${value.toFixed(1)}°C`,
-        });
-      });
-  }
-
-  const fans = sensors?.fanRpm;
-  if (fans) {
-    Object.entries(fans)
-      .map(([name, value]) => [name, formatFanRPM(value)] as const)
-      .filter(([, value]) => value)
-      .sort(([a], [b]) => a.localeCompare(b))
-      .forEach(([name, value]) => {
-        const label = formatFanSensorLabel(name);
-        rows.push({
-          label,
-          value,
-          valueTitle: `${label} ${value}`,
-        });
-      });
+  for (const [name, raw] of sortedFiniteEntries(sensors?.fanRpm)) {
+    const label = formatFanSensorLabel(name);
+    const value = formatFanRPM(raw);
+    rows.push({ label, value, valueTitle: `${label} ${value}` });
   }
 
   rows.push(...buildPowerRows(sensors?.powerWatts));

@@ -1,0 +1,41 @@
+{
+  "version": 1,
+  "base_sha": "a6920c2ad26d6f6e3e430820d62d10a2b526a912",
+  "verified_at": "2026-11-27T08:44:10Z",
+  "result": "passed",
+  "changed_paths": [
+    "frontend-modern/src/components/Infrastructure/resourceDetailDrawerOperationalModel.ts"
+  ],
+  "content_sha256": {
+    "frontend-modern/src/components/Infrastructure/resourceDetailDrawerOperationalModel.ts": "f38943b50e51fe0c842cdfc4cf9e6476d8912af419e74eba168902e181e05c36"
+  },
+  "routes": [
+    "/vmware/overview",
+    "/vmware/networks",
+    "/vmware/storage",
+    "/truenas/overview"
+  ],
+  "viewports": [
+    {
+      "width": 1440,
+      "height": 940
+    },
+    {
+      "width": 360,
+      "height": 820
+    }
+  ],
+  "states": [
+    "paired production builds of unpatched base 806949274286 (dist sha256 4b4ed555b45f...) and patched candidate a6920c2ad26d (dist sha256 fd8f350ac8b2...) served over local HTTP/WebSocket fixture in Chromium 141.0.7390.37 (1440x940 light theme, en-GB, UTC) and touch WebKit 26.0 (360x820 mobile dark theme, en-GB, UTC)",
+    "/vmware/overview stale collection-error host esxi-edge-01.lab (43% CPU, 68% Memory), offline+stale host esxi-edge-02.lab, and fresh host esxi-core-01.lab: candidate adds non-colour Stale data cues beneath both stale hosts while retaining CPU/Memory bars, uptime, VM count and phone host scoping, preserves red danger dot on offline+stale esxi-edge-02.lab (base downgraded to amber), lifts Readings: vCenter collection error: vCenter session expired (401) into inline drawer Worth checking, and shows last-known deferred CPU and Memory reading notices",
+    "/vmware/overview live WebSocket rawData recovery of esxi-edge-01.lab (sourceStatus.vmware online, CPU 27%, Memory 55%) while platformData.sourceStatus remains stale without page reload: base stayed stuck amber; candidate clears Stale data, restores green status dots in row and drawer header, clears Worth checking and deferred notices, and updates bars live",
+    "/vmware/networks stale collection-error Edge-Trunk-VLAN40, offline+stale Backup-VLAN99, and fresh VM-Prod-Network: candidate adds non-colour Stale data cues on desktop light and 360px dark phone (where Health column is hidden), leads Backup-VLAN99 Health in red with Last reported offline +2, surfaces vCenter collection error in Health and wrapped drawer Worth checking, and recovers Edge-Trunk-VLAN40 to green dot and Healthy 2 / Attention 1 on live WebSocket update without reload",
+    "/vmware/storage stale datastore nvme-edge-01 and /truenas/overview stale system truenas-prod-01: Stale data cues remain intact across desktop and phone with zero console errors, zero page errors, zero failed requests, and 0px horizontal overflow across all routes and viewports"
+  ],
+  "interactions": [
+    "loaded /vmware/overview on desktop Chromium (1440x940 light) and touch WebKit phone (360x820 dark), verified stale and offline+stale ESXi host rows, and expanded esxi-edge-01.lab inline drawer",
+    "delivered live WebSocket rawData recovery frame for esxi-edge-01.lab while platformData.sourceStatus remained stale without reloading and confirmed immediate row, dot, drawer Worth checking, and metric recovery",
+    "loaded /vmware/networks on desktop and phone, verified stale and offline+stale network rows, expanded Edge-Trunk-VLAN40 inline drawer, and delivered live WebSocket rawData recovery frame verifying Healthy 2 / Attention 1 counts, green dot, and drawer clearance without reload",
+    "loaded /vmware/storage and expanded nvme-edge-01 inline drawer and loaded /truenas/overview on desktop and phone confirming datastore and TrueNAS Stale data cue parity"
+  ]
+}

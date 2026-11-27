@@ -10,7 +10,7 @@ import { useWebSocket } from '@/contexts/appRuntime';
 import { useAlertsActivation } from '@/stores/alertsActivation';
 import { unifiedPlatformOverrideIdCandidates } from '@/features/alerts/alertOverridesModel';
 import { asTrimmedString } from '@/utils/stringUtils';
-import { formatVmwareClusterServices } from '@/utils/vmwareDisplay';
+import { formatVmwareClusterServices, getVmwareStaleNotice } from '@/utils/vmwareDisplay';
 import {
   formatVmwarePowerState,
   getVmwareResourceDisplayStatus,
@@ -87,16 +87,22 @@ type MobilePowerException = {
   title: string;
 };
 
+const MOBILE_POWER_EXCEPTIONS: Record<string, MobilePowerException> = {
+  poweredoff: { label: 'Off', tone: 'danger', title: 'Power state: Off' },
+  off: { label: 'Off', tone: 'danger', title: 'Power state: Off' },
+  suspended: { label: 'Suspended', tone: 'warning', title: 'Power state: Suspended' },
+};
+
 const getMobilePowerException = (powerState: string | undefined): MobilePowerException | null => {
   const normalized = normalizeVmwarePowerStateToken(powerState);
   if (normalized === 'poweredon' || normalized === 'on') return null;
-  if (normalized === 'poweredoff' || normalized === 'off') {
-    return { label: 'Off', tone: 'danger', title: 'Power state: Off' };
-  }
-  if (normalized === 'suspended') {
-    return { label: 'Suspended', tone: 'warning', title: 'Power state: Suspended' };
-  }
-  return { label: 'Unknown', tone: 'muted', title: 'Power state: Unknown' };
+  return (
+    MOBILE_POWER_EXCEPTIONS[normalized] ?? {
+      label: 'Unknown',
+      tone: 'muted',
+      title: 'Power state: Unknown',
+    }
+  );
 };
 
 const getVsphereHostSortValue = (
@@ -373,6 +379,7 @@ export const VsphereHostsTable: Component<{
                     const vmCount = () =>
                       vmCountByHost().get(asTrimmedString(meta()?.managedObjectId) || '') ?? 0;
                     const mobilePowerException = () => getMobilePowerException(meta()?.powerState);
+                    const staleNotice = () => getVmwareStaleNotice(host);
                     const displayStatus = () => getVmwareResourceDisplayStatus(host);
                     const indicator = () => getSimpleStatusIndicator(displayStatus());
                     const metricsKey = () => buildMetricKeyForUnifiedResource(host);
@@ -441,22 +448,34 @@ export const VsphereHostsTable: Component<{
                                 title={displayStatus() || 'unknown'}
                                 ariaHidden
                               />
-                              <span
-                                class="min-w-0 truncate font-semibold text-base-content"
-                                title={name()}
-                              >
-                                <Show when={props.vmScope} fallback={name()}>
-                                  {(scope) => (
-                                    <PlatformHostScopeNameButton
-                                      name={name()}
-                                      workloadNoun="VMs"
-                                      controlsId={scope().sectionId}
-                                      selected={isVmScopeSelected()}
-                                      onSelect={() => scope().onShow(host)}
-                                    />
+                              <div class="min-w-0">
+                                <span
+                                  class="block truncate font-semibold text-base-content"
+                                  title={name()}
+                                >
+                                  <Show when={props.vmScope} fallback={name()}>
+                                    {(scope) => (
+                                      <PlatformHostScopeNameButton
+                                        name={name()}
+                                        workloadNoun="VMs"
+                                        controlsId={scope().sectionId}
+                                        selected={isVmScopeSelected()}
+                                        onSelect={() => scope().onShow(host)}
+                                      />
+                                    )}
+                                  </Show>
+                                </span>
+                                <Show when={staleNotice()}>
+                                  {(notice) => (
+                                    <span
+                                      class="block text-[10px] font-medium text-amber-800 dark:text-amber-300"
+                                      title={notice().detail}
+                                    >
+                                      {notice().badge}
+                                    </span>
                                   )}
                                 </Show>
-                              </span>
+                              </div>
                               <Show when={mobilePowerException()}>
                                 {(power) => (
                                   <MetadataBadge

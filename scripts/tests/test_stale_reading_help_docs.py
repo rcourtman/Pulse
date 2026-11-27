@@ -97,7 +97,8 @@ class StaleReadingAndAgentHelpDocsTest(unittest.TestCase):
         self.assertIn("PlatformTableMetricFallback", table)
         self.assertIn("'Last reported inaccessible'", model)
         self.assertIn(
-            "message: 'vCenter has not updated this datastore recently.'", history
+            "`vCenter has not updated this ${isHost ? 'host' : 'datastore'} recently.`",
+            history,
         )
 
     def test_unified_agent_aligns_external_probes_nav_and_proxmox_opt_out_preservation(

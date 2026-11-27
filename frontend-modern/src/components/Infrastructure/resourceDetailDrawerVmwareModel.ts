@@ -1,4 +1,5 @@
 import type {
+  Resource,
   ResourceType,
   ResourceVMwareHardware,
   ResourceVMwareMeta,
@@ -7,7 +8,7 @@ import type {
   ResourceVMwareTools,
   ResourceVMwareVirtualDisk,
 } from '@/types/resource';
-import { formatVmwareClusterServices } from '@/utils/vmwareDisplay';
+import { formatVmwareClusterServices, getVmwareStaleNotice } from '@/utils/vmwareDisplay';
 import {
   compactDetailRows as compactRows,
   compactDetailSections as compactSections,
@@ -32,34 +33,20 @@ const wrapRow = (
 // Tools and vNIC state only mean something while the VM runs: a powered-off
 // VM has no running Tools and no connected adapters by design. Without a
 // reported power state the readings are taken at face value.
-const isPoweredOff = (vmware?: ResourceVMwareMeta): boolean => {
-  const state = asTrimmedString(vmware?.powerState)
-    .toLowerCase()
-    .replace(/[^a-z]/g, '');
-  return state === 'poweredoff' || state === 'suspended' || state === 'off';
-};
+const isPoweredOff = (vmware?: ResourceVMwareMeta): boolean =>
+  /^(poweredoff|suspended|off)$/.test(
+    asTrimmedString(vmware?.powerState)
+      .toLowerCase()
+      .replace(/[^a-z]/g, ''),
+  );
 
 const summarizeList = (values: string[] | undefined): string =>
   (values ?? []).map(asTrimmedString).filter(Boolean).join(', ');
 
-const formatBoolLabel = (value?: boolean): string => {
-  if (value === undefined) return '';
-  return value ? 'Yes' : 'No';
-};
+const formatBoolLabel = (value?: boolean): string =>
+  value === undefined ? '' : value ? 'Yes' : 'No';
 
-const VMWARE_ENUM_ACRONYMS: Record<string, string> = {
-  API: 'API',
-  BIOS: 'BIOS',
-  CPU: 'CPU',
-  IP: 'IP',
-  OS: 'OS',
-  VM: 'VM',
-  VMDK: 'VMDK',
-  VMX: 'VMX',
-  EFI: 'EFI',
-  IPV4: 'IPv4',
-  IPV6: 'IPv6',
-};
+const VMWARE_ENUM_ACRONYM = /^(API|BIOS|CPU|EFI|IP|OS|VM|VMDK|VMX)$/;
 
 const formatEnumLabel = (value?: string | null): string => {
   const normalized = asTrimmedString(value);
@@ -69,23 +56,22 @@ const formatEnumLabel = (value?: string | null): string => {
     .filter(Boolean)
     .map((part) => {
       const upper = part.toUpperCase();
-      return (
-        VMWARE_ENUM_ACRONYMS[upper] ?? part.charAt(0).toUpperCase() + part.slice(1).toLowerCase()
-      );
+      if (upper === 'IPV4' || upper === 'IPV6') return `IPv${upper.slice(3)}`;
+      return VMWARE_ENUM_ACRONYM.test(upper)
+        ? upper
+        : part.charAt(0).toUpperCase() + part.slice(1).toLowerCase();
     })
     .join(' ');
 };
 
-const formatMiB = (value?: number): string => {
-  if (typeof value !== 'number' || !Number.isFinite(value) || value < 0) return '';
-  return (
-    formatDetailBytesValue(value * 1024 * 1024, {
-      allowZero: true,
-      precision: 'compact',
-      trimWhole: true,
-    }) ?? ''
-  );
-};
+const formatMiB = (value?: number): string =>
+  typeof value === 'number' && Number.isFinite(value) && value >= 0
+    ? (formatDetailBytesValue(value * 1024 * 1024, {
+        allowZero: true,
+        precision: 'compact',
+        trimWhole: true,
+      }) ?? '')
+    : '';
 
 const countSnapshotTree = (snapshots?: ResourceVMwareSnapshot[]): number =>
   (snapshots ?? []).reduce(
@@ -93,30 +79,12 @@ const countSnapshotTree = (snapshots?: ResourceVMwareSnapshot[]): number =>
     0,
   );
 
-const snapshotDisplayName = (snapshot: ResourceVMwareSnapshot): string =>
-  asTrimmedString(snapshot.name) ||
-  asTrimmedString(snapshot.snapshot) ||
-  (typeof snapshot.id === 'number' ? `Snapshot ${snapshot.id}` : 'Snapshot');
-
 const formatSnapshotDate = (value?: string | number): string => {
   if (value === undefined || value === null || value === '') return '';
   const date = new Date(value);
-  if (Number.isNaN(date.getTime())) return asTrimmedString(String(value));
-  const pad = (part: number) => String(part).padStart(2, '0');
-  return `${date.getUTCFullYear()}-${pad(date.getUTCMonth() + 1)}-${pad(
-    date.getUTCDate(),
-  )} ${pad(date.getUTCHours())}:${pad(date.getUTCMinutes())} UTC`;
-};
-
-const snapshotValue = (snapshot: ResourceVMwareSnapshot): string => {
-  const parts = [
-    snapshot.current ? 'current' : '',
-    asTrimmedString(snapshot.state),
-    formatSnapshotDate(snapshot.createdAt),
-    snapshot.quiesced === undefined ? '' : snapshot.quiesced ? 'quiesced' : 'not quiesced',
-    asTrimmedString(snapshot.description),
-  ].filter(Boolean);
-  return parts.join(' · ');
+  return Number.isNaN(date.getTime())
+    ? asTrimmedString(String(value))
+    : `${date.toISOString().slice(0, 16).replace('T', ' ')} UTC`;
 };
 
 const flattenSnapshotRows = (
@@ -125,9 +93,22 @@ const flattenSnapshotRows = (
 ): DetailRow[] => {
   const rows: DetailRow[] = [];
   for (const snapshot of snapshots ?? []) {
+    const name =
+      asTrimmedString(snapshot.name) ||
+      asTrimmedString(snapshot.snapshot) ||
+      (typeof snapshot.id === 'number' ? `Snapshot ${snapshot.id}` : 'Snapshot');
+    const value = [
+      snapshot.current ? 'current' : '',
+      asTrimmedString(snapshot.state),
+      formatSnapshotDate(snapshot.createdAt),
+      snapshot.quiesced === undefined ? '' : snapshot.quiesced ? 'quiesced' : 'not quiesced',
+      asTrimmedString(snapshot.description),
+    ]
+      .filter(Boolean)
+      .join(' · ');
     const snapshotRow = wrapRow(
-      `${depth > 0 ? `${'-'.repeat(depth)} ` : ''}${snapshotDisplayName(snapshot)}`,
-      snapshotValue(snapshot) || asTrimmedString(snapshot.snapshot),
+      `${depth > 0 ? `${'-'.repeat(depth)} ` : ''}${name}`,
+      value || asTrimmedString(snapshot.snapshot),
       { tone: snapshot.current ? 'accent' : 'default' },
     );
     if (snapshotRow) rows.push(snapshotRow);
@@ -136,59 +117,48 @@ const flattenSnapshotRows = (
   return rows;
 };
 
-const adapterDisplayName = (adapter: ResourceVMwareNetworkAdapter): string =>
-  asTrimmedString(adapter.label) ||
-  asTrimmedString(adapter.nic) ||
-  asTrimmedString(adapter.macAddress) ||
-  'Network adapter';
-
-const adapterNetworkName = (adapter: ResourceVMwareNetworkAdapter): string =>
-  asTrimmedString(adapter.networkName) ||
-  asTrimmedString(adapter.networkId) ||
-  asTrimmedString(adapter.opaqueNetworkId) ||
-  asTrimmedString(adapter.hostDevice) ||
-  asTrimmedString(adapter.backingType);
-
-const adapterConnectionLabel = (adapter: ResourceVMwareNetworkAdapter): string => {
-  const parts = [
-    asTrimmedString(adapter.state),
-    adapter.startConnected === undefined
-      ? ''
-      : adapter.startConnected
-        ? 'starts connected'
-        : 'does not start connected',
-    adapter.allowGuestControl === undefined
-      ? ''
-      : adapter.allowGuestControl
-        ? 'guest control'
-        : 'no guest control',
-  ].filter(Boolean);
-  return parts.join(' · ');
-};
-
-const adapterValue = (adapter: ResourceVMwareNetworkAdapter): string => {
-  const parts = [
-    asTrimmedString(adapter.type),
-    adapterNetworkName(adapter),
-    asTrimmedString(adapter.macAddress),
-    adapterConnectionLabel(adapter),
-  ].filter(Boolean);
-  return parts.join(' · ');
-};
-
-const adapterTone = (adapter: ResourceVMwareNetworkAdapter): DetailValueTone =>
-  asTrimmedString(adapter.state).toLowerCase() === 'not_connected' ? 'warning' : 'default';
-
 const networkAdapterRows = (
   adapters: ResourceVMwareNetworkAdapter[] | undefined,
   poweredOff: boolean,
 ): DetailRow[] =>
   compactRows(
-    (adapters ?? []).map((adapter) =>
-      wrapRow(adapterDisplayName(adapter), adapterValue(adapter), {
-        tone: poweredOff ? 'default' : adapterTone(adapter),
-      }),
-    ),
+    (adapters ?? []).map((adapter) => {
+      const label =
+        asTrimmedString(adapter.label) ||
+        asTrimmedString(adapter.nic) ||
+        asTrimmedString(adapter.macAddress) ||
+        'Network adapter';
+      const network =
+        asTrimmedString(adapter.networkName) ||
+        asTrimmedString(adapter.networkId) ||
+        asTrimmedString(adapter.opaqueNetworkId) ||
+        asTrimmedString(adapter.hostDevice) ||
+        asTrimmedString(adapter.backingType);
+      const value = [
+        asTrimmedString(adapter.type),
+        network,
+        asTrimmedString(adapter.macAddress),
+        asTrimmedString(adapter.state),
+        adapter.startConnected === undefined
+          ? ''
+          : adapter.startConnected
+            ? 'starts connected'
+            : 'does not start connected',
+        adapter.allowGuestControl === undefined
+          ? ''
+          : adapter.allowGuestControl
+            ? 'guest control'
+            : 'no guest control',
+      ]
+        .filter(Boolean)
+        .join(' · ');
+      return wrapRow(label, value, {
+        tone:
+          !poweredOff && asTrimmedString(adapter.state).toLowerCase() === 'not_connected'
+            ? 'warning'
+            : 'default',
+      });
+    }),
   );
 
 const getWarningTone = (hasWarning: boolean): DetailValueTone =>
@@ -197,62 +167,38 @@ const getWarningTone = (hasWarning: boolean): DetailValueTone =>
 const hardwareSummary = (hardware?: ResourceVMwareHardware): string => {
   if (!hardware) return '';
   const upgradeStatus = asTrimmedString(hardware.upgradeStatus);
-  if (upgradeStatus && !['NONE', 'OK'].includes(upgradeStatus.toUpperCase())) {
-    return `Hardware ${formatEnumLabel(upgradeStatus).toLowerCase()}`;
-  }
-  return formatEnumLabel(hardware.version);
+  return upgradeStatus && !['NONE', 'OK'].includes(upgradeStatus.toUpperCase())
+    ? `Hardware ${formatEnumLabel(upgradeStatus).toLowerCase()}`
+    : formatEnumLabel(hardware.version);
 };
 
-const cpuTopologyLabel = (vmware: ResourceVMwareMeta): string => {
-  const parts = [];
-  if (
-    typeof vmware.cpuCount === 'number' &&
-    Number.isFinite(vmware.cpuCount) &&
-    vmware.cpuCount > 0
-  ) {
-    parts.push(`${vmware.cpuCount} vCPU`);
-  }
-  if (
-    typeof vmware.hardware?.cpuCoresPerSocket === 'number' &&
-    Number.isFinite(vmware.hardware.cpuCoresPerSocket) &&
-    vmware.hardware.cpuCoresPerSocket > 0
-  ) {
-    parts.push(`${vmware.hardware.cpuCoresPerSocket} cores/socket`);
-  }
-  return parts.join(' · ');
-};
+const posNum = (value?: number): number | undefined =>
+  typeof value === 'number' && Number.isFinite(value) && value > 0 ? value : undefined;
 
 const hardwareRows = (vmware?: ResourceVMwareMeta): DetailRow[] => {
-  if (!vmware?.hardware) return [];
-  const hardware = vmware.hardware;
+  const hardware = vmware?.hardware;
+  if (!hardware) return [];
   const upgradeStatus = asTrimmedString(hardware.upgradeStatus).toUpperCase();
   const upgradeAttention = Boolean(upgradeStatus) && !['NONE', 'OK'].includes(upgradeStatus);
+  const cpuTopology = [
+    posNum(vmware.cpuCount) ? `${vmware.cpuCount} vCPU` : '',
+    posNum(hardware.cpuCoresPerSocket) ? `${hardware.cpuCoresPerSocket} cores/socket` : '',
+  ]
+    .filter(Boolean)
+    .join(' · ');
   return compactRows([
     makeRow('Guest OS', formatEnumLabel(hardware.guestOs)),
     makeRow('Hardware version', formatEnumLabel(hardware.version)),
-    makeRow('CPU topology', cpuTopologyLabel(vmware)),
-    makeRow('Memory size', formatMiB(vmware?.memorySizeMib)),
-    // Upgrade and clone status only surface when something is actionable;
-    // when everything is in the default state these rows resolve to empty
-    // strings and compactRows drops them. Capability toggles
-    // (CPU/memory hot-add, boot config) live in the raw API and stay out
-    // of the operator drawer because they don't change minute to minute
-    // and operators don't act on them from Pulse.
+    makeRow('CPU topology', cpuTopology),
+    makeRow('Memory size', formatMiB(vmware.memorySizeMib)),
     makeRow('Upgrade status', upgradeAttention ? formatEnumLabel(hardware.upgradeStatus) : '', {
       tone: getWarningTone(upgradeAttention),
     }),
-    makeRow('Upgrade error', asTrimmedString(hardware.upgradeErrorMessage), {
-      tone: 'warning',
-      wrap: true,
+    wrapRow('Upgrade error', asTrimmedString(hardware.upgradeErrorMessage), { tone: 'warning' }),
+    makeRow('Instant clone frozen', hardware.instantCloneFrozen ? 'Yes' : '', {
+      tone: getWarningTone(hardware.instantCloneFrozen === true),
     }),
-    makeRow(
-      'Instant clone frozen',
-      hardware.instantCloneFrozen === true ? formatBoolLabel(true) : '',
-      {
-        tone: getWarningTone(hardware.instantCloneFrozen === true),
-      },
-    ),
-    makeRow('Enter setup mode', hardware.enterSetupMode === true ? formatBoolLabel(true) : '', {
+    makeRow('Enter setup mode', hardware.enterSetupMode ? 'Yes' : '', {
       tone: getWarningTone(hardware.enterSetupMode === true),
     }),
   ]);
@@ -266,102 +212,84 @@ const toolsSummary = (tools?: ResourceVMwareTools): string => {
     return `Tools ${formatEnumLabel(versionStatus).toLowerCase()}`;
   }
   const runState = asTrimmedString(tools.runState);
-  if (runState) return `Tools ${formatEnumLabel(runState).toLowerCase()}`;
-  return '';
+  return runState ? `Tools ${formatEnumLabel(runState).toLowerCase()}` : '';
 };
 
 const toolsRows = (tools: ResourceVMwareTools | undefined, poweredOff: boolean): DetailRow[] => {
   if (!tools) return [];
+  const runState = asTrimmedString(tools.runState);
   const versionStatus = asTrimmedString(tools.versionStatus).toUpperCase();
   const versionAttention = Boolean(versionStatus) && !['CURRENT', 'OK'].includes(versionStatus);
-  // Drawer surfaces what an operator scans for: is Tools running, is its
-  // version current, has the guest asked for a reboot, did the last install
-  // error. Install metadata (install type, upgrade policy, auto-update
-  // capability, attempt count, reboot components / time) stays in the raw
-  // API; we only surface it when something is actionable.
   return compactRows([
-    makeRow('Run state', formatEnumLabel(tools.runState), {
+    makeRow('Run state', formatEnumLabel(runState), {
       tone: getWarningTone(
         !poweredOff &&
-          Boolean(asTrimmedString(tools.runState)) &&
-          !['RUNNING', 'STARTED'].includes(asTrimmedString(tools.runState).toUpperCase()),
+          Boolean(runState) &&
+          !['RUNNING', 'STARTED'].includes(runState.toUpperCase()),
       ),
     }),
     makeRow('Version status', versionAttention ? formatEnumLabel(tools.versionStatus) : '', {
       tone: getWarningTone(versionAttention),
     }),
     makeRow('Version', asTrimmedString(tools.version)),
-    makeRow('Guest reboot', tools.guestRebootRequested === true ? 'Requested' : '', {
+    makeRow('Guest reboot', tools.guestRebootRequested ? 'Requested' : '', {
       tone: getWarningTone(tools.guestRebootRequested === true),
     }),
-    makeRow('Last install error', asTrimmedString(tools.errorMessage), {
-      tone: 'warning',
-      wrap: true,
-    }),
+    wrapRow('Last install error', asTrimmedString(tools.errorMessage), { tone: 'warning' }),
   ]);
 };
 
-const virtualDiskDisplayName = (disk: ResourceVMwareVirtualDisk): string =>
-  asTrimmedString(disk.label) || asTrimmedString(disk.disk) || 'Virtual disk';
-
 const formatVirtualDiskAddress = (disk: ResourceVMwareVirtualDisk): string => {
   const type = asTrimmedString(disk.type).toUpperCase();
-  if (type === 'SCSI' && disk.scsiBus !== undefined && disk.scsiUnit !== undefined) {
-    return `SCSI ${disk.scsiBus}:${disk.scsiUnit}`;
-  }
-  if (type === 'SATA' && disk.sataBus !== undefined && disk.sataUnit !== undefined) {
-    return `SATA ${disk.sataBus}:${disk.sataUnit}`;
-  }
-  if (type === 'NVME' && disk.nvmeBus !== undefined && disk.nvmeUnit !== undefined) {
-    return `NVMe ${disk.nvmeBus}:${disk.nvmeUnit}`;
+  const pair: Record<string, [string, number | undefined, number | undefined]> = {
+    SCSI: ['SCSI', disk.scsiBus, disk.scsiUnit],
+    SATA: ['SATA', disk.sataBus, disk.sataUnit],
+    NVME: ['NVMe', disk.nvmeBus, disk.nvmeUnit],
+  };
+  const busUnit = pair[type];
+  if (busUnit && busUnit[1] !== undefined && busUnit[2] !== undefined) {
+    return `${busUnit[0]} ${busUnit[1]}:${busUnit[2]}`;
   }
   if (type === 'IDE' && disk.idePrimary !== undefined && disk.ideMaster !== undefined) {
-    return `IDE ${disk.idePrimary ? 'primary' : 'secondary'} ${
-      disk.ideMaster ? 'master' : 'slave'
-    }`;
+    return `IDE ${disk.idePrimary ? 'primary' : 'secondary'} ${disk.ideMaster ? 'master' : 'slave'}`;
   }
   return type;
-};
-
-const virtualDiskValue = (disk: ResourceVMwareVirtualDisk): string => {
-  const parts = [
-    formatVirtualDiskAddress(disk),
-    formatDetailBytesValue(disk.capacityBytes, {
-      allowZero: true,
-      precision: 'compact',
-      trimWhole: true,
-    }),
-    asTrimmedString(disk.datastoreName),
-    asTrimmedString(disk.backingType),
-    asTrimmedString(disk.vmdkFile),
-  ].filter(Boolean);
-  return parts.join(' · ');
 };
 
 const virtualDiskRows = (disks: ResourceVMwareVirtualDisk[] | undefined): DetailRow[] =>
   compactRows(
     (disks ?? []).map((disk) =>
-      wrapRow(virtualDiskDisplayName(disk), virtualDiskValue(disk), { tone: 'default' }),
+      wrapRow(
+        asTrimmedString(disk.label) || asTrimmedString(disk.disk) || 'Virtual disk',
+        [
+          formatVirtualDiskAddress(disk),
+          formatDetailBytesValue(disk.capacityBytes, {
+            allowZero: true,
+            precision: 'compact',
+            trimWhole: true,
+          }),
+          asTrimmedString(disk.datastoreName),
+          asTrimmedString(disk.backingType),
+          asTrimmedString(disk.vmdkFile),
+        ]
+          .filter(Boolean)
+          .join(' · '),
+        { tone: 'default' },
+      ),
     ),
   );
 
-const vmwareEntityLabel = (entityType?: string): string => {
-  const normalized = asTrimmedString(entityType).toLowerCase();
-  switch (normalized) {
-    case 'host':
-    case 'hostsystem':
-      return 'Host';
-    case 'vm':
-    case 'virtualmachine':
-      return 'VM';
-    case 'datastore':
-      return 'Datastore';
-    case 'network':
-      return 'Network';
-    default:
-      return asTrimmedString(entityType);
-  }
+const ENTITY_LABELS: Record<string, string> = {
+  host: 'Host',
+  hostsystem: 'Host',
+  vm: 'VM',
+  virtualmachine: 'VM',
+  datastore: 'Datastore',
+  network: 'Network',
 };
+
+const vmwareEntityLabel = (entityType?: string): string =>
+  ENTITY_LABELS[asTrimmedString(entityType).toLowerCase()] ?? asTrimmedString(entityType);
 
 const buildSignalValue = (count: number | undefined, label: string, summary?: string): string => {
   const parts: string[] = [];
@@ -469,13 +397,16 @@ export const buildVMwareDetailsSummary = (
 export const buildVMwareDetailSections = (
   resourceType: ResourceType,
   vmware?: ResourceVMwareMeta,
+  resource?: Resource,
 ): DetailSection[] => {
   if (!vmware) {
     return [];
   }
 
+  const staleNotice = resource ? getVmwareStaleNotice(resource) : null;
   const poweredOff = isPoweredOff(vmware);
   const stateRows = compactRows([
+    staleNotice ? wrapRow('Readings', staleNotice.detail, { tone: 'warning' }) : null,
     wrapRow('Connection', asTrimmedString(vmware.connectionName)),
     wrapRow('vCenter', asTrimmedString(vmware.vcenterHost)),
     makeRow('Entity', vmwareEntityLabel(vmware.entityType)),

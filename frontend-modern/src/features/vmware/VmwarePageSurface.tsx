@@ -227,25 +227,15 @@ export function VmwarePageSurface() {
       enabled: () => shouldHydrateTab(tab),
       realtimeEnabled: () => shouldHydrateTab(tab),
     });
-  const overviewResources = createTabResources('overview');
-  const storageResources = createTabResources('storage');
-  const networkResources = createTabResources('networks');
-  const healthResources = createTabResources('health');
-  const activityResources = createTabResources('activity');
-  const resourceState = createMemo(() => {
-    switch (activeTab()) {
-      case 'storage':
-        return storageResources;
-      case 'networks':
-        return networkResources;
-      case 'health':
-        return healthResources;
-      case 'activity':
-        return activityResources;
-      default:
-        return overviewResources;
-    }
-  });
+  const tabResources = {
+    overview: createTabResources('overview'),
+    storage: createTabResources('storage'),
+    networks: createTabResources('networks'),
+    health: createTabResources('health'),
+    activity: createTabResources('activity'),
+  };
+  const healthResources = tabResources.health;
+  const resourceState = () => tabResources[activeTab()];
   const resources = () => resourceState().resources();
   const loading = () => resourceState().loading();
   const error = () => resourceState().error();

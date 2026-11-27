@@ -23,93 +23,63 @@ const SUPPORTED_BADGE_CLASS =
 const UNSUPPORTED_BADGE_CLASS =
   'inline-flex items-center rounded-sm px-2 py-0.5 text-[10px] font-medium whitespace-nowrap bg-surface-alt text-muted';
 
+const K8S_CAPABILITY_SPECS: ReadonlyArray<
+  readonly [keyof KubernetesMetricCapabilities, boolean, string, string]
+> = [
+  ['nodeCpuMemory', true, 'K8s Node CPU/Memory', 'Node CPU and memory metrics are available.'],
+  [
+    'nodeTelemetry',
+    true,
+    'Node Telemetry (Agent)',
+    'Linked Pulse agent provides node uptime, temperature, disk, network, and disk I/O.',
+  ],
+  ['podCpuMemory', true, 'Pod CPU/Memory', 'Pod CPU and memory metrics are available.'],
+  ['podNetwork', true, 'Pod Network', 'Pod network throughput is available.'],
+  ['podEphemeralDisk', true, 'Pod Ephemeral Disk', 'Pod ephemeral storage usage is available.'],
+  [
+    'podDiskIo',
+    false,
+    'Pod Disk I/O Unsupported',
+    'Pod disk read/write throughput is not collected by the Kubernetes integration path today.',
+  ],
+];
+
 export const buildKubernetesCapabilityBadges = (
   capabilities?: KubernetesMetricCapabilities,
-): ResourceDetailDrawerOperationalBadge[] => {
-  if (!capabilities) return [];
-
-  const badges: ResourceDetailDrawerOperationalBadge[] = [];
-
-  if (capabilities.nodeCpuMemory) {
-    badges.push({
-      label: 'K8s Node CPU/Memory',
-      classes: SUPPORTED_BADGE_CLASS,
-      title: 'Node CPU and memory metrics are available.',
-    });
-  }
-  if (capabilities.nodeTelemetry) {
-    badges.push({
-      label: 'Node Telemetry (Agent)',
-      classes: SUPPORTED_BADGE_CLASS,
-      title: 'Linked Pulse agent provides node uptime, temperature, disk, network, and disk I/O.',
-    });
-  }
-  if (capabilities.podCpuMemory) {
-    badges.push({
-      label: 'Pod CPU/Memory',
-      classes: SUPPORTED_BADGE_CLASS,
-      title: 'Pod CPU and memory metrics are available.',
-    });
-  }
-  if (capabilities.podNetwork) {
-    badges.push({
-      label: 'Pod Network',
-      classes: SUPPORTED_BADGE_CLASS,
-      title: 'Pod network throughput is available.',
-    });
-  }
-  if (capabilities.podEphemeralDisk) {
-    badges.push({
-      label: 'Pod Ephemeral Disk',
-      classes: SUPPORTED_BADGE_CLASS,
-      title: 'Pod ephemeral storage usage is available.',
-    });
-  }
-  if (!capabilities.podDiskIo) {
-    badges.push({
-      label: 'Pod Disk I/O Unsupported',
-      classes: UNSUPPORTED_BADGE_CLASS,
-      title:
-        'Pod disk read/write throughput is not collected by the Kubernetes integration path today.',
-    });
-  }
-
-  return badges;
-};
+): ResourceDetailDrawerOperationalBadge[] =>
+  capabilities
+    ? K8S_CAPABILITY_SPECS.filter(
+        ([key, expectTrue]) => Boolean(capabilities[key]) === expectTrue,
+      ).map(([, expectTrue, label, title]) => ({
+        label,
+        classes: expectTrue ? SUPPORTED_BADGE_CLASS : UNSUPPORTED_BADGE_CLASS,
+        title,
+      }))
+    : [];
 
 export const buildSourceHealthSummary = (
   sourceStatus: SourceStatusMap,
 ): ResourceDetailDrawerSummary | null => {
   const entries = Object.entries(sourceStatus);
-  if (entries.length === 0) return null;
-
+  if (!entries.length) return null;
   let warning = 0;
   let unhealthy = 0;
-  const parts: string[] = [];
-
-  for (const [source, status] of entries) {
+  const parts = entries.map(([source, status]) => {
     const normalized = (status?.status || '').trim().toLowerCase();
-    parts.push(`${source}:${normalized || 'unknown'}`);
-    if (['online', 'running', 'healthy', 'connected', 'ok'].includes(normalized)) {
-      continue;
-    } else if (['degraded', 'warning', 'stale'].includes(normalized)) {
-      warning += 1;
-    } else {
-      unhealthy += 1;
-    }
-  }
-
-  const total = entries.length;
+    if (/^(degraded|warning|stale)$/.test(normalized)) warning += 1;
+    else if (!/^(online|running|healthy|connected|ok)$/.test(normalized)) unhealthy += 1;
+    return `${source}:${normalized || 'unknown'}`;
+  });
   if (unhealthy > 0) {
     return {
-      label: `${unhealthy}/${total} unhealthy`,
+      label: `${unhealthy}/${entries.length} unhealthy`,
       className: 'text-red-600 dark:text-red-400',
       title: parts.join(' • '),
     };
   }
   if (warning > 0) {
     return {
-      label: `${warning}/${total} degraded`,
+      label: `${warning}/${entries.length} degraded`,
       className: 'text-amber-600 dark:text-amber-400',
       title: parts.join(' • '),
     };
@@ -120,11 +90,7 @@ export const buildSourceHealthSummary = (
 export const buildSourceSummary = (
   _mergedSources: string[],
   sourceStatus: SourceStatusMap,
-): ResourceDetailDrawerSummary | null => {
-  const health = buildSourceHealthSummary(sourceStatus);
-  if (health) return health;
-  return null;
-};
+): ResourceDetailDrawerSummary | null => buildSourceHealthSummary(sourceStatus);
 
 export const buildHostDetailCards = (options: {
   hasProxmoxNode: boolean;
@@ -155,28 +121,25 @@ export const buildHostDetailCards = (options: {
   return cards;
 };
 
+const HOST_DETAIL_LABELS: Record<string, string> = {
+  system: 'System',
+  hardware: 'Hardware',
+  storage: 'Storage',
+  network: 'Network',
+  disks: 'Disks',
+  raid: 'RAID',
+  temperatures: 'Temperatures',
+};
+
 export const buildHostDetailSummary = (hostDetailCards: string[]): string | null => {
-  const labels = Array.from(new Set(hostDetailCards));
+  const labels = Array.from(
+    new Set(hostDetailCards),
+    (label) => HOST_DETAIL_LABELS[label] ?? label,
+  );
   if (labels.length === 0) return null;
-  const presentation: Record<string, string> = {
-    system: 'System',
-    hardware: 'Hardware',
-    storage: 'Storage',
-    network: 'Network',
-    disks: 'Disks',
-    raid: 'RAID',
-    temperatures: 'Temperatures',
-  };
-  const displayLabels = labels.map((label) => presentation[label] ?? label);
-
-  const categories =
-    displayLabels.length === 1
-      ? displayLabels[0]
-      : displayLabels.length === 2
-        ? `${displayLabels[0]} and ${displayLabels[1]}`
-        : `${displayLabels.slice(0, -1).join(', ')}, and ${displayLabels[displayLabels.length - 1]}`;
-
-  return categories;
+  return labels.length <= 2
+    ? labels.join(' and ')
+    : `${labels.slice(0, -1).join(', ')}, and ${labels[labels.length - 1]}`;
 };
 
 export const buildAccessSummary = (options: {

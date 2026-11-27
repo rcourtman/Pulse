@@ -1,6 +1,10 @@
 import { resolveResourcePlatformType } from '@/utils/sourcePlatforms';
-import { hasImpairedResourceSource } from '@/utils/resourceSourceHealth';
-import { formatVmwareClusterServices } from '@/utils/vmwareDisplay';
+import {
+  formatVmwareClusterServices,
+  getVmwareStaleNotice,
+  isVmwareSourceImpaired,
+  type VmwareStaleNotice,
+} from '@/utils/vmwareDisplay';
 import type { Resource, ResourceChange, ResourceIncident, ResourceType } from '@/types/resource';
 import type { PlatformIssue } from '@/features/platformPage/PlatformIssueReason';
 import { getSimpleStatusIndicator, type StatusIndicator } from '@/utils/status';
@@ -232,8 +236,20 @@ export const getVsphereHostWorkloadScope = (
   });
 };
 
-export const getVmwareResourceDisplayStatus = (resource: Resource): string =>
-  hasImpairedResourceSource(resource, 'vmware-vsphere') ? 'degraded' : resource.status;
+const SEVERE_VMWARE_RESOURCE_STATUSES = new Set([
+  'offline',
+  'stopped',
+  'error',
+  'failed',
+  'faulted',
+  'critical',
+  'unhealthy',
+]);
+
+export const getVmwareResourceDisplayStatus = (resource: Resource): string => {
+  if (SEVERE_VMWARE_RESOURCE_STATUSES.has(normalize(resource.status))) return resource.status;
+  return isVmwareSourceImpaired(resource) ? 'degraded' : resource.status;
+};
 
 const trimString = (value: unknown): string => (typeof value === 'string' ? value.trim() : '');
 
@@ -338,10 +354,8 @@ export function mapVmwareIncidentSeverity(
   severity: string | undefined,
 ): VmwareIncidentSeverityBucket {
   const normalized = normalize(severity);
-  if (['critical', 'crit', 'fatal', 'error', 'failed', 'failure', 'red'].includes(normalized)) {
-    return 'critical';
-  }
-  if (['warning', 'warn', 'alert', 'degraded', 'yellow'].includes(normalized)) return 'warning';
+  if (/^(crit(ical)?|fatal|error|fail(ed|ure)|red)$/.test(normalized)) return 'critical';
+  if (/^(warn(ing)?|alert|degraded|yellow)$/.test(normalized)) return 'warning';
   return 'info';
 }
 
@@ -352,23 +366,24 @@ export function normalizeVmwarePowerStateToken(value: string | undefined): strin
     .replace(/[\s_-]/g, '');
 }
 
+const POWER_STATE_INFO: Record<string, [string, 'success' | 'warning' | 'danger']> = {
+  poweredon: ['On', 'success'],
+  on: ['On', 'success'],
+  poweredoff: ['Off', 'danger'],
+  off: ['Off', 'danger'],
+  suspended: ['Suspended', 'warning'],
+};
+
 export function formatVmwarePowerState(value: string | undefined): string {
-  const normalized = normalizeVmwarePowerStateToken(value);
-  if (normalized === 'poweredon' || normalized === 'on') return 'On';
-  if (normalized === 'poweredoff' || normalized === 'off') return 'Off';
-  if (normalized === 'suspended') return 'Suspended';
-  const trimmed = (value || '').trim();
-  return trimmed || 'Unknown';
+  return (
+    POWER_STATE_INFO[normalizeVmwarePowerStateToken(value)]?.[0] ?? (trimString(value) || 'Unknown')
+  );
 }
 
 export function getVmwarePowerStateVariant(
   state: string | undefined,
 ): 'success' | 'warning' | 'danger' | 'muted' {
-  const normalized = normalizeVmwarePowerStateToken(state);
-  if (normalized === 'poweredon' || normalized === 'on') return 'success';
-  if (normalized === 'poweredoff' || normalized === 'off') return 'danger';
-  if (normalized === 'suspended') return 'warning';
-  return 'muted';
+  return POWER_STATE_INFO[normalizeVmwarePowerStateToken(state)]?.[1] ?? 'muted';
 }
 
 const ATTENTION_STATUSES = new Set(['degraded', 'warning', 'critical', 'paused']);
@@ -379,7 +394,7 @@ const isAttentionOverall = (overall: string): boolean =>
 export function mapVmwareVirtualMachineStatus(
   resource: Resource,
 ): Exclude<VmwareVirtualMachineStatusFilter, 'all'> {
-  if (hasImpairedResourceSource(resource, 'vmware-vsphere')) return 'attention';
+  if (isVmwareSourceImpaired(resource)) return 'attention';
   const powerState = normalizeToken(resource.vmware?.powerState);
   const status = normalize(getVmwareResourceDisplayStatus(resource));
   const overall = normalize(resource.vmware?.overallStatus);
@@ -402,10 +417,6 @@ export function mapVmwareVirtualMachineStatus(
   return 'unknown';
 }
 
-// Realtime rows carry the vCenter sighting at the top level; older rows may
-// only carry the REST compatibility copy. A new poll wins over that old copy.
-const datastoreSighting = (resource: Resource): string | undefined =>
-  resource.sourceStatus?.vmware?.status;
 const datastoreInaccessible = (resource: Resource): boolean =>
   resource.vmware?.datastoreAccessible === false || normalize(resource.status) === 'offline';
 
@@ -425,10 +436,7 @@ export function mapVmwareDatastoreStatus(
     return 'maintenance';
   }
   if (datastoreInaccessible(resource)) return 'inaccessible';
-  const sighting = datastoreSighting(resource);
-  if (sighting ? sighting !== 'online' : hasImpairedResourceSource(resource, 'vmware-vsphere')) {
-    return 'attention';
-  }
+  if (isVmwareSourceImpaired(resource)) return 'attention';
   if (isAttentionOverall(overall) || ATTENTION_STATUSES.has(status)) return 'attention';
   if (resource.vmware?.datastoreAccessible === true || ['online', 'running'].includes(status)) {
     return 'accessible';
@@ -455,19 +463,15 @@ export function mapVmwareNetworkStatus(
   return 'unknown';
 }
 
-const VCENTER_NO_RECENT_UPDATE = 'vCenter has not updated this recently';
-
-// The datastore table shows canonical staleness beside the name. Do not let
-// the compatibility copy supersede it or displace a visible alarm reason.
+// Stale rows show the non-colour Stale data cue beside the name. Keep alarms
+// and outages ahead of the generic staleness line while surfacing collection
+// errors or filling in when staleness is the only attention reason.
 const vmwareAttentionReasons = (
   resource: Resource,
   leading: string[] = [],
-  sighting?: string,
+  staleNotice: VmwareStaleNotice | null = null,
 ): string[] => {
-  const reasons =
-    !sighting && hasImpairedResourceSource(resource, 'vmware-vsphere')
-      ? [VCENTER_NO_RECENT_UPDATE, ...leading]
-      : leading;
+  const reasons = [...leading];
   const push = (value: unknown) => {
     const text = trimString(value);
     if (text && !reasons.some((existing) => existing.toLowerCase() === text.toLowerCase())) {
@@ -489,7 +493,7 @@ const vmwareAttentionReasons = (
     if (ATTENTION_OVERALL_STATUSES.has(overall)) push(`vCenter health is ${overall}`);
     else if (alarms > 0) push(`${alarms} active vCenter alarm${alarms === 1 ? '' : 's'}`);
   }
-  if (!reasons.length && sighting && sighting !== 'online') push(VCENTER_NO_RECENT_UPDATE);
+  if (staleNotice && (!reasons.length || staleNotice.error)) push(staleNotice.detail);
   return reasons;
 };
 
@@ -521,16 +525,18 @@ const DATASTORE_ISSUE_LABELS = {
   attention: 'Attention',
 } as const;
 
-export function getVmwareDatastoreIssue(
-  resource: Resource,
-): (PlatformIssue & { stale: boolean }) | null {
+export type VmwareRowIssue = PlatformIssue & {
+  stale: boolean;
+};
+
+export function getVmwareDatastoreIssue(resource: Resource): VmwareRowIssue | null {
   const bucket = mapVmwareDatastoreStatus(resource);
   if (bucket === 'accessible' || bucket === 'unknown') return null;
   // The bucket picks one filter, but a datastore in maintenance can also be
   // unreachable or carry a critical alarm: each condition gives its reason,
   // and the worst sets the colour.
-  const sighting = datastoreSighting(resource);
-  const stale = sighting === 'stale';
+  const staleNotice = getVmwareStaleNotice(resource);
+  const stale = staleNotice !== null;
   const inaccessible = datastoreInaccessible(resource);
   const leading: string[] = [];
   if (inaccessible)
@@ -542,7 +548,7 @@ export function getVmwareDatastoreIssue(
         : 'In maintenance mode',
     );
   }
-  const reasons = vmwareAttentionReasons(resource, leading, sighting);
+  const reasons = vmwareAttentionReasons(resource, leading, staleNotice);
   return {
     tone: inaccessible || hasCriticalVmwareSignal(resource) ? 'danger' : 'warning',
     label: DATASTORE_ISSUE_LABELS[bucket],
@@ -551,14 +557,18 @@ export function getVmwareDatastoreIssue(
   };
 }
 
-export function getVmwareNetworkIssue(resource: Resource): PlatformIssue | null {
+export function getVmwareNetworkIssue(resource: Resource): VmwareRowIssue | null {
   if (mapVmwareNetworkStatus(resource) !== 'attention') return null;
-  const offline = normalize(getVmwareResourceDisplayStatus(resource)) === 'offline';
-  const reasons = vmwareAttentionReasons(resource);
+  const staleNotice = getVmwareStaleNotice(resource);
+  const stale = staleNotice !== null;
+  const offline = normalize(resource.status) === 'offline';
+  const leading = offline ? [stale ? 'Last reported offline' : 'vCenter reports it offline'] : [];
+  const reasons = vmwareAttentionReasons(resource, leading, staleNotice);
   return {
     tone: offline || hasCriticalVmwareSignal(resource) ? 'danger' : 'warning',
     label: 'Attention',
     reasons: reasons.length > 0 ? reasons : ['vCenter reports a problem'],
+    stale,
   };
 }
 
@@ -661,15 +671,13 @@ export function buildVmwareIncidentRows(resources: Resource[]): VmwareIncidentRo
     }
   }
 
-  return rows.sort((a, b) => {
-    const severityDelta = incidentSeverityRank(b.severity) - incidentSeverityRank(a.severity);
-    if (severityDelta !== 0) return severityDelta;
-    const priorityDelta = b.priority - a.priority;
-    if (priorityDelta !== 0) return priorityDelta;
-    const entityDelta = a.entityType.localeCompare(b.entityType);
-    if (entityDelta !== 0) return entityDelta;
-    return a.resourceName.localeCompare(b.resourceName);
-  });
+  return rows.sort(
+    (a, b) =>
+      incidentSeverityRank(b.severity) - incidentSeverityRank(a.severity) ||
+      b.priority - a.priority ||
+      a.entityType.localeCompare(b.entityType) ||
+      a.resourceName.localeCompare(b.resourceName),
+  );
 }
 
 export type VmwareHealthPosture = {
@@ -702,39 +710,22 @@ export function buildVmwareHealthPosture(
   return posture;
 }
 
-const isVmwareActivityChange = (change: ResourceChange): boolean => {
-  if (change.kind !== 'activity') return false;
-  if (trimString(change.sourceAdapter) === 'vmware_adapter') return true;
-  const activityType = metadataString(change.metadata, 'activity_type');
-  if (activityType.startsWith('vmware_')) return true;
-  return Boolean(
-    metadataString(
-      change.metadata,
-      'vmwareTask',
-      'vmwareTaskName',
-      'vmwareTaskState',
-      'vmwareEvent',
-      'vmwareEventType',
-      'vmwareEventMessage',
-    ),
-  );
-};
+const VMWARE_TASK_KEYS = ['vmwareTask', 'vmwareTaskName', 'vmwareTaskState'] as const;
+const VMWARE_EVENT_KEYS = ['vmwareEvent', 'vmwareEventType', 'vmwareEventMessage'] as const;
+
+const isVmwareActivityChange = (change: ResourceChange): boolean =>
+  change.kind === 'activity' &&
+  (trimString(change.sourceAdapter) === 'vmware_adapter' ||
+    metadataString(change.metadata, 'activity_type').startsWith('vmware_') ||
+    Boolean(metadataString(change.metadata, ...VMWARE_TASK_KEYS, ...VMWARE_EVENT_KEYS)));
 
 const mapVmwareActivityKind = (
   activityType: string,
   metadata: Record<string, unknown> | undefined,
 ): VmwareActivityKind => {
   const normalized = normalizeToken(activityType);
-  if (
-    normalized.includes('task') ||
-    metadataString(metadata, 'vmwareTask', 'vmwareTaskName', 'vmwareTaskState')
-  ) {
-    return 'task';
-  }
-  if (
-    normalized.includes('event') ||
-    metadataString(metadata, 'vmwareEvent', 'vmwareEventType', 'vmwareEventMessage')
-  ) {
+  if (normalized.includes('task') || metadataString(metadata, ...VMWARE_TASK_KEYS)) return 'task';
+  if (normalized.includes('event') || metadataString(metadata, ...VMWARE_EVENT_KEYS)) {
     return 'event';
   }
   return 'activity';
@@ -742,19 +733,9 @@ const mapVmwareActivityKind = (
 
 export function mapVmwareActivityStateBucket(state: string): VmwareActivityStateBucket {
   const normalized = normalizeToken(state);
-  if (
-    ['error', 'failed', 'failure', 'cancelled', 'canceled', 'timedout', 'timeout', 'red'].includes(
-      normalized,
-    )
-  ) {
-    return 'failed';
-  }
-  if (['running', 'queued', 'pending', 'inprogress', 'started'].includes(normalized)) {
-    return 'running';
-  }
-  if (['success', 'succeeded', 'complete', 'completed', 'ok', 'green'].includes(normalized)) {
-    return 'success';
-  }
+  if (/^(error|fail(ed|ure)|cancell?ed|timed?out|red)$/.test(normalized)) return 'failed';
+  if (/^(running|queued|pending|inprogress|started)$/.test(normalized)) return 'running';
+  if (/^(succe(ss|eded)|completed?|ok|green)$/.test(normalized)) return 'success';
   return 'unknown';
 }
 
@@ -764,23 +745,31 @@ const parseActivitySortTime = (change: ResourceChange): number => {
   return Number.isFinite(parsed) ? parsed : 0;
 };
 
+const appendSourceAliasKeys = (
+  keys: Set<string>,
+  connectionId: unknown,
+  entityType: unknown,
+  managedObjectId: unknown,
+  includeStorageAlias: boolean,
+): void => {
+  const sourceAlias = vmwareSourceAlias(connectionId, entityType, managedObjectId);
+  addLookupKey(keys, sourceAlias);
+  addLookupKey(keys, managedObjectId);
+  if (includeStorageAlias && sourceAlias) addLookupKey(keys, `storage:${sourceAlias}`);
+};
+
 const vmwareActivityResourceKeys = (resource: Resource): Set<string> => {
   const keys = new Set<string>();
   addLookupKey(keys, resource.id);
   addLookupKey(keys, resource.canonicalIdentity?.primaryId);
-  for (const alias of resource.canonicalIdentity?.aliases ?? []) {
-    addLookupKey(keys, alias);
-  }
-  const sourceAlias = vmwareSourceAlias(
+  for (const alias of resource.canonicalIdentity?.aliases ?? []) addLookupKey(keys, alias);
+  appendSourceAliasKeys(
+    keys,
     resource.vmware?.connectionId,
     resource.vmware?.entityType,
     resource.vmware?.managedObjectId,
+    resource.type === 'storage',
   );
-  addLookupKey(keys, sourceAlias);
-  addLookupKey(keys, resource.vmware?.managedObjectId);
-  if (sourceAlias && resource.type === 'storage') {
-    addLookupKey(keys, `storage:${sourceAlias}`);
-  }
   return keys;
 };
 
@@ -788,16 +777,13 @@ const vmwareActivityChangeKeys = (change: ResourceChange): Set<string> => {
   const keys = new Set<string>();
   addLookupKey(keys, change.resourceId);
   const metadata = change.metadata;
-  const sourceAlias = vmwareSourceAlias(
+  appendSourceAliasKeys(
+    keys,
     metadataString(metadata, 'vmwareConnectionId'),
     metadataString(metadata, 'vmwareEntityType'),
     metadataString(metadata, 'vmwareManagedObjectId'),
+    true,
   );
-  addLookupKey(keys, sourceAlias);
-  addLookupKey(keys, metadataString(metadata, 'vmwareManagedObjectId'));
-  if (sourceAlias) {
-    addLookupKey(keys, `storage:${sourceAlias}`);
-  }
   return keys;
 };
 
@@ -838,28 +824,17 @@ const buildActivityRow = (
   change: ResourceChange,
   index: number,
 ): VmwareActivityRow => {
-  const metadata = change.metadata;
-  const activityType = metadataString(metadata, 'activity_type');
-  const activityKind = mapVmwareActivityKind(activityType, metadata);
+  const m = (...keys: string[]) => metadataString(change.metadata, ...keys);
+  const activityType = m('activity_type');
+  const activityKind = mapVmwareActivityKind(activityType, change.metadata);
   // An event reads as vCenter's own message. The provider titles new events
   // with it; records stored before that carry the event class as their title.
   const title =
-    (activityKind === 'event' ? metadataString(metadata, 'vmwareEventMessage') : '') ||
-    metadataString(metadata, 'activity_title', 'vmwareTaskName', 'vmwareEventType') ||
+    (activityKind === 'event' ? m('vmwareEventMessage') : '') ||
+    m('activity_title', 'vmwareTaskName', 'vmwareEventType') ||
     trimString(change.reason) ||
     'vSphere activity';
-  const state =
-    metadataString(metadata, 'activity_state', 'vmwareTaskState') || trimString(change.to);
-  const message =
-    metadataString(metadata, 'activity_message', 'vmwareTaskError', 'vmwareEventMessage') ||
-    trimString(change.reason);
-  const description = metadataString(metadata, 'vmwareTaskDescription', 'vmwareEventMessage');
-  const eventType = metadataString(metadata, 'vmwareEventType');
-  const actor = trimString(change.actor) || metadataString(metadata, 'vmwareEventUser');
-  const nativeId = metadataString(metadata, 'activity_native_id', 'vmwareTask', 'vmwareEvent');
-  const observedAt = trimString(change.observedAt);
-  const occurredAt = trimString(change.occurredAt) || undefined;
-
+  const state = m('activity_state', 'vmwareTaskState') || trimString(change.to);
   return {
     id: `${resource.id}:activity:${change.id || index}`,
     resource,
@@ -867,27 +842,23 @@ const buildActivityRow = (
     resourceId: resource.id,
     resourceName: vmwareResourceDisplayName(resource),
     resourceType: resource.type,
-    entityType:
-      metadataString(metadata, 'vmwareEntityType') ||
-      trimString(resource.vmware?.entityType) ||
-      resource.type,
+    entityType: m('vmwareEntityType') || trimString(resource.vmware?.entityType) || resource.type,
     managedObjectId:
-      metadataString(metadata, 'vmwareManagedObjectId') ||
-      trimString(resource.vmware?.managedObjectId) ||
-      resource.id,
+      m('vmwareManagedObjectId') || trimString(resource.vmware?.managedObjectId) || resource.id,
     activityKind,
     activityType,
     stateBucket: mapVmwareActivityStateBucket(state),
     title,
-    eventType,
+    eventType: m('vmwareEventType'),
     state,
-    message,
-    description,
-    actor,
-    nativeId: nativeId || change.id,
+    message:
+      m('activity_message', 'vmwareTaskError', 'vmwareEventMessage') || trimString(change.reason),
+    description: m('vmwareTaskDescription', 'vmwareEventMessage'),
+    actor: trimString(change.actor) || m('vmwareEventUser'),
+    nativeId: m('activity_native_id', 'vmwareTask', 'vmwareEvent') || change.id,
     source: trimString(change.sourceAdapter) || trimString(change.sourceType) || 'vmware',
-    occurredAt,
-    observedAt,
+    occurredAt: trimString(change.occurredAt) || undefined,
+    observedAt: trimString(change.observedAt),
     sortTime: parseActivitySortTime(change),
   };
 };
@@ -921,13 +892,12 @@ export function buildVmwareActivityRows(
     }
   }
 
-  return rows.sort((left, right) => {
-    const timeDelta = right.sortTime - left.sortTime;
-    if (timeDelta !== 0) return timeDelta;
-    const resourceDelta = left.resourceName.localeCompare(right.resourceName);
-    if (resourceDelta !== 0) return resourceDelta;
-    return left.id.localeCompare(right.id);
-  });
+  return rows.sort(
+    (left, right) =>
+      right.sortTime - left.sortTime ||
+      left.resourceName.localeCompare(right.resourceName) ||
+      left.id.localeCompare(right.id),
+  );
 }
 
 const buildSearchHaystack = (parts: readonly unknown[]): string =>
@@ -1087,27 +1057,31 @@ export function filterVmwareVirtualMachines(
   );
 }
 
+const commonRowSearchFields = (row: VmwareIncidentRow | VmwareActivityRow): readonly unknown[] => [
+  row.resourceId,
+  row.resourceName,
+  row.resourceType,
+  row.entityType,
+  row.managedObjectId,
+  row.source,
+  row.resource.vmware?.connectionName,
+  row.resource.vmware?.vcenterHost,
+  row.resource.vmware?.datacenterName,
+  row.resource.vmware?.clusterName,
+  row.resource.vmware?.runtimeHostName,
+  ...(row.resource.tags ?? []),
+];
+
 const incidentSearchHaystack = (row: VmwareIncidentRow): string =>
   buildSearchHaystack([
-    row.resourceId,
-    row.resourceName,
-    row.resourceType,
-    row.entityType,
-    row.managedObjectId,
+    ...commonRowSearchFields(row),
     row.severity,
     row.code,
-    row.source,
     row.summary,
     row.label,
     row.category,
     row.action,
-    row.resource.vmware?.connectionName,
-    row.resource.vmware?.vcenterHost,
-    row.resource.vmware?.datacenterName,
-    row.resource.vmware?.clusterName,
-    row.resource.vmware?.runtimeHostName,
     row.resource.vmware?.activeAlarmSummary,
-    ...(row.resource.tags ?? []),
   ]);
 
 export function filterVmwareIncidents(
@@ -1130,11 +1104,7 @@ export function filterVmwareIncidents(
 const activitySearchHaystack = (row: VmwareActivityRow): string =>
   buildSearchHaystack([
     row.id,
-    row.resourceId,
-    row.resourceName,
-    row.resourceType,
-    row.entityType,
-    row.managedObjectId,
+    ...commonRowSearchFields(row),
     row.activityKind,
     row.activityType,
     row.title,
@@ -1144,14 +1114,7 @@ const activitySearchHaystack = (row: VmwareActivityRow): string =>
     row.description,
     row.actor,
     row.nativeId,
-    row.source,
-    row.resource.vmware?.connectionName,
-    row.resource.vmware?.vcenterHost,
-    row.resource.vmware?.datacenterName,
-    row.resource.vmware?.clusterName,
-    row.resource.vmware?.runtimeHostName,
     ...(row.change.relatedResources ?? []),
-    ...(row.resource.tags ?? []),
   ]);
 
 export function filterVmwareActivity(
