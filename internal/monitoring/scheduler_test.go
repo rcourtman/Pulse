@@ -19,6 +19,77 @@ func (m mockStalenessSource) StalenessScore(instanceType InstanceType, instanceN
 	return score, ok
 }
 
+type gatedStalenessSource struct {
+	reading chan struct{}
+	release chan struct{}
+}
+
+func (s gatedStalenessSource) StalenessScore(_ InstanceType, name string) (float64, bool) {
+	if name == "slow" {
+		close(s.reading)
+		<-s.release
+		return 0.75, true
+	}
+	return 0, false
+}
+
+func TestAdaptiveSchedulerFreshnessReadDoesNotBlockOtherPlans(t *testing.T) {
+	source := gatedStalenessSource{reading: make(chan struct{}), release: make(chan struct{})}
+	scheduler := NewAdaptiveScheduler(DefaultSchedulerConfig(), source, mockIntervalSelector{15 * time.Second}, nil)
+	now := time.Now()
+	slow := InstanceDescriptor{Name: "slow", Type: InstanceTypePBS}
+	fast := InstanceDescriptor{Name: "fast", Type: InstanceTypePVE, FixedInterval: 20 * time.Second}
+	scheduler.BuildPlan(now, []InstanceDescriptor{fast}, 0)
+
+	plan := make(chan []ScheduledTask, 1)
+	go func() { plan <- scheduler.BuildPlan(now, []InstanceDescriptor{slow, fast}, 0) }()
+	released := false
+	defer func() {
+		if !released {
+			close(source.release)
+		}
+	}()
+	select {
+	case <-source.reading:
+	case <-time.After(2 * time.Second):
+		t.Fatal("inventory plan did not start reading freshness")
+	}
+
+	type observation struct {
+		prior    ScheduledTask
+		after    ScheduledTask
+		hadPrior bool
+	}
+	completed := make(chan observation, 1)
+	go func() {
+		prior, ok := scheduler.LastScheduled(fast.Type, fast.Name)
+		after := scheduler.BuildPlan(now, []InstanceDescriptor{fast}, 0)[0]
+		completed <- observation{prior: prior, hadPrior: ok, after: after}
+	}()
+	select {
+	case got := <-completed:
+		if !got.hadPrior || !got.prior.NextRun.Equal(now) ||
+			!got.after.NextRun.Equal(now.Add(fast.FixedInterval)) || got.after.Interval != fast.FixedInterval {
+			t.Fatalf("independent poll did not keep its cadence: %+v", got)
+		}
+	case <-time.After(2 * time.Second):
+		t.Fatal("an inventory freshness read blocked the scheduler status read or another poll's successor")
+	}
+
+	close(source.release)
+	released = true
+	select {
+	case tasks := <-plan:
+		if len(tasks) != 2 || tasks[0].InstanceName != slow.Name ||
+			tasks[0].Priority != 0.75 || tasks[0].Interval != 15*time.Second ||
+			tasks[1].InstanceName != fast.Name || !tasks[1].NextRun.Equal(now.Add(fast.FixedInterval)) {
+			t.Fatalf("inventory plan lost freshness, ordering, or the concurrent successor: %+v", tasks)
+		}
+	case <-time.After(2 * time.Second):
+		t.Fatal("inventory plan did not finish after freshness was available")
+	}
+}
+
 // mockIntervalSelector is a test implementation of IntervalSelector
 type mockIntervalSelector struct {
 	interval time.Duration

@@ -21,6 +21,7 @@ const (
 )
 
 // StalenessSource provides normalized freshness hints for an instance.
+// Concurrent plans may read it at the same time.
 type StalenessSource interface {
 	StalenessScore(instanceType InstanceType, instanceName string) (float64, bool)
 }
@@ -173,16 +174,23 @@ func (s *AdaptiveScheduler) BuildPlan(now time.Time, inventory []InstanceDescrip
 }
 
 func (s *AdaptiveScheduler) buildUnsortedPlan(now time.Time, inventory []InstanceDescriptor, queueDepth int) []ScheduledTask {
-	tasks := make([]ScheduledTask, 0, len(inventory))
+	// Read freshness before locking the shared planner. Waiting on the
+	// tracker for a full inventory must not block a cached plan read or a
+	// poll worker that already has the freshness it needs to reschedule.
+	// Stage the scores in the result slice to avoid a second allocation.
+	tasks := make([]ScheduledTask, len(inventory))
+	for i, inst := range inventory {
+		if score, ok := s.staleness.StalenessScore(inst.Type, inst.Name); ok {
+			tasks[i].Priority = score
+		}
+	}
+
 	s.mu.Lock()
 	defer s.mu.Unlock()
 
-	for _, inst := range inventory {
+	for i, inst := range inventory {
 		key := schedulerKey(inst.Type, inst.Name)
-		score, ok := s.staleness.StalenessScore(inst.Type, inst.Name)
-		if !ok {
-			score = 0
-		}
+		score := tasks[i].Priority
 
 		lastScheduled := inst.LastScheduled
 		lastInterval := inst.LastInterval
@@ -198,7 +206,7 @@ func (s *AdaptiveScheduler) buildUnsortedPlan(now time.Time, inventory []Instanc
 			lastInterval = s.cfg.BaseInterval
 		}
 
-		currentDepth := queueDepth + len(tasks)
+		currentDepth := queueDepth + i
 		req := IntervalRequest{
 			Now:            now,
 			BaseInterval:   s.cfg.BaseInterval,
@@ -264,7 +272,7 @@ func (s *AdaptiveScheduler) buildUnsortedPlan(now time.Time, inventory []Instanc
 		}
 
 		s.lastPlan[key] = task
-		tasks = append(tasks, task)
+		tasks[i] = task
 	}
 
 	return tasks
