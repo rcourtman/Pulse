@@ -210,6 +210,44 @@ class AlertingOutageHelpDocsTest(unittest.TestCase):
             with self.subTest(api_phrase=phrase):
                 self.assertIn(phrase, active_alerts_section)
 
+    def test_builtin_ceph_health_alert_help_matches_runtime_contract(self):
+        text = DOC.read_text(encoding="utf-8")
+        marker = "### Built-in provider health alerts\n"
+        self.assertIn(marker, text)
+        section = " ".join(
+            text.split(marker, 1)[1].split("\n## ", 1)[0].split()
+        )
+
+        adapters = (
+            ROOT / "internal/unifiedresources/adapters.go"
+        ).read_text(encoding="utf-8")
+        ceph_monitor = (
+            ROOT / "internal/monitoring/ceph.go"
+        ).read_text(encoding="utf-8")
+        unified_incidents = (
+            ROOT / "internal/alerts/unified_incidents.go"
+        ).read_text(encoding="utf-8")
+
+        self.assertIn("func cephHealthIncident(", adapters)
+        self.assertIn('Code:                          "ceph_cluster_health"', adapters)
+        self.assertIn("ConfirmationsRequired:         2", adapters)
+        self.assertIn("RecoveryConfirmationsRequired: 2", adapters)
+        self.assertIn('fmt.Sprintf("%s: %s", checkName, msg)', ceph_monitor)
+        self.assertIn("case unifiedresources.ResourceTypeCeph", unified_incidents)
+
+        for phrase in (
+            "Alerts → Thresholds",
+            "`HEALTH_WARN` opens a warning alert",
+            "`HEALTH_ERR` opens a critical alert",
+            "two consecutive degraded observations",
+            "two consecutive `HEALTH_OK` observations",
+            "active Ceph health check codes and summaries",
+            "carry no resource tags",
+            "Only Ceph pool capacity thresholds are configured under **Alerts → Thresholds**",
+        ):
+            with self.subTest(phrase=phrase):
+                self.assertIn(phrase, section)
+
 
 if __name__ == "__main__":
     unittest.main()
