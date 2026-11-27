@@ -262,6 +262,35 @@ class PMGDocsTest(unittest.TestCase):
             self.assertIn(phrase, section)
         self.assertNotRegex(section, r"https?://|```|\b(?:curl|wget)\b")
 
+    def test_startup_outage_and_reconnect_recovery_match_monitor_source(self):
+        section = self.guide.split("Startup outages and automatic reconnection", 1)[1].split(
+            "Response decoding is not a network verdict", 1
+        )[0]
+        for phrase in (
+            "fails during Pulse startup",
+            "before its first connectivity poll succeeds",
+            "publishes an offline and unhealthy state",
+            "records the error in scheduler health and staleness tracking",
+            "retries client creation in the background with context-bound authentication",
+            "without restarting Pulse or deleting and re-adding the connection",
+            "Paused PMG connections are skipped intentionally during startup and reconnect retries",
+        ):
+            with self.subTest(phrase=phrase):
+                self.assertIn(phrase, section)
+
+        client_init = (ROOT / "internal/monitoring/monitor_client_init.go").read_text(encoding="utf-8")
+        reconnect = (ROOT / "internal/monitoring/monitor_client_reconnect.go").read_text(encoding="utf-8")
+        pbs_pmg = (ROOT / "internal/monitoring/monitor_pbs_pmg.go").read_text(encoding="utf-8")
+        self.assertIn("Skipping PMG client init: instance is paused", client_init)
+        self.assertIn("m.publishPMGStartupFailure(pmgInst, monErr)", client_init)
+        self.assertIn("PMG client created; awaiting first connectivity poll", client_init)
+        self.assertIn("newPMGClientFunc = pmg.NewClientWithContext", reconnect)
+        self.assertIn("missingPMG = append(missingPMG, pmgInst)", reconnect)
+        self.assertIn("m.publishPMGStartupFailure(pmgInst, monErr)", reconnect)
+        self.assertIn("func (m *Monitor) publishPMGStartupFailure(", pbs_pmg)
+        self.assertIn('Status:           "offline"', pbs_pmg)
+        self.assertIn('ConnectionHealth: "unhealthy"', pbs_pmg)
+
 
 if __name__ == "__main__":
     unittest.main()

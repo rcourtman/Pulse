@@ -473,6 +473,35 @@ class PBSDocsTest(unittest.TestCase):
             with self.subTest(monitor_token=token):
                 self.assertIn(token, pbs_poll)
 
+    def test_native_pbs_alert_isolation_and_cpu_units_match_runtime(self):
+        section = " ".join(
+            DOC.read_text(encoding="utf-8")
+            .split("### PBS CPU and memory alerts\n", 1)[1]
+            .split("\n### ", 1)[0]
+            .replace("**", "")
+            .replace("`", "")
+            .split()
+        )
+        for phrase in (
+            "native PBS node-status readings collected over the PBS API",
+            "separate native pbs series rather than reusing a linked host agent",
+            "percentage points (0 to 100%)",
+            "treats that poll as a missing observation rather than zero usage",
+            "clears stale PBS CPU and memory alerts immediately",
+        ):
+            with self.subTest(phrase=phrase):
+                self.assertIn(phrase, section)
+
+        monitor = (ROOT / "internal/monitoring/monitor_pbs_pmg.go").read_text(encoding="utf-8")
+        self.assertIn('const pbsNodeMetricsFamily = "pbs"', monitor)
+        self.assertIn("func (m *Monitor) recordPBSNodeHistory(", monitor)
+        window = (ROOT / "internal/monitoring/metric_window_provider.go").read_text(encoding="utf-8")
+        self.assertIn("if strings.EqualFold(resourceType, pbsNodeMetricsFamily)", window)
+        pbs_alerts = (ROOT / "internal/alerts/pbs.go").read_text(encoding="utf-8")
+        self.assertIn("if !pbs.NodeMetricsUnavailable", pbs_alerts)
+        self.assertIn("if cpuPercent > 0 && cpuPercent <= 1", pbs_alerts)
+        self.assertIn("m.clearPBSMetricAlerts(pbs.ID)", pbs_alerts)
+
 
 if __name__ == "__main__":
     unittest.main()

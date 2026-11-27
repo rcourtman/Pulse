@@ -168,6 +168,21 @@ or permissions:
 | **Readings stale** appears while the gateway responds | An independent availability check can pass while the PMG poll is quiet. Follow [When readings are stale](#when-readings-are-stale) and check PMG's own queue view without restarting or re-adding the connection. |
 | Cluster nodes or node queues are missing | Compare the gateway's existing cluster inventory and each affected node's native queue view. One reachable node does not prove every node was collected. |
 
+### Startup outages and automatic reconnection
+
+If a non-paused PMG connection fails during Pulse startup because the gateway is
+unreachable, TLS validation fails, or authentication is rejected, Pulse does
+not silently omit the gateway or mark it healthy before its first connectivity
+poll succeeds. Pulse immediately publishes an offline and unhealthy state,
+records the error in scheduler health and staleness tracking, and keeps the
+saved gateway configured.
+
+While the connection remains enabled, Pulse retries client creation in the
+background with context-bound authentication so the gateway can recover once
+reachable without restarting Pulse or deleting and re-adding the connection.
+Paused PMG connections are skipped intentionally during startup and reconnect
+retries.
+
 ### Response decoding is not a network verdict
 
 An error such as `pmg_queue_status` followed by `failed to decode response` or

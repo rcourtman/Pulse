@@ -616,6 +616,22 @@ polls from retained snapshots and unread datastores:
   instead of leaving stale datastores behind. A failed datastore read still
   preserves the last known storage entries.
 
+### PBS CPU and memory alerts
+
+PBS CPU and memory alerts evaluate strictly from native PBS node-status
+readings collected over the PBS API. Pulse records those alert samples in a
+separate native `pbs` series rather than reusing a linked host agent, a
+namesake host, or the drawer's compatibility chart target. Installing a host
+agent on the PBS host does not supply or mask native PBS CPU or memory alert
+evidence.
+
+PBS CPU alert thresholds compare against percentage points (`0` to `100%`),
+matching the resource view and History charts. If the PBS node-status read
+fails while the server remains reachable, Pulse treats that poll as a missing
+observation rather than zero usage and does not clear or alter an open alert's
+trusted evidence. When PBS itself is offline or unhealthy, Pulse clears stale
+PBS CPU and memory alerts immediately and keeps connectivity alerting separate.
+
 ### Slow Backup Loading
 
 A slow backup list does not establish an encrypted-datastore or PVE-proxy

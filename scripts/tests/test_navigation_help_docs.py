@@ -244,6 +244,57 @@ class NavigationHelpDocsTest(unittest.TestCase):
             with self.subTest(live_guide=live_guide):
                 self.assertIn(live_guide, storage_proposal)
 
+    def test_proxmox_93_persistent_identity_and_history_splicing_match_runtime(self):
+        unified = doc_text("UNIFIED_RESOURCES.md")
+        history = doc_text("METRICS_HISTORY.md")
+        self.assertEqual(
+            history,
+            (ROOT / "frontend-modern/public/docs/METRICS_HISTORY.md").read_text(encoding="utf-8"),
+        )
+        unified_section = " ".join(
+            unified.split("### Proxmox VE 9.3 persistent identity\n", 1)[1]
+            .split("\n### ", 1)[0]
+            .replace("**", "")
+            .replace("`", "")
+            .split()
+        )
+        for phrase in (
+            "persistent guest identity (uid and rtime)",
+            "cluster-id from GET /cluster/status",
+            "pre-9.3 canonical ID when they receive their first uid",
+            "live migrations between nodes in the same cluster stay pinned to that same canonical ID",
+            "distinct UID-based canonical ID",
+            "Differing cluster-id values prevent independent clusters or standalone nodes",
+        ):
+            with self.subTest(unified_phrase=phrase):
+                self.assertIn(phrase, unified_section)
+
+        history_section = " ".join(
+            history.split("### Proxmox live migration and VMID reuse\n", 1)[1]
+            .split("\n## ", 1)[0]
+            .replace("**", "")
+            .replace("`", "")
+            .split()
+        )
+        for phrase in (
+            "splices stored history chronologically across the cluster's sibling nodes",
+            "Proxmox VE 9.3 and later",
+            "persistent uid",
+            "withholds sibling-node history from the previous guest",
+            "keep their existing identity and history when they receive their first uid",
+        ):
+            with self.subTest(history_phrase=phrase):
+                self.assertIn(phrase, history_section)
+
+        ids_go = (ROOT / "internal/unifiedresources/ids.go").read_text(encoding="utf-8")
+        metrics_go = (ROOT / "internal/monitoring/monitor_metrics.go").read_text(encoding="utf-8")
+        cluster_go = (ROOT / "internal/monitoring/monitor_pve_cluster.go").read_text(encoding="utf-8")
+        self.assertIn("func ProxmoxGuestUIDCanonicalID(", ids_go)
+        self.assertIn("func (m *Monitor) proxmoxGuestMetricSiblingKeys(", metrics_go)
+        self.assertIn("spliceGuestMetricHistory(", metrics_go)
+        self.assertIn("clusterID := proxmox.ExtractClusterID(statuses)", cluster_go)
+        self.assertIn("Proxmox cluster-id changed during membership read", cluster_go)
+
     def test_all_changed_guides_match_their_shipped_copies(self):
         for name in (
             "README.md",
@@ -251,6 +302,8 @@ class NavigationHelpDocsTest(unittest.TestCase):
             "TROUBLESHOOTING.md",
             "TRUENAS.md",
             "PBS.md",
+            "MAIL_GATEWAY.md",
+            "METRICS_HISTORY.md",
             "KUBERNETES.md",
             "UNIFIED_RESOURCES.md",
             "MIGRATION_UNIFIED_NAV.md",
