@@ -68,6 +68,30 @@ class PublicDocsClaimsTest(unittest.TestCase):
         self.assertEqual(len(errors), 1)
         self.assertIn("TrueNAS 26 removed", errors[0])
 
+    def test_contributing_references_live_repository_paths_and_commands(self) -> None:
+        text = (ROOT / "CONTRIBUTING.md").read_text(encoding="utf-8")
+        for required in (
+            "`cmd/pulse-agent`",
+            "`cmd/pulse-agent-helper`",
+            "`cmd/pulse-agent-runner`",
+            "`internal/monitoring`",
+            "`npm --prefix frontend-modern run build`",
+            "`make build-agents`",
+        ):
+            self.assertIn(required, text)
+        for stale in (
+            "cmd/pulse-*-agent",
+            "`internal/monitor`",
+            "docs/internal/SCRIPT_LIBRARY.md",
+            "make bundle-scripts",
+            "MIGRATION_SCAFFOLDING.md",
+        ):
+            self.assertNotIn(stale, text)
+        self.assertEqual(
+            (ROOT / "frontend-modern/public/docs/CONTRIBUTING.md").read_text(encoding="utf-8"),
+            text,
+        )
+
 
 class PublicDocsLinksTest(unittest.TestCase):
     def setUp(self) -> None:

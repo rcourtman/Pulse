@@ -102,8 +102,7 @@ and installer tooling.
   the built frontend and exposes REST + WebSocket APIs.
 - **Architecture (`ARCHITECTURE.md`)** – High-level system design diagrams and explanations.
 - **Frontend (`frontend-modern/`)** – Vite + SolidJS app built with TypeScript.
-- **Agents (`cmd/pulse-*-agent`)** – Go binaries distributed alongside Pulse for
-  host and Docker telemetry.
+- **Agents (`cmd/pulse-agent`, `cmd/pulse-agent-helper`, `cmd/pulse-agent-runner`)** – Go binaries distributed alongside Pulse for host, container, and typed-action workflows.
 - **Documentation (`docs/`)** – Markdown-based guides published to users and
   referenced from the README.
 - **Scripts (`scripts/`)** – Bash installers and helpers bundled for
@@ -158,7 +157,7 @@ Mock mode is supported for development, but the internal developer notes are not
 
 Key entry points:
 - HTTP router lives in `internal/api`.
-- Monitoring engines live under `internal/monitor`.
+- Monitoring engines live under `internal/monitoring`.
 - Configuration parsing resides in `internal/config`.
 
 When adding new API endpoints, document them in `docs/API.md` and provide
@@ -184,8 +183,9 @@ examples where possible.
 The same managed runtime wrappers are available from `frontend-modern/` if you
 start there by habit, so `npm run dev`, `npm run dev:status`, and
 `npm run dev:verify` behave the same way from either workspace.
-- Production build: `npm run build` (syncs the Go embed copy in
-  `internal/api/frontend-modern/dist` automatically).
+- Production build: `npm --prefix frontend-modern run build` (or `make build`,
+  which syncs the Go embed copy in `internal/api/frontend-modern/dist`
+  automatically).
 
 Use SolidJS patterns (signals, memos, createEffect) and the shared design-system
 components in `components/shared/`. Add screenshots when introducing new
@@ -199,12 +199,10 @@ light/dark classes and broken utility chains; use semantic tokens from
 
 ## Installers & Scripts
 
-- Centralised guidance: `docs/internal/SCRIPT_LIBRARY.md`
-- Bundling: `make bundle-scripts`
-- Tests: `scripts/tests/run.sh` plus integration suites under
-  `scripts/tests/integration/`
-
-Document rollout plans and kill switches in `MIGRATION_SCAFFOLDING.md` so future contributors know how to disable risky changes.
+- Server and agent installers: `install.sh` and `scripts/install.sh`
+- Agent builds: `make build-agents`
+- Tests: `scripts/tests/run.sh`, `scripts/tests/integration/`, and
+  `go test ./scripts/installtests/...`
 
 ---
 
