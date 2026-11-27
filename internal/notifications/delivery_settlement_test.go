@@ -16,6 +16,14 @@ import (
 	"github.com/stretchr/testify/require"
 )
 
+// A row's persisted disposition can be visible before its worker has finished
+// auditing it and relinquished ownership.
+func continuityQueueIdle(q *NotificationQueue) bool {
+	q.mu.RLock()
+	defer q.mu.RUnlock()
+	return len(q.processingNotifications) == 0
+}
+
 func TestNotificationAcknowledgedStatusFailureRetriesLocally(t *testing.T) {
 	var mu sync.Mutex
 	count := 0
@@ -29,22 +37,33 @@ func TestNotificationAcknowledgedStatusFailureRetriesLocally(t *testing.T) {
 	hook := WebhookConfig{ID: "ops", URL: server.URL, Enabled: true, Service: "generic"}
 	n := deferredContinuityManager(t, t.TempDir(), hook)
 	q := n.GetQueue()
-	q.installProcessor(n.ProcessQueuedNotification)
+	q.processorTicker.Stop()
+	var invocations atomic.Int32
+	q.installProcessor(func(row *QueuedNotification) error {
+		invocations.Add(1)
+		return n.ProcessQueuedNotification(row)
+	})
 	_, err := q.db.Exec(`CREATE TRIGGER reject_completion BEFORE UPDATE OF status ON notification_queue WHEN NEW.status='sent' BEGIN SELECT RAISE(ABORT,'synthetic completion persistence failure'); END`)
 	require.NoError(t, err)
 	n.SendAlert(&alerts.Alert{ID: "completion-pending", StartTime: time.Now(), Level: alerts.AlertLevelCritical})
-	q.processBatch()
-	require.Eventually(t, func() bool {
-		stats, err := q.GetQueueStats()
-		return err == nil && stats["pending"] == 1 && stats["settlement_pending"] == 1 && stats["sending"] == 0
-	}, 5*time.Second, time.Millisecond)
+	waitForDeferral := func(want int32) {
+		t.Helper()
+		require.Eventually(t, func() bool {
+			if invocations.Load() != want {
+				return false
+			}
+			stats, err := q.GetQueueStats()
+			return err == nil && stats["pending"] == 1 && stats["settlement_pending"] == 1 && stats["sending"] == 0 && continuityQueueIdle(q)
+		}, 5*time.Second, time.Millisecond, "attempt %d did not finish with settlement pending", want)
+	}
+	waitForDeferral(1)
 	// Simulate elapsed local-repair time without another provider attempt.
 	originalAttempt := time.Now().Add(-time.Hour).Unix()
 	_, err = q.db.Exec(`UPDATE notification_queue SET last_attempt=?`, originalAttempt)
 	require.NoError(t, err)
-	for retry := 0; retry < 2; retry++ {
+	for want := int32(2); want <= 3; want++ {
 		retryContinuitySettlementNow(t, q)
-		q.processBatch()
+		waitForDeferral(want)
 	}
 	var attempts, audits int
 	require.NoError(t, q.db.QueryRow(`SELECT attempts FROM notification_queue`).Scan(&attempts))
@@ -55,8 +74,8 @@ func TestNotificationAcknowledgedStatusFailureRetriesLocally(t *testing.T) {
 	_, err = q.db.Exec(`DROP TRIGGER reject_completion`)
 	require.NoError(t, err)
 	retryContinuitySettlementNow(t, q)
-	q.processBatch()
 	drainContinuity(t, n)
+	require.Equal(t, int32(4), invocations.Load())
 	stats, err := q.GetQueueStats()
 	require.NoError(t, err)
 	require.Equal(t, 1, stats["sent"])
@@ -111,7 +130,7 @@ func TestNotificationAcknowledgedSendingRecoversAfterBothStatusWritesFail(t *tes
 	q.processBatch()
 	require.Eventually(t, func() bool {
 		stats, err := q.GetQueueStats()
-		return err == nil && stats["sending"] == 1 && stats["settlement_pending"] == 1
+		return err == nil && stats["sending"] == 1 && stats["settlement_pending"] == 1 && continuityQueueIdle(q)
 	}, 5*time.Second, time.Millisecond)
 	require.False(t, n.DeliveryHealth().Healthy)
 	// A fallback acceptance record can coexist with a failed terminal status
@@ -433,7 +452,7 @@ func TestNotificationReopenCannotCancelANewerResolution(t *testing.T) {
 					if err := q.db.QueryRow(`SELECT status,last_error FROM notification_queue WHERE id='stale-firing'`).Scan(&status, &reason); err != nil {
 						return false
 					}
-					return status == "cancelled" || (status == "pending" && reason.String == notificationOccurrencePendingMessage)
+					return (status == "cancelled" || (status == "pending" && reason.String == notificationOccurrencePendingMessage)) && continuityQueueIdle(q)
 				}, 5*time.Second, time.Millisecond)
 			} else {
 				n.SendAlert(a)
@@ -817,9 +836,8 @@ func TestNotificationMalformedAcknowledgementIsolatedByDestination(t *testing.T)
 	stats, err := q.GetQueueStats()
 	require.NoError(t, err)
 	require.Equal(t, 1, stats["settlement_pending"], "malformed obligation silently disappeared")
-	row.Config = []byte("invalid")
 	q.SetProcessor(n.ProcessQueuedNotification)
-	q.processNotification(row)
+	drainContinuity(t, n)
 	stats, err = q.GetQueueStats()
 	require.NoError(t, err)
 	require.Zero(t, stats["settlement_pending"])
@@ -1112,6 +1130,10 @@ func TestNotificationAcknowledgementStorageFailureKeepsProviderBudgetBounded(t *
 	hook := WebhookConfig{ID: "ops", URL: server.URL, Enabled: true, Service: "generic"}
 	n := continuityManager(t, t.TempDir(), hook)
 	q := n.GetQueue()
+	// Drive each retry through the one queue worker without a periodic sweep.
+	// A competing manual batch can see the pending row before its previous
+	// attempt has released ownership and silently skip it.
+	q.processorTicker.Stop()
 	_, err := q.db.Exec(`CREATE TRIGGER reject_success_audit BEFORE INSERT ON notification_audit WHEN NEW.success=1 BEGIN SELECT RAISE(ABORT,'synthetic acknowledgement persistence failure'); END`)
 	require.NoError(t, err)
 	n.SendAlert(&alerts.Alert{ID: "ack-unpersisted", StartTime: time.Now(), Level: alerts.AlertLevelCritical})
@@ -1121,15 +1143,21 @@ func TestNotificationAcknowledgementStorageFailureKeepsProviderBudgetBounded(t *
 			observed := count
 			mu.Unlock()
 			stats, err := q.GetQueueStats()
-			if want == 3 {
-				return err == nil && observed == want && stats["dlq"] == 1 && stats["sending"] == 0
+			if err != nil || observed != want || stats["sending"] != 0 || !continuityQueueIdle(q) {
+				return false
 			}
-			return err == nil && observed == want && stats["pending"] == 1 && stats["sending"] == 0
-		}, 5*time.Second, time.Millisecond)
+			if want == 3 {
+				return stats["dlq"] == 1
+			}
+			return stats["pending"] == 1
+		}, 5*time.Second, time.Millisecond, "provider attempt %d did not finish", want)
 		if want < 3 {
 			_, err := q.db.Exec(`UPDATE notification_queue SET next_retry_at=? WHERE status='pending'`, time.Now().Add(-time.Second).Unix())
 			require.NoError(t, err)
-			q.processBatch()
+			select {
+			case q.notifyChan <- struct{}{}:
+			default: // A wake is already queued.
+			}
 		}
 	}
 	q.processBatch()
