@@ -73,6 +73,14 @@ Pulse trusts these headers completely — they *are* the identity and the privil
 
 Neither of these can be enforced from inside Pulse: a forged header and a genuine one are indistinguishable once they arrive.
 
+### Origin checks on proxy-authenticated writes
+
+A forward-auth proxy attaches identity headers to every browser request that carries its sign-in cookie, so there is no Pulse session cookie to bind a CSRF token to. Pulse therefore checks the browser origin on every `/api/` write (`POST`, `PUT`, `PATCH`, `DELETE`, including `/api/setup-script-url`) and rejects cross-site browser writes with **403 `CSRF origin validation failed`**, recording a `csrf_failure` audit event.
+
+A `Sec-Fetch-Site: same-site` write (for example from a sibling subdomain or another port on the same host) is admitted only when its `Origin` header, or its `Referer` header when `Origin` is absent, matches Pulse's exact scheme, host and port. An opaque `null` origin is rejected. Safe reads (`GET`, `HEAD`, `OPTIONS`) and non-browser clients sending no browser origin metadata keep their normal admission.
+
+Behind an HTTPS-terminating proxy, Pulse trusts `X-Forwarded-Proto: https` for this origin comparison only when the immediate peer is listed in `PULSE_TRUSTED_PROXY_CIDRS`. Keep the public `Host` header intact and configure [trusted proxy CIDRs](REVERSE_PROXY.md#before-configuring-the-proxy). These origin checks are in addition to Pulse's session CSRF token check: if a browser also sends a Pulse session cookie, `X-CSRF-Token` is still required.
+
 ## 📦 Examples
 
 These are integration requirements for an already configured authenticator,
@@ -119,6 +127,7 @@ fall back to all-users-admin access.
 | Issue | Check |
 | :--- | :--- |
 | **401 Unauthorized** | Verify `X-Proxy-Secret` matches `PROXY_AUTH_SECRET`. Check if headers are being stripped by intermediate proxies. |
+| **403 CSRF origin validation failed** | Pulse rejected a browser write whose origin did not match Pulse's scheme, host and port. Check that the proxy preserves the public `Host` header, sends `X-Forwarded-Proto: https` on TLS routes and is listed in `PULSE_TRUSTED_PROXY_CIDRS`. Do not disable authentication or add `ALLOWED_ORIGINS=*` to bypass a header mismatch. |
 | **Not Admin** | Check the role header actually reaches Pulse and contains the admin role **exactly** — matching is case-sensitive and compares whole roles, so `Admins` and `authentik Admins` do not match the `admin` default. Set `PROXY_AUTH_ADMIN_ROLE` to your IdP's admin group name. Pulse logs a warning at startup when it falls back to the default. |
 | **Sign out returns to the same user** | Distinguish the [browser redirect, proxy session and IdP session](#sign-out-and-session-boundaries); a configured URL is not proof that access ended. |
 
