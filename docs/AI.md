@@ -702,7 +702,7 @@ means Pulse omits the field so the Ollama server's own policy applies; explicit
 duration, seconds, `-1`, and `0` values persist across restart and apply to both
 streaming and non-streaming requests.
 
-In **Settings → Pulse Intelligence → Provider & Models**, you configure the **Default model** and an optional **Patrol model** (`patrol_model`). Web settings no longer expose a `chat_model` override because the in-app Assistant chat window is retired. A previously saved `chat_model` still applies only to legacy Pulse Mobile chat until 31 March 2027, and `auto_fix_model` is retained as a compatibility settings key.
+In **Settings → Pulse Intelligence → Provider & Models**, you configure the **Shared Default Model** (`model`). To override the model Patrol uses, set **Patrol model** (`patrol_model`) under **Settings → Pulse Intelligence → Patrol → Model readiness**. Web settings no longer expose a `chat_model` override because the in-app Assistant chat window is retired. A previously saved `chat_model` is still read as a compatibility fallback for legacy Pulse Mobile chat (until 31 March 2027) and for server-side narration or analysis when `patrol_model` is unset, and `auto_fix_model` is retained as a compatibility settings key.
 
 ### Patrol model readiness advisor
 

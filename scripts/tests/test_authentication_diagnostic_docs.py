@@ -232,7 +232,14 @@ class AuthenticationDiagnosticDocsTest(unittest.TestCase):
         self.assertIn("| `guest_unreachable` |", source)
         self.assertIn("PATROL_ARCHITECTURE.md#deterministic-signal-detection-and-verification", source)
         self.assertIn("continuing Relay subscribers receive Pro capabilities", guide)
+        self.assertIn("Shared Default Model", guide)
+        self.assertIn(
+            "Settings → Pulse Intelligence → Patrol → Model readiness",
+            guide,
+        )
         self.assertIn("Web settings no longer expose a `chat_model` override", guide)
+        self.assertNotIn("still applies only to legacy Pulse Mobile chat", guide)
+        self.assertIn("compatibility fallback", guide)
         self.assertIn("Three-phase tool execution pipeline", guide)
         self.assertIn("`ActionResultV2` evidence and verification boundaries", guide)
 
