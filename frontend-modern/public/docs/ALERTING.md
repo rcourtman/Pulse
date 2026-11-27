@@ -21,6 +21,23 @@ delays can also apply. See [thresholds and inheritance](CONFIGURATION.md#metric-
 for the exact semantics. Do not lower a threshold or interrupt a workload just
 to make a test alert fire.
 
+### Built-in provider health alerts
+
+Some provider health conditions raise alerts automatically while alerting is
+enabled, even though they do not appear as configurable rows under
+**Alerts → Thresholds**.
+
+For Ceph clusters monitored through Proxmox or a host agent, `HEALTH_WARN`
+opens a warning alert and `HEALTH_ERR` opens a critical alert after two
+consecutive degraded observations. The alert clears after two consecutive
+`HEALTH_OK` observations, and its message includes the active Ceph health check
+codes and summaries reported by the cluster. These alerts use normal alert
+history, acknowledgement, snooze, quiet hours and notification routing, subject
+to each destination's minimum severity. Because built-in Ceph cluster health
+alerts carry no resource tags, destinations with a tag filter will not match
+them. Only Ceph pool capacity thresholds are configured under
+**Alerts → Thresholds**.
+
 ## Choose where notifications go
 
 Open **Alerts → Notifications** to configure email or a webhook destination,
