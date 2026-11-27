@@ -212,6 +212,29 @@ describe('ResourceDetailDrawer snapshot ownership', () => {
     expect(container).not.toHaveTextContent('12ms');
   });
 
+  it('renders a calm Waiting for ping status without a Down badge for a newly created push check', () => {
+    const waitingPush = snapshot({
+      id: 'availability:push-waiting',
+      name: 'Nightly backup',
+      displayName: 'Nightly backup',
+      type: 'network-endpoint',
+      platformType: 'availability',
+      sources: ['availability'],
+      status: 'unknown',
+      availability: {
+        targetId: 'push-waiting',
+        protocol: 'push',
+        address: '',
+        available: false,
+      },
+    });
+    render(() => <ResourceDetailDrawer resource={waitingPush} presentation="table-row" />);
+    const card = screen.getByTestId('availability-probe-status');
+    expect(card).toHaveTextContent('Waiting for ping');
+    expect(card).not.toHaveTextContent('Down');
+    expect(card).toHaveTextContent('Inbound heartbeat');
+  });
+
   it('disposes per-resource disclosure state and late facet results when a different ID is selected', async () => {
     let completeOld!: (value: unknown) => void;
     requests.facets.mockReturnValueOnce(new Promise((resolve) => (completeOld = resolve)));

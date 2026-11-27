@@ -40,7 +40,7 @@ Every field is listed below with the reason it exists. Nothing else is included 
 
 | Field | Example | Purpose |
 |-------|---------|---------|
-| Schema version | `24` | Identify the exact payload contract so old and new signals are not mixed silently |
+| Schema version | `25` | Identify the exact payload contract so old and new signals are not mixed silently |
 | Sent at | `2026-07-23T08:30:00Z` | Date the individual heartbeat without sending a history of client activity |
 | Install ID | `a1b2c3d4-...` | Distinguish active installations within one rotation window without tying telemetry to an account or person |
 | Version | `6.0.0-rc.1` | Track the canonical release identity currently deployed |
@@ -87,6 +87,8 @@ Every field is listed below with the reason it exists. Nothing else is included 
 | Availability targets | `9` | Understand agentless availability-check adoption in aggregate |
 | Availability probe targets | `2` | Understand external-probe adoption in aggregate; counts only, no agent names or addresses |
 | Availability probe agents | `1` | Understand how many distinct probe agents installs deploy; counts only |
+| Availability DNS targets | `2` | Understand native DNS check adoption in aggregate, counts only, no hostnames or answers |
+| Availability push targets | `3` | Understand inbound heartbeat check adoption in aggregate, counts only, no tokens, schedules, or job names |
 | Agent hosts commands enabled | `1` | Count agent hosts whose owner turned on commands, so changes that need commands can be judged by how many owners they reach; a count only, never which hosts |
 | Docker hosts failure logs enabled | `0` | Count Docker hosts whose owner turned on the last log lines of a failed container; a count only, never which hosts or any log text |
 | AI enabled | `true`/`false` | See whether AI features are actually used before expanding or removing them |
@@ -368,7 +370,7 @@ occurrence exists, leaving no trustworthy fired-alert denominator. Detected
 flapping episodes are not reported because their diagnostic event path may be
 dropped under pressure. Configuration adoption is reported instead.
 
-The current telemetry contract is schema version 24. Schema v16 adds four
+The current telemetry contract is schema version 25. Schema v16 adds four
 workload-history adoption counts. The browser
 sends only one closed milestone name to the local Pulse server and deduplicates
 each milestone once per browser session. Pulse stores bounded UTC-day counts
@@ -495,6 +497,7 @@ Every change to the payload bumps the schema version, is listed here with its da
 
 | Schema | Date | Change |
 |--------|------|--------|
+| 25 | 2026-11-24 | Counts of configured DNS and inbound heartbeat availability checks, counts only, no tokens, schedules, hostnames, or answers |
 | 24 | 2026-11-18 | Three content-free infrastructure map counters: sessions that opened the map, sessions that saved an image, and sessions that saved one with names hidden |
 | 23 | 2026-11-17 | Independent closed-investigation-run outcomes, fixed handoff reasons and explicit observation coverage; no customer content or new outbound identifiers |
 | 22 | 2026-11-14 | Counts of agent hosts with commands on and Docker hosts with failure logs on; never which hosts |

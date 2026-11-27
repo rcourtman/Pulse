@@ -43,10 +43,15 @@ import {
 import { useUnifiedResources } from '@/hooks/useUnifiedResources';
 import { AVAILABILITY_QUERY_PARAMS } from '@/routing/resourceLinks';
 import { notificationStore } from '@/stores/notifications';
-import { sessionCanReadAvailabilitySettings } from '@/stores/sessionSettingsCapabilities';
+import { presentationPolicyIsReadOnly } from '@/stores/sessionPresentationPolicy';
+import {
+  sessionCanReadAvailabilitySettings,
+  sessionSettingsCapabilitiesResolved,
+} from '@/stores/sessionSettingsCapabilities';
 import type { Resource, ResourceAvailabilityMeta } from '@/types/resource';
 import { buildProbeAgentOptions } from '@/utils/availabilityProbeAgents';
 import { getAvailabilityTargetAddLabel } from '@/utils/availabilityTargetKinds';
+import { isFeatureAvailable } from '@/utils/featureReleases';
 import { useRelativeTimeNow } from '@/utils/relativeTimeClock';
 
 // Fetch availability endpoints alongside agent hosts so multi-location probe
@@ -85,7 +90,12 @@ export const AvailabilityPageSurface: Component = () => {
   const [deleteError, setDeleteError] = createSignal<string | null>(null);
   const [historyRefreshToken, setHistoryRefreshToken] = createSignal(0);
 
-  const canManage = createMemo(() => sessionCanReadAvailabilitySettings());
+  const canManage = createMemo(
+    () =>
+      sessionSettingsCapabilitiesResolved() &&
+      sessionCanReadAvailabilitySettings() &&
+      !presentationPolicyIsReadOnly(),
+  );
   const model = createMemo(() => buildStandalonePageModel(resources()));
   const checks = createMemo(() => model().availabilityChecks);
   const probeAgentOptions = createMemo(() => buildProbeAgentOptions(model().machines));
@@ -266,9 +276,11 @@ export const AvailabilityPageSurface: Component = () => {
 
   const renderDetailActions = (resource: Resource) => {
     if (!canManage()) return null;
-    const targetId = availabilityMetaFor(resource)?.targetId;
+    const meta = availabilityMetaFor(resource);
+    const targetId = meta?.targetId;
     if (!targetId) return null;
     const target = () => targetsById().get(targetId);
+    const isPush = () => (meta?.protocol ?? target()?.protocol)?.toLowerCase() === 'push';
     const enabled = () => target()?.enabled ?? true;
     const isTesting = () => testingTargetId() === targetId;
     const isPending = () => pendingActionId() === targetId;
@@ -276,21 +288,23 @@ export const AvailabilityPageSurface: Component = () => {
 
     return (
       <>
-        <button
-          type="button"
-          class={actionClass}
-          disabled={isTesting() || isPending()}
-          onClick={() => void handleTestCheck(resource)}
-          aria-label={isTesting() ? `Testing ${resource.name}` : `Test ${resource.name} now`}
-          title={isTesting() ? 'Testing check' : 'Test now'}
-          data-testid="availability-drawer-test-button"
-        >
-          <RefreshCwIcon
-            class={`h-3.5 w-3.5 ${isTesting() ? 'animate-spin' : ''}`}
-            aria-hidden="true"
-          />
-          <span class="hidden sm:inline">{isTesting() ? 'Testing' : 'Test now'}</span>
-        </button>
+        <Show when={!isPush()}>
+          <button
+            type="button"
+            class={actionClass}
+            disabled={isTesting() || isPending()}
+            onClick={() => void handleTestCheck(resource)}
+            aria-label={isTesting() ? `Testing ${resource.name}` : `Test ${resource.name} now`}
+            title={isTesting() ? 'Testing check' : 'Test now'}
+            data-testid="availability-drawer-test-button"
+          >
+            <RefreshCwIcon
+              class={`h-3.5 w-3.5 ${isTesting() ? 'animate-spin' : ''}`}
+              aria-hidden="true"
+            />
+            <span class="hidden sm:inline">{isTesting() ? 'Testing' : 'Test now'}</span>
+          </button>
+        </Show>
         <button
           type="button"
           class={actionClass}
@@ -336,7 +350,9 @@ export const AvailabilityPageSurface: Component = () => {
     if (current.mode === 'edit' && current.target) {
       return `${getAvailabilityTargetMethodLabel(current.target)} · ${getAvailabilityTargetAddressLabel(current.target)}`;
     }
-    return 'Monitor websites, APIs, routers, and devices with ICMP ping, TCP, UDP, HTTP/HTTPS, and TLS certificate checks.';
+    return isFeatureAvailable('availabilityPushChecks')
+      ? 'Monitor websites, APIs, resolvers, routers, devices, and scheduled jobs with ICMP ping, TCP, UDP, DNS, HTTP/HTTPS, TLS certificate, and push heartbeat checks.'
+      : 'Monitor websites, APIs, resolvers, routers, and devices with ICMP ping, TCP, UDP, DNS, HTTP/HTTPS, and TLS certificate checks.';
   });
 
   const showLoading = createMemo(

@@ -1,5 +1,8 @@
 import type { Resource } from '@/types/resource';
-import { getAvailabilityProbePresentation } from '@/utils/availabilityProbePresentation';
+import {
+  getAvailabilityProbePresentation,
+  getAvailabilityPushFirstPingStatusIndicator,
+} from '@/utils/availabilityProbePresentation';
 import {
   getAgentFirstReportStatusIndicator,
   isPulseAgentPlatformResource,
@@ -108,7 +111,9 @@ export const buildStandaloneMachineVmCounts = (
 const AGENT_REPORT_STALE_AFTER_MS = 5 * 60 * 1000;
 
 export const getStandaloneResourceStatusIndicator = (resource: Resource, nowMs = Date.now()) => {
-  const waiting = getAgentFirstReportStatusIndicator(resource);
+  const waiting =
+    getAgentFirstReportStatusIndicator(resource) ??
+    getAvailabilityPushFirstPingStatusIndicator(resource);
   if (waiting) return waiting;
   const indicator = getSimpleStatusIndicator(resource.status);
   if (indicator.variant === 'danger') return indicator;

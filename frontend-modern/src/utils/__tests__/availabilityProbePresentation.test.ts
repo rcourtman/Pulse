@@ -1,8 +1,10 @@
 import { describe, expect, it, vi } from 'vitest';
 import type { Resource } from '@/types/resource';
 import {
+  getAvailabilityProbeEndpointLabel,
   getAvailabilityProbeMethodLabel,
   getAvailabilityProbePresentation,
+  getAvailabilityPushFirstPingStatusIndicator,
 } from '@/utils/availabilityProbePresentation';
 
 const makeAvailabilityResource = (overrides?: Partial<Resource>): Resource => ({
@@ -253,4 +255,47 @@ it('measures all probe ages from the supplied clock rather than Date.now', () =>
   );
   expect(probe?.detailLabel).toContain('checked 1 min ago');
   expect(probe?.detailLabel).toContain('last success 2 mins ago');
+});
+
+it('presents push heartbeat checks with Inbound heartbeat endpoint and fresh waiting/cron state', () => {
+  expect(getAvailabilityProbeEndpointLabel({ protocol: 'push', address: '' })).toBe(
+    'Inbound heartbeat',
+  );
+
+  const waitingResource = makeAvailabilityResource({
+    status: 'unknown',
+    availability: {
+      protocol: 'push',
+      address: '',
+      available: false,
+    },
+  });
+  const waiting = getAvailabilityProbePresentation(
+    waitingResource,
+    new Date('2026-11-24T12:00:00Z'),
+  );
+  expect(waiting?.methodLabel).toBe('Push');
+  expect(waiting?.resultLabel).toBe('waiting for ping');
+  expect(waiting?.freshnessLabel).toBe('fresh');
+  expect(waiting?.toneClassName).toBe('text-muted');
+  expect(getAvailabilityPushFirstPingStatusIndicator(waitingResource)).toEqual({
+    variant: 'info',
+    label: 'Waiting for first ping',
+  });
+
+  const cronHealthy = getAvailabilityProbePresentation(
+    makeAvailabilityResource({
+      status: 'online',
+      availability: {
+        protocol: 'push',
+        address: '',
+        available: true,
+        lastChecked: '2026-11-24T03:00:00Z',
+        pollIntervalSeconds: 60,
+      },
+    }),
+    new Date('2026-11-24T12:00:00Z'),
+  );
+  expect(cronHealthy?.resultLabel).toBe('ok');
+  expect(cronHealthy?.freshnessLabel).toBe('fresh');
 });

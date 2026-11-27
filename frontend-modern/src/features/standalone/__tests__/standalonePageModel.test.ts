@@ -327,4 +327,27 @@ describe('standalonePageModel', () => {
     ]);
     expect(getStandaloneTabSpecs(false, 'vms').map((tab) => tab.id)).toEqual(['machines', 'vms']);
   });
+
+  it('treats newly created push checks waiting for their first ping as calm awaiting status rather than attention', () => {
+    const waitingPush = resource({
+      id: 'availability:push-1',
+      name: 'Nightly backup',
+      type: 'network-endpoint',
+      platformType: 'availability',
+      sources: ['availability'],
+      status: 'unknown',
+      availability: {
+        targetId: 'push-1',
+        protocol: 'push',
+        address: '',
+        available: false,
+      },
+    });
+    const indicator = getStandaloneResourceStatusIndicator(waitingPush);
+    expect(indicator).toEqual({ variant: 'info', label: 'Waiting for first ping' });
+    const summary = buildStandalonePostureSummary([waitingPush]);
+    expect(summary.attention).toBe(0);
+    expect(summary.warning).toBe(0);
+    expect(summary.unknown).toBe(1);
+  });
 });

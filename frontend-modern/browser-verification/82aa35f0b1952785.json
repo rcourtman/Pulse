@@ -1,0 +1,50 @@
+{
+  "version": 1,
+  "base_sha": "a374780d8d21cf142c8476966437675b2bd3a3b7",
+  "verified_at": "2026-11-24T12:26:13Z",
+  "result": "passed",
+  "changed_paths": [
+    "frontend-modern/src/components/Infrastructure/AvailabilityProbeStatusCard.tsx",
+    "frontend-modern/src/components/Infrastructure/ResourceDetailSummary.tsx",
+    "frontend-modern/src/features/availability/AvailabilityPageSurface.tsx",
+    "frontend-modern/src/features/standalone/standalonePageModel.ts",
+    "frontend-modern/src/utils/availabilityProbePresentation.ts"
+  ],
+  "content_sha256": {
+    "frontend-modern/src/components/Infrastructure/AvailabilityProbeStatusCard.tsx": "c3675900ae7ac1d7cc9c48e9b3bfa03f4afa0b60be817849b2fc058d40939953",
+    "frontend-modern/src/components/Infrastructure/ResourceDetailSummary.tsx": "b3ad115df1f533248ac0383f909e61dc5acdf6ce926083b0738e768ff00ea348",
+    "frontend-modern/src/features/availability/AvailabilityPageSurface.tsx": "2fa92aea10c618e41c853565018228616bd20f721492fa9694aa2bb99b003611",
+    "frontend-modern/src/features/standalone/standalonePageModel.ts": "475ec833d6029c40cf47e9445a8ad1ea02b1f59f66e80a0b1e981fc6fae6b74f",
+    "frontend-modern/src/utils/availabilityProbePresentation.ts": "d792793088ec3da1145ad24848be820d6243a4233700e761a8845a1d428c9d97"
+  },
+  "routes": [
+    "/availability",
+    "/docs/PUSH_CHECKS",
+    "/settings/monitoring/availability"
+  ],
+  "viewports": [
+    {
+      "width": 1280,
+      "height": 800
+    },
+    {
+      "width": 390,
+      "height": 844
+    }
+  ],
+  "states": [
+    "production build refuses /docs/PUSH_CHECKS and hides Scheduled job / backup (Push) preset and Push / Heartbeat probe on /availability and /settings/monitoring/availability",
+    "development build renders /docs/PUSH_CHECKS guide and allows creating Cron push checks inline on /availability",
+    "newly created waiting push check shows calm awaiting posture badge (1 check awaiting status), blue dot, Inbound heartbeat target label, muted waiting for ping result, sky Waiting for ping drawer badge, and no amber Observed state Unknown alert box",
+    "expanded push check drawer hides outbound Test now button while retaining Pause and Edit actions",
+    "non-admin viewer session hides Add check and drawer management actions and skips /api/availability-targets fetch",
+    "both Light and Dark themes and mobile 390x844 expanded drawer render with zero horizontal page overflow",
+    "105-target large estate loads smoothly into default Fleet view and filters cleanly to push rows in Table view"
+  ],
+  "interactions": [
+    "verified production gating on :17658 for /docs/PUSH_CHECKS and /availability Add check modal",
+    "created Stage 3 Final Push Check (Cron 0 3 * * *) on :15178 at 1280x800, confirmed generated Ping URL and curl snippet, closed via Done, expanded drawer, and verified calm Waiting for ping posture, row, and drawer card",
+    "verified Light and Dark themes on /availability and mobile 390x844 layout with expanded push drawer",
+    "ran Playwright integration spec 73-availability-push-checks.spec.ts across chromium, mobile-chrome, and mobile-safari (9/9 passed) plus real non-mock backend lifecycle in Chromium and WebKit (404 revoked, /start, completion, /fail, recovery, 413 2 KiB cap) and 105-target large estate on pulse-dev"
+  ]
+}

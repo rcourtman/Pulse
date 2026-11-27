@@ -10704,3 +10704,16 @@ and `AvailabilityChecksTable.test.tsx`.
 and result formatting (`waiting for ping`, `missed`, `failed`, `ok`, or measured
 duration) for unified availability resources backed by `protocol: "push"` checks
 without exposing ping tokens in unified resource payloads.
+
+### Push checks Stage 3 presentation and waiting-state contract (24 November 2026)
+
+`availabilityProbePresentation.ts` exports `isAvailabilityPushWaitingForFirstPing`
+and `getAvailabilityPushFirstPingStatusIndicator`, formats empty push endpoints
+as `Inbound heartbeat`, and keeps push freshness aligned with server-side
+deadline evaluation rather than a 2x poll-interval heuristic.
+`standalonePageModel.ts`, `AvailabilityProbeStatusCard.tsx`, and
+`ResourceDetailSummary.tsx` consume the shared first-ping indicator so newly
+created push checks show calm awaiting status across posture summaries, table
+rows, and detail drawers. Verified by `availabilityProbePresentation.test.ts`,
+`standalonePageModel.test.ts`, `ResourceDetailDrawer.snapshot.test.tsx`, and
+`AvailabilityPageSurface.test.tsx`.

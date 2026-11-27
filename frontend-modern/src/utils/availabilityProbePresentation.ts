@@ -1,5 +1,6 @@
 import type { Resource, ResourceAvailabilityMeta } from '@/types/resource';
 import { formatRelativeTime } from '@/utils/format';
+import type { StatusIndicator } from '@/utils/status';
 
 export interface AvailabilityProbePresentation {
   methodLabel: string;
@@ -25,6 +26,23 @@ const AVAILABILITY_PROBE_UNKNOWN_CLASS = 'text-muted';
 
 const normalizeAvailabilityProtocol = (protocol?: string | null): string =>
   (protocol ?? '').trim().toLowerCase();
+
+export const isAvailabilityPushWaitingForFirstPing = (
+  availability?: ResourceAvailabilityMeta | null,
+): boolean =>
+  normalizeAvailabilityProtocol(availability?.protocol) === 'push' &&
+  !(availability?.lastChecked ?? '').trim();
+
+export const getAvailabilityPushFirstPingStatusIndicator = (
+  resource: Pick<Resource, 'availability' | 'platformData'>,
+): StatusIndicator | undefined => {
+  const availability =
+    resource.availability ??
+    (resource.platformData?.availability as ResourceAvailabilityMeta | undefined);
+  return isAvailabilityPushWaitingForFirstPing(availability)
+    ? { variant: 'info', label: 'Waiting for first ping' }
+    : undefined;
+};
 
 export const getAvailabilityProbeMethodLabel = (
   availability?: ResourceAvailabilityMeta | null,
@@ -66,6 +84,9 @@ export const getAvailabilityProbeEndpointLabel = (
 ): string => {
   const address = (availability?.address ?? '').trim();
   const protocol = normalizeAvailabilityProtocol(availability?.protocol);
+  if (protocol === 'push' && !address) {
+    return 'Inbound heartbeat';
+  }
   const port = availability?.port;
   const addressWithPort =
     address &&
@@ -168,6 +189,9 @@ const getAvailabilityProbeToneClassName = (
   freshnessLabel: AvailabilityProbePresentation['freshnessLabel'],
 ): string => {
   const normalizedStatus = (resource.status ?? '').trim().toLowerCase();
+  if (isAvailabilityPushWaitingForFirstPing(availability)) {
+    return AVAILABILITY_PROBE_UNKNOWN_CLASS;
+  }
   if (availability.probeOutcome === 'indeterminate') {
     return AVAILABILITY_PROBE_WARNING_CLASS;
   }
@@ -196,6 +220,13 @@ const getAvailabilityFreshnessLabel = (
   const validUntilMillis = explicitValidUntil ? Date.parse(explicitValidUntil) : Number.NaN;
   if (Number.isFinite(validUntilMillis)) {
     return validUntilMillis >= now.getTime() ? 'fresh' : 'stale';
+  }
+
+  // Push checks are evaluated locally against their cron or interval + grace
+  // deadline rather than a 2x pollInterval heuristic, and newly created checks
+  // intentionally wait for their first ping without raising a stale warning.
+  if (normalizeAvailabilityProtocol(availability.protocol) === 'push') {
+    return 'fresh';
   }
 
   const checkedMillis = availability.lastChecked
