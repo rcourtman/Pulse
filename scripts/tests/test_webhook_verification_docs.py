@@ -165,6 +165,43 @@ class WebhookVerificationDocsTest(unittest.TestCase):
         self.assertIn("as a legacy correlation token", contract)
         self.assertIn("must not prescribe permanent header-only deduplication", contract)
 
+    def test_webhook_header_bounds_origin_redirects_and_saved_secrets_match_source(self):
+        text = " ".join(DOC.read_text(encoding="utf-8").split())
+        delivery = (
+            ROOT / "internal/notifications/webhook_delivery.go"
+        ).read_text(encoding="utf-8")
+        notifications_go = (
+            ROOT / "internal/notifications/notifications.go"
+        ).read_text(encoding="utf-8")
+        saved_dest = (
+            ROOT / "internal/notifications/saved_credential_destination.go"
+        ).read_text(encoding="utf-8")
+        notifications_api = (
+            ROOT / "internal/api/alerting/notifications.go"
+        ).read_text(encoding="utf-8")
+
+        for token in (
+            "const maxWebhookHeaderValueBytes = 2048",
+            "func webhookHeaderValue(",
+            "sameNotificationOrigin(via[0].URL, req.URL)",
+            "len(via) >= WebhookMaxRedirects",
+        ):
+            self.assertIn(token, delivery)
+        self.assertIn("WebhookMaxRedirects     = 3", notifications_go)
+        self.assertIn("func WebhookURLKeepsOrigin(", saved_dest)
+        self.assertIn("webhookAddressChangeNeedsValuesMessage", notifications_api)
+
+        for phrase in (
+            "Alert-derived HTTP headers (`X-Pulse-Event-ID`, and `Title` on ntfy deliveries) percent-encode control bytes other than tab and deterministically shorten values over 2,048 bytes with a SHA-256 suffix",
+            "Masked values in custom headers and custom fields stay preserved only while editing the same webhook URL origin",
+            "Changing the webhook address to a different scheme, host, or port requires entering those saved values again",
+            "A masked `signingSecret` can still be kept across URL edits because it only signs the payload and is never sent to the receiver",
+            "Alert webhooks follow redirects only within the same scheme, host, and port, stopping on a third redirect (at most 2 redirects across 3 requests)",
+            "Cross-origin redirects fail immediately as configuration errors without forwarding alert bodies, custom headers, or signatures",
+        ):
+            with self.subTest(phrase=phrase):
+                self.assertIn(phrase, text)
+
 
 if __name__ == "__main__":
     unittest.main()

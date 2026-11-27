@@ -64,6 +64,34 @@ budget. Fix the server certificate or TLS settings rather than disabling
 verification. Email and webhook destinations do not provide a Skip TLS Verify
 toggle.
 
+To customize how alert emails appear, expand **Show advanced options** in the
+email settings form to open **Email branding & subject**. You can set a
+**Subject prefix** (up to 64 characters, default `[Pulse Alert]`), a
+**Brand name** (up to 80 characters, default `Pulse Monitoring`), and an
+optional plain-text **Footer note** (up to 240 characters). Pulse strips line
+breaks and control characters, collapses extra whitespace, and HTML-escapes
+those fields across single, grouped, resolved, and **Send test email**
+messages. Leave a field blank to restore the default. Raw HTML and custom email
+template files are not supported. Editing email branding fields does not change
+the email destination continuity fingerprint.
+
+Saved SMTP passwords and Apprise API keys are write-only and stay preserved
+only while editing the same destination. Changing the SMTP server host or port,
+or turning off TLS or STARTTLS encryption on an encrypted SMTP configuration,
+requires entering the SMTP password again for both saving and **Send test
+email**. Changing the Apprise server origin or turning off its certificate
+check requires entering the Apprise API key again for both saving and testing.
+A blank SMTP server host is refused as a configuration error instead of dialing
+loopback.
+
+Across queued email, webhook, and Apprise destinations, when a later live alert
+or recovery succeeds for the exact same saved destination configuration, Pulse
+automatically re-queues up to 25 recent (24-hour) retryable retained failures
+for that destination once, subject to a five-minute cooldown per destination.
+Authentication, configuration, rejected, and TLS failures, edited destinations,
+rehearsals, and deliveries older than 24 hours are not automatically re-queued,
+and a successful **Test** send does not trigger this recovery.
+
 ### Rehearse the saved delivery path
 
 In **Alerts → Notifications**, expand **Delivery rehearsal**. Save or discard
