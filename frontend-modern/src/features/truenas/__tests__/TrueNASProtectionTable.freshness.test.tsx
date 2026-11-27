@@ -249,9 +249,9 @@ describe('TrueNAS protection freshness model', () => {
       'fresh-ok',
     ]);
 
-    expect(
-      filterTrueNASProtectionPoints(points, '', 'success', staleMap).map((p) => p.id),
-    ).toEqual(['fresh-ok']);
+    expect(filterTrueNASProtectionPoints(points, '', 'success', staleMap).map((p) => p.id)).toEqual(
+      ['fresh-ok'],
+    );
     expect(filterTrueNASProtectionPoints(points, '', 'running', staleMap)).toEqual([]);
     expect(filterTrueNASProtectionPoints(points, '', 'stale', staleMap).map((p) => p.id)).toEqual([
       'stale-ok',
