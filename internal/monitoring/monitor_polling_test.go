@@ -304,18 +304,16 @@ func TestRescheduleTaskUsesInstanceIntervalWhenSchedulerDisabled(t *testing.T) {
 
 	scheduleFixtureSuccessor(monitor, task)
 
-	monitor.taskQueue.mu.Lock()
-	entry, ok := monitor.taskQueue.entries[schedulerKey(task.InstanceType, task.InstanceName)]
-	monitor.taskQueue.mu.Unlock()
+	queued, ok := monitor.taskQueue.Get(task.InstanceType, task.InstanceName)
 	if !ok {
 		t.Fatalf("expected task to be rescheduled in queue")
 	}
 
-	if entry.task.Interval != cfg.PVEPollingInterval {
-		t.Fatalf("expected interval %v, got %v", cfg.PVEPollingInterval, entry.task.Interval)
+	if queued.Interval != cfg.PVEPollingInterval {
+		t.Fatalf("expected interval %v, got %v", cfg.PVEPollingInterval, queued.Interval)
 	}
 
-	remaining := time.Until(entry.task.NextRun)
+	remaining := time.Until(queued.NextRun)
 	if remaining < cfg.PVEPollingInterval-2*time.Second || remaining > cfg.PVEPollingInterval+time.Second {
 		t.Fatalf("expected NextRun about %v from now, got %v", cfg.PVEPollingInterval, remaining)
 	}
@@ -1975,17 +1973,15 @@ func TestRescheduleTask_SuccessfulOutcome(t *testing.T) {
 	scheduleFixtureSuccessor(m, task)
 
 	// Task should be rescheduled at regular interval (no backoff)
-	m.taskQueue.mu.Lock()
-	entry, ok := m.taskQueue.entries[key]
-	m.taskQueue.mu.Unlock()
+	queued, ok := m.taskQueue.Get(task.InstanceType, task.InstanceName)
 
 	if !ok {
 		t.Fatal("expected task to be rescheduled")
 	}
 
 	// Should use base interval since scheduler is nil
-	if entry.task.Interval != cfg.PVEPollingInterval {
-		t.Errorf("expected interval %v, got %v", cfg.PVEPollingInterval, entry.task.Interval)
+	if queued.Interval != cfg.PVEPollingInterval {
+		t.Errorf("expected interval %v, got %v", cfg.PVEPollingInterval, queued.Interval)
 	}
 }
 
@@ -2032,17 +2028,15 @@ func TestRescheduleTask_TransientFailureWithBackoff(t *testing.T) {
 	scheduleFixtureSuccessor(m, task)
 
 	// Task should be rescheduled with backoff delay
-	m.taskQueue.mu.Lock()
-	entry, ok := m.taskQueue.entries[key]
-	m.taskQueue.mu.Unlock()
+	queued, ok := m.taskQueue.Get(task.InstanceType, task.InstanceName)
 
 	if !ok {
 		t.Fatal("expected task to be rescheduled with backoff")
 	}
 
 	// With backoff, interval should be modified
-	if entry.task.Interval <= 0 {
-		t.Errorf("expected positive backoff interval, got %v", entry.task.Interval)
+	if queued.Interval <= 0 {
+		t.Errorf("expected positive backoff interval, got %v", queued.Interval)
 	}
 }
 
@@ -2083,7 +2077,7 @@ func TestRescheduleTask_NonTransientFailureGoesToDeadLetter(t *testing.T) {
 
 	// Task should NOT be in the main queue
 	m.taskQueue.mu.Lock()
-	_, inMainQueue := m.taskQueue.entries[key]
+	_, inMainQueue := m.taskQueue.entries[taskQueueKey{task.InstanceType, task.InstanceName}]
 	m.taskQueue.mu.Unlock()
 
 	if inMainQueue {
@@ -2165,22 +2159,18 @@ func TestRescheduleTask_NoOutcomeUsesDefaultInterval(t *testing.T) {
 		NextRun:      time.Now(),
 	}
 
-	key := schedulerKey(task.InstanceType, task.InstanceName)
-
 	// No outcome recorded - hasOutcome will be false
 	scheduleFixtureSuccessor(m, task)
 
-	m.taskQueue.mu.Lock()
-	entry, ok := m.taskQueue.entries[key]
-	m.taskQueue.mu.Unlock()
+	queued, ok := m.taskQueue.Get(task.InstanceType, task.InstanceName)
 
 	if !ok {
 		t.Fatal("expected task to be rescheduled")
 	}
 
 	// Should use config PVE polling interval
-	if entry.task.Interval != cfg.PVEPollingInterval {
-		t.Errorf("expected interval %v, got %v", cfg.PVEPollingInterval, entry.task.Interval)
+	if queued.Interval != cfg.PVEPollingInterval {
+		t.Errorf("expected interval %v, got %v", cfg.PVEPollingInterval, queued.Interval)
 	}
 }
 
@@ -2204,20 +2194,16 @@ func TestRescheduleTask_PBSInstance(t *testing.T) {
 		NextRun:      time.Now(),
 	}
 
-	key := schedulerKey(task.InstanceType, task.InstanceName)
-
 	scheduleFixtureSuccessor(m, task)
 
-	m.taskQueue.mu.Lock()
-	entry, ok := m.taskQueue.entries[key]
-	m.taskQueue.mu.Unlock()
+	queued, ok := m.taskQueue.Get(task.InstanceType, task.InstanceName)
 
 	if !ok {
 		t.Fatal("expected PBS task to be rescheduled")
 	}
 
-	if entry.task.Interval != cfg.PBSPollingInterval {
-		t.Errorf("expected PBS interval %v, got %v", cfg.PBSPollingInterval, entry.task.Interval)
+	if queued.Interval != cfg.PBSPollingInterval {
+		t.Errorf("expected PBS interval %v, got %v", cfg.PBSPollingInterval, queued.Interval)
 	}
 }
 
@@ -2241,20 +2227,16 @@ func TestRescheduleTask_PMGInstance(t *testing.T) {
 		NextRun:      time.Now(),
 	}
 
-	key := schedulerKey(task.InstanceType, task.InstanceName)
-
 	scheduleFixtureSuccessor(m, task)
 
-	m.taskQueue.mu.Lock()
-	entry, ok := m.taskQueue.entries[key]
-	m.taskQueue.mu.Unlock()
+	queued, ok := m.taskQueue.Get(task.InstanceType, task.InstanceName)
 
 	if !ok {
 		t.Fatal("expected PMG task to be rescheduled")
 	}
 
-	if entry.task.Interval != cfg.PMGPollingInterval {
-		t.Errorf("expected PMG interval %v, got %v", cfg.PMGPollingInterval, entry.task.Interval)
+	if queued.Interval != cfg.PMGPollingInterval {
+		t.Errorf("expected PMG interval %v, got %v", cfg.PMGPollingInterval, queued.Interval)
 	}
 }
 
@@ -2299,9 +2281,7 @@ func TestRescheduleTask_AdaptivePollingMaxIntervalLimit(t *testing.T) {
 
 	scheduleFixtureSuccessor(m, task)
 
-	m.taskQueue.mu.Lock()
-	entry, ok := m.taskQueue.entries[key]
-	m.taskQueue.mu.Unlock()
+	queued, ok := m.taskQueue.Get(task.InstanceType, task.InstanceName)
 
 	if !ok {
 		t.Fatal("expected task to be rescheduled")
@@ -2309,8 +2289,8 @@ func TestRescheduleTask_AdaptivePollingMaxIntervalLimit(t *testing.T) {
 
 	// With AdaptivePollingMaxInterval <= 15s, backoff delay should be capped at 4s
 	maxDelay := 4 * time.Second
-	if entry.task.Interval > maxDelay {
-		t.Errorf("expected backoff interval to be capped at %v, got %v", maxDelay, entry.task.Interval)
+	if queued.Interval > maxDelay {
+		t.Errorf("expected backoff interval to be capped at %v, got %v", maxDelay, queued.Interval)
 	}
 }
 
@@ -2335,21 +2315,17 @@ func TestRescheduleTask_UsesExistingIntervalWhenSet(t *testing.T) {
 		NextRun:      time.Now(),
 	}
 
-	key := schedulerKey(task.InstanceType, task.InstanceName)
-
 	scheduleFixtureSuccessor(m, task)
 
-	m.taskQueue.mu.Lock()
-	entry, ok := m.taskQueue.entries[key]
-	m.taskQueue.mu.Unlock()
+	queued, ok := m.taskQueue.Get(task.InstanceType, task.InstanceName)
 
 	if !ok {
 		t.Fatal("expected task to be rescheduled")
 	}
 
 	// Should use the existing interval when it's already set
-	if entry.task.Interval != customInterval {
-		t.Errorf("expected existing interval %v to be preserved, got %v", customInterval, entry.task.Interval)
+	if queued.Interval != customInterval {
+		t.Errorf("expected existing interval %v to be preserved, got %v", customInterval, queued.Interval)
 	}
 }
 

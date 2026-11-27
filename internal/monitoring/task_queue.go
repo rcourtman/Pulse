@@ -31,8 +31,12 @@ type scheduledTaskEntry struct {
 	keepSchedule bool // queued intent set by an explicit edit or a worker's retry
 }
 
-func (e *scheduledTaskEntry) key() string {
-	return schedulerKey(e.task.InstanceType, e.task.InstanceName)
+// Keep the existing type and name strings as separate fields. Routine plan
+// refreshes and worker completions do not need to allocate a composite string
+// while holding the queue lock.
+type taskQueueKey struct {
+	kind InstanceType
+	name string
 }
 
 type taskHeap []*scheduledTaskEntry
@@ -78,7 +82,7 @@ func (h *taskHeap) Pop() interface{} {
 // holds claimed tasks, which are not part of the heap or queue snapshots.
 type TaskQueue struct {
 	mu           sync.Mutex
-	entries      map[string]*scheduledTaskEntry
+	entries      map[taskQueueKey]*scheduledTaskEntry
 	heap         taskHeap
 	queuedByType map[string]int // heap membership only; claimed entries do not count
 	earlierHead  chan struct{}  // lazily shared by workers waiting for new eligibility
@@ -92,7 +96,7 @@ type TaskQueue struct {
 // NewTaskQueue constructs an empty queue.
 func NewTaskQueue() *TaskQueue {
 	tq := &TaskQueue{
-		entries:      make(map[string]*scheduledTaskEntry),
+		entries:      make(map[taskQueueKey]*scheduledTaskEntry),
 		heap:         make(taskHeap, 0),
 		queuedByType: make(map[string]int),
 	}
@@ -120,7 +124,7 @@ func (q *TaskQueue) upsertPlan(task ScheduledTask, availabilityRevision uint64) 
 }
 
 func (q *TaskQueue) upsertLocked(task ScheduledTask, fromPlanner bool) {
-	key := schedulerKey(task.InstanceType, task.InstanceName)
+	key := taskQueueKey{task.InstanceType, task.InstanceName}
 	if entry, ok := q.entries[key]; ok {
 		if entry.index < 0 {
 			if !fromPlanner {
@@ -199,7 +203,7 @@ func (q *TaskQueue) refreshAvailabilitySchedule(localTasks map[string]ScheduledT
 // same critical section. An explicit edit or removal made during the claim
 // takes precedence over the returning worker's normal schedule.
 func (q *TaskQueue) completeClaim(task, next ScheduledTask, reschedule pollReschedule) {
-	key := schedulerKey(task.InstanceType, task.InstanceName)
+	key := taskQueueKey{task.InstanceType, task.InstanceName}
 	q.mu.Lock()
 	defer q.mu.Unlock()
 
@@ -230,7 +234,7 @@ func (q *TaskQueue) completeClaim(task, next ScheduledTask, reschedule pollResch
 
 // Get returns the queued task for an instance, if present.
 func (q *TaskQueue) Get(instanceType InstanceType, instance string) (ScheduledTask, bool) {
-	key := schedulerKey(instanceType, instance)
+	key := taskQueueKey{instanceType, instance}
 	q.mu.Lock()
 	defer q.mu.Unlock()
 
@@ -243,7 +247,7 @@ func (q *TaskQueue) Get(instanceType InstanceType, instance string) (ScheduledTa
 
 // Remove deletes a queued task or cancels the successor of a claimed task.
 func (q *TaskQueue) Remove(instanceType InstanceType, instance string) {
-	key := schedulerKey(instanceType, instance)
+	key := taskQueueKey{instanceType, instance}
 	q.mu.Lock()
 	defer q.mu.Unlock()
 
@@ -252,7 +256,7 @@ func (q *TaskQueue) Remove(instanceType InstanceType, instance string) {
 	}
 }
 
-func (q *TaskQueue) removeLocked(key string, entry *scheduledTaskEntry) {
+func (q *TaskQueue) removeLocked(key taskQueueKey, entry *scheduledTaskEntry) {
 	if entry.index < 0 {
 		entry.followup = dropWorkerSchedule
 		return
