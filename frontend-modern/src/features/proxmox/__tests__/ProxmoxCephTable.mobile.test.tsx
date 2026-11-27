@@ -55,4 +55,23 @@ describe('ProxmoxCephTable phone cluster readability', () => {
     expect(first).not.toHaveClass('truncate');
     expect(second).toHaveClass('whitespace-normal', 'wrap-anywhere');
   });
+
+  it('shows Stale data under the cluster name and Stale in Health on compact phone width', () => {
+    const staleCluster: Resource = {
+      ...makeCluster('ceph-stale', 'Mock Cluster East 01'),
+      sourceStatus: { proxmox: { status: 'stale' } },
+    };
+    render(() => (
+      <ProxmoxCephTable
+        resources={[staleCluster, makeCluster('ceph-2', 'Mock Cluster East 02')]}
+        emptyIcon={<span />}
+        emptyTitle="No Ceph"
+        emptyDescription="No Ceph"
+      />
+    ));
+
+    expect(screen.getByText('Stale data')).toBeInTheDocument();
+    expect(screen.getByRole('cell', { name: 'Stale' })).toBeInTheDocument();
+    expect(screen.getByRole('cell', { name: 'Healthy' })).toBeInTheDocument();
+  });
 });

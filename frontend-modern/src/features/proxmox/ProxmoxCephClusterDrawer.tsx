@@ -34,6 +34,7 @@ import {
   buildCephClusterDetailSections,
   getCephClusterExceptionRows,
   getCephClusterFacts,
+  getCephClusterStaleNotice,
 } from './proxmoxCephClusterDrawerModel';
 
 const GuestDrawerHistory = lazy(() =>
@@ -82,6 +83,7 @@ const CephClusterOverview: Component<{
       historyGroups().flatMap((group) => group.series.map((series) => series.metric)),
     ),
   );
+  const staleNotice = createMemo(() => getCephClusterStaleNotice(props.cluster));
   const exceptionRows = createMemo(() =>
     getCephClusterExceptionRows(
       props.cluster,
@@ -120,6 +122,7 @@ const CephClusterOverview: Component<{
               target={target()}
               range={props.historyRange}
               enabled={props.historyEnabled}
+              liveReadingsAvailable={!staleNotice()}
               groups={historyGroups()}
               currentMetrics={getResourceMetricsHistoryCurrentMetrics(props.cluster)}
               alerts={chartAlerts()}

@@ -56,7 +56,10 @@ describe('Ceph reported health', () => {
     ];
     render(() => table(() => resources));
 
-    const row = (name: string) => within(screen.getByText(name, { exact: true }).closest('tr')!);
+    const row = (name: string) =>
+      within(
+        screen.getByRole('button', { name: new RegExp(`details for ${name}$`) }).closest('tr')!,
+      );
     expect(row('Alder').getByRole('cell', { name: 'Unknown' })).toBeInTheDocument();
     expect(row('Alder').getByText('40.0%')).toBeInTheDocument();
     expect(row('Elm').getByRole('cell', { name: 'Unknown' })).toHaveAttribute(
@@ -86,5 +89,84 @@ describe('Ceph reported health', () => {
     expect(screen.getByTestId('ceph-cluster-drawer')).toBe(drawer);
     expect(within(drawer).getByRole('img', { name: 'Healthy' })).toBeInTheDocument();
     expect(screen.getByRole('cell', { name: 'Healthy' })).toBeInTheDocument();
+  });
+
+  it('marks stale HEALTH_OK clusters as Stale out of Healthy, preserves Critical, and recovers live', async () => {
+    const staleHealthy: Resource = {
+      ...cluster('StaleEast', 'warning', 'HEALTH_OK'),
+      sourceStatus: {
+        proxmox: { status: 'error', error: 'Proxmox API session expired (401)' },
+      },
+    };
+    const staleCritical: Resource = {
+      ...cluster('StaleWest', 'offline', 'HEALTH_ERR'),
+      ceph: {
+        ...cluster('StaleWest', 'offline', 'HEALTH_ERR').ceph!,
+        healthMessage: '2 osds down',
+      },
+      sourceStatus: { proxmox: { status: 'stale' } },
+    };
+    const freshHealthy: Resource = {
+      ...cluster('FreshNorth', 'online', 'HEALTH_OK'),
+      sourceStatus: { proxmox: { status: 'online' } },
+    };
+
+    const [resources, setResources] = createSignal<Resource[]>([
+      staleHealthy,
+      staleCritical,
+      freshHealthy,
+    ]);
+    render(() => table(resources));
+
+    const row = (name: string) =>
+      within(
+        screen.getByRole('button', { name: new RegExp(`details for ${name}$`) }).closest('tr')!,
+      );
+
+    // Stale HEALTH_OK must not read Healthy, shows Stale data + collection error, keeps retained figures.
+    expect(row('StaleEast').getByText('Stale data')).toBeInTheDocument();
+    expect(row('StaleEast').getByRole('cell', { name: 'Stale' })).toHaveAttribute(
+      'title',
+      'Stale · Last reported HEALTH_OK · Proxmox collection error: Proxmox API session expired (401)',
+    );
+    expect(
+      row('StaleEast').getByText('Proxmox collection error: Proxmox API session expired (401)'),
+    ).toBeInTheDocument();
+    expect(row('StaleEast').getByText('40.0%')).toBeInTheDocument();
+
+    // Stale HEALTH_ERR preserves Critical verdict and healthMessage alongside Stale data cue.
+    expect(row('StaleWest').getByText('Stale data')).toBeInTheDocument();
+    expect(row('StaleWest').getByRole('cell', { name: 'Critical' })).toBeInTheDocument();
+    expect(row('StaleWest').getByText('2 osds down')).toBeInTheDocument();
+
+    // Filter counts keep stale HEALTH_OK out of Healthy and inside Warning, while Critical stays Critical.
+    expect(screen.getByRole('button', { name: 'Healthy, 1' })).toBeInTheDocument();
+    expect(screen.getByRole('button', { name: 'Warning, 1' })).toBeInTheDocument();
+    expect(screen.getByRole('button', { name: 'Critical, 1' })).toBeInTheDocument();
+
+    // Expand stale cluster drawer: header repeats Stale and Worth checking surfaces Readings error.
+    await fireEvent.click(screen.getByRole('button', { name: 'Expand details for StaleEast' }));
+    const drawer = screen.getByTestId('ceph-cluster-drawer');
+    expect(within(drawer).getByRole('img', { name: 'Stale' })).toBeInTheDocument();
+    expect(within(drawer).getByTestId('ceph-cluster-drawer-exceptions')).toHaveTextContent(
+      'Proxmox collection error: Proxmox API session expired (401)',
+    );
+
+    // Live recovery clears Stale data and restores Healthy on both row and open drawer.
+    setResources([
+      {
+        ...staleHealthy,
+        status: 'online',
+        sourceStatus: { proxmox: { status: 'online' } },
+      },
+      staleCritical,
+      freshHealthy,
+    ]);
+    expect(row('StaleEast').queryByText('Stale data')).toBeNull();
+    expect(row('StaleEast').getByRole('cell', { name: 'Healthy' })).toBeInTheDocument();
+    expect(within(drawer).getByRole('img', { name: 'Healthy' })).toBeInTheDocument();
+    expect(within(drawer).queryByTestId('ceph-cluster-drawer-exceptions')).toBeNull();
+    expect(screen.getByRole('button', { name: 'Healthy, 2' })).toBeInTheDocument();
+    expect(screen.getByRole('button', { name: 'Warning, 0' })).toBeInTheDocument();
   });
 });
