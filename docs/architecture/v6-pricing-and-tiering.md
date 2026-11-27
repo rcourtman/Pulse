@@ -4,8 +4,8 @@
 > Primary v6 execution authority is `docs/release-control/v6/internal/SOURCE_OF_TRUTH.md` (+ `docs/release-control/v6/internal/status.json`).
 > This file remains the detailed pricing evidence/spec and must stay aligned with the release-control source.
 
-> **Status:** APPROVED — Current commercial contract.
-> **Date:** 2026-09-19
+> **Status:** APPROVED. Current commercial contract.
+> **Date:** 2026-11-27
 > **Replaces:** All previous pricing documents and v5 pricing structure.
 
 This document is the single source of truth for Pulse v6 pricing, tiering, feature
@@ -23,16 +23,20 @@ release-control source wins and this file must be corrected.
    configured provider or local model. We never cap how many times users can run
    Patrol through their own provider. The paid gate is on auto-execution of fixes,
    not on analysis or suggestions.
-3. **Distinct jobs, clear bundles.** Community, Relay, and Pro are not a
-   good/better/best ladder. Community is the monitoring foundation, Relay is the access
-   service, and Pro is the operations product. Pro may bundle Relay connectivity, but
-   public copy must not use that entitlement relationship to recommend one job over another.
+3. **Distinct jobs, clear bundles.** Community, Pro, and Business are not a
+   feature-escalation ladder that gates core monitoring. Community is the
+   monitoring foundation, Pro is the operations product for individuals and
+   small teams, and Business is the same product sized for larger company teams
+   with unlimited named team seats and a next-business-day support target.
+   Relay left public checkout on 29 September 2026 and retires with Pulse
+   Mobile on 31 March 2027. Do not offer Relay again or describe it as a way
+   to reach the web UI.
 4. **Simple to understand.** A homelabber should know which product fits the job in
    under 10 seconds.
-5. **Product-led public language.** Public marketing describes Pulse, Community, Relay,
-   Pro, Cloud, and MSP as enduring products rather than release trains. Version identifiers
+5. **Product-led public language.** Public marketing describes Pulse, Community,
+   Pro, Business, Cloud, and MSP as enduring products rather than release trains. Version identifiers
    belong only in version-sensitive tasks such as release notes, downloads, compatibility,
-   migration, support, and implementation metadata; they must not lead homepage, product,
+   migration, support, and implementation metadata. They must not lead homepage, product,
    pricing, or acquisition copy.
 
 ---
@@ -136,35 +140,39 @@ watch-only Patrol findings but apply fixes manually. Pro users can let Patrol
 investigate, ask for approval when policy requires it, run governed fixes, verify
 outcomes, and record what happened.
 
-### Relay — $4.99/month or $39/year
+### Relay (retired 29 September 2026, existing subscribers only)
+
+Relay left public checkout on **29 September 2026** and retires together with
+Pulse Mobile on **31 March 2027**. Relay only ever connected the Pulse Mobile
+app. It never provided remote access to the Pulse web UI. Do not offer Relay
+for purchase again, and do not describe Relay as a way to reach the web UI.
 
 | Element | Value |
 |---|---|
+| Public checkout | **No** (retired 29 September 2026, existing subscribers only) |
 | Monitoring scope | **Core self-hosted monitoring included** |
-| Product job | Secure remote access, Mobile pairing, and push delivery |
-| Community monitoring | Remains free and unchanged |
-| Relay remote access | **Yes** |
-| Pulse Mobile handoff pairing | **Yes** (handoff and push notifications) |
-| Push notifications | **Yes** |
-| Customer-specific Relay URL | No; Relay uses the standard outbound relay service for v6 GA |
+| Continuing entitlement | **Pro entitlements** at the subscriber's current Stripe price (`$4.99/month` or `$39/year`) for as long as their subscription continues, including after 31 March 2027 |
+| Existing Pulse Mobile pairing and push | Continues for already-paired phones until **31 March 2027** |
+| Customer-specific Relay URL | No. Relay uses the standard outbound relay service while it remains active for paired phones until 31 March 2027 |
 | Metrics history | Included with Community |
-| Patrol governed fixes | No |
-| Alert investigation | No |
-| RBAC/Audit/Reporting | No |
-| Reporting | No |
+| Patrol governed fixes, investigation, RBAC, Audit, Reporting, Agent profiles | **Yes** for continuing Relay subscribers (projected to Pro entitlements via `relay_retirement.go`) |
 
-**Positioning:** Relay is the access service. Present it when someone wants secure remote
-access, Pulse Mobile handoff pairing, and push notifications without changing
-their self-hosted monitoring scope. Do not recommend Relay over Pro, or describe Relay as a
-step toward Pro; the products solve different jobs.
+**Continuity policy:** Existing Relay subscribers keep their Stripe price and
+receive Pro entitlements for as long as their subscription remains continuously
+active. Do not tell continuing Relay subscribers to buy Pro to obtain those
+entitlements. For remote access to the web UI, users use their own VPN or
+tunnel. For phone alerts after 31 March 2027, users add an ntfy, Gotify, or
+Pushover destination under **Alerts** and open Pulse in their phone's browser.
 
-### Pro — $8.99/month or $79/year
+### Pro ($8.99/month or $79/year)
 
 | Element | Value |
 |---|---|
 | Monitoring scope | **Core self-hosted monitoring included** |
 | Product job | Patrol-powered investigation and governed operations |
-| Relay connectivity | Included as a bundled service |
+| Named team seats | **3 named team seats** on new subscriptions (subscriptions started before the Business launch on 20 August 2026 keep their original unlimited seat allowance) |
+| Support | Typically within two business days (no priority-response SLA) |
+| Existing Pulse Mobile pairing | Continues for paired phones until 31 March 2027 |
 | Patrol modes | **Yes** (choose how much Patrol can do) |
 | Issue investigation | **Yes** |
 | Governed fixes | **Yes** (approved execution, safety preflight, rollback, verification) |
@@ -174,10 +182,10 @@ step toward Pro; the products solve different jobs.
 | SAML SSO | Included with Community |
 | Agent profiles | **Yes** |
 | PDF/CSV reporting | **Yes** |
-| Self-hosted trial acquisition | No; local trial CTAs are retired for v6 GA |
+| Self-hosted trial acquisition | No. Local trial CTAs are retired for v6 GA |
 
 **Positioning:** Pro is the operations product for self-hosted operators who want Pulse to
-move from monitoring into investigation and governed action. It is not "more Relay." The
+move from monitoring into investigation and governed action. The
 marketing pitch focuses on two things:
 1. "Choose Patrol mode" (how much Patrol can do)
 2. "Let Patrol investigate and fix governed issues" (issue investigation, governed fixes, verification)
@@ -186,19 +194,36 @@ Metric history was a Pro pillar until 17 November 2026. It is now free on every
 plan: free installs already stored the data, and only a minority of paid installs
 read past seven days.
 
-Relay connectivity and the team extras (RBAC, audit logging, reporting, and agent profiles)
-are bundled, but they are supporting entitlements rather than evidence of a product ladder.
+Team and admin controls (RBAC, audit logging, reporting, and agent profiles) are
+included with Pro.
+
+### Business ($399/year, annual only)
+
+Launched for public checkout on **20 August 2026**
+(`docs/release-control/v6/internal/records/business-tier-launch-2026-08-20.md`).
+Business runs the exact same feature set as Pro and never differentiates by
+gating product features.
+
+| Element | Value |
+|---|---|
+| Price | **$399/year** (annual billing only, no monthly plan) |
+| Monitoring scope | **Core self-hosted monitoring included** |
+| Product job | Same product and feature set as Pro, sized for a company team |
+| Named team seats | **Unlimited named team seats** (`max_users` unset) |
+| Support | **Next-business-day target** (no hard SLA) |
+| Patrol modes, investigation, governed fixes, RBAC, Audit, Reporting, Agent profiles | **Identical to Pro** |
+| Self-hosted trial acquisition | No |
 
 ### Self-hosted license and support scope
 
-- One Relay or Pro subscription covers one customer-owned Pulse environment.
-  Customer-owned environments remain owner-operated when administered by an
-  appointed IT contractor or MSP.
+- One Pro, Business, or continuing retired Relay subscription covers one
+  customer-owned Pulse environment. Customer-owned environments remain
+  owner-operated when administered by an appointed IT contractor or MSP.
 - Monitored systems and child resources are not metered.
 - The subscription permits three concurrent activations inside that environment
   for primary, migration, and recovery use. These slots do not license unrelated
   customer environments.
-- Each customer may own a separate Relay or Pro subscription and independent
+- Each customer may own a separate Pro or Business subscription and independent
   installation. An IT contractor or MSP may install, configure, monitor, and
   maintain it without changing license ownership or requiring an MSP agreement.
 - A provider-owned entitlement across client workspaces requires MSP. One
@@ -206,11 +231,12 @@ are bundled, but they are supporting entitlements rather than evidence of a prod
   customers.
 - Community remains MIT-licensed. Independent customer installations and paid
   administration of the open-source core do not require a commercial or MSP license.
-- Verified administrative ownership transfer is supported; resale, sharing,
+- Verified administrative ownership transfer is supported. Resale, sharing,
   and unverified third-party assignment are prohibited.
-- Relay and Pro include verified commercial support for billing, activation,
-  transfer, configuration, and diagnostics, typically within two business
-  days. This is not a contractual SLA or priority-support commitment.
+- Pro and continuing Relay subscriptions include verified commercial support for
+  billing, activation, transfer, configuration, and diagnostics, typically
+  within two business days. Business carries a next-business-day support target.
+  Neither is a contractual SLA or priority-support commitment.
 
 **Readiness assertion `customer-owned-contractor-administration`, adopted
 2026-09-19:** Public terms, pricing copy, and support answers must preserve the
@@ -219,7 +245,7 @@ contractor and a provider-owned MSP service. Outside IT support alone must never
 trigger an MSP requirement. This clarification adds no new plan, price,
 activation slot, seat allowance, or entitlement.
 
-### Pro+ — Legacy continuity tier only
+### Pro+ (legacy continuity tier only)
 
 Existing Pro+ entitlements remain supported for continuity, but Pro+ is no longer part of
 the public v6 self-hosted ladder because monitored-system volume is not the paid boundary.
@@ -275,63 +301,81 @@ pass the governed Cloud reopening gate.
 
 ---
 
-## MSP Tiers (Provider-hosted, request-assisted)
+## MSP Tiers (Provider-hosted, self-serve for Solo through Scale)
 
 MSP provides a provider-owned entitlement across client workspaces, central
 management, and one commercial relationship. It is not required merely because
 the same contractor administers several independently customer-owned Community,
-Relay, or Pro installations.
+Pro, or Business installations.
 
-Pulse MSP is not the shared-process organization model. The default MSP route is provider-hosted: the MSP runs a Stripe-free control plane that creates one isolated Pulse runtime/container per client workspace. A signed MSP license sets the plan version and client workspace cap. Pulse-hosted MSP is an optional request-assisted path where Pulse operates that provider stack.
+Pulse MSP is not the shared-process organization model. The canonical MSP route
+is provider-hosted: the MSP runs a control plane that creates one isolated Pulse
+runtime per client workspace. A signed MSP license sets the plan version and
+client workspace cap. Pulse-hosted MSP is an optional request-assisted path
+where Pulse operates that provider stack.
 
-MSP is an assisted preview, not a public self-serve checkout path. Public copy
-may show the recorded monthly and annual prices, but fulfillment remains
-request-assisted and must not imply immediate Pulse-hosted provisioning.
+Provider-hosted MSP offers a self-serve **60-day, two-workspace evaluation**
+(no form, card, or approval) and direct in-app Stripe checkout from **Plan** in
+the provider portal for **Solo, Starter, Growth, and Scale** (monthly or
+annual). **MSP Enterprise** (40+ workspaces), white-label report branding, and
+optional Pulse-hosted MSP remain request-assisted.
 
-### MSP Starter — $149/month or $1,490/year
+### MSP Solo ($69/month or $690/year)
+
+| Element | Value |
+|---|---|
+| Client workspaces | Up to **3** |
+| Provider control plane | Yes, provider-hosted |
+| Client runtime isolation | One Pulse runtime/container per client |
+| Portal handoff | Yes |
+| Webhook templates | Gotify, PagerDuty, Slack, and Generic |
+| White-label report branding | Requires `white_label` entitlement |
+| Access motion | Self-serve 60-day evaluation and in-app Stripe checkout from **Plan** |
+
+### MSP Starter ($149/month or $1,490/year)
 
 | Element | Value |
 |---|---|
 | Client workspaces | Up to **5** |
-| Provider control plane | Yes, provider-hosted and Stripe-free |
+| Provider control plane | Yes, provider-hosted |
 | Client runtime isolation | One Pulse runtime/container per client |
 | Portal handoff | Yes |
 | Webhook templates | Gotify, PagerDuty, Slack, and Generic |
 | White-label report branding | Requires `white_label` entitlement |
-| Access motion | Request-assisted |
+| Access motion | Self-serve 60-day evaluation and in-app Stripe checkout from **Plan** |
 
-### MSP Growth — $249/month or $2,490/year
+### MSP Growth ($249/month or $2,490/year)
 
 | Element | Value |
 |---|---|
 | Client workspaces | Up to **15** |
-| Provider control plane | Yes, provider-hosted and Stripe-free |
+| Provider control plane | Yes, provider-hosted |
 | Client runtime isolation | One Pulse runtime/container per client |
 | Portal handoff | Yes |
 | Webhook templates | Gotify, PagerDuty, Slack, and Generic |
 | White-label report branding | Requires `white_label` entitlement |
-| Access motion | Request-assisted |
+| Access motion | Self-serve 60-day evaluation and in-app Stripe checkout from **Plan** |
 
-### MSP Scale — $399/month or $3,990/year
+### MSP Scale ($399/month or $3,990/year)
 
 | Element | Value |
 |---|---|
 | Client workspaces | Up to **40** |
-| Provider control plane | Yes, provider-hosted and Stripe-free |
+| Provider control plane | Yes, provider-hosted |
 | Client runtime isolation | One Pulse runtime/container per client |
 | Portal handoff | Yes |
 | Webhook templates | Gotify, PagerDuty, Slack, and Generic |
 | White-label report branding | Requires `white_label` entitlement |
-| Access motion | Request-assisted |
+| Access motion | Self-serve 60-day evaluation and in-app Stripe checkout from **Plan** |
 
-### MSP Enterprise — Custom
+### MSP Enterprise (Custom)
 
 | Element | Value |
 |---|---|
-| Client workspaces | Custom |
+| Client workspaces | Custom (40+) |
 | Hosting shape | Provider-hosted by default, Pulse-hosted optional by agreement |
 | White-label report branding | **Yes**, when granted through `white_label` |
-| Pricing | Negotiated |
+| Pricing | Negotiated, request-assisted |
 
 ---
 
@@ -339,26 +383,26 @@ request-assisted and must not imply immediate Pulse-hosted provisioning.
 
 ### 1. Operations-value ladder
 Self-hosted conversion should come from clear operational upgrades, not monitored-system
-capacity pressure. Community proves the core monitoring loop, Relay sells convenience,
-and Pro sells safe operations and team/admin controls.
+capacity pressure. Community proves the core monitoring loop, Pro sells safe
+operations and team/admin controls, and Business scales Pro for larger company
+teams with unlimited seats and a next-business-day support target.
 
 ### 2. AI fix previews (strongest lever)
-Free/Relay users see exactly what Patrol found and how to fix it (specific commands), but
-must apply manually. Pro users see the same information with an "Apply Fix" button. Every
-Patrol finding is a conversion moment.
+Community users see exactly what Patrol found and how to fix it (specific commands), but
+must apply fixes manually. Pro and Business users see the same information with
+governed execution. Continuing Relay subscribers also receive Pro entitlements.
 
 ### 3. Provider setup stays self-managed
 AI setup on self-hosted installs should point operators at their own provider connection or
 local model endpoint. Paid operations features such as governed fixes
-and issue investigation remain opt-in extras; they do not
+and issue investigation remain opt-in extras. They do not
 replace the self-managed AI runtime path.
 
-### 4. Relay as optional convenience ($39/yr)
-Gives remote-access and mobile users a small paid convenience option without turning core
-self-hosted monitoring into a capacity tier.
-Remote access through the standard outbound Relay service + mobile + push notifications
-should make it an easy purchase for users who want Pulse available outside
-their LAN.
+### 4. Retired Relay (no longer offered)
+Relay left public checkout on 29 September 2026 and retires with Pulse Mobile on
+31 March 2027. Do not offer Relay in new conversion flows or describe Relay as a
+way to reach the web UI. Existing Relay subscribers keep their price and receive
+Pro entitlements for as long as their subscription continues.
 
 ### 5. Opt-in commercial discovery
 Default self-hosted v6 sessions must not present ordinary users with trial, paywall, or
@@ -367,30 +411,30 @@ opens pricing/activation/recovery/support flows, when the session is hosted/clou
 existing entitlement requires a clear renewal or recovery path.
 
 High-intent product moments should stay useful without becoming sales surfaces:
-- Patrol finds a fixable issue -> show the manual fix and BYOK/provider path first; governed fix execution can
+- Patrol finds a fixable issue -> show the manual fix and BYOK/provider path first. Governed fix execution can
   remain an opt-in Pro capability where commercial prompts are explicitly allowed.
-- An alert needs deeper explanation -> keep free investigation context useful; paid alert
+- An alert needs deeper explanation -> keep free investigation context useful. Paid alert
   analysis stays an optional, discoverable extra.
 - User taps a longer chart range -> explain the local retention state without implying a
   monitoring capacity limit.
-- User wants remote access or Pulse Mobile handoff pairing -> point to Relay only inside the explicit Relay
-  setup/commercial handoff, not as a global nudge.
+- User wants remote access to the web UI -> recommend their own VPN or tunnel, never retired Relay.
 
 ### 6. No self-hosted monitored-system overflow gate
 Self-hosted Community users should not need a temporary monitored-system overflow path because
-core self-hosted monitoring is included by default and not metered. Onboarding can still surface
-Relay and Pro value when users try remote access, push notifications, alert
-investigation, or governed fixes.
+core self-hosted monitoring is included by default and not metered. Explicit
+commercial surfaces explain Pro and Business value for alert investigation,
+governed fixes, team controls, and organization seat/support scale.
 
 ### 7. Transparent monitored-system ledger
 The ledger remains important for inventory truth, hosted/MSP limits, and support. It should
 show exactly which top-level systems Pulse sees, which collection path is being used, and what
-is included under each system. On self-hosted Community/Relay/Pro, it must not create a false
-"X/Y systems" paywall or imply that users need to buy more monitoring room.
+is included under each system. On self-hosted Community, Pro, Business, and
+legacy continuity tiers, it must not create a false "X/Y systems" paywall or
+imply that users need to buy more monitoring room.
 
 ### 8. No default upsell cadence
 There is no proactive self-hosted upsell cadence in v6 GA. If older compatibility settings
-mention prompt reduction, treat them as legacy controls; the v6 default is already quiet unless
+mention prompt reduction, treat them as legacy controls. The v6 default is already quiet unless
 the user enters an explicit commercial path or has an entitlement state that needs attention.
 
 ### 9. Cloud remains unavailable until reopening proof
@@ -402,18 +446,18 @@ inputs until the governed reopening gate passes.
 
 | Change | Effective time | Billing treatment |
 |---|---|---|
-| Community to Relay or Pro | After successful checkout | New subscription |
-| Relay to Pro | Immediate after explicit quote and successful payment | Prorated |
+| Community to Pro or Business | After successful checkout | New subscription |
 | Monthly to annual, same tier | Immediate after explicit quote and successful payment | Prorated |
-| Pro to Relay | Current paid period end | No proration |
 | Annual to monthly, same tier | Current paid period end | No proration |
+| Continuing Relay billing-cycle change | Moves to the regular Pro price (nobody moves onto a retired Relay price) | Prorated for monthly to annual, period end for annual to monthly |
 | Voluntary cancellation | Current paid period end | No proration |
 
+Relay is retired and is neither a target offer nor a downgrade option from Pro.
 Combined transitions use the most restrictive timing rule. Voluntary
-cancellation has a seven-day recovery-only window after paid entitlement ends;
-payment failure has a separate seven-day functional grace period. Downgrades
+cancellation has a seven-day recovery-only window after paid entitlement ends.
+Payment failure has a separate seven-day functional grace period. Downgrades
 preserve configuration, report definitions, audit records, metric history, and
-generated reports; nothing is purged because a plan ended.
+generated reports. Nothing is purged because a plan ended.
 
 ---
 
@@ -449,23 +493,23 @@ customer-facing GA funnel.
 
 ## Pricing Page Layout
 
-### Main pricing page (self-hosted — 3 columns)
+### Main pricing page (self-hosted, 3 columns)
 
 ```
-  Community     Relay           Pro
-  $0            $39/yr          $79/yr
+  Community     Pro             Business
+  $0            $79/yr          $399/yr
   Included      Included        Included
   monitoring    monitoring      monitoring
 
-  [Get Started] [Buy Relay]     [Choose Pro]
+  [Get Started] [Choose Pro]    [Choose Business]
 ```
 
 Below the table:
-- "Need managed hosting? → See Cloud plans"
-- "Managing clients? → See MSP plans"
-- "Need a custom commercial deployment? → Contact us"
+- "Need managed hosting? -> See Cloud plans" (signup currently closed)
+- "Managing clients? -> See MSP plans"
+- "Need a custom commercial deployment? -> Contact us"
 
-### Cloud page (3 columns)
+### Cloud page (3 columns, dormant)
 
 ```
   Starter       Power           Max
@@ -473,12 +517,12 @@ Below the table:
   10 agents     30 agents       75 agents
 ```
 
-### MSP page (3 columns + Enterprise)
+### MSP page (4 self-serve tiers + Enterprise)
 
 ```
-  Starter       Growth          Scale           Enterprise
-  $149/mo       $249/mo         $399/mo         Custom
-  5 clients     15 clients      40 clients      Custom
+  Solo          Starter         Growth          Scale           Enterprise
+  $69/mo        $149/mo         $249/mo         $399/mo         Custom
+  3 clients     5 clients       15 clients      40 clients      40+ clients
 ```
 
 ---
@@ -497,34 +541,39 @@ explain monitored-system identity:
 ### Plan taglines
 
 - **Community:** Monitor your self-hosted infrastructure for free.
-- **Relay:** Monitor from anywhere with remote access, mobile, and push.
 - **Pro:** Pulse does not just watch your infrastructure. It helps operate it.
+- **Business:** The same product Pro runs, sized for a company team with unlimited named team seats and a next-business-day support target.
+- **Retired Relay (existing subscribers only):** Relay is no longer sold. Existing subscribers keep their price and receive Pro features for as long as their subscription continues.
 - **Pro+:** Legacy continuity tier for existing holders.
 
 ### Boundary-upgrade copy
 
-- **Community → Relay:** Want Pulse outside your LAN? Upgrade to Relay for secure remote access, mobile, and push notifications.
-- **Relay → Pro:** Want Pulse to do more than alert? Upgrade to Pro for hands-on Patrol modes, issue investigation, governed fixes, and verified outcomes.
-- **Existing self-hosted monitoring:** Your monitored systems keep working. Paid self-hosted tiers add convenience and operations features, not more monitoring room.
+- **Community -> Pro:** Want Pulse to do more than alert? Upgrade to Pro for hands-on Patrol modes, issue investigation, governed fixes, and verified outcomes.
+- **Pro -> Business:** Running Pulse for a larger team? Business keeps the exact Pro feature set with unlimited named team seats and a next-business-day support target.
+- **Existing self-hosted monitoring:** Your monitored systems keep working. Paid self-hosted tiers add operations and team scale, not more monitoring room.
 
 ---
 
 ## Stripe Price IDs
 
-> Updated 2026-04-24 with the final public self-hosted Relay / Pro price IDs.
+> Updated 2026-11-27 to reflect the 2026-08-20 Business launch and 2026-09-29 Relay retirement.
 
 ### Self-Hosted
 
-> 2026-04-24 implementation: the locked Relay and Pro monthly/annual prices now
-> exist in live Stripe and are the only self-hosted v6 prices marked
-> `public_checkout` in the live license-server plan map. The previous higher
-> pre-GA Relay / Pro prices remain non-public compatibility entries only. Pro+
-> is a continuity tier, not a public self-hosted checkout column.
+> Public checkout offers Pro (3 named team seats on new subscriptions) and
+> Business (annual-only, unlimited named team seats). Prior pre-Business Pro
+> prices and retired Relay prices remain active for continuing subscriptions
+> only (`public_checkout` off). Continuing Relay subscriptions are projected to
+> Pro entitlements at their existing Stripe price. Pro+ is a continuity tier,
+> not a public self-hosted checkout column.
 
-- Relay Monthly: `price_1TPmE5BrHBocJIGHdwLp4tTA` ($4.99/mo)
-- Relay Annual: `price_1TPmE5BrHBocJIGH7P6JgMHP` ($39/yr)
-- Pro Monthly: `price_1TPmE6BrHBocJIGHHaPwluoM` ($8.99/mo)
-- Pro Annual: `price_1TPmE6BrHBocJIGHR8bMvjK8` ($79/yr)
+- Pro Monthly (current public checkout, 3 named team seats): `price_1U6WQvBrHBocJIGHYqXOjFWm` ($8.99/mo)
+- Pro Annual (current public checkout, 3 named team seats): `price_1U6WQvBrHBocJIGHxMjt6t41` ($79/yr)
+- Business Annual (current public checkout, annual only, unlimited named team seats): `price_1U6WQuBrHBocJIGH0ThY3XAc` ($399/yr)
+- Pro Monthly (pre-2026-08-20 continuity, not public checkout): `price_1TPmE6BrHBocJIGHHaPwluoM` ($8.99/mo)
+- Pro Annual (pre-2026-08-20 continuity, not public checkout): `price_1TPmE6BrHBocJIGHR8bMvjK8` ($79/yr)
+- Retired Relay Monthly (existing subscribers only, projected to Pro entitlements, not public checkout): `price_1TPmE5BrHBocJIGHdwLp4tTA` ($4.99/mo)
+- Retired Relay Annual (existing subscribers only, projected to Pro entitlements, not public checkout): `price_1TPmE5BrHBocJIGH7P6JgMHP` ($39/yr)
 - Pro+ renewal/continuity prices: `price_1T51LIBrHBocJIGHkUjg7sgO` ($18/mo), `price_1T51LIBrHBocJIGHvVaoGsGF` ($149/yr), not public checkout
 
 ### Cloud (created 2026-02-28)
@@ -536,9 +585,13 @@ explain monitored-system identity:
 - Cloud Max Monthly: `price_1T5kg4BrHBocJIGHHa8Ecqho` ($79/mo)
 - Cloud Max Annual: `price_1T5kg5BrHBocJIGH5AIJ4nVc` ($699/yr)
 
-### MSP (created 2026-02-28)
-> Owner review required before publication: these price IDs exist, but MSP is request-assisted and must not be presented as live self-serve checkout until launch is approved.
+### MSP
+> Provider-hosted MSP Solo, Starter, Growth, and Scale are live self-serve plans
+> via **Plan** in the provider portal after the 60-day evaluation. MSP
+> Enterprise, white-label branding, and optional Pulse-hosted MSP remain
+> request-assisted.
 
+- MSP Solo ($69/mo or $690/yr, up to 3 client workspaces, live provider-portal Stripe checkout)
 - MSP Starter Monthly: `price_1T5kgTBrHBocJIGHjOs15LI2` ($149/mo)
 - MSP Starter Annual: `price_1T5kgUBrHBocJIGHT6PiOn6x` ($1,490/yr)
 - MSP Growth Monthly: `price_1T5kgVBrHBocJIGHulNsCTb1` ($249/mo)
@@ -556,7 +609,7 @@ explain monitored-system identity:
 
 ### Pulse runtime
 
-- [x] Treat self-hosted Community / Relay / Pro and legacy Pro+ continuity defaults as core monitoring included without a monitored-system volume gate
+- [x] Treat self-hosted Community / Pro / Business and legacy Relay / Pro+ continuity defaults as core monitoring included without a monitored-system volume gate
 - [x] Preserve grandfathered v5 recurring plans as not-metered continuity states while subscriptions remain active
 - [x] Keep hosted Cloud / MSP capacity out of static self-hosted tier defaults and in plan-specific license claims
 - [ ] Keep refining monitored-system identity and ledger truth for inventory, hosted/MSP limits, and support workflows
@@ -564,21 +617,22 @@ explain monitored-system identity:
 ### Frontend
 
 - [x] Remove self-hosted monitored-system capacity pressure from billing and pricing surfaces
-- [x] Present the public self-hosted ladder as Community / Relay / Pro
+- [x] Present the public self-hosted plans as Community, Pro, and Business (with Relay retired from public checkout)
 - [ ] Keep ledger and inventory language focused on what Pulse monitors, not paid capacity pressure
-- [ ] Keep paid prompts out of ordinary self-hosted runtime surfaces; commercial copy belongs in explicit pricing, activation, recovery, hosted, or entitlement-aware paths
+- [ ] Keep paid prompts out of ordinary self-hosted runtime surfaces. Commercial copy belongs in explicit pricing, activation, recovery, hosted, or entitlement-aware paths
 
 ### License server / checkout / landing pages (`pulse-pro`)
 
-- [x] Create new self-hosted Stripe prices for Relay / Pro at the locked public bands
+- [x] Create self-hosted Stripe prices for Pro (3-seat new checkout) and Business ($399/yr annual-only) while preserving prior Pro and retired Relay continuity
 - [x] Update plan mappings, checkout flows, and renewal-safe migration logic without disturbing grandfathered v5 continuity
-- [x] Keep Pro+ out of the public checkout ladder unless a separate continuity requirement explicitly needs it
-- [x] Cut the landing page, checkout copy, and purchase surfaces over to core-monitoring-included language and the new price bands
+- [x] Keep Pro+ and retired Relay out of public checkout while projecting continuing Relay subscriptions to Pro entitlements
+- [x] Cut the landing page, checkout copy, and purchase surfaces over to core-monitoring-included language and current self-hosted plans
 
 ### Cloud / MSP
 
-- [ ] Keep current Cloud/MSP list pricing unchanged for now unless a separate decision explicitly revises it
-- [ ] Keep MSP request-assisted until owner approval makes the public launch motion explicit
+- [x] Launch self-serve 60-day evaluation and provider-portal Stripe checkout for provider-hosted MSP Solo, Starter, Growth, and Scale
+- [ ] Keep MSP Enterprise, white-label branding, and optional Pulse-hosted MSP request-assisted until explicitly expanded
+- [ ] Keep current Cloud list pricing dormant until the governed Cloud reopening gate passes
 - [ ] Continue differentiating Cloud / MSP limits via plan-specific license claims rather than self-hosted static bands
 
 ---
@@ -586,9 +640,8 @@ explain monitored-system identity:
 ## Review Checkpoints
 
 ### 30-day post-launch review
-- Free → Relay opt-in purchase rate
-- Free → Pro opt-in purchase rate
-- Relay customers who later adopt Pro operations
+- Community -> Pro and Community -> Business opt-in purchase rate
+- Continuing Relay retention and entitlement continuity
 - Which explicit commercial handoffs are used most (pricing, activation, recovery, hosted)
 - Support load per product
 
@@ -605,6 +658,7 @@ explain monitored-system identity:
 
 | Date | Change | Author |
 |---|---|---|
+| 2026-11-27 | Aligned canonical pricing spec with shipped commercial state: recorded Relay retirement (left public checkout 29 September 2026, retires with Pulse Mobile 31 March 2027, app-only rather than web remote access, continuing subscribers keep their price with Pro entitlements), documented the launched Business tier ($399/yr annual-only, unlimited seats, next-business-day support target, 3-seat cap on new Pro checkouts), updated self-service lifecycle rules, and aligned provider-hosted MSP Solo ($69/mo or $690/yr), 60-day evaluation, and self-serve provider-portal checkout. | Pulse Maintainer |
 | 2026-09-19 | Clarified that independent customer-owned installations may be administered by contractors without an MSP agreement. Reserved MSP for provider-owned entitlements across client workspaces and preserved the prohibition on pooling standard subscriptions. | Richard |
 | 2026-07-10 | Made public marketing product-led rather than release-led. Version identifiers remain available for version-sensitive lifecycle tasks and technical contracts, but no longer frame homepage, product, pricing, or acquisition copy. | Richard |
 | 2026-07-10 | Reframed Community, Relay, and Pro as distinct job-based product choices rather than a good/better/best ladder. Removed product recommendations from public pricing while preserving Relay connectivity as a bundled Pro entitlement. | Richard |
