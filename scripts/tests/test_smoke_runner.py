@@ -464,9 +464,13 @@ class SmokeRunnerTest(unittest.TestCase):
                     before = len(self.observed_calls())
                     result = self.run_runner(mode, shard)
                     calls = self.observed_calls()[before:]
-                    self.assertEqual(calls, names[shard::count])
+                    expected_calls = names[shard::count]
+                    if mode == "--smoke-shard":
+                        self.assertEqual(sorted(calls), expected_calls)
+                    else:
+                        self.assertEqual(calls, expected_calls)
                     self.assertEqual(result.returncode, 1, result.stdout + result.stderr)
-                    failures = [name for name in calls if statuses[name]]
+                    failures = [name for name in expected_calls if statuses[name]]
                     expected = "Failed suites:\n" + "".join(
                         f"  scripts/tests/{name} (exit {statuses[name]})\n" for name in failures)
                     self.assertTrue(result.stdout.endswith(expected), result.stdout)
@@ -570,7 +574,7 @@ class SmokeRunnerTest(unittest.TestCase):
             result = self.run_runner("--smoke-shard", shard)
             self.assertEqual(result.returncode, 0, result.stdout + result.stderr)
             calls = self.observed_calls()[before:]
-            self.assertEqual(calls, sorted(names)[shard::2])
+            self.assertEqual(sorted(calls), sorted(names)[shard::2])
             seen.extend(calls)
             self.assertIn(f"Smoke shard {shard}/2: 4 of 8 suites", result.stdout)
         self.assertEqual(sorted(seen), sorted(names))
@@ -584,7 +588,7 @@ class SmokeRunnerTest(unittest.TestCase):
             before = len(self.observed_calls())
             result = self.run_runner("--smoke-shard", shard)
             self.assertNotEqual(result.returncode, 0)
-            self.assertEqual(self.observed_calls()[before:], names[shard::2])
+            self.assertEqual(sorted(self.observed_calls()[before:]), names[shard::2])
             self.assertIn("Summary: 2/3 passed", result.stdout)
             self.assertIn("Failures: 1", result.stdout)
 
@@ -633,7 +637,7 @@ class SmokeRunnerTest(unittest.TestCase):
             self.assertEqual(result.returncode, 0, result.stdout + result.stderr)
             calls = self.observed_calls()[before:]
             seen.extend(calls)
-            self.assertEqual(calls, sorted(calls))
+            self.assertEqual(len(calls), len(set(calls)))
             self.assertEqual(sum(seconds[name] for name in calls), 202)
         self.assertEqual(sorted(seen), names)
         self.assertEqual(len(seen), len(set(seen)))
@@ -960,6 +964,226 @@ class InterruptionObservationTest(unittest.TestCase):
             self.assertIsNone(active['exit_code'])
             self.assertIsNone(active['signal'])
             self.assertFalse(active['interruption_stop']['leader_reaped'])
+
+
+class ConcurrentRunnerTest(unittest.TestCase):
+    def setUp(self):
+        self.temporary = tempfile.TemporaryDirectory(prefix="pulse-smoke-concurrent-")
+        self.addCleanup(self.temporary.cleanup)
+        self.root = Path(self.temporary.name)
+        self.tests = self.root / "scripts/tests"
+        self.tests.mkdir(parents=True)
+        self.script_runner = self.root / "scripts/run-script-tests.py"
+        shutil.copyfile(ROOT / "scripts/run-script-tests.py", self.script_runner)
+        self.weights = self.root / ".github/scripts/smoke-test-seconds.txt"
+        self.weights.parent.mkdir(parents=True)
+        self.weights.write_text("DEFAULT_WEIGHT 1\n", encoding="utf-8")
+        self.bin = self.root / "bin"
+        self.bin.mkdir()
+        git = self.bin / "git"
+        git.write_text('#!/bin/sh\nprintf "%s\\n" "$FIXTURE_CHECKOUT_SHA"\n', encoding="utf-8")
+        git.chmod(0o700)
+        self.environment = {
+            **os.environ,
+            "PATH": f"{self.bin}{os.pathsep}{os.environ['PATH']}",
+            "FIXTURE_CHECKOUT_SHA": "b" * 40,
+        }
+
+    def run_direct(self, *args, receipt: Path | None = None):
+        env = dict(self.environment)
+        if receipt is not None:
+            env["PULSE_SCRIPT_TEST_RECEIPT"] = str(receipt)
+            env["PULSE_SCRIPT_TEST_SOURCE_SHA"] = "b" * 40
+        return subprocess.run(
+            ["python3", str(self.script_runner), *map(str, args)],
+            cwd=self.root,
+            env=env,
+            capture_output=True,
+            text=True,
+            timeout=15,
+        )
+
+    def test_concurrent_workers_overlap_respect_bound_and_schedule_longest_first(self):
+        launches = self.root / "launches.txt"
+        barrier = self.root / "active"
+        barrier.mkdir()
+        # Four suites: heavy z-suite (weight 50) must launch before light suites
+        # when workers=2, and two suites must genuinely overlap in flight.
+        for name, body in (
+            ("test_a.py", "import time\ntime.sleep(0.25)\n"),
+            ("test_b.py", "import time\ntime.sleep(0.25)\n"),
+            ("test_c.py", "import time\ntime.sleep(0.25)\n"),
+            ("test_z_heavy.py", "import time\ntime.sleep(0.25)\n"),
+        ):
+            path = self.tests / name
+            path.write_text(
+                "import os, time\nfrom pathlib import Path\n"
+                f"with Path({str(launches)!r}).open('a', encoding='utf-8') as f: f.write({name!r} + '\\n')\n"
+                f"marker = Path({str(barrier)!r}) / f'{{os.getpid()}}'\n"
+                "marker.write_text('1')\n"
+                f"peak_file = Path({str(self.root / 'peak.txt')!r})\n"
+                f"active_now = len(list(Path({str(barrier)!r}).iterdir()))\n"
+                "with peak_file.open('a', encoding='utf-8') as f: f.write(f'{active_now}\\n')\n"
+                + body
+                + "marker.unlink(missing_ok=True)\n",
+                encoding="utf-8",
+            )
+        self.weights.write_text("DEFAULT_WEIGHT 1\ntest_z_heavy.py 50\ntest_c.py 20\n", encoding="utf-8")
+        receipt = self.root / "receipt.json"
+        suites = [self.tests / n for n in ("test_a.py", "test_b.py", "test_c.py", "test_z_heavy.py")]
+        result = self.run_direct("--workers", "2", "--weights", self.weights, "--", *suites, receipt=receipt)
+        self.assertEqual(result.returncode, 0, result.stdout + result.stderr)
+        launch_order = launches.read_text(encoding="utf-8").splitlines()
+        self.assertEqual(set(launch_order[:2]), {"test_z_heavy.py", "test_c.py"})
+        self.assertEqual(sorted(launch_order), ["test_a.py", "test_b.py", "test_c.py", "test_z_heavy.py"])
+        peaks = [int(v) for v in (self.root / "peak.txt").read_text(encoding="utf-8").splitlines()]
+        self.assertGreaterEqual(max(peaks), 2, "expected concurrent overlap across workers=2")
+        self.assertLessEqual(max(peaks), 2, "active workers exceeded --workers bound")
+        record = json.loads(receipt.read_text(encoding="utf-8"))
+        self.assertTrue(record["collection_complete"])
+        self.assertEqual(record["workers"], 2)
+        self.assertIsNone(record["pending_invocation"])
+        self.assertEqual(record["pending_invocations"], [])
+        self.assertEqual(record["unobserved_indexes"], [])
+        self.assertEqual([o["index"] for o in record["observations"]], [0, 1, 2, 3])
+        self.assertEqual(
+            [o["suite"] for o in record["observations"]],
+            [f"scripts/tests/{n}" for n in ("test_a.py", "test_b.py", "test_c.py", "test_z_heavy.py")],
+        )
+
+    def test_concurrent_failures_and_spawn_errors_keep_deterministic_summary_and_receipt(self):
+        blocked = self.tests / "test-blocked.sh"
+        blocked.write_text("#!/bin/sh\nexit 0\n", encoding="utf-8")
+        blocked.chmod(0o600)
+        fail_a = self.tests / "test_a_fail.py"
+        fail_a.write_text(
+            "import sys\nprint('stdout-a')\nprint('stderr-a', file=sys.stderr)\nraise SystemExit(7)\n",
+            encoding="utf-8",
+        )
+        ok_b = self.tests / "test_b_ok.py"
+        ok_b.write_text("import sys\nprint('stdout-b')\nprint('stderr-b', file=sys.stderr)\n", encoding="utf-8")
+        fail_c = self.tests / "test_c_fail.py"
+        fail_c.write_text("import sys\nprint('stdout-c')\nraise SystemExit(3)\n", encoding="utf-8")
+        receipt = self.root / "receipt.json"
+        suites = [blocked, fail_a, ok_b, fail_c]
+        result = self.run_direct("--workers", "4", "--", *suites, receipt=receipt)
+        self.assertEqual(result.returncode, 1, result.stdout + result.stderr)
+        self.assertIn("stdout-a", result.stdout)
+        self.assertIn("stdout-b", result.stdout)
+        self.assertIn("stderr-a", result.stderr)
+        self.assertIn("stderr-b", result.stderr)
+        self.assertNotIn("stdout-a", receipt.read_text(encoding="utf-8"))
+        self.assertTrue(
+            result.stdout.endswith(
+                "Summary: 1/4 passed\nFailures: 3\nFailed suites:\n"
+                "  scripts/tests/test-blocked.sh (exit 126)\n"
+                "  scripts/tests/test_a_fail.py (exit 7)\n"
+                "  scripts/tests/test_c_fail.py (exit 3)\n"
+            ),
+            result.stdout,
+        )
+        record = json.loads(receipt.read_text(encoding="utf-8"))
+        self.assertTrue(record["collection_complete"])
+        self.assertEqual(record["unobserved_indexes"], [])
+        self.assertEqual([o["index"] for o in record["observations"]], [0, 1, 2, 3])
+        self.assertFalse(record["observations"][0]["started"])
+        self.assertEqual(record["observations"][0]["start_error_errno"], 13)
+        self.assertEqual([o["exit_code"] for o in record["observations"][1:]], [7, 0, 3])
+
+    def test_concurrent_interruption_stops_all_active_groups_and_refuses_queued_suites(self):
+        ready_dir = self.root / "ready"
+        ready_dir.mkdir()
+        queued_marker = self.root / "queued-ran"
+        for name in ("test_hold_1.py", "test_hold_2.py"):
+            (self.tests / name).write_text(
+                "import os, time\nfrom pathlib import Path\n"
+                f"p = Path({str(ready_dir / name)!r})\n"
+                "tmp = p.with_suffix('.tmp')\n"
+                "tmp.write_text(str(os.getpgrp()))\n"
+                "tmp.replace(p)\n"
+                "time.sleep(30)\n",
+                encoding="utf-8",
+            )
+        (self.tests / "test_queued.py").write_text(
+            f"from pathlib import Path\nPath({str(queued_marker)!r}).write_text('ran')\n",
+            encoding="utf-8",
+        )
+        receipt = self.root / "receipt.json"
+        env = {
+            **self.environment,
+            "PULSE_SCRIPT_TEST_RECEIPT": str(receipt),
+            "PULSE_SCRIPT_TEST_SOURCE_SHA": "b" * 40,
+        }
+        suites = [self.tests / n for n in ("test_hold_1.py", "test_hold_2.py", "test_queued.py")]
+        process = subprocess.Popen(
+            ["python3", str(self.script_runner), "--workers", "2", "--", *map(str, suites)],
+            cwd=self.root,
+            env=env,
+            stdout=subprocess.PIPE,
+            stderr=subprocess.PIPE,
+            text=True,
+            start_new_session=True,
+        )
+
+        def cleanup():
+            groups = {process.pid}
+            for name in ("test_hold_1.py", "test_hold_2.py"):
+                p = ready_dir / name
+                if p.exists():
+                    groups.add(int(p.read_text(encoding="utf-8").strip()))
+            for group in groups:
+                if group != os.getpgrp():
+                    try:
+                        os.killpg(group, signal.SIGKILL)
+                    except ProcessLookupError:
+                        pass
+            try:
+                process.communicate(timeout=5)
+            except subprocess.TimeoutExpired:
+                pass
+
+        self.addCleanup(cleanup)
+        deadline = time.monotonic() + 10
+        while (
+            not ((ready_dir / "test_hold_1.py").exists() and (ready_dir / "test_hold_2.py").exists())
+            and process.poll() is None
+            and time.monotonic() < deadline
+        ):
+            time.sleep(0.02)
+        self.assertTrue((ready_dir / "test_hold_1.py").exists() and (ready_dir / "test_hold_2.py").exists())
+        os.kill(process.pid, signal.SIGTERM)
+        stdout, stderr = process.communicate(timeout=8)
+        self.assertEqual(process.returncode, 128 + signal.SIGTERM, stdout + stderr)
+        self.assertFalse(queued_marker.exists(), "queued suite must not start after interruption")
+        self.assertNotIn("Summary:", stdout)
+        self.assertIn("no passing verdict", stderr)
+        record = json.loads(receipt.read_text(encoding="utf-8"))
+        self.assertFalse(record["collection_complete"])
+        self.assertEqual(record["interruption_signal"], signal.SIGTERM)
+        self.assertEqual(record["unobserved_indexes"], [2])
+        self.assertEqual(len(record["observations"]), 2)
+        for obs in record["observations"]:
+            self.assertTrue(obs["started"])
+            self.assertEqual(obs["signal"], signal.SIGTERM)
+            self.assertTrue(obs["interruption_stop"]["leader_reaped"])
+            self.assertTrue(obs["interruption_stop"]["process_group_absent"])
+
+    def test_invalid_worker_or_weight_options_fail_before_starting_suites(self):
+        marker = self.root / "ran"
+        suite = self.tests / "test_ok.py"
+        suite.write_text(f"from pathlib import Path\nPath({str(marker)!r}).write_text('1')\n", encoding="utf-8")
+        for bad_args in (
+            ("--workers", "0", "--", suite),
+            ("--workers", "-1", "--", suite),
+            ("--workers", "99", "--", suite),
+            ("--workers", "abc", "--", suite),
+            ("--weights", str(self.root / "missing.txt"), "--", suite),
+            ("--unknown", suite),
+        ):
+            with self.subTest(bad_args=bad_args):
+                result = self.run_direct(*bad_args)
+                self.assertEqual(result.returncode, 1)
+                self.assertFalse(marker.exists())
 
 
 if __name__ == "__main__":

@@ -15,9 +15,11 @@ Usage: scripts/tests/run.sh [test-script ...]
 
 Run all scripts/tests/test-*.sh and scripts/tests/test_*.py tests or a subset
 when specified. Documentation and smoke CI balance their complete discovered
-inventories across four and two isolated, sorted shards respectively, using
-measured suite durations. Hints never define coverage or change test deadlines;
-new suites receive a default scheduling weight.
+inventories across four and two isolated shards respectively, using measured
+suite durations; smoke shards execute up to four suites concurrently scheduled
+longest-first while preserving deterministic failure summaries and receipts.
+Hints never define coverage or change test deadlines; new suites receive a
+default scheduling weight.
 Failed runs finish with the selected suite names and their observed exit codes.
 CI can retain atomic, output-free suite observations with PULSE_SCRIPT_TEST_RECEIPT
 and PULSE_SCRIPT_TEST_SOURCE_SHA. Incomplete collection never establishes a pass.
@@ -74,7 +76,7 @@ resolve_test_path() {
 }
 
 run_tests() {
-  # One sequencer preserves selection/order and streams original child output.
+  # One sequencer preserves selection and streams or replays child output.
   # Returned observations are saved before a later suite can block the summary.
   exec python3 "${ROOT_DIR}/scripts/run-script-tests.py" "$@"
 }
@@ -88,6 +90,7 @@ main() {
   fi
 
   local -a tests=()
+  local -a runner_args=()
   if [[ "${1:-}" == --docs-shard ]]; then
     if [[ $# -ne 2 || ! "${2:-}" =~ ^[0-3]$ ]]; then
       echo "Usage: scripts/tests/run.sh --docs-shard <0|1|2|3>" >&2
@@ -141,6 +144,7 @@ main() {
       fi
     fi
     printf 'Smoke shard %s/2: %s of %s suites\n' "$2" "${#tests[@]}" "${#smoke_tests[@]}"
+    runner_args=(--workers 4 --weights "${ROOT_DIR}/.github/scripts/smoke-test-seconds.txt" --)
   elif [[ $# -gt 0 ]]; then
     local arg resolved
     for arg in "$@"; do
@@ -161,7 +165,7 @@ main() {
     exit 1
   fi
 
-  run_tests "${tests[@]}"
+  run_tests "${runner_args[@]}" "${tests[@]}"
 }
 
 main "$@"

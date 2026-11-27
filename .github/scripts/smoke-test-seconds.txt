@@ -1,28 +1,47 @@
-# Script smoke suite seconds from complete passing main run 44375270690.
-# Pulse f173cf450e0db2dccb7edb368843f6cd1e2a8d10 (2026-11-18); jobs
-# 135055513173 / 135055513160. Measured from each suite header to the next
-# header (or the passing summary). These hints never determine coverage.
-# Suites below 15 seconds and unmeasured suites use the shorter-suite mean.
-# Refresh from both complete shard logs when measured imbalance returns.
-DEFAULT_WEIGHT 2.083
-test_agent_load.py 32.741
-test_agent_log_docs.py 16.353
-test_api_failure_index.py 16.496
-test_auto_update_service_state.py 57.890
-test_backend_build_cache.py 15.786
-test_backend_make_test.py 26.446
-test_docker_troubleshooting_docs.py 15.422
-test_memory_troubleshooting_docs.py 27.338
-test_notification_troubleshooting_docs.py 24.696
-test_npm_audit_retry.py 28.565
-test_performance_troubleshooting_docs.py 90.551
-test_public_docs_workflow.py 29.630
-test_release_backend_queue.py 16.485
-test_server_installer_stop.py 23.732
-test_server_service_deadlines.py 26.899
-test_server_service_discovery.py 20.462
-test_server_update_timer.py 21.063
-test_syft_download.py 18.155
-test_troubleshooting_logs.py 35.810
-test_truenas_docs.py 25.134
-test_vm_disk_diagnostics.py 22.340
+# Median script smoke suite seconds from four complete PR Build and Test runs on
+# 27 November 2026: 46013235880, 46006017081, 46004837120 and 46002040651.
+# Each run observed all 174 suites. Unseen holdout 45997858617 did not feed
+# these estimates; its modeled 4-worker longest-first makespan balances at
+# 97.6s/96.4s (spread 1.2s, 194.0s combined vs 771.9s serial).
+# Hints schedule shards and longest-first launch priority; they never define
+# coverage. Suites below 5 seconds and unmeasured suites use the shorter-suite
+# mean. Refresh from complete shard logs when measured imbalance returns.
+DEFAULT_WEIGHT 0.917
+test-hot-dev-bg.sh 12.083
+test-npm-audit-retry.sh 10.781
+test_admin_docs.py 8.607
+test_agent_installer_credential_paths.py 7.731
+test_agent_load.py 38.317
+test_agent_log_docs.py 16.328
+test_agent_removal_systemd.py 7.691
+test_api_auth_docs.py 7.793
+test_api_failure_index.py 28.999
+test_authentication_diagnostic_docs.py 13.474
+test_auto_update_service_state.py 60.509
+test_auto_update_systemd.py 12.480
+test_backend_build_cache.py 16.270
+test_backend_make_test.py 24.323
+test_ci_browser_proof_only.py 9.696
+test_ci_docs_only.py 11.164
+test_ci_secret_scan.py 12.003
+test_dev_prepush_frontend.py 5.658
+test_docker_troubleshooting_docs.py 15.407
+test_go_package_slices.py 9.772
+test_icmp_privilege_docs.py 8.214
+test_memory_troubleshooting_docs.py 27.294
+test_npm_audit_retry.py 25.895
+test_performance_troubleshooting_docs.py 89.399
+test_playwright_acquisition.py 6.143
+test_public_docs_workflow.py 12.208
+test_release_backend_queue.py 15.924
+test_server_installer_stop.py 24.452
+test_server_service_deadlines.py 10.299
+test_server_service_discovery.py 17.518
+test_server_unit_publication.py 5.941
+test_server_update_containment_docs.py 6.577
+test_server_update_menu.py 8.053
+test_server_update_timer.py 20.636
+test_smoke_runner.py 11.147
+test_syft_download.py 18.009
+test_troubleshooting_logs.py 19.418
+test_vm_disk_diagnostics.py 21.196
