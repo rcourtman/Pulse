@@ -5571,6 +5571,7 @@ func (m *Monitor) cleanupTrackingMaps(now time.Time) {
 	// catalog, or hold the monitor lock across those reads.
 	type candidate struct {
 		key           string
+		providerType  InstanceType
 		breaker       *circuitBreaker
 		lastOutcomeAt time.Time
 	}
@@ -5580,10 +5581,19 @@ func (m *Monitor) cleanupTrackingMaps(now time.Time) {
 		if breaker == nil {
 			continue
 		}
+		// A closed breaker often stays in the same state indefinitely while
+		// polls keep reporting. Its transition time alone does not make this
+		// tracking entry idle, and asking about membership may read disk on
+		// the monitor's main loop.
+		lastOutcomeAt := m.lastOutcome[key].recordedAt
+		if !lastOutcomeAt.Before(cutoff) {
+			continue
+		}
 		_, _, _, _, lastTransition := breaker.stateDetails()
 		if lastTransition.Before(cutoff) {
-			candidates = append(candidates, candidate{key, breaker, m.lastOutcome[key].recordedAt})
-			if providerType, _, found := strings.Cut(key, "::"); found {
+			providerType, _, found := strings.Cut(key, "::")
+			candidates = append(candidates, candidate{key, InstanceType(providerType), breaker, lastOutcomeAt})
+			if found {
 				if providerTypes == nil {
 					providerTypes = make(map[InstanceType]struct{})
 				}
@@ -5594,10 +5604,13 @@ func (m *Monitor) cleanupTrackingMaps(now time.Time) {
 	m.mu.Unlock()
 
 	if len(candidates) > 0 {
-		activeKeys := m.activeSchedulerKeysForProviders(providerTypes)
+		activeKeys, unreadable := m.activeSchedulerKeysForProviders(providerTypes)
 		m.mu.Lock()
 		for _, candidate := range candidates {
 			key := candidate.key
+			if _, unknown := unreadable[candidate.providerType]; unknown {
+				continue
+			}
 			if _, active := activeKeys[key]; active || m.circuitBreakers[key] != candidate.breaker ||
 				!m.lastOutcome[key].recordedAt.Equal(candidate.lastOutcomeAt) {
 				continue
