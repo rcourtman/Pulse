@@ -173,7 +173,7 @@ describe('getReplicationJobStaleNotice', () => {
       health: { verdict: 'stale', reasons: [{ code: 'telemetry_stale', detail: '20m' }] },
     });
     expect(getReplicationJobStaleNotice(makeJob(), [linkedOnlineButPveStale])?.detail).toBe(
-      'No Proxmox report from pve-a for 20m — showing the last values received.',
+      'Proxmox API poll failed on pve-a (last report 20m ago) — showing the last values received.',
     );
   });
 });
@@ -277,7 +277,8 @@ describe('ProxmoxReplicationTable stale-reading presentation', () => {
     // Searching "stale" matches both stale jobs (Stale data and Failed + Stale), not fresh peer.
     const searchInput = screen.getByPlaceholderText('Search jobs, guests, nodes');
     fireEvent.input(searchInput, { target: { value: 'stale' } });
-    expect(screen.getByText('100 (billing-db)')).toBeInTheDocument();
+    expect(screen.getByRole('button', { name: 'All, 2' })).toBeInTheDocument();
+    expect(screen.getAllByText('100 (billing-db)').length).toBeGreaterThan(0);
     expect(screen.getByText('101 (worker-queue)')).toBeInTheDocument();
     expect(screen.queryByText('102 (edge-proxy)')).not.toBeInTheDocument();
     fireEvent.input(searchInput, { target: { value: '' } });
@@ -287,7 +288,7 @@ describe('ProxmoxReplicationTable stale-reading presentation', () => {
     const staleChip = screen.getByRole('button', { name: 'Stale, 1' });
     staleChip.focus();
     await fireEvent.click(staleChip);
-    expect(screen.getByText('100 (billing-db)')).toBeInTheDocument();
+    expect(screen.getAllByText('100 (billing-db)').length).toBeGreaterThan(0);
     expect(screen.queryByText('102 (edge-proxy)')).not.toBeInTheDocument();
 
     const recoveredNodeA = makeNode({
@@ -305,7 +306,7 @@ describe('ProxmoxReplicationTable stale-reading presentation', () => {
     await fireEvent.click(screen.getByRole('button', { name: 'All, 3' }));
     expect(screen.queryByRole('button', { name: /^Stale,/ })).not.toBeInTheDocument();
     expect(
-      within(screen.getByText('100 (billing-db)').closest('tr')!).getByText('Healthy'),
+      within(screen.getAllByText('100 (billing-db)')[0].closest('tr')!).getByText('Healthy'),
     ).toBeInTheDocument();
   });
 

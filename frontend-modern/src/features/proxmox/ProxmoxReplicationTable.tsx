@@ -65,13 +65,7 @@ import { parseBackupTimestampMs } from '@/utils/backupTimestamp';
 // pipeline.
 
 type ReplicationStatusFilter =
-  | 'all'
-  | 'healthy'
-  | 'stale'
-  | 'failed'
-  | 'pending'
-  | 'unknown'
-  | 'disabled';
+  'all' | 'healthy' | 'stale' | 'failed' | 'pending' | 'unknown' | 'disabled';
 
 type ReplicationJobRecord = ReplicationJob & {
   // Go models.ReplicationJob serializes LastPolled as an RFC3339 string on
@@ -129,6 +123,7 @@ const buildProxmoxNodeStaleNotice = (
     'Proxmox';
 
   let reason: string;
+  const ageSuffix = staleness?.age ? ` (last report ${staleness.age} ago)` : '';
   if (sourceError && staleness?.age) {
     reason = `No Proxmox report from ${subject} for ${staleness.age} (${sourceError})`;
   } else if (sourceError) {
@@ -138,13 +133,13 @@ const buildProxmoxNodeStaleNotice = (
     sourceStatus === 'error' ||
     sourceStatus === 'failed'
   ) {
-    reason = `Proxmox API poll failed on ${subject}`;
+    reason = `Proxmox API poll failed on ${subject}${ageSuffix}`;
   } else if (
     connectionHealth === 'offline' ||
     sourceStatus === 'offline' ||
     nodeStatus === 'offline'
   ) {
-    reason = `Proxmox node ${subject} is offline in Pulse`;
+    reason = `Proxmox node ${subject} is offline in Pulse${ageSuffix}`;
   } else if (staleness?.age) {
     reason = `No Proxmox report from ${subject} for ${staleness.age}`;
   } else if (connectionHealth === 'degraded') {
@@ -1117,7 +1112,7 @@ export const ProxmoxReplicationTable: Component<{
                                       ? (ind().compactLabel ?? ind().label)
                                       : ind().label}
                                   </span>
-                                  <Show when={staleNotice() && classification() !== 'stale'}>
+                                  <Show when={classification() !== 'stale' ? staleNotice() : null}>
                                     {(notice) => (
                                       <span
                                         data-replication-stale-cue
