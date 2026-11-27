@@ -26,16 +26,24 @@ import {
   type PlatformTableFilterOption,
   type PlatformTableSortValue,
 } from '@/features/platformPage/sharedPlatformPage';
-import { TrueNASRowLead, TrueNASTableFrame, createTrueNASDetailState } from './TrueNASTableFrame';
+import {
+  TrueNASRowLead,
+  TrueNASStaleBadge,
+  TrueNASTableFrame,
+  createTrueNASDetailState,
+} from './TrueNASTableFrame';
 import { getPlatformResourceDetailRowClass } from '@/features/platformPage/PlatformResourceDetailTableRow';
 import type { RecoveryPoint } from '@/types/recovery';
+import type { Resource } from '@/types/resource';
 import {
-  filterTrueNASProtectionPoints,
   buildTrueNASProtectionPosture,
+  buildTrueNASProtectionStaleNoticeMap,
+  filterTrueNASProtectionPoints,
   mapTrueNASProtectionKind,
   mapTrueNASProtectionStatus,
   sortTrueNASProtectionPoints,
   type TrueNASProtectionKind,
+  type TrueNASProtectionStaleNotice,
   type TrueNASProtectionStatusBucket,
   type TrueNASProtectionStatusFilter,
 } from './truenasPageModel';
@@ -48,6 +56,13 @@ import {
   type DetailValueTone,
 } from '@/components/shared/DetailSectionTable';
 import { RecordOwnerLink } from '@/features/platformPage/RecordOwnerLink';
+
+const TRUENAS_PROTECTION_STALE_OPTION: PlatformTableFilterOption<TrueNASProtectionStatusFilter> = {
+  value: 'stale',
+  label: 'Stale',
+  compactLabel: 'Stale',
+  tone: 'warning',
+};
 
 const TRUENAS_PROTECTION_STATUS_OPTIONS: PlatformTableFilterOption<TrueNASProtectionStatusFilter>[] =
   [
@@ -191,6 +206,7 @@ type TrueNASProtectionSortKey = (typeof TRUENAS_PROTECTION_SORT_KEYS)[number];
 const getTrueNASProtectionSortValue = (
   point: RecoveryPoint,
   key: TrueNASProtectionSortKey,
+  staleNotice?: TrueNASProtectionStaleNotice,
 ): PlatformTableSortValue => {
   switch (key) {
     case 'dataset':
@@ -207,8 +223,12 @@ const getTrueNASProtectionSortValue = (
       return typeof point.sizeBytes === 'number' && Number.isFinite(point.sizeBytes)
         ? point.sizeBytes
         : null;
-    case 'outcome':
-      return getRecoveryOutcomeLabel(normalizeRecoveryOutcome(point.outcome));
+    case 'outcome': {
+      const outcome = normalizeRecoveryOutcome(point.outcome);
+      return staleNotice && outcome === 'success'
+        ? staleNotice.badge
+        : getRecoveryOutcomeLabel(outcome);
+    }
     default:
       key satisfies never;
       return null;
@@ -255,15 +275,23 @@ const sourceDatasetsLabel = (point: RecoveryPoint): string | null => {
   return datasets.length > 0 ? datasets.join(', ') : null;
 };
 
-const buildProtectionDetailSections = (point: RecoveryPoint): ProtectionDetailSection[] => {
+const buildProtectionDetailSections = (
+  point: RecoveryPoint,
+  staleNotice?: TrueNASProtectionStaleNotice | null,
+): ProtectionDetailSection[] => {
   const kind = mapTrueNASProtectionKind(point);
+  const outcome = normalizeRecoveryOutcome(point.outcome);
+  const outcomeLabel = getRecoveryOutcomeLabel(outcome);
   const target = targetLabel(point);
   const targetSecondary = targetSecondaryLabel(point);
   const summaryRows = compactDetailRows([
     detailRow('Kind', kindLabel(kind)),
-    detailRow('Outcome', getRecoveryOutcomeLabel(normalizeRecoveryOutcome(point.outcome)), {
-      tone: outcomeTone(point),
-    }),
+    ...(staleNotice
+      ? [
+          detailRow('Status', staleNotice.badge, { tone: 'warning' }),
+          detailRow('Last reported', outcomeLabel, { tone: outcomeTone(point) }),
+        ]
+      : [detailRow('Outcome', outcomeLabel, { tone: outcomeTone(point) })]),
     detailRow('Dataset', datasetLabel(point)),
     detailRow('Host', hostLabel(point)),
     detailRow('Started', detailDateTime(point.startedAt)),
@@ -305,6 +333,7 @@ const buildProtectionDetailSections = (point: RecoveryPoint): ProtectionDetailSe
 
 export const TrueNASProtectionTable: Component<{
   points: RecoveryPoint[];
+  systems?: Resource[];
   loading?: boolean;
   error?: unknown;
   onRefresh?: () => void;
@@ -316,29 +345,47 @@ export const TrueNASProtectionTable: Component<{
   search?: () => string;
   onSearchChange?: (value: string) => void;
 }> = (props) => {
-  const rows = createMemo(() => sortTrueNASProtectionPoints(props.points));
-  const posture = createMemo(() => buildTrueNASProtectionPosture(rows()));
+  const staleNoticeByPointId = createMemo(() =>
+    buildTrueNASProtectionStaleNoticeMap(props.points, props.systems ?? []),
+  );
+  const rows = createMemo(() =>
+    sortTrueNASProtectionPoints(props.points, staleNoticeByPointId()),
+  );
+  const posture = createMemo(() =>
+    buildTrueNASProtectionPosture(rows(), staleNoticeByPointId()),
+  );
   const detail = createTrueNASDetailState('truenas-protection-detail');
   const tableState = createPlatformTableFilterState({
     resources: rows,
     initialStatus: 'all' as TrueNASProtectionStatusFilter,
-    filter: filterTrueNASProtectionPoints,
+    filter: (items, search, status) =>
+      filterTrueNASProtectionPoints(items, search, status, staleNoticeByPointId()),
     externalSearch: props.search,
     onExternalSearchChange: props.onSearchChange,
   });
-  const statusOptions = createMemo(() =>
-    withPlatformStatusCounts(TRUENAS_PROTECTION_STATUS_OPTIONS, tableState.countForStatus, {
+  const statusOptions = createMemo(() => {
+    const showStaleFilter = posture().stale > 0 || tableState.status() === 'stale';
+    const baseOptions = showStaleFilter
+      ? [
+          ...TRUENAS_PROTECTION_STATUS_OPTIONS.slice(0, 2),
+          TRUENAS_PROTECTION_STALE_OPTION,
+          ...TRUENAS_PROTECTION_STATUS_OPTIONS.slice(2),
+        ]
+      : TRUENAS_PROTECTION_STATUS_OPTIONS;
+    return withPlatformStatusCounts(baseOptions, tableState.countForStatus, {
       value: 'attention',
       tone: posture().failed > 0 ? 'danger' : 'warning',
-    }),
-  );
+    });
+  });
   const sort = createPlatformTableSortState({
     storageKey: 'truenasProtection',
     sortKeys: TRUENAS_PROTECTION_SORT_KEYS,
     descendingFirst: ['completed', 'size'],
   });
   const sortedRows = createMemo(() =>
-    sort.sortRows(tableState.filtered(), getTrueNASProtectionSortValue),
+    sort.sortRows(tableState.filtered(), (point, key) =>
+      getTrueNASProtectionSortValue(point, key, staleNoticeByPointId().get(point.id)),
+    ),
   );
 
   return (
@@ -459,6 +506,40 @@ export const TrueNASProtectionTable: Component<{
               <PlatformWindowedRows items={sortedRows} estimatedRowHeight={32}>
                 {(point) => {
                   const outcome = () => normalizeRecoveryOutcome(point.outcome);
+                  const statusBucket = () => mapTrueNASProtectionStatus(point);
+                  const staleNotice = () => staleNoticeByPointId().get(point.id) ?? null;
+                  const isStaleHealthy = () => Boolean(staleNotice()) && outcome() === 'success';
+                  const rowVariant = (): StatusIndicatorVariant => {
+                    const stale = staleNotice();
+                    if (!stale) return protectionVariant(statusBucket());
+                    return outcome() === 'failed' ? 'danger' : 'warning';
+                  };
+                  const rowDotTitle = () => {
+                    const stale = staleNotice();
+                    const outcomeLabel = getRecoveryOutcomeLabel(outcome());
+                    if (!stale) return outcomeLabel;
+                    return isStaleHealthy()
+                      ? `${stale.badge} · Last reported ${outcomeLabel} · ${stale.detail}`
+                      : `${outcomeLabel} · ${stale.badge} · ${stale.detail}`;
+                  };
+                  const outcomeBadgeClass = () => {
+                    const stale = staleNotice();
+                    if (!stale) return getRecoveryOutcomeBadgeClass(outcome());
+                    if (outcome() === 'success') return getRecoveryOutcomeBadgeClass('warning');
+                    if (outcome() === 'running') return getRecoveryOutcomeBadgeClass('unknown');
+                    return getRecoveryOutcomeBadgeClass(outcome());
+                  };
+                  const detailStatus = () => {
+                    const stale = staleNotice();
+                    const outcomeLabel = getRecoveryOutcomeLabel(outcome());
+                    if (!stale) {
+                      return { variant: protectionVariant(statusBucket()), label: outcomeLabel };
+                    }
+                    return {
+                      variant: rowVariant(),
+                      label: isStaleHealthy() ? stale.badge : `${outcomeLabel} · ${stale.badge}`,
+                    };
+                  };
                   const artifact = () => artifactLabel(point);
                   const artifactSecondary = () => artifactSecondaryLabel(point);
                   const target = () => targetLabel(point);
@@ -471,7 +552,8 @@ export const TrueNASProtectionTable: Component<{
                         class={`${getPlatformResourceDetailRowClass(isExpanded())} text-[11px] sm:text-xs`}
                         data-truenas-protection-row={point.id}
                         data-truenas-protection-kind={mapTrueNASProtectionKind(point)}
-                        data-truenas-protection-outcome={mapTrueNASProtectionStatus(point)}
+                        data-truenas-protection-outcome={statusBucket()}
+                        data-truenas-protection-stale={staleNotice() ? 'true' : undefined}
                         onClick={() => detail.toggle(point)}
                       >
                         <TableCell class={getPlatformTableCellClassForKind('name')}>
@@ -479,9 +561,9 @@ export const TrueNASProtectionTable: Component<{
                             item={point}
                             drawer={detail}
                             label={datasetLabel(point)}
-                            variant={protectionVariant(mapTrueNASProtectionStatus(point))}
-                            pulse={mapTrueNASProtectionStatus(point) === 'running'}
-                            dotTitle={getRecoveryOutcomeLabel(outcome())}
+                            variant={rowVariant()}
+                            pulse={!staleNotice() && statusBucket() === 'running'}
+                            dotTitle={rowDotTitle()}
                           >
                             <div class="min-w-0">
                               <div
@@ -495,6 +577,10 @@ export const TrueNASProtectionTable: Component<{
                               >
                                 {datasetLabel(point)}
                               </div>
+                              <TrueNASStaleBadge
+                                notice={isStaleHealthy() ? null : staleNotice()}
+                                attr="protection"
+                              />
                             </div>
                           </TrueNASRowLead>
                         </TableCell>
@@ -532,8 +618,19 @@ export const TrueNASProtectionTable: Component<{
                           {sizeLabel(point)}
                         </TableCell>
                         <TableCell class={getPlatformTableCellClassForKind('badge')}>
-                          <span class={getRecoveryOutcomeBadgeClass(outcome())}>
-                            {getRecoveryOutcomeLabel(outcome())}
+                          <span
+                            class={outcomeBadgeClass()}
+                            title={staleNotice() ? rowDotTitle() : undefined}
+                            data-truenas-protection-stale-badge={
+                              isStaleHealthy() ? 'true' : undefined
+                            }
+                          >
+                            <Show
+                              when={isStaleHealthy()}
+                              fallback={getRecoveryOutcomeLabel(outcome())}
+                            >
+                              <PlatformResponsiveTableLabel compact="Stale" full="Stale data" />
+                            </Show>
                           </span>
                         </TableCell>
                       </TableRow>
@@ -548,10 +645,7 @@ export const TrueNASProtectionTable: Component<{
                             testId="truenas-protection-detail"
                             detailFor={point.id}
                             title={datasetLabel(point)}
-                            status={{
-                              variant: protectionVariant(mapTrueNASProtectionStatus(point)),
-                              label: getRecoveryOutcomeLabel(outcome()),
-                            }}
+                            status={detailStatus()}
                             summary={`${kindLabel(mapTrueNASProtectionKind(point))} on ${hostLabel(point)}`}
                             actions={
                               <RecordOwnerLink
@@ -562,10 +656,29 @@ export const TrueNASProtectionTable: Component<{
                                 }}
                               />
                             }
-                            sections={buildProtectionDetailSections(point)}
+                            sections={buildProtectionDetailSections(point, staleNotice())}
                             detailAttributes={{ 'data-truenas-protection-detail-for': point.id }}
                             onClose={() => detail.close(point)}
-                          />
+                          >
+                            <Show when={staleNotice()}>
+                              {(notice) => (
+                                <InlineNotice
+                                  role="status"
+                                  tone="warning"
+                                  data-testid="truenas-protection-stale-notice"
+                                  aria-label="TrueNAS protection readings may be stale"
+                                >
+                                  <p class="font-medium">
+                                    Readings from {notice().systemName} may be out of date.
+                                  </p>
+                                  <p>
+                                    {notice().detail}. Showing the last reported protection event;
+                                    newer snapshots, replication runs, or failures may be missing.
+                                  </p>
+                                </InlineNotice>
+                              )}
+                            </Show>
+                          </InlineDetailPanel>
                         </InlineDetailTableRow>
                       </Show>
                     </>

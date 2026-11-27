@@ -109,7 +109,7 @@ export type TrueNASCommonTableProps = {
 
 export function TrueNASStaleBadge(props: {
   notice: TrueNASStaleNotice | null;
-  attr: 'system' | 'storage';
+  attr: 'system' | 'storage' | 'protection';
 }) {
   return (
     <Show when={props.notice}>
@@ -119,6 +119,7 @@ export function TrueNASStaleBadge(props: {
           title={notice().detail}
           data-truenas-system-stale={props.attr === 'system' ? 'true' : undefined}
           data-truenas-storage-stale={props.attr === 'storage' ? 'true' : undefined}
+          data-truenas-protection-stale-cue={props.attr === 'protection' ? 'true' : undefined}
         >
           {notice().badge}
         </span>
