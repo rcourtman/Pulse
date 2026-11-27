@@ -384,6 +384,82 @@ func TestBuildFixtureStateReportsNetworkModeAndHostRoutes(t *testing.T) {
 	}
 }
 
+func TestBuildFixtureStateReportsPassivePeersAndAccelerators(t *testing.T) {
+	cfg := DefaultConfig
+	cfg.DockerHostCount = 2
+	cfg.DockerContainersPerHost = 4
+	cfg.GenericHostCount = 6
+	cfg.RandomMetrics = false
+
+	data := buildFixtureState(cfg)
+
+	linuxIPs := make(map[string]struct{})
+	hasGPU := false
+	hasPeer := false
+	for _, host := range data.Hosts {
+		switch strings.ToLower(strings.TrimSpace(host.Platform)) {
+		case "windows", "macos", "darwin":
+			if len(host.ActivePeers) != 0 {
+				t.Fatalf("%s host %s reported active peers %+v, want none", host.Platform, host.Hostname, host.ActivePeers)
+			}
+			continue
+		}
+		if ip := mockFirstPrivateIPv4(host.NetworkInterfaces); ip != "" {
+			linuxIPs[ip] = struct{}{}
+		}
+		if len(host.Sensors.GPU) > 0 {
+			gpu := host.Sensors.GPU[0]
+			if gpu.TemperatureCelsius != nil && gpu.UtilizationPercent != nil && gpu.MemoryUsedBytes != nil && gpu.MemoryTotalBytes != nil {
+				hasGPU = true
+			}
+		}
+	}
+	for _, host := range data.Hosts {
+		for _, peer := range host.ActivePeers {
+			if peer.Protocol != "tcp" || peer.RemotePort == 0 {
+				t.Fatalf("host %s reported malformed peer %+v", host.Hostname, peer)
+			}
+			if _, ok := linuxIPs[peer.RemoteIP]; !ok {
+				t.Fatalf("host %s peer remote IP %q does not match another Linux fixture host", host.Hostname, peer.RemoteIP)
+			}
+			hasPeer = true
+		}
+	}
+	if !hasGPU {
+		t.Fatal("expected at least one Linux fixture host to report GPU sensor telemetry")
+	}
+	if !hasPeer {
+		t.Fatal("expected at least one Linux fixture host to report an internal passive TCP peer")
+	}
+
+	hasVMAccel := false
+	for _, vm := range data.VMs {
+		if len(vm.Accelerators) > 0 {
+			hasVMAccel = true
+			break
+		}
+	}
+	if !hasVMAccel {
+		t.Fatal("expected at least one running Proxmox VM fixture to report an accelerator")
+	}
+
+	hasDockerAccel := false
+	for _, host := range data.DockerHosts {
+		for _, container := range host.Containers {
+			if len(container.Accelerators) > 0 {
+				hasDockerAccel = true
+				break
+			}
+		}
+		if hasDockerAccel {
+			break
+		}
+	}
+	if !hasDockerAccel {
+		t.Fatal("expected at least one running Docker container fixture to report an accelerator")
+	}
+}
+
 // The demo estate has the network gear an owner would check: a router, a
 // switch and an access point, each typed as what it is. The router answers on
 // the address the Proxmox nodes route through, so the map draws it in place of

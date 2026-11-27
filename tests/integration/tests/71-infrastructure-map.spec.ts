@@ -650,6 +650,124 @@ test.describe("Infrastructure map", () => {
     await expect(zoomReset).toHaveText("100%");
   });
 
+  test("switches between By host and By role, inspects the networks drawer, and handles keyboard shortcuts", async ({
+    page,
+  }, testInfo) => {
+    test.skip(
+      isPhoneProject(testInfo.project.name),
+      "Covered once, with a pointer",
+    );
+    await asDevelopmentBuild(page);
+    await openMap(page);
+
+    // By host is the default layout, and switching to By role persists across reload.
+    const layoutGroup = page.getByTestId("infrastructure-map-layout");
+    const byHost = layoutGroup.getByRole("button", { name: "By host" });
+    const byRole = layoutGroup.getByRole("button", { name: "By role" });
+    await expect(byHost).toHaveAttribute("aria-pressed", "true");
+    await byRole.click();
+    await expect(byRole).toHaveAttribute("aria-pressed", "true");
+
+    await page.reload({ waitUntil: "domcontentloaded" });
+    await expect(page.locator(TILE).first()).toBeVisible({ timeout: 60_000 });
+    await expect(
+      page
+        .getByTestId("infrastructure-map-layout")
+        .getByRole("button", { name: "By role" }),
+    ).toHaveAttribute("aria-pressed", "true");
+
+    await page
+      .getByTestId("infrastructure-map-layout")
+      .getByRole("button", { name: "By host" })
+      .click();
+    await expect(
+      page
+        .getByTestId("infrastructure-map-layout")
+        .getByRole("button", { name: "By host" }),
+    ).toHaveAttribute("aria-pressed", "true");
+
+    // Clicking the networks summary pill opens the All networks drawer and filters cleanly.
+    const networksSummary = page.getByTestId(
+      "infrastructure-map-networks-summary",
+    );
+    if (await networksSummary.isVisible()) {
+      await networksSummary.click();
+      const drawer = page.getByTestId("infrastructure-map-drawer");
+      await expect(drawer).toBeVisible();
+      await expect(
+        drawer.getByRole("heading", { name: "All networks" }),
+      ).toBeVisible();
+      const filterButton = drawer
+        .getByTestId("infrastructure-map-network-list")
+        .getByRole("button", { name: "Filter" })
+        .first();
+      if (await filterButton.isVisible()) {
+        await filterButton.click();
+        await expect(drawer).toBeHidden();
+        await expect(
+          page.getByTestId("infrastructure-map-filter-bar"),
+        ).toBeVisible();
+        await page.getByRole("button", { name: "Clear filters" }).click();
+        await expect(
+          page.getByTestId("infrastructure-map-filter-bar"),
+        ).toBeHidden();
+      } else {
+        await page.keyboard.press("Escape");
+        await expect(drawer).toBeHidden();
+      }
+    }
+
+    // Keyboard shortcuts focus search with / and zoom with + and 0.
+    const search = page.getByTestId("infrastructure-map-search");
+    await page.locator("h1").click();
+    await page.keyboard.press("/");
+    await expect(search).toBeFocused();
+    await page.keyboard.press("Escape");
+    await expect(search).not.toBeFocused();
+
+    const zoomReset = page.getByTestId("infrastructure-map-zoom-reset");
+    await expect(zoomReset).toHaveText("100%");
+    await page.keyboard.press("+");
+    await expect(zoomReset).toHaveText("125%");
+    await page.keyboard.press("0");
+    await expect(zoomReset).toHaveText("100%");
+  });
+
+  test("hides unmonitored gateway add-a-check links when availability settings are not granted", async ({
+    page,
+  }, testInfo) => {
+    test.skip(
+      isPhoneProject(testInfo.project.name),
+      "Covered once, with a pointer",
+    );
+    await asDevelopmentBuild(page);
+    await page.route("**/api/security/status", async (route) => {
+      const response = await route.fetch();
+      const body = (await response.json()) as Record<string, unknown>;
+      const existingCaps =
+        typeof body.settingsCapabilities === "object" &&
+        body.settingsCapabilities !== null
+          ? (body.settingsCapabilities as Record<string, unknown>)
+          : {};
+      await route.fulfill({
+        response,
+        json: {
+          ...body,
+          settingsCapabilities: {
+            ...existingCaps,
+            availabilityRead: false,
+            infrastructureRead: false,
+          },
+        },
+      });
+    });
+    await openMap(page);
+
+    await expect(
+      page.locator(`${MAP} a[data-map-hit][aria-label$="add a check"]`),
+    ).toHaveCount(0);
+  });
+
   test("the guide opens from the map in a development build", async ({
     page,
   }, testInfo) => {
