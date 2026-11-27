@@ -1275,6 +1275,7 @@ describe('truenasPageModel', () => {
     expect(mapTrueNASProtectionStatus(legacyReplication)).toBe('warning');
     expect(buildTrueNASProtectionPosture([snapshot, replication, legacyReplication])).toEqual({
       healthy: 1,
+      stale: 0,
       warning: 1,
       failed: 0,
       running: 1,

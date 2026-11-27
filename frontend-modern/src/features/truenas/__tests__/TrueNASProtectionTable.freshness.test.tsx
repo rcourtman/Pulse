@@ -25,7 +25,7 @@ const makeSystem = (overrides: Partial<Resource> & Pick<Resource, 'id'>): Resour
   ({
     type: 'agent',
     name: overrides.id,
-    displayName: overrides.id,
+    displayName: overrides.name ?? overrides.id,
     status: 'online',
     platformId: 'truenas-primary',
     platformType: 'truenas',
@@ -215,6 +215,7 @@ describe('TrueNAS protection freshness model', () => {
       kind: 'backup',
       mode: 'remote',
       outcome: 'running',
+      startedAt: '2026-11-27T10:30:00Z',
       completedAt: undefined,
       details: { connectionId: 'conn-stale', hostname: 'nas-east', taskName: 'rep-east' },
     });

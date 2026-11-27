@@ -668,8 +668,8 @@ export const TrueNASProtectionTable: Component<{
                                     Readings from {notice().systemName} may be out of date.
                                   </p>
                                   <p>
-                                    {notice().detail}. Showing the last reported protection event;
-                                    newer snapshots, replication runs, or failures may be missing.
+                                    {notice().detail}. Showing the last reported protection event.
+                                    Newer snapshots, replication runs, or failures may be missing.
                                   </p>
                                 </InlineNotice>
                               )}

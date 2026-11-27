@@ -978,16 +978,16 @@ const indexTrueNASSystemsForProtection = (systems: readonly Resource[]): Indexed
     addConnectionTokens(connectionIds, system.agent?.agentId);
     addConnectionTokens(connectionIds, system.metricsTarget?.resourceId);
     addConnectionTokens(connectionIds, system.platformId);
-    addConnectionTokens(connectionIds, system.canonical?.platformId);
+    addConnectionTokens(connectionIds, system.canonicalIdentity?.platformId);
     addConnectionTokens(connectionIds, system.id);
-    for (const alias of system.canonical?.aliases ?? []) {
+    for (const alias of system.canonicalIdentity?.aliases ?? []) {
       addConnectionTokens(connectionIds, alias);
     }
     const hostnames = new Set<string>();
     for (const value of [
       system.truenas?.hostname,
       system.agent?.hostname,
-      system.canonical?.hostname,
+      system.canonicalIdentity?.hostname,
       system.name,
       system.displayName,
     ]) {
