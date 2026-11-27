@@ -174,6 +174,41 @@ class AuthenticationDiagnosticDocsTest(unittest.TestCase):
         self.assertIn("ActionResultV2", source)
         self.assertIn("ASSISTANT_SAFETY.md#evidence-and-outcomes", source)
 
+    def test_patrol_architecture_matches_live_runtime_and_shipped_copy(self):
+        doc_path = ROOT / "docs/PATROL_ARCHITECTURE.md"
+        shipped_path = ROOT / "frontend-modern/public/docs/PATROL_ARCHITECTURE.md"
+        source = doc_path.read_text(encoding="utf-8")
+        self.assertEqual(source, shipped_path.read_text(encoding="utf-8"))
+        guide = " ".join(source.split())
+
+        for stale in (
+            "computePatrolMaxTurns",
+            "computeTriageMaxTurns",
+            "## The evaluation pass",
+            "## The assessment sweep",
+            "An evaluation pass for signals the model saw",
+            "An assessment sweep for findings the model left unassessed",
+        ):
+            with self.subTest(stale=stale):
+                self.assertNotIn(stale, source)
+
+        patrol_ai = (ROOT / "internal/ai/patrol_ai.go").read_text(encoding="utf-8")
+        patrol_findings = (ROOT / "internal/ai/patrol_findings.go").read_text(encoding="utf-8")
+        findings_go = (ROOT / "internal/ai/findings.go").read_text(encoding="utf-8")
+
+        self.assertIn("func patrolDetectionMaxTurns(scope *PatrolScope) int", patrol_ai)
+        self.assertIn("patrolDetectionMaxTurns", source)
+        self.assertIn("`4` turns", guide)
+        self.assertIn("`40` turns", guide)
+        self.assertIn("patrolMissingAssessmentIDs", source)
+        self.assertIn("verifyBySignals", source)
+        self.assertIn("func (p *PatrolService) hasDeterministicVerifierForKey", patrol_findings)
+        self.assertIn("hasDeterministicVerifierForKey", source)
+        self.assertIn("investigationFixRetryCooldown = 20 * time.Minute", findings_go)
+        self.assertIn("investigationTimeoutCooldown  = 10 * time.Minute", findings_go)
+        self.assertIn("investigationFixRetryCooldown", source)
+        self.assertIn("investigationTimeoutCooldown", source)
+
     def test_ai_recipes_send_only_the_intended_method_path_and_body(self):
         recipes = blocks("AI_AUTONOMY")
         self.assertEqual(len(recipes), len(EXPECTED_AI))

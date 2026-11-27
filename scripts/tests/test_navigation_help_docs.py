@@ -167,6 +167,46 @@ class NavigationHelpDocsTest(unittest.TestCase):
         self.assertIn("**Settings → Security → Pulse Mobile** (`/settings/system-relay`)", guide)
         self.assertNotIn("**Settings → Pulse Mobile**", guide)
 
+    def test_architecture_guide_matches_router_polling_routes_stores_and_rbac(self):
+        arch = (ROOT / "ARCHITECTURE.md").read_text(encoding="utf-8")
+        shipped = (ROOT / "frontend-modern/public/docs/ARCHITECTURE.md").read_text(encoding="utf-8")
+        self.assertEqual(arch, shipped)
+
+        for router_file in (
+            "router_routes_auth_security.go",
+            "router_routes_monitoring.go",
+            "router_routes_ai_relay.go",
+            "router_routes_licensing.go",
+            "router_routes_registration.go",
+            "router_routes_cloud.go",
+            "router_routes_debug.go",
+        ):
+            with self.subTest(router_file=router_file):
+                self.assertTrue((ROOT / "internal/api" / router_file).is_file())
+                self.assertIn(f"`{router_file}`", arch)
+        for stale_file in ("router_routes_org_license.go", "router_routes_hosted.go", "stores/metricsCollector.ts"):
+            with self.subTest(stale_file=stale_file):
+                self.assertNotIn(stale_file, arch)
+
+        config_go = (ROOT / "internal/config/config.go").read_text(encoding="utf-8")
+        self.assertIn("PVEPollingInterval:              10 * time.Second", config_go)
+        self.assertIn("PBSPollingInterval:              60 * time.Second", config_go)
+        self.assertIn("PMGPollingInterval:              60 * time.Second", config_go)
+        self.assertIn("defaulting to `10 s` for PVE and `60 s` for PBS and PMG", arch)
+        self.assertNotIn("default 2 s for PVE", arch)
+
+        self.assertIn("| `/availability/*` | Availability |", arch)
+        self.assertIn("`g c` → Availability", arch)
+        self.assertIn("/api/recovery/postures", arch)
+        self.assertIn("/api/agents/agent/report", arch)
+        self.assertIn("31 March 2027", arch)
+
+        perms_go = (ROOT / "pkg/auth/permissions.go").read_text(encoding="utf-8")
+        for resource in ("settings", "audit_logs", "nodes", "users", "license", "ai", "discovery", "actions", "alerts"):
+            with self.subTest(rbac_resource=resource):
+                self.assertIn(f'= "{resource}"', perms_go)
+                self.assertIn(f"`{resource}`", arch)
+
     def test_all_changed_guides_match_their_shipped_copies(self):
         for name in (
             "TROUBLESHOOTING.md",
