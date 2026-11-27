@@ -11,6 +11,7 @@ import (
 	"github.com/rcourtman/pulse-go-rewrite/internal/alerts"
 	"github.com/rcourtman/pulse-go-rewrite/internal/config"
 	"github.com/rcourtman/pulse-go-rewrite/internal/models"
+	"github.com/rcourtman/pulse-go-rewrite/pkg/pbs"
 	"github.com/rcourtman/pulse-go-rewrite/pkg/proxmox"
 )
 
@@ -48,6 +49,70 @@ func TestPlanningListsNonBatchProviderOnceWithoutMutatingRoster(t *testing.T) {
 	if provider.listCalls != 1 || !slices.Equal(provider.instances, []string{"zeta", "alpha"}) {
 		t.Errorf("provider roster was read %d times (want one), after plan: %v", provider.listCalls, provider.instances)
 	}
+}
+
+func TestMonitorAdaptivePlanReadsCurrentSuccessor(t *testing.T) {
+	synctest.Test(t, func(t *testing.T) {
+		start := time.Now()
+		m := newScheduleFixture(t.Context(), true, func(context.Context) ([]proxmox.Node, error) {
+			return []proxmox.Node{{Node: scheduleFixtureNode, Status: "online", CPU: 0.42, Uptime: 36000}}, nil
+		})
+		m.pbsClients = map[string]*pbs.Client{"slow": nil}
+		source := gatedStalenessSource{reading: make(chan struct{}), release: make(chan struct{})}
+		m.scheduler.staleness = source
+		initial := m.scheduler.BuildPlan(start, []InstanceDescriptor{
+			{Name: scheduleFixtureNode, Type: InstanceTypePVE},
+		}, 0)[0]
+		m.taskQueue.Upsert(initial)
+
+		time.Sleep(10 * time.Second)
+		planned := make(chan []ScheduledTask, 1)
+		go func() { planned <- m.buildScheduledTasks(time.Now()) }()
+		defer close(source.release)
+		synctest.Wait()
+		select {
+		case <-source.reading:
+		default:
+			t.Fatal("periodic plan did not reach the peer's freshness read")
+		}
+
+		// The pending first poll could not get a worker before one cadence
+		// elapsed. Its real successor is therefore due at the current time,
+		// not at the elapsed slot that the older planner originally saw.
+		time.Sleep(40 * time.Second)
+		task, ok := m.taskQueue.WaitNext(t.Context())
+		if !ok {
+			t.Fatal("could not claim the due PVE poll")
+		}
+		m.executeAndRescheduleTask(t.Context(), task, nil, 0)
+		workerNext, ok := m.taskQueue.Get(InstanceTypePVE, scheduleFixtureNode)
+		if !ok || workerNext.NextRun.Sub(start) != 50*time.Second || workerNext.Interval != scheduleFixtureCadence {
+			t.Fatalf("worker successor = %+v (queued %v), want +50s at %s", workerNext, ok, scheduleFixtureCadence)
+		}
+		nodes := m.state.GetSnapshot().Nodes
+		if len(nodes) != 1 || nodes[0].CPU != 0.42 {
+			t.Fatalf("worker did not publish a fresh PVE reading: %+v", nodes)
+		}
+
+		// Releasing the unrelated freshness read allows the original plan
+		// to take its lock after the worker has updated the schedule cache.
+		source.release <- struct{}{}
+		for _, next := range <-planned {
+			if next.InstanceType != InstanceTypePVE {
+				continue
+			}
+			if !next.NextRun.Equal(workerNext.NextRun) || next.Interval != workerNext.Interval {
+				t.Errorf("periodic plan produced +%s at %s; worker's newer slot is +%s at %s",
+					next.NextRun.Sub(start), next.Interval, workerNext.NextRun.Sub(start), workerNext.Interval)
+			}
+			cached, exists := m.scheduler.LastScheduled(InstanceTypePVE, scheduleFixtureNode)
+			if !exists || cached != next {
+				t.Errorf("cached schedule = %+v (exists %v), want %+v", cached, exists, next)
+			}
+			return
+		}
+		t.Error("periodic plan omitted the PVE poll")
+	})
 }
 
 const (
