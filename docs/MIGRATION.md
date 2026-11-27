@@ -139,9 +139,9 @@ configuration import as proof of a complete multi-organisation migration.
    **Settings → System → Recovery → Restore Backup**, select the file
    and enter the original passphrase used for that file. Older backups still
    accept the password or passphrase you chose when exporting, even if your
-   login password has since changed. Import replaces the included configuration
-   rather than merging with the destination's records. API-token records and
-   SSO configuration are replaced only when the caller holds instance-wide
+   login password has since changed. Import replaces the included configuration,
+   and it does not merge them with the destination's records. API-token records
+   and SSO configuration are replaced only when the caller holds instance-wide
    authority as described above.
 4. Check the result before changing DNS or agent addresses. A success message
    establishes neither full recovery nor fresh monitoring. For a
