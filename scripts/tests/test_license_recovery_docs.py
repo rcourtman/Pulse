@@ -72,15 +72,21 @@ class LicenseRecoveryDocsTest(unittest.TestCase):
     def test_license_recovery_points_to_system_plans_and_billing_route(self):
         text = section((ROOT / "docs/PULSE_PRO.md").read_text())
         self.assertIn(
-            "Open **Settings → System → Plans & Billing** (`/settings/system-billing/plan`, **Plan** tab)",
+            "Open **Settings → System → Plans & Billing** (`/settings/pulse-intelligence/billing/plan`, **Plan** tab)",
             text,
         )
         self.assertNotIn("Open **Plans & Billing → Plan**", text)
+        self.assertNotIn("/settings/system-billing/plan", text)
         catalog = (ROOT / "frontend-modern/src/components/Settings/settingsNavCatalog.ts").read_text(encoding="utf-8")
         self.assertIn("id: 'system-billing'", catalog)
         billing = (ROOT / "frontend-modern/src/components/Settings/selfHostedBillingPresentation.ts").read_text(encoding="utf-8")
         self.assertIn("navLabel: 'Plans & Billing'", billing)
         self.assertIn("planTabLabel: 'Plan'", billing)
+        pricing = (ROOT / "frontend-modern/src/utils/pricingHandoff.ts").read_text(encoding="utf-8")
+        self.assertIn("export const SELF_HOSTED_PRO_BILLING_ROUTE = '/settings/pulse-intelligence/billing';", pricing)
+        self.assertIn("export const SELF_HOSTED_PRO_BILLING_PLAN_ROUTE = `${SELF_HOSTED_PRO_BILLING_ROUTE}/plan`;", pricing)
+        nav = (ROOT / "frontend-modern/src/components/Settings/settingsNavigationModel.ts").read_text(encoding="utf-8")
+        self.assertIn("case 'system-billing':\n      return SELF_HOSTED_PRO_BILLING_PLAN_ROUTE;", nav)
 
 
 if __name__ == "__main__":
