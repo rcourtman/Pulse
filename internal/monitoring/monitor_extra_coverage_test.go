@@ -363,7 +363,7 @@ func TestDetectClusterMembership_CanonicalizesAndRetiresStandaloneOverlap(t *tes
 	originalDetect := detectMonitorPVECluster
 	t.Cleanup(func() { detectMonitorPVECluster = originalDetect })
 
-	detectMonitorPVECluster = func(clientConfig proxmox.ClientConfig, existingEndpoints []config.ClusterEndpoint) (bool, string, []config.ClusterEndpoint) {
+	detectMonitorPVECluster = func(_ context.Context, clientConfig proxmox.ClientConfig, existingEndpoints []config.ClusterEndpoint) (bool, string, []config.ClusterEndpoint) {
 		return true, "cluster-A", []config.ClusterEndpoint{
 			{NodeName: "minipc", Host: "https://10.0.0.5:8006"},
 		}
