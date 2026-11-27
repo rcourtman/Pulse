@@ -522,12 +522,12 @@ export const TrueNASProtectionTable: Component<{
                       ? `${stale.badge} · Last reported ${outcomeLabel} · ${stale.detail}`
                       : `${outcomeLabel} · ${stale.badge} · ${stale.detail}`;
                   };
-                  const outcomeBadgeClass = () => {
+                  const effectiveOutcome = () => {
                     const stale = staleNotice();
-                    if (!stale) return getRecoveryOutcomeBadgeClass(outcome());
-                    if (outcome() === 'success') return getRecoveryOutcomeBadgeClass('warning');
-                    if (outcome() === 'running') return getRecoveryOutcomeBadgeClass('unknown');
-                    return getRecoveryOutcomeBadgeClass(outcome());
+                    if (!stale) return outcome();
+                    if (outcome() === 'success') return 'warning';
+                    if (outcome() === 'running') return 'unknown';
+                    return outcome();
                   };
                   const detailStatus = () => {
                     const stale = staleNotice();
@@ -619,7 +619,7 @@ export const TrueNASProtectionTable: Component<{
                         </TableCell>
                         <TableCell class={getPlatformTableCellClassForKind('badge')}>
                           <span
-                            class={outcomeBadgeClass()}
+                            class={getRecoveryOutcomeBadgeClass(effectiveOutcome())}
                             title={staleNotice() ? rowDotTitle() : undefined}
                             data-truenas-protection-stale-badge={
                               isStaleHealthy() ? 'true' : undefined
