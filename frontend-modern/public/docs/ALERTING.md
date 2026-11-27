@@ -57,6 +57,13 @@ For an incident that occurs naturally, check all three steps:
 3. Confirm that the intended recipient received the message. Provider
    acceptance alone does not establish receipt or that a person read it.
 
+TLS certificate trust, expiry, hostname, and HTTP-on-HTTPS errors stop
+immediately as terminal failures across email, webhook, and Apprise
+destinations instead of retrying across the delivery queue or SMTP retry
+budget. Fix the server certificate or TLS settings rather than disabling
+verification. Email and webhook destinations do not provide a Skip TLS Verify
+toggle.
+
 ### Rehearse the saved delivery path
 
 In **Alerts → Notifications**, expand **Delivery rehearsal**. Save or discard
@@ -225,7 +232,11 @@ or intentionally pause the target.
 
 A poll warning means Pulse has not recorded a fresh success for that
 connection. An increasing `pulse_monitor_poll_total` series with
-`result="error"` means polls are still returning failures.
+`result="error"` means polls are still returning failures. Each scrape emits
+`pulse_monitor_poll_last_success_timestamp` and
+`pulse_monitor_poll_staleness_seconds` from one snapshot of the latest
+successful completion, so a delayed older result still counts in
+`pulse_monitor_poll_total` without moving that completion backwards.
 
 If scrapes keep succeeding with no new poll outcomes, check the scheduler and
 agent series already on that scrape target (an absent series on an older build
@@ -238,8 +249,11 @@ is not zero):
   `pulse_scheduler_queued_poll_overdue_seconds` and
   `pulse_scheduler_claimed_poll_overdue_seconds` (`stage="waiting_for_slot"`
   and `stage="running"`) across fresh scrapes. Growing ages show queued or
-  claimed polls falling behind their schedule or timeout budget. Zero does
-  not prove polling recovered.
+  claimed polls falling behind their schedule or timeout budget. A stopped
+  scheduler drops out of `pulse_scheduler_queued_poll_overdue_seconds` even if
+  a blocked worker has not returned yet, so keep checking
+  `pulse_scheduler_claimed_poll_overdue_seconds` for that worker. Zero does not
+  prove polling recovered.
 - **Parked poll failures:** `pulse_scheduler_dead_letter_depth` counts terminal
   poll entries still parked in running schedulers at scrape time by
   `instance_type` and `instance`. After a connection recovers, or its scheduler

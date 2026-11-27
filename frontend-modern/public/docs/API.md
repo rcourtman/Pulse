@@ -623,7 +623,9 @@ JSON
 ```
 
 Inspect the returned approval policy, blast radius, expiry and preflight checks.
-Keep its `actionId` and reviewed `planHash`; replace `act_...` and `sha256:...`
+Direct API and interactive plans expire after 5 minutes by default, while
+background and refreshed Patrol plans stay open for approval for 24 hours.
+Keep its `actionId` and reviewed `planHash`. Replace `act_...` and `sha256:...`
 below with those returned values. Planning is not proof that execution is safe
 or currently available. Pulse asks the agent to check the plan (for example a
 simulated package upgrade) only when the caller may also execute actions;

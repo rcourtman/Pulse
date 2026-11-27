@@ -69,8 +69,9 @@ result with its report. The server masks and bounds the lines again when it
 receives them. Masking is pattern-based and is not a guarantee: a secret in an
 unrecognised shape is sent as written. The lines are stored with the
 container's current state, are readable by anyone who can read that container
-in Pulse, and reach the configured AI provider when Patrol or the Assistant
-reads the container, where they also stay in that run's saved record. Pulse
+in Pulse, and reach the configured AI provider when Patrol reads the container
+(or legacy Pulse Mobile chat until 31 March 2027), where they also stay in that
+run's saved record. Pulse
 does not put them in an alert message. Patrol can quote from them in a
 finding, and a finding can be sent as a notification.
 

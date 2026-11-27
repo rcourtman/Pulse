@@ -30,7 +30,7 @@ Patrol mode sets how far Pulse can go when Patrol finds something that needs att
 | **Autopilot** | `full` | Yes | Yes | Execute automatically | Execute automatically | Pro / legacy Pro+ / Cloud |
 
 - **Watch only**: Patrol creates findings but takes no action. This is the Community baseline and the default without Pro. Suitable for learning what Patrol detects before enabling investigation or fix execution.
-- **Ask first** (Pro and above): Patrol investigates findings and proposes fixes. All fixes queue for manual approval before execution.
+- **Ask first** (Pro and above): Patrol investigates findings and proposes fixes. All fixes queue for manual approval before execution, and background Patrol plans stay open for approval for 24 hours.
 - **Safe auto-fix** (Pro and above): Warning-level safe fix plans can execute automatically. Critical findings still require approval. This is the recommended starting point for most Pro and legacy Pro+ users who enable fix execution.
 - **Autopilot** (Pro and above): Safe fix plans can execute without approval. Activation requires an explicit human-session acknowledgement and a Pro, legacy Pro+, or Cloud license. Recommended only for environments with thorough alert coverage.
 
@@ -163,6 +163,8 @@ When Patrol mode is `approval`, `assisted`, or `full`, Patrol investigates findi
 | `patrol_investigation_timeout_sec` | `investigation_timeout_sec` | 600 (1500 for subscription CLIs) | 60-1800 | Maximum seconds per investigation. Subscription agent CLIs (`codex-subscription`, `claude-subscription`) default to 1500 seconds (25 minutes) when unset. |
 
 The following limits are fixed in the runtime and cannot be changed: up to 3 investigations run in parallel (up to 64 additional findings can wait in memory for a free slot, prioritised critical-first), up to 3 attempts per finding, a 1 hour default cooldown between investigation attempts, a 20 minute cooldown after a failed fix or failed fix verification, and a 10 minute cooldown after a timed-out outcome. Runs that fail before producing a conclusion, are interrupted by a restart, or end with unknown fix verification carry no extra cooldown and wait for the next scheduled Patrol cycle.
+
+Background Patrol action plans, including refreshed Patrol plans, stay open for approval for 24 hours before expiring, matching investigation retention. Direct API and interactive action plans keep the 5-minute default expiry. Live freshness, policy, and emergency-stop checks still run when an approved plan executes.
 
 ---
 
