@@ -1246,6 +1246,51 @@ func TestWaitNext_RearmsForShorterCadence(t *testing.T) {
 	})
 }
 
+func TestTaskQueue_RefreshWithoutChangingHeapOrder(t *testing.T) {
+	synctest.Test(t, func(t *testing.T) {
+		q := NewTaskQueue()
+		due := time.Now().Add(time.Second)
+		first := ScheduledTask{
+			InstanceType: InstanceTypePVE, InstanceName: "first",
+			NextRun: due, Interval: 10 * time.Second, Priority: 2,
+		}
+		peer := first
+		peer.InstanceName, peer.Priority = "peer", 1
+		q.upsertPlan(first, 0)
+		q.upsertPlan(peer, 0)
+
+		// Metadata and cadence should be fresh even when the existing
+		// slot and its order stay the same.
+		peer.NextRun = due.Add(time.Minute)
+		peer.Interval *= 2
+		peer.Metadata.ChangeHash = "new-reading"
+		q.upsertPlan(peer, 0)
+		got, ok := q.Get(peer.InstanceType, peer.InstanceName)
+		if !ok || !got.NextRun.Equal(due) || got.Interval != peer.Interval || got.Metadata != peer.Metadata {
+			t.Fatalf("queued peer = %+v, %t; want original deadline and refreshed cadence and metadata", got, ok)
+		}
+
+		// A priority change at the same deadline must still reorder the
+		// heap. Mark the replacement explicit, then verify a same-order
+		// explicit refresh keeps that intent when an ordinary plan arrives.
+		peer.NextRun, peer.Priority = due, 3
+		q.upsertPlan(peer, 0)
+		peer.Metadata.ChangeHash = "explicit"
+		q.Upsert(peer)
+		q.upsertPlan(first, 0)
+		q.upsertPlan(ScheduledTask{
+			InstanceType: peer.InstanceType, InstanceName: peer.InstanceName,
+			NextRun: due, Interval: first.Interval, Priority: 1,
+		}, 0)
+
+		time.Sleep(time.Second)
+		got, ok = q.WaitNext(t.Context())
+		if !ok || got != peer {
+			t.Fatalf("first claim = %+v, %t; want explicit peer %+v", got, ok, peer)
+		}
+	})
+}
+
 func TestWaitNext_RechecksAfterHeadRemoval(t *testing.T) {
 	synctest.Test(t, func(t *testing.T) {
 		q := NewTaskQueue()
