@@ -20,9 +20,12 @@ import {
 } from '@/utils/metricThresholds';
 import { normalizeStorageSourceKey, storageSourceMatchesFilter } from '@/utils/storageSources';
 import type { StatusIndicator } from '@/utils/status';
+import { formatRelativeTime } from '@/utils/format';
 import {
+  PHYSICAL_DISK_TEMPERATURE_LAST_KNOWN_CLASS,
   getPhysicalDiskHeatSummary,
   isPhysicalDiskRunningHot,
+  type PhysicalDiskFreshness,
 } from './diskTemperaturePresentation';
 import type { NormalizedHealth, StorageHealthFilter } from './models';
 import { matchesStorageNodeTerms, parseStorageSearchQuery } from './storageSearchQuery';
@@ -85,6 +88,10 @@ export interface PhysicalDiskPresentationData {
   temperatureThresholds?: MetricDisplayThresholds | null;
   rpm: number;
   used: string;
+  freshness?: PhysicalDiskFreshness;
+  freshnessReason?: string;
+  freshnessError?: string;
+  observedAt?: number;
   collection?: PhysicalDiskCollectionStatus;
   smartAttributes?: {
     powerOnHours?: number;
@@ -439,6 +446,78 @@ export const getPhysicalDiskTemperatureThresholds = (
     ? disk.temperatureThresholds
     : resolveFactoryDiskTemperatureThresholds(disk.type);
 
+const STALE_PHYSICAL_DISK_SOURCE_STATUSES = new Set([
+  'stale',
+  'offline',
+  'error',
+  'failed',
+  'unauthorized',
+]);
+const CONNECTED_PHYSICAL_DISK_SOURCE_STATUSES = new Set([
+  'online',
+  'running',
+  'healthy',
+  'connected',
+  'ok',
+]);
+
+const parseObservedAt = (value: unknown): number | undefined => {
+  if (typeof value === 'number' && Number.isFinite(value) && value > 0) return value;
+  if (typeof value === 'string' && value.trim()) {
+    const parsed = Date.parse(value);
+    if (Number.isFinite(parsed) && parsed > 0) return parsed;
+  }
+  return undefined;
+};
+
+export function extractPhysicalDiskFreshness(resource: Resource): {
+  freshness: PhysicalDiskFreshness;
+  freshnessError?: string;
+  observedAt?: number;
+} {
+  const sourceStatus =
+    resource.sourceStatus ??
+    (resource.platformData as { sourceStatus?: Resource['sourceStatus'] } | undefined)
+      ?.sourceStatus;
+  const entries = Object.entries(sourceStatus ?? {}).filter(
+    ([source]) => source.trim().toLowerCase() !== 'availability',
+  );
+  const degraded = entries.find(([, entry]) =>
+    STALE_PHYSICAL_DISK_SOURCE_STATUSES.has((entry?.status || '').trim().toLowerCase()),
+  )?.[1];
+  if (degraded) {
+    return {
+      freshness: 'stale',
+      freshnessError: degraded.error?.trim() || undefined,
+      observedAt: parseObservedAt(degraded.lastSeen) ?? parseObservedAt(resource.lastSeen),
+    };
+  }
+  const connected = entries.some(([, entry]) =>
+    CONNECTED_PHYSICAL_DISK_SOURCE_STATUSES.has((entry?.status || '').trim().toLowerCase()),
+  );
+  return {
+    freshness: connected ? 'fresh' : 'unknown',
+    observedAt: parseObservedAt(resource.lastSeen),
+  };
+}
+
+export function getPhysicalDiskStaleDetail(
+  disk: Pick<
+    PhysicalDiskPresentationData,
+    'freshness' | 'freshnessReason' | 'freshnessError' | 'observedAt'
+  >,
+): string {
+  if (disk.freshness !== 'stale') return '';
+  if (disk.freshnessReason?.trim()) return disk.freshnessReason.trim();
+  const observed =
+    typeof disk.observedAt === 'number' && Number.isFinite(disk.observedAt) && disk.observedAt > 0
+      ? formatRelativeTime(disk.observedAt)
+      : '';
+  const age = observed ? ` Last successful refresh ${observed}.` : '';
+  const error = disk.freshnessError?.trim() ? ` ${disk.freshnessError.trim()}` : '';
+  return `Retained last-known disk readings.${age}${error}`.trim();
+}
+
 export function extractPhysicalDiskPresentationData(
   resource: Resource,
   resolveTemperatureThresholds: PhysicalDiskTemperatureThresholdResolver = resolveFactoryDiskTemperatureThresholds,
@@ -446,6 +525,9 @@ export function extractPhysicalDiskPresentationData(
 ): PhysicalDiskPresentationData {
   const pd = resource.physicalDisk || ((resource.platformData as any)?.physicalDisk ?? {});
   const diskNode = getPhysicalDiskNodeIdentity(resource);
+  const freshnessInfo = extractPhysicalDiskFreshness(resource);
+  const freshnessReason =
+    freshnessInfo.freshness === 'stale' ? getPhysicalDiskStaleDetail(freshnessInfo) : undefined;
   // A reason's severity decides the verdict even when it carries no display
   // text, so only the summary list drops empty summaries.
   const riskReasonDetails: ResourceStorageRiskReason[] = Array.isArray(pd.risk?.reasons)
@@ -480,6 +562,10 @@ export function extractPhysicalDiskPresentationData(
     temperatureThresholds: resolveTemperatureThresholds(pd.diskType || '', alertResourceIds),
     rpm: pd.rpm ?? 0,
     used: pd.used || '',
+    freshness: freshnessInfo.freshness,
+    freshnessReason,
+    freshnessError: freshnessInfo.freshnessError,
+    observedAt: freshnessInfo.observedAt,
     storageRole: pd.storageRole,
     storageGroup: pd.storageGroup,
     storageState: pd.storageState,
@@ -533,6 +619,7 @@ export {
   getPhysicalDiskLastKnownTemperatureTitle,
   getPhysicalDiskTemperaturePresentation,
   isPhysicalDiskTemperatureCurrent,
+  type PhysicalDiskFreshness,
   type PhysicalDiskTemperaturePresentation,
 } from './diskTemperaturePresentation';
 
@@ -579,7 +666,7 @@ const getPhysicalDiskVerdictPriority = (disk: PhysicalDiskPresentationData): num
     case 'attention':
       return 200;
     default:
-      return 0;
+      return disk.freshness === 'stale' ? 100 : 0;
   }
 };
 
@@ -619,6 +706,9 @@ export function matchesPhysicalDiskSearch(
       resource,
       getSourcePlatformLabel(getPhysicalDiskSourceKey(resource)),
     ),
+    disk.freshness === 'stale' ? 'stale stale data' : '',
+    disk.freshnessError,
+    disk.freshness === 'stale' ? getPhysicalDiskStaleDetail(disk) : '',
   ]
     .join(' ')
     .toLowerCase();
@@ -831,6 +921,14 @@ export function getPhysicalDiskHealthStatus(
     return { label: 'Needs Attention', summary: verdict.summary, tone: PHYSICAL_DISK_WARNING_TONE };
   }
 
+  if (disk.freshness === 'stale') {
+    return {
+      label: 'Stale',
+      summary: getPhysicalDiskStaleDetail(disk),
+      tone: PHYSICAL_DISK_WARNING_TONE,
+    };
+  }
+
   if (isUnraidPhysicalDisk(disk) && !hasUnraidPhysicalDiskFaultSignal(disk)) {
     return {
       label: normalizePhysicalDiskState(disk.storageState) === 'online' ? 'Online' : 'Unknown',
@@ -877,7 +975,7 @@ export function getPhysicalDiskNormalizedHealth(
   // A disk running hot sits in the health filter with the critical disks, as
   // its Temp cell reads red.
   if (verdict.kind === 'hot') return 'critical';
-  if (verdict.kind === 'attention') return 'warning';
+  if (verdict.kind === 'attention' || disk.freshness === 'stale') return 'warning';
   return clearLabel === 'Healthy' ? 'healthy' : 'unknown';
 }
 
@@ -940,6 +1038,9 @@ export function getPhysicalDiskLifeLabel(disk: PhysicalDiskPresentationData): st
 export function getPhysicalDiskLifeTextClass(disk: PhysicalDiskPresentationData): string {
   if (!isPhysicalDiskWearoutReported(disk)) {
     return PHYSICAL_DISK_MUTED_PLACEHOLDER_CLASS;
+  }
+  if (disk.freshness === 'stale') {
+    return PHYSICAL_DISK_TEMPERATURE_LAST_KNOWN_CLASS;
   }
   if (disk.wearout < 20) return 'text-red-600 dark:text-red-400';
   if (disk.wearout < 50) return 'text-amber-600 dark:text-amber-400';

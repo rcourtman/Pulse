@@ -2,6 +2,7 @@ import { Component, For, Show, Suspense, createMemo, lazy } from 'solid-js';
 import type { HistoryTimeRange } from '@/api/charts';
 import type { DetailSection } from '@/components/shared/DetailSectionTable';
 import { DrawerAttentionSection } from '@/components/shared/DrawerAttentionSection';
+import { InlineNotice } from '@/components/shared/InlineNotice';
 import {
   TechnicalDetailsDisclosure,
   TechnicalDetailsSection,
@@ -28,7 +29,10 @@ import {
   getDiskDrawerNotices,
   isDiskDrawerIOAvailable,
 } from '@/features/storageBackups/diskDrawerPresentation';
-import type { PhysicalDiskPresentationData } from '@/features/storageBackups/diskPresentation';
+import {
+  getPhysicalDiskStaleDetail,
+  type PhysicalDiskPresentationData,
+} from '@/features/storageBackups/diskPresentation';
 import type { Alert } from '@/types/api';
 import type { Resource } from '@/types/resource';
 import { useRelativeTimeNow } from '@/utils/relativeTimeClock';
@@ -101,6 +105,10 @@ export const DiskDrawerOverview: Component<DiskDrawerOverviewProps> = (props) =>
   );
   const notices = createMemo(() => getDiskDrawerNotices(props.diskData));
   const facts = createMemo(() => getDiskDrawerFacts(props.diskData, props.disk));
+  const staleDetail = createMemo(() => {
+    const detail = getPhysicalDiskStaleDetail(props.diskData);
+    return detail && !/[.!?]$/.test(detail) ? `${detail}.` : detail;
+  });
 
   return (
     <div class="space-y-3" data-testid="disk-drawer-overview">
@@ -114,6 +122,15 @@ export const DiskDrawerOverview: Component<DiskDrawerOverviewProps> = (props) =>
           acknowledged: alert.acknowledged,
         }))}
       />
+
+      <Show when={props.diskData.freshness === 'stale'}>
+        <div data-testid="disk-drawer-stale-notice">
+          <InlineNotice tone="warning" role="status">
+            <span class="font-medium">Stale data.</span> {staleDetail()} Health, temperature, and
+            SMART readings reflect the last report received and may no longer be current.
+          </InlineNotice>
+        </div>
+      </Show>
 
       <DrawerExceptionList testId="disk-drawer-exceptions" rows={exceptionRows()} />
 

@@ -321,4 +321,49 @@ describe('DiskDrawer', () => {
     expect(screen.getByTestId('operator-state')).toHaveTextContent('physical_disk:disk-1');
     expect(screen.getByTestId('drawer-history')).toHaveAttribute('data-enabled', 'false');
   });
+
+  it('shows the stale-readings notice without duplicating Worth checking, preserves faults, and clears on recovery', () => {
+    const staleHealthy = {
+      ...buildDisk({ diskType: 'ssd', wearout: 94, temperature: 44 }),
+      sourceStatus: {
+        proxmox: {
+          status: 'error',
+          lastSeen: Date.now() - 18 * 60_000,
+          error: 'Proxmox node unreachable',
+        },
+      },
+    } as unknown as Resource;
+    const [disk, setDisk] = createSignal<Resource>(staleHealthy);
+    renderDrawer(disk);
+
+    expect(screen.getByLabelText('Stale').className).toContain('amber');
+    expect(screen.getByTestId('disk-drawer-stale-notice')).toHaveTextContent('Stale data.');
+    expect(screen.getByTestId('disk-drawer-stale-notice')).toHaveTextContent(
+      'Proxmox node unreachable',
+    );
+    expect(screen.queryByTestId('disk-drawer-exceptions')).toBeNull();
+    const card = screen.getByTestId('disk-drawer-health-card');
+    expect(within(card).getByText('Stale')).toBeInTheDocument();
+    expect(within(card).getByText('Last known temperature')).toBeInTheDocument();
+
+    // A stale failing disk keeps Replace Now in Worth checking alongside the stale banner.
+    setDisk({
+      ...staleHealthy,
+      physicalDisk: { ...staleHealthy.physicalDisk!, health: 'FAILED' },
+    } as unknown as Resource);
+    expect(screen.getByLabelText('Replace Now').className).toContain('red');
+    expect(screen.getByTestId('disk-drawer-stale-notice')).toBeInTheDocument();
+    expect(screen.getByTestId('disk-drawer-exceptions')).toHaveTextContent('Replace Now');
+
+    // Live recovery clears the stale banner and returns live temperature framing.
+    setDisk({
+      ...staleHealthy,
+      sourceStatus: { proxmox: { status: 'online', lastSeen: Date.now() } },
+    } as unknown as Resource);
+    expect(screen.queryByTestId('disk-drawer-stale-notice')).toBeNull();
+    expect(screen.getByLabelText('Healthy').className).toContain('emerald');
+    expect(
+      within(screen.getByTestId('disk-drawer-health-card')).getByText('Temperature'),
+    ).toBeInTheDocument();
+  });
 });

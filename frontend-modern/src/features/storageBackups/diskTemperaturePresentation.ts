@@ -13,13 +13,17 @@ import { formatTemperature } from '@/utils/temperature';
 export const PHYSICAL_DISK_TEMPERATURE_LAST_KNOWN_CLASS =
   'text-muted underline decoration-dotted underline-offset-2 cursor-help';
 
+export type PhysicalDiskFreshness = 'fresh' | 'stale' | 'unknown';
+
 // Normalization may keep the last known temperature when the current
 // observation is not available, such as a disk in standby or a host agent that
-// stopped reporting. The value is a current reading only when its collection
-// state is available, or when the source predates collection state.
+// stopped reporting. The value is a current reading only when its source is
+// not stale and its collection state is available (or absent for older sources).
 export function isPhysicalDiskTemperatureCurrent(
   collection: PhysicalDiskCollectionStatus | null | undefined,
+  freshness?: PhysicalDiskFreshness,
 ): boolean {
+  if (freshness === 'stale') return false;
   const state = collection?.temperature?.state;
   return !state || state === 'available';
 }
@@ -41,15 +45,23 @@ export interface PhysicalDiskTemperaturePresentation {
 export function getPhysicalDiskTemperaturePresentation(disk: {
   temperature: number;
   collection?: PhysicalDiskCollectionStatus | null;
+  freshness?: PhysicalDiskFreshness;
+  freshnessReason?: string;
 }): PhysicalDiskTemperaturePresentation | null {
   if (!Number.isFinite(disk.temperature) || disk.temperature <= 0) return null;
-  const current = isPhysicalDiskTemperatureCurrent(disk.collection);
+  const fieldUnavailable = !isPhysicalDiskTemperatureCurrent(disk.collection);
+  const current = !fieldUnavailable && disk.freshness !== 'stale';
+  const staleReason = disk.freshnessReason?.trim();
   return {
     label: formatTemperature(disk.temperature),
     current,
     title: current
       ? undefined
-      : getPhysicalDiskLastKnownTemperatureTitle(disk.collection?.temperature),
+      : fieldUnavailable
+        ? getPhysicalDiskLastKnownTemperatureTitle(disk.collection?.temperature)
+        : staleReason
+          ? `Last known reading, not current: ${staleReason}`
+          : 'Last known reading, not current: reporting source has not updated recently',
   };
 }
 
@@ -60,12 +72,16 @@ export function getPhysicalDiskTemperaturePresentation(disk: {
 // reading is not current, and null thresholds mean disk temperature alerting
 // is off for the disk, so neither is ever hot. Disk risk never carries heat.
 export function isPhysicalDiskRunningHot(
-  disk: { temperature: number; collection?: PhysicalDiskCollectionStatus | null },
+  disk: {
+    temperature: number;
+    collection?: PhysicalDiskCollectionStatus | null;
+    freshness?: PhysicalDiskFreshness;
+  },
   thresholds: MetricDisplayThresholds | null,
 ): boolean {
   if (!thresholds || !(thresholds.critical > 0)) return false;
   if (!Number.isFinite(disk.temperature) || disk.temperature <= 0) return false;
-  if (!isPhysicalDiskTemperatureCurrent(disk.collection)) return false;
+  if (!isPhysicalDiskTemperatureCurrent(disk.collection, disk.freshness)) return false;
   return disk.temperature >= thresholds.critical;
 }
 

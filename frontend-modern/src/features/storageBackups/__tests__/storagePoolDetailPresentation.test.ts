@@ -345,4 +345,22 @@ describe('storagePoolDetailPresentation', () => {
       ]),
     );
   });
+
+  it('marks linked disk temperature as last known when the disk reporting source is stale', () => {
+    const record = buildRecord();
+    const staleDisk = {
+      ...buildDisk(),
+      sourceStatus: {
+        truenas: {
+          status: 'stale',
+          lastSeen: new Date(Date.now() - 18 * 60_000).toISOString(),
+          error: 'TrueNAS API unreachable',
+        },
+      },
+    } as Resource;
+
+    const [linked] = getStoragePoolLinkedDisks(record, [staleDisk]);
+    expect(linked.temperatureLastKnownTitle).toContain('Last known reading, not current:');
+    expect(linked.temperatureLastKnownTitle).toContain('TrueNAS API unreachable');
+  });
 });

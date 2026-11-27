@@ -698,4 +698,86 @@ describe('DiskList', () => {
     expect(screen.queryByText('pve20')).toBeNull();
     expect(screen.getByText('ext4')).toBeInTheDocument();
   });
+
+  it('surfaces Stale health and last-known metrics for stale sources, preserves faults with Stale data cue, and clears on recovery', async () => {
+    const healthyDisk = {
+      ...buildDisk('sda', 'pve-stale', {
+        model: 'Samsung 870 EVO',
+        diskType: 'ssd',
+        wearout: 94,
+        temperature: 68,
+        health: 'PASSED',
+      }),
+      sourceStatus: {
+        proxmox: {
+          status: 'error',
+          lastSeen: Date.now() - 15 * 60_000,
+          error: 'Proxmox poll timed out',
+        },
+      },
+    } as unknown as Resource;
+    const failedDisk = {
+      ...buildDisk('sdb', 'pve-stale', {
+        model: 'WDC Archive',
+        diskType: 'hdd',
+        temperature: 46,
+        health: 'FAILED',
+      }),
+      sourceStatus: {
+        proxmox: {
+          status: 'stale',
+          lastSeen: Date.now() - 15 * 60_000,
+        },
+      },
+    } as unknown as Resource;
+
+    const [disks, setDisks] = createSignal<Resource[]>([healthyDisk, failedDisk]);
+    const view = render(() => (
+      <DiskList
+        disks={disks()}
+        nodes={[]}
+        selectedNode={null}
+        searchTerm=""
+        selectedDiskId={null}
+        onSelectedDiskChange={() => {}}
+      />
+    ));
+
+    const sdaRow = view.container.querySelector<HTMLElement>('[data-row-id="sda"]')!;
+    expect(within(sdaRow).getByText('Stale')).toBeInTheDocument();
+    expect(sdaRow.querySelector('[data-disk-stale-cue]')).toBeNull();
+    const sdaTemp = sdaRow.querySelector<HTMLElement>('[data-temperature-reading]')!;
+    expect(sdaTemp).toHaveAttribute('data-temperature-reading', 'last-known');
+    expect(sdaTemp).toHaveAttribute('title', expect.stringContaining('Proxmox poll timed out'));
+    const sdaLife = sdaRow.querySelector<HTMLElement>('[data-life-reading]')!;
+    expect(sdaLife).toHaveAttribute('data-life-reading', 'last-known');
+    expect(sdaLife).toHaveTextContent('94%, last known');
+
+    const sdbRow = view.container.querySelector<HTMLElement>('[data-row-id="sdb"]')!;
+    expect(within(sdbRow).getByText('Replace Now')).toBeInTheDocument();
+    expect(sdbRow.querySelector('[data-disk-stale-cue]')).toHaveTextContent('Stale data');
+
+    // Live recovery restores live verdict, temperature, and wearout styling.
+    setDisks([
+      {
+        ...healthyDisk,
+        physicalDisk: { ...healthyDisk.physicalDisk!, temperature: 36 },
+        sourceStatus: { proxmox: { status: 'online', lastSeen: Date.now() } },
+      } as unknown as Resource,
+      {
+        ...failedDisk,
+        sourceStatus: { proxmox: { status: 'online', lastSeen: Date.now() } },
+      } as unknown as Resource,
+    ]);
+    await waitFor(() => expect(within(sdaRow).getByText('Healthy')).toBeInTheDocument());
+    expect(sdaRow.querySelector('[data-temperature-reading]')).toHaveAttribute(
+      'data-temperature-reading',
+      'current',
+    );
+    expect(sdaRow.querySelector('[data-life-reading]')).toHaveAttribute(
+      'data-life-reading',
+      'current',
+    );
+    expect(sdbRow.querySelector('[data-disk-stale-cue]')).toBeNull();
+  });
 });

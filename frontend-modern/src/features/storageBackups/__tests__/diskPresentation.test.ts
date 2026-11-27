@@ -6,6 +6,7 @@ import {
   buildPhysicalDiskGroupFilterOptions,
   buildPhysicalDiskRoleFilterOptions,
   comparePhysicalDiskPresentation,
+  extractPhysicalDiskFreshness,
   extractPhysicalDiskPresentationData,
   filterAndSortPhysicalDisks,
   PHYSICAL_DISK_EMPTY_CARD_CLASS,
@@ -1025,5 +1026,199 @@ describe('wearout evidence boundary', () => {
     expect(getPhysicalDiskLifeTextClass(makeDiskData({ wearout: 0, type: 'ssd' }))).toBe(
       'text-red-600 dark:text-red-400',
     );
+  });
+});
+
+describe('physical disk source freshness', () => {
+  const makeResource = (overrides: Partial<Resource> = {}): Resource =>
+    ({
+      id: 'disk-stale-1',
+      type: 'physical_disk',
+      name: 'Samsung 870 EVO',
+      platformId: 'pve-cluster',
+      platformType: 'proxmox-pve',
+      sourceType: 'api',
+      status: 'online',
+      lastSeen: Date.now() - 15 * 60_000,
+      physicalDisk: {
+        devPath: '/dev/sda',
+        model: 'Samsung 870 EVO',
+        diskType: 'ssd',
+        sizeBytes: 1_000_000_000_000,
+        health: 'PASSED',
+        wearout: 94,
+        temperature: 72,
+      },
+      ...overrides,
+    }) as unknown as Resource;
+
+  const isoAgo = (minutes: number) => new Date(Date.now() - minutes * 60_000).toISOString();
+
+  it('extracts stale freshness from impaired sourceStatus and prefers top-level over platformData', () => {
+    const staleResource = makeResource({
+      sourceStatus: {
+        proxmox: {
+          status: 'error',
+          lastSeen: isoAgo(12),
+          error: 'Proxmox API timed out',
+        },
+      },
+    });
+    expect(extractPhysicalDiskFreshness(staleResource)).toMatchObject({
+      freshness: 'stale',
+      freshnessError: 'Proxmox API timed out',
+    });
+
+    // Live top-level recovery clears an older stale platformData.sourceStatus copy.
+    const recovered = makeResource({
+      sourceStatus: { proxmox: { status: 'online', lastSeen: isoAgo(0) } },
+      platformData: {
+        sourceStatus: { proxmox: { status: 'stale', error: 'old timeout' } },
+      },
+    });
+    expect(extractPhysicalDiskFreshness(recovered).freshness).toBe('fresh');
+
+    // Availability checks are not a disk's own telemetry source.
+    const availabilityOnly = makeResource({
+      sourceStatus: {
+        availability: { status: 'stale' },
+        proxmox: { status: 'online', lastSeen: isoAgo(0) },
+      },
+    });
+    expect(extractPhysicalDiskFreshness(availabilityOnly).freshness).toBe('fresh');
+  });
+
+  it('surfaces Stale for stale healthy disks, preserves Replace Now for stale failed disks, and treats stale temps and life as last known', () => {
+    const staleHot = extractPhysicalDiskPresentationData(
+      makeResource({
+        sourceStatus: {
+          proxmox: {
+            status: 'stale',
+            lastSeen: isoAgo(20),
+            error: 'node polling stalled',
+          },
+        },
+      }),
+    );
+
+    // Retained 72°C must not trigger live Running Hot; Health reads Stale instead.
+    expect(getPhysicalDiskHealthStatus(staleHot)).toMatchObject({
+      label: 'Stale',
+      tone: 'text-amber-700 dark:text-amber-300',
+    });
+    expect(getPhysicalDiskHealthStatus(staleHot).summary).toContain('node polling stalled');
+    expect(getPhysicalDiskTemperaturePresentation(staleHot)).toMatchObject({
+      label: '72°C',
+      current: false,
+    });
+    expect(getPhysicalDiskLifeTextClass(staleHot)).toBe(PHYSICAL_DISK_TEMPERATURE_LAST_KNOWN_CLASS);
+    expect(getPhysicalDiskNormalizedHealth(makeResource(), staleHot)).toBe('warning');
+
+    // A critical drive fault remains Replace Now even when its source stops updating.
+    const staleFailed = extractPhysicalDiskPresentationData(
+      makeResource({
+        sourceStatus: { agent: { status: 'stale', lastSeen: isoAgo(10) } },
+        physicalDisk: {
+          devPath: '/dev/sdb',
+          model: 'Archive HDD',
+          diskType: 'hdd',
+          sizeBytes: 4_000_000_000_000,
+          health: 'FAILED',
+          temperature: 44,
+        },
+      }),
+    );
+    expect(getPhysicalDiskHealthStatus(staleFailed)).toMatchObject({
+      label: 'Replace Now',
+      tone: 'text-red-700 dark:text-red-300',
+    });
+    expect(getPhysicalDiskNormalizedHealth(makeResource(), staleFailed)).toBe('critical');
+  });
+
+  it('sorts stale disks above fresh healthy disks and matches stale and error search terms', () => {
+    const freshResource = makeResource({
+      id: 'disk-fresh',
+      sourceStatus: { proxmox: { status: 'online', lastSeen: isoAgo(0) } },
+      physicalDisk: {
+        devPath: '/dev/sda',
+        model: 'Fresh SSD',
+        diskType: 'ssd',
+        sizeBytes: 1_000_000_000_000,
+        health: 'PASSED',
+        temperature: 34,
+      },
+    });
+    const staleResource = makeResource({
+      id: 'disk-stale',
+      sourceStatus: {
+        proxmox: {
+          status: 'error',
+          lastSeen: isoAgo(15),
+          error: 'pve-b API timed out',
+        },
+      },
+      physicalDisk: {
+        devPath: '/dev/sdb',
+        model: 'Stale SSD',
+        diskType: 'ssd',
+        sizeBytes: 1_000_000_000_000,
+        health: 'PASSED',
+        temperature: 38,
+      },
+    });
+    const failedResource = makeResource({
+      id: 'disk-failed',
+      sourceStatus: { proxmox: { status: 'online', lastSeen: isoAgo(0) } },
+      physicalDisk: {
+        devPath: '/dev/sdc',
+        model: 'Failed HDD',
+        diskType: 'hdd',
+        sizeBytes: 2_000_000_000_000,
+        health: 'FAILED',
+        temperature: 40,
+      },
+    });
+    const byId = new Map(
+      [freshResource, staleResource, failedResource].map((item) => [
+        item.id,
+        extractPhysicalDiskPresentationData(item),
+      ]),
+    );
+
+    expect(
+      filterAndSortPhysicalDisks([freshResource, staleResource, failedResource], {
+        selectedNode: null,
+        searchTerm: '',
+        healthFilter: 'all',
+        getDiskData: (item) => byId.get(item.id)!,
+        matchesNode: () => true,
+      }).map((item) => item.id),
+    ).toEqual(['disk-failed', 'disk-stale', 'disk-fresh']);
+
+    expect(
+      filterAndSortPhysicalDisks([freshResource, staleResource], {
+        selectedNode: null,
+        searchTerm: '',
+        healthFilter: 'healthy',
+        getDiskData: (item) => byId.get(item.id)!,
+        matchesNode: () => true,
+      }).map((item) => item.id),
+    ).toEqual(['disk-fresh']);
+
+    expect(
+      filterAndSortPhysicalDisks([freshResource, staleResource], {
+        selectedNode: null,
+        searchTerm: '',
+        healthFilter: 'attention',
+        getDiskData: (item) => byId.get(item.id)!,
+        matchesNode: () => true,
+      }).map((item) => item.id),
+    ).toEqual(['disk-stale']);
+
+    expect(matchesPhysicalDiskSearch(staleResource, byId.get('disk-stale')!, 'stale')).toBe(true);
+    expect(matchesPhysicalDiskSearch(staleResource, byId.get('disk-stale')!, 'api timed out')).toBe(
+      true,
+    );
+    expect(matchesPhysicalDiskSearch(freshResource, byId.get('disk-fresh')!, 'stale')).toBe(false);
   });
 });

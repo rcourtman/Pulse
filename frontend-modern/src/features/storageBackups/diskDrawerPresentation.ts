@@ -25,6 +25,7 @@ import {
   getPhysicalDiskParentLabel,
   getPhysicalDiskRoleLabel,
   getPhysicalDiskSourceBadgePresentation,
+  getPhysicalDiskStaleDetail,
   getPhysicalDiskTemperaturePresentation,
   getPhysicalDiskTemperatureThresholds,
   isPhysicalDiskWearoutReported,
@@ -116,10 +117,13 @@ export function isDiskDrawerIOAvailable(disk: PhysicalDiskPresentationData): boo
 const finite = (value: number | undefined): number | undefined =>
   typeof value === 'number' && Number.isFinite(value) ? value : undefined;
 
+const ensureSentence = (value: string): string => (/[.!?]$/.test(value) ? value : `${value}.`);
+
 /** Current readings the charts show before any history is stored. */
 export function getDiskDrawerCurrentMetrics(
   disk: PhysicalDiskPresentationData,
 ): Record<string, number | undefined> {
+  if (disk.freshness === 'stale') return {};
   const temperature = getPhysicalDiskTemperaturePresentation(disk);
   const attrs = disk.smartAttributes ?? {};
   return {
@@ -130,19 +134,43 @@ export function getDiskDrawerCurrentMetrics(
   };
 }
 
-/** A retained temperature is charted as last known, never as live. */
+/** A retained temperature or stale disk snapshot is charted as last known, never as live. */
 export function getDiskDrawerDeferredMetrics(
   disk: PhysicalDiskPresentationData,
 ): Record<string, GuestDrawerHistoryDeferredMetric> | undefined {
   const temperature = getPhysicalDiskTemperaturePresentation(disk);
+  if (disk.freshness === 'stale') {
+    const message = ensureSentence(getPhysicalDiskStaleDetail(disk));
+    const attrs = disk.smartAttributes ?? {};
+    const deferred: Record<string, GuestDrawerHistoryDeferredMetric> = {};
+    if (temperature) {
+      deferred.smart_temp = {
+        lastKnownValue: disk.temperature,
+        message: temperature.title ? ensureSentence(temperature.title) : message,
+      };
+    }
+    const reallocated = finite(attrs.reallocatedSectors);
+    if (reallocated !== undefined) {
+      deferred.smart_reallocated_sectors = { lastKnownValue: reallocated, message };
+    }
+    const pctUsed = finite(attrs.percentageUsed);
+    if (pctUsed !== undefined) {
+      deferred.smart_percentage_used = { lastKnownValue: pctUsed, message };
+    }
+    const spare = finite(attrs.availableSpare);
+    if (spare !== undefined) {
+      deferred.smart_available_spare = { lastKnownValue: spare, message };
+    }
+    return Object.keys(deferred).length > 0 ? deferred : undefined;
+  }
   if (!temperature || temperature.current || !temperature.title) return undefined;
   return {
-    smart_temp: { lastKnownValue: disk.temperature, message: `${temperature.title}.` },
+    smart_temp: { lastKnownValue: disk.temperature, message: ensureSentence(temperature.title) },
   };
 }
 
 const lifeTone = (disk: PhysicalDiskPresentationData): DetailValueTone => {
-  if (!isPhysicalDiskWearoutReported(disk)) return 'muted';
+  if (!isPhysicalDiskWearoutReported(disk) || disk.freshness === 'stale') return 'muted';
   const textClass = getPhysicalDiskLifeTextClass(disk);
   if (textClass.includes('red')) return 'danger';
   if (textClass.includes('amber')) return 'warning';
@@ -163,21 +191,32 @@ export function buildDiskDrawerHealthSection(disk: PhysicalDiskPresentationData)
   const indicator = getPhysicalDiskHealthIndicator(disk);
   const summary = getPhysicalDiskHealthSummary(status);
   const temperature = getPhysicalDiskTemperaturePresentation(disk);
+  const isStale = disk.freshness === 'stale';
+  const staleDetail = isStale ? getPhysicalDiskStaleDetail(disk) : undefined;
+  const staleVerdictOnly = isStale && status.label === 'Stale';
   return {
     label: 'SMART health',
     testId: 'disk-drawer-health',
     rows: compactDetailRows([
-      makeDetailRow('Health', summary ? `${status.label}: ${summary}` : status.label, {
-        tone:
-          indicator.variant === 'danger'
-            ? 'danger'
-            : indicator.variant === 'warning'
-              ? 'warning'
-              : indicator.variant === 'success'
-                ? 'success'
-                : 'default',
-        wrap: true,
-      }),
+      makeDetailRow(
+        'Health',
+        staleVerdictOnly ? status.label : summary ? `${status.label}: ${summary}` : status.label,
+        {
+          // Stale-only disks show the prominent amber banner above the charts;
+          // keep the Health row inside SMART health instead of repeating it in Worth checking.
+          tone: staleVerdictOnly
+            ? 'default'
+            : indicator.variant === 'danger'
+              ? 'danger'
+              : indicator.variant === 'warning'
+                ? 'warning'
+                : indicator.variant === 'success'
+                  ? 'success'
+                  : 'default',
+          title: staleVerdictOnly ? staleDetail : undefined,
+          wrap: true,
+        },
+      ),
       temperature
         ? makeDetailRow(
             temperature.current ? 'Temperature' : 'Last known temperature',
@@ -190,10 +229,12 @@ export function buildDiskDrawerHealthSection(disk: PhysicalDiskPresentationData)
       // Worn flash already turns the verdict above; the life left then stays
       // in this card instead of repeating the verdict in Worth checking.
       makeDetailRow('Life remaining', getPhysicalDiskLifeLabel(disk), {
-        tone:
-          indicator.variant === 'warning' || indicator.variant === 'danger'
+        tone: isStale
+          ? 'muted'
+          : indicator.variant === 'warning' || indicator.variant === 'danger'
             ? 'default'
             : lifeTone(disk),
+        title: isStale ? staleDetail : undefined,
       }),
     ]),
   };
