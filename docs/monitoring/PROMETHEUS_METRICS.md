@@ -193,9 +193,10 @@ collection ran or recovered.
 
 Dead-letter depth adds the entries from running schedulers with the same
 labels. After a connection recovers, or after its scheduler is stopped or
-replaced, its old entries no longer contribute. A previously scraped label
-with no remaining entries reads zero. Zero does not mean collection is running;
-compare it with the poll result counters and freshness in the same window.
+replaced, its old entries no longer contribute. A label with no remaining entries
+reads zero for up to five minutes after its last positive scrape, then Pulse
+omits the series. Neither zero nor an absent series proves collection is running;
+compare with the poll result counters and freshness in the same window.
 
 When expected results stop, check the two claimed-poll stages on successive scrapes:
 

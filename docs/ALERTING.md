@@ -226,9 +226,11 @@ is not zero):
 - **Parked poll failures:** `pulse_scheduler_dead_letter_depth` counts terminal
   poll entries still parked in running schedulers at scrape time by
   `instance_type` and `instance`. After a connection recovers, or its scheduler
-  stops or is replaced, a previously scraped label returns to `0`. Zero does
-  not prove polling is running, so compare it with `pulse_monitor_poll_total`
-  and `pulse_monitor_poll_last_success_timestamp` in the same window.
+  stops or is replaced, a label with no remaining entries reads `0` for up
+  to five minutes after its last positive scrape, then the series disappears.
+  Neither zero nor an absent series proves polling is running. Compare with
+  `pulse_monitor_poll_total` and `pulse_monitor_poll_last_success_timestamp`
+  in the same window.
 - **Agent reports:** inspect `pulse_http_requests_total` with `method="POST"`
   separately for `/api/agents/agent/report` (or legacy
   `/api/agents/host/report`) and `/api/agents/docker/report`, split by

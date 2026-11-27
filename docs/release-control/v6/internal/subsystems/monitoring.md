@@ -2288,14 +2288,21 @@ The Prometheus gauge reads current entries only from running scheduler
 runtimes at scrape time. Tenant shutdown or replacement stops contributing
 as soon as its runtime is cancelled, even if the old monitor and its queue
 are still reachable. Scrapes add the entries of all active runtimes with
-matching labels and retain zero for previously observed labels that no
-longer have entries. A delayed Health or worker refresh cannot restore
-retired entries or hide a still-active peer. Successful polling needs no
-metrics scan of the dead-letter queue.
+matching labels. A label without any parked entries reads zero for up to
+five minutes after its last positive scrape and is then omitted, so retired
+connection labels do not accumulate for the lifetime of the process.
+Only positive scrapes extend that window, using the time collection began.
+A delayed Health or worker refresh cannot restore retired entries or hide a
+still-active peer. Successful polling needs no metrics scan of the dead-letter
+queue.
 
 `TestScheduledPollDeadLetterTracksLatestOutcome` checks both the settled
 Scheduler Health representation and the depth metric after ordinary worker
-recovery and overlapping refreshes. `TestSchedulerDeadLettersFollowTenantRuntime`
+recovery and overlapping refreshes.
+`TestSchedulerDeadLetterScrapeExpiresHistoricalLabels` checks that historical
+labels read zero during the window and expire while an active peer continues
+to export, and that the same label can fail and recover again.
+`TestSchedulerDeadLettersFollowTenantRuntime`
 scrapes through actual tenant reload, removal and shutdown, keeping a failed
 old queue alive and reusing labels across tenants and replacements.
 `TestSchedulerDeadLettersExcludeCancelledRuntimeBeforeDetach` covers
