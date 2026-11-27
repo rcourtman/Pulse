@@ -43,6 +43,12 @@ From a check's detail drawer on **Availability**, administrators can run
 timeline and response-time history across **24h**, **7d**, **30d** and **1y**.
 Pausing or deleting a saved check retires its pending local poll from the
 scheduler queue so removed checks do not keep scheduling follow-up polls.
+Deleting a check also clears its scheduler health, retry, failure, dead-letter
+and staleness entries so removed checks do not leave stale errors behind.
+Local probes cancelled during a server reload or shutdown are discarded rather
+than recording false unreachable failures or history rows, and in-flight local
+or remote results for a check that was paused, deleted, edited or reassigned
+to remote-only locations are dropped instead of restoring outdated state.
 
 Keep credentials and private target addresses out of public screenshots and
 support reports. Use a service you own or are authorised to monitor.
@@ -82,6 +88,11 @@ than asserting that the target is down. Eligible stale probes can raise a
 warning through the normal alert policies. The [external-probe reference](CONFIGURATION.md#external-probes-pro)
 documents the missing-report window and how duplicate agent-offline warnings
 are avoided.
+
+Pausing a check clears its pre-pause observations and external-probe grace
+tracking without raising stale-probe errors while paused. Resuming the check
+starts a fresh first-report grace window instead of immediately reporting an
+unavailable probe.
 
 ## Detect when Pulse cannot alert
 

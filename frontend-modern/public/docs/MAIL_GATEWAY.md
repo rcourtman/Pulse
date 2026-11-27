@@ -75,6 +75,8 @@ request already in flight. PMG readings and alerts are unavailable or stale
 while paused, so use the gateway's own monitoring and arrange independent
 coverage. Restore only the connection you deliberately paused when it is safe
 to resume. Do not restart Pulse or alter PMG queues to verify an opt-out.
+While paused, skipped PMG polls do not record synthetic poll successes or clear
+an earlier failure in scheduler health or staleness tracking.
 
 ## Read the Mail Gateway view
 

@@ -67,6 +67,34 @@ class WatchdogHelpDocsTest(unittest.TestCase):
             with self.subTest(phrase=phrase):
                 self.assertIn(phrase, self.guide)
 
+    def test_availability_lifecycle_truthfulness_matches_poller_source(self) -> None:
+        poller = (ROOT / "internal/monitoring/availability_poller.go").read_text(encoding="utf-8")
+        probe_agent = (ROOT / "internal/monitoring/availability_probe_agent.go").read_text(
+            encoding="utf-8"
+        )
+        staleness = (ROOT / "internal/monitoring/staleness_tracker.go").read_text(encoding="utf-8")
+
+        for token in (
+            "availabilityRefreshMu",
+            "currentLocalAvailabilityTarget",
+            "pausedIDs",
+            "context.Canceled",
+        ):
+            with self.subTest(poller_token=token):
+                self.assertIn(token, poller)
+        self.assertIn("Rejecting probe availability result for disabled target", probe_agent)
+        self.assertIn("func (t *StalenessTracker) Remove(", staleness)
+
+        for phrase in (
+            "clears its scheduler health, retry, failure, dead-letter and staleness entries",
+            "Local probes cancelled during a server reload or shutdown are discarded",
+            "in-flight local or remote results for a check that was paused, deleted, edited or reassigned to remote-only locations are dropped",
+            "clears its pre-pause observations and external-probe grace tracking without raising stale-probe errors while paused",
+            "starts a fresh first-report grace window instead of immediately reporting an unavailable probe",
+        ):
+            with self.subTest(phrase=phrase):
+                self.assertIn(phrase, self.guide)
+
 
 if __name__ == "__main__":
     unittest.main()
