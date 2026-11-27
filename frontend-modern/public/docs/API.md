@@ -1100,6 +1100,15 @@ points, rollups, posture, and filter semantics.
   - Returns distinct filter values (clusters/nodes/namespaces) and capability flags (size/verification/entity id present).
   - Query params: same filters as `/api/recovery/points` (except paging)
 
+### Proxmox Replication Jobs
+`GET /api/replication/jobs` (`monitoring:read`)
+Returns scheduled ZFS replication jobs between Proxmox VE nodes from the current monitor snapshot as `{"data": [...], "meta": {"total": 0}}`.
+- Optional query params:
+  - `platform`: `proxmox`, `proxmox-pve`, or `pve` (an unknown platform token returns an empty `data` list rather than the full dataset)
+  - `instance`: case-insensitive Proxmox VE connection name
+  - `guest`: numeric `guestId` or case-insensitive `guestName` / `guest` label
+- Each job includes `id`, `instance`, `jobId`, `guestId`/`guestName`, `sourceNode`/`targetNode`, `schedule`, `enabled`, `lastSyncStatus`, `lastSyncTime`/`nextSyncTime`, `failCount`, `error`, and `lastPolled` (RFC3339 timestamp of the monitor snapshot poll). Because this endpoint carries no per-job source-health envelope, freshness in **Proxmox → Replication** follows the owning Proxmox VE node or connection in `/api/resources` (`source=proxmox`). Returns HTTP 405 for methods other than GET.
+
 ---
 
 ## 🔔 Notifications

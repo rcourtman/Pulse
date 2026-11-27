@@ -541,5 +541,87 @@ class RecoveryPartialReadHelpDocsTest(unittest.TestCase):
         self.assertIn("No restore points ${qualifyRestorePointCounts() || undatedEntryCount() > 0 ? 'listed for' : 'from'}", table)
 
 
+class ProxmoxReplicationFreshnessHelpDocsTest(unittest.TestCase):
+    """Keep RECOVERY.md and API.md aligned with Proxmox replication stale UI and /api/replication/jobs."""
+
+    heading = "## Proxmox replication freshness\n"
+
+    def section(self):
+        text = RECOVERY_DOC.read_text(encoding="utf-8")
+        self.assertEqual(text.count(self.heading), 1)
+        body = text.split(self.heading, 1)[1].split("\n## ", 1)[0]
+        return " ".join(body.split())
+
+    def test_recovery_where_to_look_links_proxmox_replication_freshness(self):
+        text = RECOVERY_DOC.read_text(encoding="utf-8")
+        where = text.split("## Where to look\n", 1)[1].split("\n## ", 1)[0]
+        self.assertIn("**Proxmox → Replication** (`/proxmox/replication`)", where)
+        self.assertIn("(#proxmox-replication-freshness)", where)
+        self.assertEqual(
+            RECOVERY_DOC.read_bytes(),
+            (ROOT / "frontend-modern/public/docs/RECOVERY.md").read_bytes(),
+        )
+
+    def test_replication_freshness_help_matches_table_and_drawer_ui(self):
+        text = self.section()
+        table = (
+            ROOT / "frontend-modern/src/features/proxmox/ProxmoxReplicationTable.tsx"
+        ).read_text(encoding="utf-8")
+        for label in (
+            "Healthy",
+            "Stale",
+            "Stale data",
+            "Failed",
+            "Pending",
+            "Unknown",
+            "Disabled",
+            "Last reported",
+            "Last polled",
+        ):
+            with self.subTest(label=label):
+                self.assertIn(f"**{label}**", text)
+                self.assertIn(f"'{label}'", table)
+        self.assertIn("staleNotice ? 'stale' : 'healthy'", table)
+        self.assertIn("data-replication-stale-cue", table)
+        self.assertIn("data-testid=\"replication-job-stale-notice\"", table)
+        self.assertIn("makeDetailRow('Last reported', 'Healthy'", table)
+        self.assertIn("makeDetailRow('Last polled', polledText", table)
+        for phrase in (
+            "/api/replication/jobs",
+            "not PBS backups",
+            "owning Proxmox VE source node",
+            "rather than a fixed browser timer",
+            "inline amber **Stale** cue",
+            "search for `stale`",
+            "clear the stale banner, inline cues and **Stale** filter count automatically",
+            "VM_DISK_MONITORING.md#backup-safety",
+        ):
+            with self.subTest(phrase=phrase):
+                self.assertIn(phrase, text)
+
+    def test_api_reference_documents_replication_jobs_contract(self):
+        api_doc = (ROOT / "docs/API.md").read_text(encoding="utf-8")
+        self.assertEqual(
+            api_doc.encode("utf-8"),
+            (ROOT / "frontend-modern/public/docs/API.md").read_bytes(),
+        )
+        section = api_doc.split("### Proxmox Replication Jobs\n", 1)[1].split("\n---", 1)[0]
+        handler = (ROOT / "internal/api/replication.go").read_text(encoding="utf-8")
+        model = (ROOT / "internal/models/models.go").read_text(encoding="utf-8")
+        self.assertIn("GET /api/replication/jobs", section)
+        self.assertIn("monitoring:read", section)
+        self.assertIn('r.mux.HandleFunc("/api/replication/jobs"', handler)
+        self.assertIn("config.ScopeMonitoringRead", handler)
+        for param in ("platform", "instance", "guest"):
+            with self.subTest(param=param):
+                self.assertIn(f"`{param}`", section)
+                self.assertIn(f'query.Get("{param}")', handler)
+        self.assertIn('case "proxmox", "proxmox-pve", "pve":', handler)
+        self.assertIn("unknown platform token returns an empty `data` list", " ".join(section.split()))
+        self.assertIn('`lastPolled`', section)
+        self.assertIn('`json:"lastPolled"`', model)
+        self.assertIn("no per-job source-health envelope", " ".join(section.split()))
+
+
 if __name__ == "__main__":
     unittest.main()
