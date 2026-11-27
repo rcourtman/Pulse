@@ -908,7 +908,9 @@ func findDetectedPVEInstance(cfg *config.Config, probed *config.PVEInstance) *co
 // maybeRefreshClusterInfo retries cluster detection for the connection that
 // instance is a copy of and stores the result on that connection.
 func (h *ConfigHandlers) maybeRefreshClusterInfo(ctx context.Context, instance config.PVEInstance) {
-	if shouldSkipClusterAutoDetection(instance.Host, instance.Name) {
+	// Listing saved configuration must not contact a paused connection.
+	// An explicitly requested test or refresh has its own handler.
+	if instance.Disabled || shouldSkipClusterAutoDetection(instance.Host, instance.Name) {
 		return
 	}
 
@@ -961,11 +963,11 @@ func (h *ConfigHandlers) maybeRefreshClusterInfo(ctx context.Context, instance c
 
 	config.Mu.Lock()
 	current := findDetectedPVEInstance(h.getConfig(ctx), &instance)
-	if current == nil {
+	if current == nil || current.Disabled {
 		config.Mu.Unlock()
 		log.Info().
 			Str("instance", instance.Name).
-			Msg("Discarded cluster validation retry for a connection that was removed or changed meanwhile")
+			Msg("Discarded cluster validation retry for a connection that was removed, changed, or paused meanwhile")
 		return
 	}
 	current.IsCluster = true

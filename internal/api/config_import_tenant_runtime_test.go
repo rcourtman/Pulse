@@ -105,7 +105,7 @@ func TestConfigImportAppliesOnlySelectedTenant(t *testing.T) {
 		t.Fatal(err)
 	}
 	afterCfg := after.GetConfig()
-	if len(afterCfg.PVEInstances) != 1 || afterCfg.PVEInstances[0].Name != "restored" || afterCfg.PVEInstances[0].TokenValue != "synthetic-restored-node-secret" {
+	if len(afterCfg.PVEInstances) != 1 || afterCfg.PVEInstances[0].Name != "restored" || !afterCfg.PVEInstances[0].Disabled || afterCfg.PVEInstances[0].TokenValue != "synthetic-restored-node-secret" {
 		t.Error("selected tenant runtime did not apply only its imported nodes/credentials")
 	}
 	if afterCfg.PublicURL != beforeDefault.PublicURL || afterCfg.PBSPollingInterval != beforeDefault.PBSPollingInterval {
@@ -251,8 +251,8 @@ func logConfigImportNodes(t *testing.T, router *Router, orgID, token, phase stri
 	if phase == "after" && orgID == "tenant-a" {
 		expectedName = "restored"
 	}
-	if len(nodes) != 1 || nodes[0].Name != expectedName || nodes[0].Host != configImportNodeHost(expectedName) || !nodes[0].HasToken || !nodes[0].VerifySSL {
-		t.Errorf("%s %s consuming node API did not return its own trusted connection", phase, orgID)
+	if len(nodes) != 1 || nodes[0].Name != expectedName || nodes[0].Host != configImportNodeHost(expectedName) || nodes[0].Enabled || !nodes[0].HasToken || !nodes[0].VerifySSL {
+		t.Errorf("%s %s consuming node API did not return its own paused, trusted connection", phase, orgID)
 	}
 	if bytes.Contains(rec.Body.Bytes(), []byte("synthetic-"+expectedName+"-node-secret")) {
 		t.Error("node API exposed the stored credential")
