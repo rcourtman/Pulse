@@ -28,6 +28,7 @@ In Docker and Kubernetes you must expose `9091` explicitly if you want to scrape
 | `pulse_http_request_duration_seconds` | Histogram | Latency buckets by `method`, `route`, `status`. |
 | `pulse_http_requests_total` | Counter | Total requests by `method`, `route`, `status`. |
 | `pulse_http_request_errors_total` | Counter | Error totals by `method`, `route`, `status_class` (`client_error`, `server_error`, `none`). |
+| `pulse_http_deprecated_api_usage_total` | Counter | Requests routed through deprecated API compatibility paths by `feature` and `route`. |
 
 On builds that report registered route patterns, `route` identifies the
 pattern (for example `/api/state` or `/api/orgs/{id}`) rather than the
@@ -305,6 +306,65 @@ Example rollout alerts:
 - `increase(pulse_operational_trust_active_count_mismatch_total[15m]) > 0`
 - `increase(pulse_operational_trust_notification_delivery_total{outcome="dead_letter"}[15m]) > 0`
 - `increase(pulse_operational_trust_action_verification_total{outcome=~"contradicted|timed_out"}[30m]) > 0`
+
+## AI Runtime & Patrol
+
+AI and Patrol metrics initialize lazily when the server records its first AI loop, Patrol, or attention observation. A missing series before Patrol runs is not a scrape failure.
+
+| Metric | Type | Description |
+| :--- | :--- | :--- |
+| `pulse_ai_agentic_iterations_total` | Counter | Agentic LLM loop turns by `provider` and `model`. |
+| `pulse_ai_strict_resolution_block_total` | Counter | Actions blocked because the target resource was not resolved, by `tool` and `action`. |
+| `pulse_ai_routing_mismatch_block_total` | Counter | Operations blocked for targeting a parent host instead of a child resource, by `tool`, `target_kind`, and `child_kind`. |
+| `pulse_ai_phantom_detected_total` | Counter | Detected phantom execution claims by `provider` and `model`. |
+| `pulse_patrol_run_total` | Counter | Patrol runs by `trigger` and `type` (`full` or `scoped`). |
+| `pulse_patrol_circuit_block_total` | Counter | Patrol runs blocked by the AI provider circuit breaker. |
+| `pulse_patrol_finding_rejected_total` | Counter | Findings rejected by threshold validation, by `resource_type` and `metric`. |
+| `pulse_patrol_investigation_outcome_total` | Counter | Patrol investigation completions by `outcome`. |
+| `pulse_patrol_fix_verification_total` | Counter | Patrol fix verification results by `result`. |
+| `pulse_patrol_triage_flags` | Histogram | Deterministic triage flags produced per Patrol run. |
+| `pulse_patrol_triage_quiet_total` | Counter | Patrol runs recorded as quiet infrastructure with no triage flags and no active findings. |
+| `pulse_patrol_scoped_dropped_total` | Counter | Scoped Patrol runs dropped because another run was already in progress. |
+| `pulse_patrol_scoped_dropped_final_total` | Counter | Scoped Patrol runs permanently dropped after exhausting retries. |
+| `pulse_patrol_stream_resume_outcome_total` | Counter | Patrol event-stream subscriber resume outcomes by `outcome`. |
+| `pulse_patrol_stream_resync_reason_total` | Counter | Synthetic Patrol stream snapshots by `reason`. |
+| `pulse_patrol_stream_replay_events_total` | Counter | Patrol stream events replayed to resuming subscribers. |
+| `pulse_patrol_stream_replay_batch_size` | Histogram | Patrol stream replay batch size per subscriber sync. |
+| `pulse_patrol_stream_subscriber_drop_total` | Counter | Patrol stream subscribers dropped by `reason`. |
+| `pulse_patrol_attention_items` | Gauge | Current Patrol attention item count by canonical lifecycle `state`. |
+| `pulse_patrol_attention_oldest_age_seconds` | Gauge | Age in seconds of the oldest active Patrol attention item. |
+| `pulse_patrol_attention_acknowledgement_latest_seconds` | Gauge | Elapsed seconds from first observation to the newest current acknowledgement. |
+| `pulse_patrol_calm_evaluation_timestamp_seconds` | Gauge | Unix timestamp of the latest canonical Patrol calm-day evaluation. |
+
+## Database, Discovery & Access
+
+Database and RBAC metrics initialize lazily on their first wrapped database or RBAC event. Discovery metrics register at startup.
+
+| Metric | Type | Description |
+| :--- | :--- | :--- |
+| `pulse_db_query_duration_seconds` | Histogram | Wrapped SQLite query execution time by `database` and `operation`. |
+| `pulse_db_slow_queries_total` | Counter | Wrapped database queries at or above 100 ms by `database` and `operation`. |
+| `pulse_discovery_scans_total` | Counter | Network discovery scans by `result`. |
+| `pulse_discovery_scan_duration_seconds` | Histogram | Network discovery scan duration in seconds. |
+| `pulse_discovery_last_scan_servers` | Gauge | Servers found in the most recent discovery scan. |
+| `pulse_discovery_last_scan_errors` | Gauge | Errors encountered in the most recent discovery scan. |
+| `pulse_rbac_managers_active` | Gauge | Active tenant RBAC manager instances in cache. |
+| `pulse_rbac_role_mutations_total` | Counter | RBAC role mutations by `action` (`create`, `update`, `delete`, `deprovision`, `assign`). |
+| `pulse_rbac_integrity_checks_total` | Counter | RBAC integrity checks by `result` (`healthy`, `unhealthy`). |
+
+## Unified Agent Metrics (`127.0.0.1:9191/metrics`)
+
+The `pulse-agent` binary exposes its own Prometheus endpoint on each monitored host, separate from the Pulse server listener on port `9091`. By default it binds to `127.0.0.1:9191` and can be changed with `--health-addr` or disabled with `--health-addr ""` or `PULSE_HEALTH_ADDR=off` (see [Agent Security](../AGENT_SECURITY.md#agent-privilege-model)).
+
+| Metric | Type | Description |
+| :--- | :--- | :--- |
+| `pulse_agent_info` | Gauge | Agent metadata labeled by `version`, `host_enabled`, `docker_enabled`, and `kubernetes_enabled`. |
+| `pulse_agent_up` | Gauge | Agent liveness (`1` = up, `0` = down). |
+| `pulse_agent_module_enabled` | Gauge | Whether each agent `module` is configured to run (`1` or `0`). |
+| `pulse_agent_module_ready` | Gauge | Whether each configured agent `module` initialized successfully (`1` or `0`). |
+| `pulse_agent_destination_configured` | Gauge | Configured Pulse report destinations by `module`, `destination`, and `role`. |
+| `pulse_agent_destination_delivery_up` | Gauge | Whether the most recent report delivery to a Pulse destination succeeded (`1` or `0`), by `module`, `destination`, and `role`. |
+| `pulse_hostagent_command_approval_grant_rejections_total` | Counter | Approval-required commands rejected by the host agent due to invalid approval grants, by `reason`. |
 
 ## 🚨 Alerting Examples
 - **High Error Rate**: `rate(pulse_http_request_errors_total[5m]) > 0.05`
