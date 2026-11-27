@@ -20,7 +20,7 @@ import (
 func TestPollPVEInstanceCommitsClusterIdentityOnFirstPoll(t *testing.T) {
 	originalDetect := detectMonitorPVECluster
 	t.Cleanup(func() { detectMonitorPVECluster = originalDetect })
-	detectMonitorPVECluster = func(clientConfig proxmox.ClientConfig, existingEndpoints []config.ClusterEndpoint) (bool, string, []config.ClusterEndpoint) {
+	detectMonitorPVECluster = func(_ context.Context, clientConfig proxmox.ClientConfig, existingEndpoints []config.ClusterEndpoint) (bool, string, []config.ClusterEndpoint) {
 		return true, "rewo", []config.ClusterEndpoint{
 			{NodeID: "node/pve01", NodeName: "pve01", Host: "https://192.168.1.11:8006", IP: "192.168.1.11", Online: true, LastSeen: time.Now()},
 		}

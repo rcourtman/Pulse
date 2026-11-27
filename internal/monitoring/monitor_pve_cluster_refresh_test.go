@@ -35,7 +35,7 @@ func TestDetectClusterMembership_RefreshesStaleClusterEndpoints(t *testing.T) {
 	originalDetect := detectMonitorPVECluster
 	t.Cleanup(func() { detectMonitorPVECluster = originalDetect })
 
-	detectMonitorPVECluster = func(clientConfig proxmox.ClientConfig, existingEndpoints []config.ClusterEndpoint) (bool, string, []config.ClusterEndpoint) {
+	detectMonitorPVECluster = func(_ context.Context, clientConfig proxmox.ClientConfig, existingEndpoints []config.ClusterEndpoint) (bool, string, []config.ClusterEndpoint) {
 		return true, "MyCluster", []config.ClusterEndpoint{
 			// Same nodes, new subnet. 127.0.0.1:1 fails instantly (connection
 			// refused) so the rebuilt client's health check doesn't block.
@@ -97,7 +97,7 @@ func TestDetectClusterMembership_NoRefreshWhenEndpointsUnchanged(t *testing.T) {
 	originalDetect := detectMonitorPVECluster
 	t.Cleanup(func() { detectMonitorPVECluster = originalDetect })
 
-	detectMonitorPVECluster = func(clientConfig proxmox.ClientConfig, existingEndpoints []config.ClusterEndpoint) (bool, string, []config.ClusterEndpoint) {
+	detectMonitorPVECluster = func(_ context.Context, clientConfig proxmox.ClientConfig, existingEndpoints []config.ClusterEndpoint) (bool, string, []config.ClusterEndpoint) {
 		return true, "MyCluster", []config.ClusterEndpoint{
 			{NodeID: "node/proxmox0", NodeName: "proxmox0", Host: "https://proxmox0:8006", IP: "127.0.0.9", Online: true, LastSeen: time.Now()},
 		}
@@ -466,7 +466,7 @@ func TestPVEEndpointFingerprintFollowsPollingTrust(t *testing.T) {
 	originalDetect := detectMonitorPVECluster
 	t.Cleanup(func() { detectMonitorPVECluster = originalDetect })
 	var dialed []string
-	detectMonitorPVECluster = func(clientConfig proxmox.ClientConfig, _ []config.ClusterEndpoint) (bool, string, []config.ClusterEndpoint) {
+	detectMonitorPVECluster = func(_ context.Context, clientConfig proxmox.ClientConfig, _ []config.ClusterEndpoint) (bool, string, []config.ClusterEndpoint) {
 		dialed = append(dialed, clientConfig.Fingerprint)
 		return false, "", nil
 	}

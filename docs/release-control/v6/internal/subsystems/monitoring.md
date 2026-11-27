@@ -130,6 +130,16 @@ computed at scrape time from active claims, without taking a provider,
 monitor or queue lock. An expired context does not end a claim that has
 not returned. A returned failure in backoff is not an active claim.
 
+Proxmox runtime cluster discovery is part of its poll: temporary client
+authentication, membership reads and retry delays stop on the poll context.
+While the poll is live, discovery still makes up to three five-second status
+reads with one- and two-second retry delays. An abandoned read supplies no
+new membership; successful discovery uses the existing endpoint and identity
+rules. `TestPVEClusterDiscoveryReleasesCancelledProviderRequest` checks
+cancellation during real loopback password and token requests, and
+`TestPVEClusterDiscoveryRetryStopsAtPollDeadline` and
+`TestPVEClusterDiscoveryKeepsRetryAndAttemptBudgets` check the timer boundaries.
+
 Removing a due poll from the heap claims its provider type and connection
 within that monitor. Only one worker can own that key, including while waiting
 for a process slot. Periodic replanning cannot queue another attempt for a
