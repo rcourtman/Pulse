@@ -1,16 +1,12 @@
-import { Show, createMemo, type Component, type JSX } from 'solid-js';
-import { StatusDot } from '@/components/shared/StatusDot';
+import { createMemo, type Component, type JSX } from 'solid-js';
 import { TableCell, TableRow } from '@/components/shared/Table';
 import { ResourceNameWithWebInterfaceLink } from '@/components/shared/WebInterfaceLink';
 import { getSimpleStatusIndicator } from '@/utils/status';
 import { asTrimmedString } from '@/utils/stringUtils';
 import {
   PlatformWindowedRows,
-  PLATFORM_HEALTH_FILTER_OPTIONS,
   PlatformResponsiveTableLabel,
   PlatformSortableTableHead,
-  PlatformTableEmptyState,
-  PlatformTableToolbar,
   createPlatformTableFilterState,
   createPlatformTableSortState,
   formatPlatformTableTextValue,
@@ -18,11 +14,8 @@ import {
   summarizePlatformTableValues,
   PlatformTableShell,
   type PlatformTableSortValue,
-  withPlatformStatusCounts,
 } from '@/features/platformPage/sharedPlatformPage';
 import {
-  PlatformResourceDetailToggleButton,
-  PlatformResourceDetailTableRow,
   createPlatformResourceDetailState,
   createPlatformResourceLabelResolver,
   getPlatformResourceDetailRowClass,
@@ -35,6 +28,11 @@ import {
   isSingleKubernetesCluster,
 } from './kubernetesPageModel';
 import { KubernetesScopeText } from './KubernetesScopeText';
+import {
+  KubernetesDetailRow,
+  KubernetesRowLead,
+  KubernetesTableFrame,
+} from './KubernetesRecordDetail';
 
 // Services have a distinct API contract from Ingress and EndpointSlice:
 // operators need the Service type, virtual IP, exposed ports, node ports, and
@@ -129,210 +127,170 @@ export const KubernetesServicesTable: Component<{
   );
 
   return (
-    <Show
-      when={props.resources.length > 0}
-      fallback={
-        <PlatformTableEmptyState
-          icon={props.emptyIcon}
-          title={props.emptyTitle}
-          description={props.emptyDescription}
-        />
-      }
+    <KubernetesTableFrame
+      hasResources={props.resources.length > 0}
+      emptyIcon={props.emptyIcon}
+      emptyTitle={props.emptyTitle}
+      emptyDescription={props.emptyDescription}
+      showToolbar={props.showToolbar}
+      rowNoun="services"
+      filteredEmptyNoun="Kubernetes services"
+      tableState={tableState}
     >
-      <div class="space-y-3">
-        <Show when={props.showToolbar !== false}>
-          <PlatformTableToolbar
-            search={tableState.search}
-            onSearchChange={tableState.setSearch}
-            searchPlaceholder="Search services"
-            searchSuggestions={tableState.searchSuggestions}
-            status={tableState.status()}
-            onStatusChange={tableState.setStatus}
-            statusOptions={withPlatformStatusCounts(
-              PLATFORM_HEALTH_FILTER_OPTIONS,
-              tableState.countForStatus,
-            )}
-            visible={tableState.visible()}
-            total={tableState.total()}
-            rowNoun="services"
-          />
-        </Show>
+      <PlatformTableShell
+        title={props.title ?? 'Services'}
+        tableClass="min-w-full table-fixed text-xs md:min-w-[1120px]"
+        header={
+          <>
+            <PlatformSortableTableHead
+              kind="name"
+              sort={sort}
+              sortKey="service"
+              class="platform-table-mobile-w-30 kubernetes-service-name-column md:w-[22%]"
+            >
+              Service
+            </PlatformSortableTableHead>
+            <PlatformSortableTableHead
+              kind="text"
+              sort={sort}
+              sortKey="scope"
+              class="platform-table-mobile-w-15 md:w-[15%]"
+            >
+              Scope
+            </PlatformSortableTableHead>
+            <PlatformSortableTableHead
+              kind="text"
+              sort={sort}
+              sortKey="type"
+              class="platform-table-mobile-w-15 kubernetes-service-type-column md:w-[11%]"
+            >
+              <PlatformResponsiveTableLabel compact="Typ" full="Type" />
+            </PlatformSortableTableHead>
+            <PlatformSortableTableHead
+              kind="text"
+              sort={sort}
+              sortKey="clusterIp"
+              class="platform-table-phone-hidden kubernetes-service-ip-column md:w-[13%]"
+            >
+              <PlatformResponsiveTableLabel compact="IP" full="Cluster IP" />
+            </PlatformSortableTableHead>
+            <PlatformSortableTableHead
+              kind="text"
+              sort={sort}
+              class="platform-table-phone-hidden md:w-[13%]"
+            >
+              <PlatformResponsiveTableLabel compact="Ext IP" full="External IPs" />
+            </PlatformSortableTableHead>
+            <PlatformSortableTableHead
+              kind="text"
+              sort={sort}
+              class="platform-table-mobile-w-15 kubernetes-service-ports-column md:w-[16%]"
+            >
+              Ports
+            </PlatformSortableTableHead>
+            <PlatformSortableTableHead
+              kind="text"
+              sort={sort}
+              class="hidden md:table-cell md:w-[13%]"
+            >
+              Selector
+            </PlatformSortableTableHead>
+          </>
+        }
+        body={
+          <>
+            <PlatformWindowedRows items={sortedRows} estimatedRowHeight={32}>
+              {(resource) => {
+                const indicator = () => getSimpleStatusIndicator(resource.status);
+                const name = () => serviceName(resource);
+                const serviceType = () =>
+                  formatPlatformTableTextValue(resource.kubernetes?.serviceType);
+                const clusterIp = () =>
+                  formatPlatformTableTextValue(resource.kubernetes?.clusterIp);
+                const externalIps = () => externalIpSummary(resource);
+                const ports = () => portSummary(resource);
+                const selector = () => selectorSummary(resource);
+                const isExpanded = () => drawer.isExpanded(resource);
 
-        <Show
-          when={tableState.filtered().length > 0}
-          fallback={
-            <PlatformTableEmptyState
-              icon={props.emptyIcon}
-              title="No services match current filters"
-              description="Adjust the search or status filter to see more Kubernetes services."
-            />
-          }
-        >
-          <PlatformTableShell
-            title={props.title ?? 'Services'}
-            tableClass="min-w-full table-fixed text-xs md:min-w-[1120px]"
-            header={
-              <>
-                <PlatformSortableTableHead
-                  kind="name"
-                  sort={sort}
-                  sortKey="service"
-                  class="platform-table-mobile-w-30 kubernetes-service-name-column md:w-[22%]"
-                >
-                  Service
-                </PlatformSortableTableHead>
-                <PlatformSortableTableHead
-                  kind="text"
-                  sort={sort}
-                  sortKey="scope"
-                  class="platform-table-mobile-w-15 md:w-[15%]"
-                >
-                  Scope
-                </PlatformSortableTableHead>
-                <PlatformSortableTableHead
-                  kind="text"
-                  sort={sort}
-                  sortKey="type"
-                  class="platform-table-mobile-w-15 kubernetes-service-type-column md:w-[11%]"
-                >
-                  <PlatformResponsiveTableLabel compact="Typ" full="Type" />
-                </PlatformSortableTableHead>
-                <PlatformSortableTableHead
-                  kind="text"
-                  sort={sort}
-                  sortKey="clusterIp"
-                  class="platform-table-phone-hidden kubernetes-service-ip-column md:w-[13%]"
-                >
-                  <PlatformResponsiveTableLabel compact="IP" full="Cluster IP" />
-                </PlatformSortableTableHead>
-                <PlatformSortableTableHead
-                  kind="text"
-                  sort={sort}
-                  class="platform-table-phone-hidden md:w-[13%]"
-                >
-                  <PlatformResponsiveTableLabel compact="Ext IP" full="External IPs" />
-                </PlatformSortableTableHead>
-                <PlatformSortableTableHead
-                  kind="text"
-                  sort={sort}
-                  class="platform-table-mobile-w-15 kubernetes-service-ports-column md:w-[16%]"
-                >
-                  Ports
-                </PlatformSortableTableHead>
-                <PlatformSortableTableHead
-                  kind="text"
-                  sort={sort}
-                  class="hidden md:table-cell md:w-[13%]"
-                >
-                  Selector
-                </PlatformSortableTableHead>
-              </>
-            }
-            body={
-              <>
-                <PlatformWindowedRows items={sortedRows} estimatedRowHeight={32}>
-                  {(resource) => {
-                    const indicator = () => getSimpleStatusIndicator(resource.status);
-                    const name = () => serviceName(resource);
-                    const serviceType = () =>
-                      formatPlatformTableTextValue(resource.kubernetes?.serviceType);
-                    const clusterIp = () =>
-                      formatPlatformTableTextValue(resource.kubernetes?.clusterIp);
-                    const externalIps = () => externalIpSummary(resource);
-                    const ports = () => portSummary(resource);
-                    const selector = () => selectorSummary(resource);
-                    const detailRowId = () => drawer.detailRowId(resource);
-                    const isExpanded = () => drawer.isExpanded(resource);
-
-                    return (
-                      <>
-                        <TableRow
-                          class={`${getPlatformResourceDetailRowClass(isExpanded())} text-[11px] sm:text-xs`}
-                          data-kubernetes-service-row={resource.id}
-                          onClick={() => drawer.toggle(resource)}
-                        >
-                          <TableCell class={getPlatformTableCellClassForKind('name')}>
-                            <div class="flex min-w-0 items-center gap-2">
-                              <PlatformResourceDetailToggleButton
-                                expanded={isExpanded()}
-                                resourceLabel={name()}
-                                controlsId={detailRowId()}
-                                onToggle={() => drawer.toggle(resource)}
-                              />
-                              <StatusDot
-                                size="sm"
-                                variant={indicator().variant}
-                                title={resource.status || 'unknown'}
-                                ariaHidden
-                              />
-                              <ResourceNameWithWebInterfaceLink
-                                name={name()}
-                                url={resource.customUrl}
-                                class="min-w-0"
-                                nameClass="kubernetes-service-name-value truncate font-semibold text-base-content"
-                              />
-                            </div>
-                          </TableCell>
-                          <TableCell
-                            class={`${getPlatformTableCellClassForKind('text')} text-base-content`}
-                          >
-                            <KubernetesScopeText
-                              resource={resource}
-                              singleCluster={singleCluster()}
-                              class="block truncate"
-                            />
-                          </TableCell>
-                          <TableCell
-                            class={`${getPlatformTableCellClassForKind('text')} text-base-content`}
-                          >
-                            {serviceType()}
-                          </TableCell>
-                          <TableCell
-                            class={`${getPlatformTableCellClassForKind('text')} platform-table-phone-hidden text-base-content`}
-                          >
-                            {clusterIp()}
-                          </TableCell>
-                          <TableCell
-                            class={`${getPlatformTableCellClassForKind('text')} platform-table-phone-hidden text-base-content`}
-                          >
-                            <span class="block truncate" title={externalIps().title}>
-                              {externalIps().label}
-                            </span>
-                          </TableCell>
-                          <TableCell
-                            class={`${getPlatformTableCellClassForKind('text')} text-base-content`}
-                          >
-                            <span class="block truncate" title={ports().title}>
-                              {ports().label}
-                            </span>
-                          </TableCell>
-                          <TableCell
-                            class={`${getPlatformTableCellClassForKind('text')} hidden text-base-content md:table-cell`}
-                          >
-                            <span class="block truncate" title={selector().title}>
-                              {selector().label}
-                            </span>
-                          </TableCell>
-                        </TableRow>
-                        <PlatformResourceDetailTableRow
+                return (
+                  <>
+                    <TableRow
+                      class={`${getPlatformResourceDetailRowClass(isExpanded())} text-[11px] sm:text-xs`}
+                      data-kubernetes-service-row={resource.id}
+                      onClick={() => drawer.toggle(resource)}
+                    >
+                      <TableCell class={getPlatformTableCellClassForKind('name')}>
+                        <KubernetesRowLead
                           resource={resource}
-                          statusIndicator={indicator()}
-                          open={isExpanded()}
-                          detailRowId={detailRowId()}
-                          colSpan={7}
-                          resolveResourceLabel={resolveResourceLabel}
-                          onClose={() => drawer.close(resource)}
+                          drawer={drawer}
+                          label={name()}
+                          status={indicator()}
+                          dotTitle={resource.status || 'unknown'}
+                        >
+                          <ResourceNameWithWebInterfaceLink
+                            name={name()}
+                            url={resource.customUrl}
+                            class="min-w-0"
+                            nameClass="kubernetes-service-name-value truncate font-semibold text-base-content"
+                          />
+                        </KubernetesRowLead>
+                      </TableCell>
+                      <TableCell
+                        class={`${getPlatformTableCellClassForKind('text')} text-base-content`}
+                      >
+                        <KubernetesScopeText
+                          resource={resource}
+                          singleCluster={singleCluster()}
+                          class="block truncate"
                         />
-                      </>
-                    );
-                  }}
-                </PlatformWindowedRows>
-              </>
-            }
-          />
-        </Show>
-      </div>
-    </Show>
+                      </TableCell>
+                      <TableCell
+                        class={`${getPlatformTableCellClassForKind('text')} text-base-content`}
+                      >
+                        {serviceType()}
+                      </TableCell>
+                      <TableCell
+                        class={`${getPlatformTableCellClassForKind('text')} platform-table-phone-hidden text-base-content`}
+                      >
+                        {clusterIp()}
+                      </TableCell>
+                      <TableCell
+                        class={`${getPlatformTableCellClassForKind('text')} platform-table-phone-hidden text-base-content`}
+                      >
+                        <span class="block truncate" title={externalIps().title}>
+                          {externalIps().label}
+                        </span>
+                      </TableCell>
+                      <TableCell
+                        class={`${getPlatformTableCellClassForKind('text')} text-base-content`}
+                      >
+                        <span class="block truncate" title={ports().title}>
+                          {ports().label}
+                        </span>
+                      </TableCell>
+                      <TableCell
+                        class={`${getPlatformTableCellClassForKind('text')} hidden text-base-content md:table-cell`}
+                      >
+                        <span class="block truncate" title={selector().title}>
+                          {selector().label}
+                        </span>
+                      </TableCell>
+                    </TableRow>
+                    <KubernetesDetailRow
+                      resource={resource}
+                      statusIndicator={indicator()}
+                      drawer={drawer}
+                      colSpan={7}
+                      resolveResourceLabel={resolveResourceLabel}
+                    />
+                  </>
+                );
+              }}
+            </PlatformWindowedRows>
+          </>
+        }
+      />
+    </KubernetesTableFrame>
   );
 };
 

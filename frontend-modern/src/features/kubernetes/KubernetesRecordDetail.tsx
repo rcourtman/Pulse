@@ -1,4 +1,4 @@
-import { type Component, type JSX } from 'solid-js';
+import { Show, type Component, type ComponentProps, type JSX } from 'solid-js';
 import {
   InlineDetailPanel,
   compactDetailRows,
@@ -6,14 +6,241 @@ import {
   makeDetailRow,
   type DetailSection,
 } from '@/components/shared/DetailSectionTable';
+import { InlineNotice } from '@/components/shared/InlineNotice';
+import { ResponsiveMetricCell } from '@/components/shared/responsive';
+import { StatusDot } from '@/components/shared/StatusDot';
+import { TableCell } from '@/components/shared/Table';
+import { StackedMemoryBar } from '@/components/Workloads/StackedMemoryBar';
+import { unifiedPlatformOverrideIdCandidates } from '@/features/alerts/alertOverridesModel';
 import { RecordOwnerLink } from '@/features/platformPage/RecordOwnerLink';
 import type { ResourcePageSubject } from '@/features/platformNavigation/resourcePagePath';
+import { useAlertsActivation } from '@/stores/alertsActivation';
 import type { Resource } from '@/types/resource';
+import { buildMetricKeyForUnifiedResource } from '@/utils/metricsKeys';
 import { useRelativeTimeNow } from '@/utils/relativeTimeClock';
 import type { StatusIndicator } from '@/utils/status';
 import { asTrimmedString } from '@/utils/stringUtils';
-import { kubernetesClusterLabel, mapKubernetesEventSeverity } from './kubernetesPageModel';
+import {
+  PlatformResourceDetailTableRow,
+  PlatformResourceDetailToggleButton,
+  type PlatformResourceDetailState,
+} from '@/features/platformPage/PlatformResourceDetailTableRow';
+import {
+  PLATFORM_HEALTH_FILTER_OPTIONS,
+  PlatformTableEmptyState,
+  PlatformTableMetricFallback,
+  PlatformTableToolbar,
+  getPlatformTableCellClassForKind,
+  getPlatformTableFiniteMetric,
+  type PlatformTableFilterOption,
+  withPlatformStatusCounts,
+} from '@/features/platformPage/sharedPlatformPage';
+import {
+  KUBERNETES_STALE_READINGS_LABEL,
+  describeKubernetesStaleReadings,
+  kubernetesClusterLabel,
+  mapKubernetesEventSeverity,
+  type KubernetesResourceStatusFilter,
+} from './kubernetesPageModel';
 import { makeDetailTimestampRow } from '@/features/platformPage/platformDetailTimestampRow';
+
+export const getKubernetesMemorySortValue = (resource: Resource): number | null => {
+  const total = getPlatformTableFiniteMetric(resource.memory?.total) ?? 0;
+  if (total > 0) {
+    return ((getPlatformTableFiniteMetric(resource.memory?.used) ?? 0) / total) * 100;
+  }
+  return getPlatformTableFiniteMetric(resource.memory?.current) ?? null;
+};
+
+export const KubernetesCpuMemoryCells: Component<{
+  resource: Resource;
+  canRenderMetrics: boolean;
+}> = (props) => {
+  const alertsActivation = useAlertsActivation();
+  const alertResourceIds = () => unifiedPlatformOverrideIdCandidates(props.resource);
+  const cpuPercent = () => getPlatformTableFiniteMetric(props.resource.cpu?.current);
+  const memoryTotal = () => getPlatformTableFiniteMetric(props.resource.memory?.total) ?? 0;
+  const memoryUsed = () => getPlatformTableFiniteMetric(props.resource.memory?.used) ?? 0;
+  const memoryPercentOnly = () =>
+    memoryTotal() > 0 ? undefined : getPlatformTableFiniteMetric(props.resource.memory?.current);
+  const metricCellClass = `${getPlatformTableCellClassForKind('metric-bar')} w-[20%] md:w-auto`;
+  return (
+    <>
+      <TableCell class={metricCellClass}>
+        <ResponsiveMetricCell
+          class="w-full"
+          value={cpuPercent() ?? 0}
+          type="cpu"
+          resourceId={buildMetricKeyForUnifiedResource(props.resource)}
+          isRunning={props.canRenderMetrics && cpuPercent() !== undefined}
+          showMobile={false}
+          thresholds={alertsActivation.getMetricThresholds('kubernetes', 'cpu', alertResourceIds())}
+        />
+      </TableCell>
+      <TableCell class={metricCellClass}>
+        <Show
+          when={props.canRenderMetrics && (memoryTotal() > 0 || memoryPercentOnly() !== undefined)}
+          fallback={<PlatformTableMetricFallback />}
+        >
+          <StackedMemoryBar
+            used={memoryUsed()}
+            total={memoryTotal()}
+            percentOnly={memoryPercentOnly()}
+            thresholds={alertsActivation.getMetricThresholds(
+              'kubernetes',
+              'memory',
+              alertResourceIds(),
+            )}
+          />
+        </Show>
+      </TableCell>
+    </>
+  );
+};
+
+export const KubernetesStaleDataCue: Component<{ when: boolean; scope: string }> = (props) => (
+  <Show when={props.when}>
+    <span
+      class="block truncate text-[11px] font-medium text-amber-700 dark:text-amber-300"
+      data-kubernetes-stale={props.scope}
+    >
+      {KUBERNETES_STALE_READINGS_LABEL}
+    </span>
+  </Show>
+);
+
+export const KubernetesRowLead: Component<{
+  resource: Resource;
+  drawer: PlatformResourceDetailState;
+  label: string;
+  status: StatusIndicator;
+  dotTitle?: string;
+  children?: JSX.Element;
+}> = (props) => (
+  <div class="flex min-w-0 items-center gap-2">
+    <PlatformResourceDetailToggleButton
+      expanded={props.drawer.isExpanded(props.resource)}
+      resourceLabel={props.label}
+      controlsId={props.drawer.detailRowId(props.resource)}
+      onToggle={() => props.drawer.toggle(props.resource)}
+    />
+    <StatusDot
+      size="sm"
+      variant={props.status.variant}
+      title={props.dotTitle ?? props.status.label}
+      ariaHidden
+    />
+    {props.children ?? (
+      <span class="truncate font-semibold text-base-content" title={props.label}>
+        {props.label}
+      </span>
+    )}
+  </div>
+);
+
+export const KubernetesDetailRow: Component<{
+  resource: Resource;
+  statusIndicator: StatusIndicator;
+  drawer: PlatformResourceDetailState;
+  colSpan: number;
+  resolveResourceLabel?: (resourceId: string) => string | null | undefined;
+}> = (props) => {
+  const staleMessage = () => describeKubernetesStaleReadings(props.resource);
+  return (
+    <PlatformResourceDetailTableRow
+      resource={props.resource}
+      statusIndicator={props.statusIndicator}
+      open={props.drawer.isExpanded(props.resource)}
+      detailRowId={props.drawer.detailRowId(props.resource)}
+      colSpan={props.colSpan}
+      resolveResourceLabel={props.resolveResourceLabel}
+      context={
+        <Show when={staleMessage()}>
+          <div class="mb-3" data-testid="kubernetes-stale-readings-notice">
+            <InlineNotice tone="warning" role="status">
+              <span class="font-medium">{KUBERNETES_STALE_READINGS_LABEL}.</span> {staleMessage()}
+            </InlineNotice>
+          </div>
+        </Show>
+      }
+      onClose={() => props.drawer.close(props.resource)}
+    />
+  );
+};
+
+export function KubernetesTableFrame<
+  Status extends string = KubernetesResourceStatusFilter,
+>(props: {
+  hasResources: boolean;
+  emptyIcon: JSX.Element;
+  emptyTitle: string;
+  emptyDescription: string;
+  showToolbar?: boolean;
+  rowNoun: string;
+  searchPlaceholder?: string;
+  filteredEmptyTitle?: string;
+  filteredEmptyNoun?: string;
+  statusOptions?: readonly PlatformTableFilterOption<Status>[];
+  tableState: {
+    search: () => string;
+    setSearch: (value: string) => void;
+    searchSuggestions: ComponentProps<typeof PlatformTableToolbar>['searchSuggestions'];
+    status: () => Status;
+    setStatus: (value: Status) => void;
+    countForStatus: (value: Status) => number;
+    visible: () => number;
+    total: () => number;
+    filtered: () => Resource[];
+  };
+  children: JSX.Element;
+}) {
+  return (
+    <Show
+      when={props.hasResources}
+      fallback={
+        <PlatformTableEmptyState
+          icon={props.emptyIcon}
+          title={props.emptyTitle}
+          description={props.emptyDescription}
+        />
+      }
+    >
+      <div class="space-y-3">
+        <Show when={props.showToolbar !== false}>
+          <PlatformTableToolbar
+            search={props.tableState.search}
+            onSearchChange={props.tableState.setSearch}
+            searchPlaceholder={props.searchPlaceholder ?? `Search ${props.rowNoun}`}
+            searchSuggestions={props.tableState.searchSuggestions}
+            status={props.tableState.status()}
+            onStatusChange={props.tableState.setStatus}
+            statusOptions={withPlatformStatusCounts(
+              (props.statusOptions ??
+                PLATFORM_HEALTH_FILTER_OPTIONS) as readonly PlatformTableFilterOption<Status>[],
+              props.tableState.countForStatus,
+            )}
+            visible={props.tableState.visible()}
+            total={props.tableState.total()}
+            rowNoun={props.rowNoun}
+          />
+        </Show>
+
+        <Show
+          when={props.tableState.filtered().length > 0}
+          fallback={
+            <PlatformTableEmptyState
+              icon={props.emptyIcon}
+              title={props.filteredEmptyTitle ?? `No ${props.rowNoun} match current filters`}
+              description={`Adjust the search or status filter to see more ${props.filteredEmptyNoun ?? props.rowNoun}.`}
+            />
+          }
+        >
+          {props.children}
+        </Show>
+      </div>
+    </Show>
+  );
+}
 
 // Events, ConfigMaps, Secrets, RBAC objects and namespace policies are
 // records about a cluster, not objects Pulse monitors: they carry no alerts,

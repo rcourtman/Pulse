@@ -1,22 +1,11 @@
 import { Show, createMemo, type Component, type JSX } from 'solid-js';
-import { StatusDot } from '@/components/shared/StatusDot';
-import { ResponsiveMetricCell } from '@/components/shared/responsive';
-import { StackedMemoryBar } from '@/components/Workloads/StackedMemoryBar';
 import { TableCell, TableRow } from '@/components/shared/Table';
 import { ResourceNameWithWebInterfaceLink } from '@/components/shared/WebInterfaceLink';
-import { buildMetricKeyForUnifiedResource } from '@/utils/metricsKeys';
-import { getSimpleStatusIndicator } from '@/utils/status';
 import { asTrimmedString } from '@/utils/stringUtils';
-import { useAlertsActivation } from '@/stores/alertsActivation';
-import { unifiedPlatformOverrideIdCandidates } from '@/features/alerts/alertOverridesModel';
 import {
   PlatformWindowedRows,
-  PLATFORM_HEALTH_FILTER_OPTIONS,
   PlatformSortableTableHead,
   PlatformTableCountRatioValue,
-  PlatformTableMetricFallback,
-  PlatformTableToolbar,
-  PlatformTableEmptyState,
   PlatformResponsiveTableLabel,
   createPlatformTableFilterState,
   createPlatformTableSortState,
@@ -25,11 +14,8 @@ import {
   getPlatformTableCellClassForKind,
   PlatformTableShell,
   type PlatformTableSortValue,
-  withPlatformStatusCounts,
 } from '@/features/platformPage/sharedPlatformPage';
 import {
-  PlatformResourceDetailToggleButton,
-  PlatformResourceDetailTableRow,
   createPlatformResourceDetailState,
   createPlatformResourceLabelResolver,
   getPlatformResourceDetailRowClass,
@@ -39,8 +25,18 @@ import {
   buildKubernetesClusterChildCounts,
   emptyKubernetesClusterChildCounts,
   filterKubernetesResources,
+  hasStaleKubernetesReadings,
+  mapKubernetesClusterStatus,
   type KubernetesResourceStatusFilter,
 } from './kubernetesPageModel';
+import {
+  KubernetesCpuMemoryCells,
+  KubernetesDetailRow,
+  KubernetesRowLead,
+  KubernetesStaleDataCue,
+  KubernetesTableFrame,
+  getKubernetesMemorySortValue,
+} from './KubernetesRecordDetail';
 
 // Kubernetes clusters are control-plane aggregates, not single processes —
 // they have no per-cluster Disk I/O / Uptime / Temperature concepts that
@@ -79,7 +75,6 @@ export const KubernetesClustersTable: Component<{
   selectedClusterId?: string;
   onSelectCluster?: (cluster: Resource) => void;
 }> = (props) => {
-  const alertsActivation = useAlertsActivation();
   const tableState = createPlatformTableFilterState({
     resources: () => props.clusters,
     initialStatus: 'all' as KubernetesResourceStatusFilter,
@@ -122,13 +117,8 @@ export const KubernetesClustersTable: Component<{
         return countsByCluster().get(cluster.id)?.deployments.total ?? null;
       case 'cpu':
         return getPlatformTableFiniteMetric(cluster.cpu?.current) ?? null;
-      case 'memory': {
-        const total = getPlatformTableFiniteMetric(cluster.memory?.total) ?? 0;
-        if (total > 0) {
-          return ((getPlatformTableFiniteMetric(cluster.memory?.used) ?? 0) / total) * 100;
-        }
-        return getPlatformTableFiniteMetric(cluster.memory?.current) ?? null;
-      }
+      case 'memory':
+        return getKubernetesMemorySortValue(cluster);
       default:
         key satisfies never;
         return null;
@@ -137,178 +127,122 @@ export const KubernetesClustersTable: Component<{
   const sortedRows = createMemo(() => sort.sortRows(tableState.filtered(), getClusterSortValue));
 
   return (
-    <Show
-      when={props.clusters.length > 0}
-      fallback={
-        <PlatformTableEmptyState
-          icon={props.emptyIcon}
-          title={props.emptyTitle}
-          description={props.emptyDescription}
-        />
-      }
+    <KubernetesTableFrame
+      hasResources={props.clusters.length > 0}
+      emptyIcon={props.emptyIcon}
+      emptyTitle={props.emptyTitle}
+      emptyDescription={props.emptyDescription}
+      showToolbar={props.showToolbar}
+      rowNoun="clusters"
+      tableState={tableState}
     >
-      <div class="space-y-3">
-        <Show when={props.showToolbar !== false}>
-          <PlatformTableToolbar
-            search={tableState.search}
-            onSearchChange={tableState.setSearch}
-            searchPlaceholder="Search clusters"
-            searchSuggestions={tableState.searchSuggestions}
-            status={tableState.status()}
-            onStatusChange={tableState.setStatus}
-            statusOptions={withPlatformStatusCounts(
-              PLATFORM_HEALTH_FILTER_OPTIONS,
-              tableState.countForStatus,
-            )}
-            visible={tableState.visible()}
-            total={tableState.total()}
-            rowNoun="clusters"
-          />
-        </Show>
-
-        <Show
-          when={tableState.filtered().length > 0}
-          fallback={
-            <PlatformTableEmptyState
-              icon={props.emptyIcon}
-              title="No clusters match current filters"
-              description="Adjust the search or status filter to see more clusters."
-            />
-          }
-        >
-          <PlatformTableShell
-            title={props.title ?? 'Clusters'}
-            tableClass="min-w-full table-fixed text-xs md:min-w-[1040px]"
-            header={
-              <>
-                <PlatformSortableTableHead
-                  kind="name"
-                  sort={sort}
-                  sortKey="cluster"
-                  class="platform-table-mobile-w-30 md:w-[17%]"
-                >
-                  Cluster
-                </PlatformSortableTableHead>
-                <PlatformSortableTableHead
-                  kind="text"
-                  sort={sort}
-                  sortKey="context"
-                  class="hidden md:table-cell md:w-[15%]"
-                >
-                  Context
-                </PlatformSortableTableHead>
-                <PlatformSortableTableHead
-                  kind="text"
-                  sort={sort}
-                  sortKey="version"
-                  class="platform-table-phone-hidden md:w-[10%]"
-                >
-                  <PlatformResponsiveTableLabel compact="Ver" full="Version" />
-                </PlatformSortableTableHead>
-                <PlatformSortableTableHead
-                  kind="metric-bar"
-                  sort={sort}
-                  sortKey="cpu"
-                  class="platform-table-mobile-w-20 md:w-[15%]"
-                >
-                  CPU
-                </PlatformSortableTableHead>
-                <PlatformSortableTableHead
-                  kind="metric-bar"
-                  sort={sort}
-                  sortKey="memory"
-                  class="platform-table-mobile-w-20 md:w-[15%]"
-                >
-                  <PlatformResponsiveTableLabel compact="Mem" full="Memory" />
-                </PlatformSortableTableHead>
-                <PlatformSortableTableHead
-                  kind="numeric-value"
-                  sort={sort}
-                  sortKey="nodes"
-                  class="platform-table-mobile-w-15 md:w-[8%]"
-                >
-                  <PlatformResponsiveTableLabel compact="Nds" full="Nodes" />
-                </PlatformSortableTableHead>
-                <PlatformSortableTableHead
-                  kind="numeric-value"
-                  sort={sort}
-                  sortKey="pods"
-                  class="platform-table-mobile-w-15 md:w-[8%] platform-table-narrow-hidden"
-                >
-                  Pods
-                </PlatformSortableTableHead>
-                <PlatformSortableTableHead
-                  kind="numeric-value"
-                  sort={sort}
-                  sortKey="deployments"
-                  class="hidden md:table-cell md:w-[12%]"
-                >
-                  Deployments
-                </PlatformSortableTableHead>
-              </>
-            }
-            body={
-              <>
-                <PlatformWindowedRows items={sortedRows} estimatedRowHeight={32}>
-                  {(cluster) => {
-                    const name = () =>
-                      asTrimmedString(cluster.kubernetes?.clusterName) ||
-                      asTrimmedString(cluster.name) ||
-                      cluster.id;
-                    const clusterScopeId = () =>
-                      asTrimmedString(cluster.kubernetes?.clusterId) ||
-                      asTrimmedString(cluster.kubernetes?.clusterName) ||
-                      '';
-                    const context = () => formatPlatformTableTextValue(cluster.kubernetes?.context);
-                    const version = () => formatPlatformTableTextValue(cluster.kubernetes?.version);
-                    const metricsKey = () => buildMetricKeyForUnifiedResource(cluster);
-                    const alertResourceIds = () => unifiedPlatformOverrideIdCandidates(cluster);
-                    const cpuThresholds = () =>
-                      alertsActivation.getMetricThresholds('kubernetes', 'cpu', alertResourceIds());
-                    const memoryThresholds = () =>
-                      alertsActivation.getMetricThresholds(
-                        'kubernetes',
-                        'memory',
-                        alertResourceIds(),
-                      );
-                    const cpuPercent = () => getPlatformTableFiniteMetric(cluster.cpu?.current);
-                    const memoryTotal = () =>
-                      getPlatformTableFiniteMetric(cluster.memory?.total) ?? 0;
-                    const memoryUsed = () =>
-                      getPlatformTableFiniteMetric(cluster.memory?.used) ?? 0;
-                    const memoryPercentOnly = () =>
-                      memoryTotal() > 0
-                        ? undefined
-                        : getPlatformTableFiniteMetric(cluster.memory?.current);
-                    const hasMemoryMetric = () =>
-                      memoryTotal() > 0 || memoryPercentOnly() !== undefined;
-                    const counts = () =>
-                      countsByCluster().get(cluster.id) ?? emptyKubernetesClusterChildCounts();
-                    const indicator = () => getSimpleStatusIndicator(cluster.status);
-                    const canRenderMetrics = () => indicator().variant !== 'muted';
-                    const detailRowId = () => drawer.detailRowId(cluster);
-                    const isExpanded = () => drawer.isExpanded(cluster);
-                    return (
-                      <>
-                        <TableRow
-                          class={`${getPlatformResourceDetailRowClass(isExpanded())} text-[11px] sm:text-xs`}
-                          data-kubernetes-cluster-row={cluster.id}
-                          onClick={() => drawer.toggle(cluster)}
+      <PlatformTableShell
+        title={props.title ?? 'Clusters'}
+        tableClass="min-w-full table-fixed text-xs md:min-w-[1040px]"
+        header={
+          <>
+            <PlatformSortableTableHead
+              kind="name"
+              sort={sort}
+              sortKey="cluster"
+              class="platform-table-mobile-w-30 md:w-[17%]"
+            >
+              Cluster
+            </PlatformSortableTableHead>
+            <PlatformSortableTableHead
+              kind="text"
+              sort={sort}
+              sortKey="context"
+              class="hidden md:table-cell md:w-[15%]"
+            >
+              Context
+            </PlatformSortableTableHead>
+            <PlatformSortableTableHead
+              kind="text"
+              sort={sort}
+              sortKey="version"
+              class="platform-table-phone-hidden md:w-[10%]"
+            >
+              <PlatformResponsiveTableLabel compact="Ver" full="Version" />
+            </PlatformSortableTableHead>
+            <PlatformSortableTableHead
+              kind="metric-bar"
+              sort={sort}
+              sortKey="cpu"
+              class="platform-table-mobile-w-20 md:w-[15%]"
+            >
+              CPU
+            </PlatformSortableTableHead>
+            <PlatformSortableTableHead
+              kind="metric-bar"
+              sort={sort}
+              sortKey="memory"
+              class="platform-table-mobile-w-20 md:w-[15%]"
+            >
+              <PlatformResponsiveTableLabel compact="Mem" full="Memory" />
+            </PlatformSortableTableHead>
+            <PlatformSortableTableHead
+              kind="numeric-value"
+              sort={sort}
+              sortKey="nodes"
+              class="platform-table-mobile-w-15 md:w-[8%]"
+            >
+              <PlatformResponsiveTableLabel compact="Nds" full="Nodes" />
+            </PlatformSortableTableHead>
+            <PlatformSortableTableHead
+              kind="numeric-value"
+              sort={sort}
+              sortKey="pods"
+              class="platform-table-mobile-w-15 md:w-[8%] platform-table-narrow-hidden"
+            >
+              Pods
+            </PlatformSortableTableHead>
+            <PlatformSortableTableHead
+              kind="numeric-value"
+              sort={sort}
+              sortKey="deployments"
+              class="hidden md:table-cell md:w-[12%]"
+            >
+              Deployments
+            </PlatformSortableTableHead>
+          </>
+        }
+        body={
+          <>
+            <PlatformWindowedRows items={sortedRows} estimatedRowHeight={32}>
+              {(cluster) => {
+                const name = () =>
+                  asTrimmedString(cluster.kubernetes?.clusterName) ||
+                  asTrimmedString(cluster.name) ||
+                  cluster.id;
+                const clusterScopeId = () =>
+                  asTrimmedString(cluster.kubernetes?.clusterId) ||
+                  asTrimmedString(cluster.kubernetes?.clusterName) ||
+                  '';
+                const context = () => formatPlatformTableTextValue(cluster.kubernetes?.context);
+                const version = () => formatPlatformTableTextValue(cluster.kubernetes?.version);
+                const counts = () =>
+                  countsByCluster().get(cluster.id) ?? emptyKubernetesClusterChildCounts();
+                const indicator = () => mapKubernetesClusterStatus(cluster);
+                const readingsStale = () => hasStaleKubernetesReadings(cluster);
+                const canRenderMetrics = () => indicator().variant !== 'muted';
+                const isExpanded = () => drawer.isExpanded(cluster);
+                return (
+                  <>
+                    <TableRow
+                      class={`${getPlatformResourceDetailRowClass(isExpanded())} text-[11px] sm:text-xs`}
+                      data-kubernetes-cluster-row={cluster.id}
+                      onClick={() => drawer.toggle(cluster)}
+                    >
+                      <TableCell class={getPlatformTableCellClassForKind('name')}>
+                        <KubernetesRowLead
+                          resource={cluster}
+                          drawer={drawer}
+                          label={name()}
+                          status={indicator()}
                         >
-                          <TableCell class={getPlatformTableCellClassForKind('name')}>
-                            <div class="flex min-w-0 items-center gap-2">
-                              <PlatformResourceDetailToggleButton
-                                expanded={isExpanded()}
-                                resourceLabel={name()}
-                                controlsId={detailRowId()}
-                                onToggle={() => drawer.toggle(cluster)}
-                              />
-                              <StatusDot
-                                size="sm"
-                                variant={indicator().variant}
-                                title={cluster.status || 'unknown'}
-                                ariaHidden
-                              />
+                          <div class="min-w-0">
+                            <div class="flex min-w-0 items-center gap-1.5">
                               <ResourceNameWithWebInterfaceLink
                                 name={name()}
                                 url={cluster.customUrl}
@@ -345,96 +279,69 @@ export const KubernetesClustersTable: Component<{
                                 </span>
                               </Show>
                             </div>
-                          </TableCell>
-                          <TableCell
-                            class={`${getPlatformTableCellClassForKind('text')} hidden text-base-content md:table-cell`}
-                          >
-                            {context()}
-                          </TableCell>
-                          <TableCell
-                            class={`${getPlatformTableCellClassForKind('text')} platform-table-phone-hidden font-mono text-[11px] text-base-content`}
-                          >
-                            <span class="inline-flex items-center rounded-sm bg-surface-alt px-1.5 py-0.5 font-mono text-[10px] text-base-content">
-                              {version()}
-                            </span>
-                          </TableCell>
-                          <TableCell
-                            class={`${getPlatformTableCellClassForKind('metric-bar')} w-[20%] md:w-auto`}
-                          >
-                            <ResponsiveMetricCell
-                              class="w-full"
-                              value={cpuPercent() ?? 0}
-                              type="cpu"
-                              resourceId={metricsKey()}
-                              isRunning={canRenderMetrics() && cpuPercent() !== undefined}
-                              showMobile={false}
-                              thresholds={cpuThresholds()}
-                            />
-                          </TableCell>
-                          <TableCell
-                            class={`${getPlatformTableCellClassForKind('metric-bar')} w-[20%] md:w-auto`}
-                          >
-                            <Show
-                              when={canRenderMetrics() && hasMemoryMetric()}
-                              fallback={<PlatformTableMetricFallback />}
-                            >
-                              <StackedMemoryBar
-                                used={memoryUsed()}
-                                total={memoryTotal()}
-                                percentOnly={memoryPercentOnly()}
-                                thresholds={memoryThresholds()}
-                              />
-                            </Show>
-                          </TableCell>
-                          <TableCell
-                            class={`${getPlatformTableCellClassForKind('numeric-value')} text-base-content`}
-                          >
-                            <PlatformTableCountRatioValue
-                              current={counts().nodes.total - counts().nodes.attention}
-                              total={counts().nodes.total}
-                              currentTone={counts().nodes.attention > 0 ? 'warning' : undefined}
-                            />
-                          </TableCell>
-                          <TableCell
-                            class={`${getPlatformTableCellClassForKind('numeric-value')} text-base-content platform-table-narrow-hidden`}
-                          >
-                            <PlatformTableCountRatioValue
-                              current={counts().pods.total - counts().pods.attention}
-                              total={counts().pods.total}
-                              currentTone={counts().pods.attention > 0 ? 'warning' : undefined}
-                            />
-                          </TableCell>
-                          <TableCell
-                            class={`${getPlatformTableCellClassForKind('numeric-value')} hidden text-base-content md:table-cell`}
-                          >
-                            <PlatformTableCountRatioValue
-                              current={counts().deployments.total - counts().deployments.attention}
-                              total={counts().deployments.total}
-                              currentTone={
-                                counts().deployments.attention > 0 ? 'warning' : undefined
-                              }
-                            />
-                          </TableCell>
-                        </TableRow>
-                        <PlatformResourceDetailTableRow
-                          resource={cluster}
-                          statusIndicator={indicator()}
-                          open={isExpanded()}
-                          detailRowId={detailRowId()}
-                          colSpan={8}
-                          resolveResourceLabel={resolveResourceLabel}
-                          onClose={() => drawer.close(cluster)}
+                            <KubernetesStaleDataCue when={readingsStale()} scope="cluster" />
+                          </div>
+                        </KubernetesRowLead>
+                      </TableCell>
+                      <TableCell
+                        class={`${getPlatformTableCellClassForKind('text')} hidden text-base-content md:table-cell`}
+                      >
+                        {context()}
+                      </TableCell>
+                      <TableCell
+                        class={`${getPlatformTableCellClassForKind('text')} platform-table-phone-hidden font-mono text-[11px] text-base-content`}
+                      >
+                        <span class="inline-flex items-center rounded-sm bg-surface-alt px-1.5 py-0.5 font-mono text-[10px] text-base-content">
+                          {version()}
+                        </span>
+                      </TableCell>
+                      <KubernetesCpuMemoryCells
+                        resource={cluster}
+                        canRenderMetrics={canRenderMetrics()}
+                      />
+                      <TableCell
+                        class={`${getPlatformTableCellClassForKind('numeric-value')} text-base-content`}
+                      >
+                        <PlatformTableCountRatioValue
+                          current={counts().nodes.total - counts().nodes.attention}
+                          total={counts().nodes.total}
+                          currentTone={counts().nodes.attention > 0 ? 'warning' : undefined}
                         />
-                      </>
-                    );
-                  }}
-                </PlatformWindowedRows>
-              </>
-            }
-          />
-        </Show>
-      </div>
-    </Show>
+                      </TableCell>
+                      <TableCell
+                        class={`${getPlatformTableCellClassForKind('numeric-value')} text-base-content platform-table-narrow-hidden`}
+                      >
+                        <PlatformTableCountRatioValue
+                          current={counts().pods.total - counts().pods.attention}
+                          total={counts().pods.total}
+                          currentTone={counts().pods.attention > 0 ? 'warning' : undefined}
+                        />
+                      </TableCell>
+                      <TableCell
+                        class={`${getPlatformTableCellClassForKind('numeric-value')} hidden text-base-content md:table-cell`}
+                      >
+                        <PlatformTableCountRatioValue
+                          current={counts().deployments.total - counts().deployments.attention}
+                          total={counts().deployments.total}
+                          currentTone={counts().deployments.attention > 0 ? 'warning' : undefined}
+                        />
+                      </TableCell>
+                    </TableRow>
+                    <KubernetesDetailRow
+                      resource={cluster}
+                      statusIndicator={indicator()}
+                      drawer={drawer}
+                      colSpan={8}
+                      resolveResourceLabel={resolveResourceLabel}
+                    />
+                  </>
+                );
+              }}
+            </PlatformWindowedRows>
+          </>
+        }
+      />
+    </KubernetesTableFrame>
   );
 };
 
