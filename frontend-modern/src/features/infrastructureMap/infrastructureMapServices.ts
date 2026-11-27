@@ -78,6 +78,10 @@ export interface DiagramTile {
   memoryTotalBytes?: number;
   versionLabel?: string;
   temperatureC?: number;
+  gpuSummary?: string;
+  gpuUtilPercent?: number;
+  gpuTempC?: number;
+  accelerators?: string[];
   diskSummary?: string;
   diskMaxTempC?: number;
   unhealthyDiskCount?: number;
@@ -580,6 +584,7 @@ const serviceTile = (item: MapItem, host: MapHost, plan: NetworkPlan): DiagramTi
     ...(item.pendingUpdates !== undefined ? { pendingUpdates: item.pendingUpdates } : {}),
     ...(item.lastBackupAt ? { lastBackupAt: item.lastBackupAt } : {}),
     ...tileNetworkTelemetry(item),
+    ...(item.accelerators?.length ? { accelerators: item.accelerators } : {}),
     ...(item.dockerNetworks?.length ? { dockerNetworks: item.dockerNetworks } : {}),
     address: plan.where(item.address, item.segmentIds),
     detail: item.detail,
@@ -658,6 +663,8 @@ export const matchesDiagramTileQuery = (
     tile.composeProject,
     tile.hostName,
     tile.versionLabel,
+    tile.gpuSummary,
+    ...(tile.accelerators ?? []),
     tile.diskSummary,
     tile.sizeLabel,
     tile.vdevLayout,
@@ -1202,6 +1209,9 @@ export function buildServiceDiagram(
       ...(host.memoryTotalBytes !== undefined ? { memoryTotalBytes: host.memoryTotalBytes } : {}),
       ...(host.versionLabel ? { versionLabel: host.versionLabel } : {}),
       ...(host.temperatureC !== undefined ? { temperatureC: host.temperatureC } : {}),
+      ...(host.gpuSummary ? { gpuSummary: host.gpuSummary } : {}),
+      ...(host.gpuUtilPercent !== undefined ? { gpuUtilPercent: host.gpuUtilPercent } : {}),
+      ...(host.gpuTempC !== undefined ? { gpuTempC: host.gpuTempC } : {}),
       ...(host.diskSummary ? { diskSummary: host.diskSummary } : {}),
       ...(host.diskMaxTempC !== undefined ? { diskMaxTempC: host.diskMaxTempC } : {}),
       ...(host.unhealthyDiskCount !== undefined
@@ -1340,13 +1350,16 @@ export function buildServiceDiagram(
     if (!label) return 0;
     if (label === 'runs on') return 1;
     if (label === 'storage') return 2;
-    if (label === 'mounts' || label === 'backups') return 3;
-    if (label === 'DNS') return 4;
-    if (label === 'gateway') return 5;
-    if (label === 'checks') return 6;
-    if (label === 'routes') return 7;
-    if (label.startsWith('via ')) return 8;
-    return 9;
+    if (label === 'mounts' || label === 'shared mount' || label === 'backups') return 3;
+    if (label === 'shared volume' || label.startsWith('vol ')) return 4;
+    if (label === 'DNS') return 5;
+    if (label === 'gateway') return 6;
+    if (label === 'checks') return 7;
+    if (label === 'depends on' || label.startsWith('uses ')) return 8;
+    if (label.startsWith('talks')) return 9;
+    if (label === 'routes') return 10;
+    if (label.startsWith('via ')) return 11;
+    return 12;
   };
   const links: DiagramLink[] = [];
   const linkByPair = new Map<string, DiagramLink>();
@@ -1495,9 +1508,49 @@ export function buildServiceDiagram(
     const pool = drawn.get(poolId);
     if (pool) say(pool, `Holds ${nameList(names)}`);
   }
+  const poolTileByMemberId = new Map<string, DiagramTile>();
+  for (const { tile, pools: members } of drawnPools(storagePools)) {
+    poolTileByMemberId.set(tile.id, tile);
+    for (const member of members) poolTileByMemberId.set(member.id, tile);
+  }
   const carried = new Map<string, number>();
   const routedBy = new Map<string, number>();
+  const peerLabelFor = (detail: string | undefined): { arc: string; verb: string; rev: string } => {
+    if (!detail || detail === 'communicates_with') {
+      return { arc: 'talks to', verb: 'Talks to', rev: 'Receives traffic from' };
+    }
+    if (detail.startsWith(':')) {
+      return {
+        arc: `talks ${detail}`,
+        verb: `Talks (${detail}) to`,
+        rev: `Receives (${detail}) from`,
+      };
+    }
+    switch (detail) {
+      case 'depends_on':
+        return { arc: 'depends on', verb: 'Depends on', rev: 'Used by' };
+      case 'stores_on':
+        return { arc: 'storage', verb: 'Data on', rev: 'Used by' };
+      case 'protected_by':
+        return { arc: 'backups', verb: 'Protected by', rev: 'Protects' };
+      case 'mounted_to':
+        return { arc: 'mounts', verb: 'Mounted to', rev: 'Mounts' };
+      case 'exposed_by':
+        return { arc: 'routes', verb: 'Exposed by', rev: 'Exposes' };
+      default:
+        return { arc: detail.replace(/_/g, ' '), verb: 'Connected to', rev: 'Connected to' };
+    }
+  };
   for (const link of model.connections.links) {
+    if (link.kind === 'storage') {
+      const from = drawn.get(link.fromId);
+      const to = drawn.get(link.toId) ?? poolTileByMemberId.get(link.toId);
+      if (!from || !to) continue;
+      if (placedOn.has(`${from.id}>${to.id}`)) continue;
+      placedOn.add(`${from.id}>${to.id}`);
+      uses(from, to, `Data on ${to.name}`, 'storage');
+      continue;
+    }
     const from = drawn.get(link.fromId);
     const to = drawn.get(link.toId);
     // An end folded into a `+N` tile is not drawn, so the link has no place.
@@ -1510,7 +1563,7 @@ export function buildServiceDiagram(
       from.hasConnectionCaption = true;
       carried.set(to.id, (carried.get(to.id) ?? 0) + 1);
       tie(link.fromId, link.toId, `via ${to.name}`);
-    } else {
+    } else if (link.kind === 'route') {
       say(
         to,
         link.hosts.length > 0
@@ -1524,6 +1577,24 @@ export function buildServiceDiagram(
       }
       routedBy.set(from.id, (routedBy.get(from.id) ?? 0) + 1);
       tie(link.fromId, link.toId, link.hosts.length > 0 ? mapRouteLabel(link.hosts) : 'routes');
+    } else if (link.kind === 'volume') {
+      const volPhrase = link.detail ? `volume ${link.detail}` : 'a shared volume';
+      say(from, `Shares ${volPhrase} with ${to.name}`);
+      say(to, `Shares ${volPhrase} with ${from.name}`);
+      tie(link.fromId, link.toId, link.detail ? `vol ${link.detail}` : 'shared volume');
+    } else if (link.kind === 'mount') {
+      say(from, `Shares host mount with ${to.name}`);
+      say(to, `Shares host mount with ${from.name}`);
+      tie(link.fromId, link.toId, 'shared mount');
+    } else if (link.kind === 'stack') {
+      say(from, `Uses ${to.name}`);
+      say(to, `Used by ${from.name}`);
+      tie(link.fromId, link.toId, `uses ${to.name}`);
+    } else if (link.kind === 'peer') {
+      const labels = peerLabelFor(link.detail);
+      say(from, `${labels.verb} ${to.name}`);
+      say(to, `${labels.rev} ${from.name}`);
+      tie(link.fromId, link.toId, labels.arc);
     }
   }
   for (const [id, count] of carried) {

@@ -387,6 +387,10 @@ const drawTile = (
       ...(tile.probeSummary ? { probeSummary: tile.probeSummary } : {}),
       ...(tile.certWarning ? { certWarning: tile.certWarning } : {}),
       ...(tile.temperatureC !== undefined ? { temperatureC: tile.temperatureC } : {}),
+      ...(tile.gpuSummary ? { gpuSummary: tile.gpuSummary } : {}),
+      ...(tile.gpuUtilPercent !== undefined ? { gpuUtilPercent: tile.gpuUtilPercent } : {}),
+      ...(tile.gpuTempC !== undefined ? { gpuTempC: tile.gpuTempC } : {}),
+      ...(tile.accelerators?.length ? { accelerators: tile.accelerators } : {}),
       ...(tile.diskSummary ? { diskSummary: tile.diskSummary } : {}),
       ...(tile.diskMaxTempC !== undefined ? { diskMaxTempC: tile.diskMaxTempC } : {}),
       ...(tile.unhealthyDiskCount !== undefined

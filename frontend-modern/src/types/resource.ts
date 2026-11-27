@@ -262,6 +262,11 @@ export type ResourceRelationshipType =
   | 'owned_by'
   | 'attached_to'
   | 'checks'
+  | 'hosted_by'
+  | 'stores_on'
+  | 'protected_by'
+  | 'member_of'
+  | 'communicates_with'
   | string;
 
 export interface ResourceRelationship {
@@ -703,6 +708,7 @@ export interface ResourceProxmoxMeta {
   nodeIdentity?: string;
   vmid?: number;
   node?: string;
+  accelerators?: string[];
   nodeName?: string;
   nodeAliases?: string[];
   /** Preferred node label; nodeName remains the provider-native diagnostic key. */
@@ -929,6 +935,7 @@ export interface ResourceDockerMeta {
     mode?: string;
     rw?: boolean;
   }>;
+  accelerators?: string[];
   filesystems?: FilesystemObservation[];
   networks?: Array<{
     name?: string;

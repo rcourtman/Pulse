@@ -216,10 +216,20 @@ targets remain ringed):
 - a backup target names the hosts it is set up on, and each host names the
   targets it backs up to,
 - a guest is joined to the pool its data is on, and to the pool a share or
-  folder it mounts is on, such as a media server that mounts a NAS array.
+  folder it mounts is on, such as a media server that mounts a NAS array,
+- Docker containers sharing a named volume, a non-system host bind mount, a
+  host storage pool path, or a Compose stack / private network database or
+  broker are joined on hover,
+- Linux hosts running the Pulse agent passively match established internal
+  TCP peers from `/proc/net/tcp` and `/proc/net/tcp6` against other monitored
+  Pulse resources only (public internet and loopback addresses are discarded
+  on the host before sending),
+- host GPU telemetry and Docker/Proxmox hardware accelerators (`GPU`, `iGPU`,
+  `TPU`, `NPU`, `PCIe`) appear automatically as badges on hosts and workloads.
 
-Gateways, DNS servers and shared container networks come from the Pulse
-agent, so keep agents on the same release as the server.
+Gateways, DNS servers, passive internal peer links and shared container
+networks come from the Pulse agent, so keep agents on the same release as the
+server.
 
 A mount has no name that says where it comes from, so Pulse matches it by
 size: it is joined to a pool only when they are the same size and as full,
@@ -246,6 +256,6 @@ The picture is made in your browser. It is not sent to Pulse.
 
 - The Internet tile is drawn, not monitored, and never shows live traffic
   motion.
-- Firewall rules, and which app talks to which (only whether the Proxmox
-  guest NIC firewall flag is set).
+- Firewall rules (only whether the Proxmox guest NIC firewall flag is set),
+  packet contents, or connections to unmonitored devices.
 - Devices with no check and no agent.

@@ -4838,3 +4838,11 @@ extra request, subscription or render path is added.
 `/availability` (`pages/Availability.tsx`). Availability checks stay lazily
 loaded behind the page chunk without increasing the initial bundle or adding
 polling paths.
+
+
+### Preserve canonical resource relationships in state adapter merges (27 November 2026)
+
+`frontend-modern/src/utils/resourceStateAdapters.ts` preserves
+`resource.relationships` alongside `recentChanges` and `facetCounts` in
+`mergeCanonicalResource` with a reference copy and zero added polling or
+re-computation cost.

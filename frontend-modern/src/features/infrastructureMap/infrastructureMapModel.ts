@@ -116,6 +116,8 @@ export interface MapItem {
   dockerNetworks?: string[];
   /** Sorted unique lowercase Kubernetes Ingress hostnames routing to a pod via a matching Service. */
   ingressHosts?: string[];
+  /** Sorted unique hardware accelerators attached to this workload (e.g. `GPU`, `iGPU`, `TPU`). */
+  accelerators?: string[];
   /** Concise factual summary of an availability check probe (e.g. `HTTPS 200`, `TCP :443`). */
   probeSummary?: string;
   /** Concise TLS certificate warning for an availability check, when unhealthy or expiring. */
@@ -198,6 +200,12 @@ export interface MapHost {
   versionLabel?: string;
   /** Host primary temperature in degrees Celsius, rounded to the nearest integer. */
   temperatureC?: number;
+  /** Compact host GPU summary (e.g. `RTX 4090`, `2× GPU`), stripped to generic label under Hide names. */
+  gpuSummary?: string;
+  /** Peak GPU utilization percentage (0 to 100) across host GPUs, when reported. */
+  gpuUtilPercent?: number;
+  /** Peak GPU temperature in degrees Celsius across host GPUs, rounded to integer. */
+  gpuTempC?: number;
   /** Compact physical disk inventory summary (e.g. `2× NVMe · 4× HDD`). */
   diskSummary?: string;
   /** Highest reported physical disk temperature in degrees Celsius, rounded to integer. */
@@ -391,6 +399,70 @@ const lastBackupAtOf = (resource: Resource): string | undefined => {
   const value = clean(resource.proxmox?.lastBackup);
   if (!value) return undefined;
   return Number.isFinite(Date.parse(value)) ? value : undefined;
+};
+
+const compactGpuName = (raw: string): string => {
+  const trimmed = raw
+    .replace(
+      /^(?:NVIDIA\s+GeForce|NVIDIA\s+Tesla|NVIDIA\s+Quadro|NVIDIA|AMD\s+Radeon|AMD|Intel\s+Arc|Intel)\s+/i,
+      '',
+    )
+    .trim();
+  return trimmed || raw.trim() || 'GPU';
+};
+
+const hostGpuTelemetryOf = (
+  resource: Resource,
+): { gpuSummary?: string; gpuUtilPercent?: number; gpuTempC?: number } => {
+  const gpus = resource.agent?.sensors?.gpu;
+  if (!gpus?.length) return {};
+  let maxUtil: number | undefined;
+  let maxTemp: number | undefined;
+  for (const gpu of gpus) {
+    const util = finitePercent(gpu.utilizationPercent);
+    if (util !== undefined && (maxUtil === undefined || util > maxUtil)) {
+      maxUtil = Math.round(util);
+    }
+    if (
+      typeof gpu.temperatureCelsius === 'number' &&
+      Number.isFinite(gpu.temperatureCelsius) &&
+      gpu.temperatureCelsius > 0
+    ) {
+      const temp = Math.round(gpu.temperatureCelsius);
+      if (maxTemp === undefined || temp > maxTemp) maxTemp = temp;
+    }
+  }
+  const gpuSummary =
+    gpus.length === 1 ? compactGpuName(clean(gpus[0].name)) : `${gpus.length}× GPU`;
+  return {
+    gpuSummary,
+    ...(maxUtil !== undefined ? { gpuUtilPercent: maxUtil } : {}),
+    ...(maxTemp !== undefined ? { gpuTempC: maxTemp } : {}),
+  };
+};
+
+const acceleratorsOf = (resource: Resource): string[] | undefined => {
+  const set = new Set<string>();
+  const add = (label: string) => {
+    const trimmed = clean(label);
+    if (trimmed) set.add(trimmed);
+  };
+  for (const label of resource.docker?.accelerators ?? []) add(label);
+  for (const label of resource.proxmox?.accelerators ?? []) add(label);
+  // Also recognize device bind mounts reported by older Docker agents immediately.
+  for (const mount of resource.docker?.mounts ?? []) {
+    for (const rawPath of [mount.source, mount.destination]) {
+      const path = clean(rawPath).toLowerCase();
+      if (!path) continue;
+      if (path.startsWith('/dev/nvidia')) add('GPU');
+      else if (path.startsWith('/dev/kfd')) add('AMD GPU');
+      else if (path === '/dev/dri' || path.startsWith('/dev/dri/')) add('iGPU');
+      else if (path.startsWith('/dev/apex')) add('TPU');
+      else if (path.startsWith('/dev/hailo')) add('NPU');
+    }
+  }
+  if (set.size === 0) return undefined;
+  return [...set].sort(collator.compare);
 };
 
 const HEALTHY_POOL_STATES = new Set([
@@ -932,6 +1004,7 @@ const toItem = (
         ? podExposure?.detail
         : undefined;
   const ingressHosts = resource.type === 'pod' ? podExposure?.ingressHosts : undefined;
+  const accelerators = acceleratorsOf(resource);
   return {
     id: resource.id,
     name: displayName(resource),
@@ -953,6 +1026,7 @@ const toItem = (
     ...(linkedResourceId ? { linkedResourceId } : {}),
     ...(dockerNetworks ? { dockerNetworks } : {}),
     ...(ingressHosts ? { ingressHosts } : {}),
+    ...(accelerators ? { accelerators } : {}),
     ...(probeSummary ? { probeSummary } : {}),
     ...(certWarning ? { certWarning } : {}),
     ...(attached[0]?.address ? { address: attached[0].address } : {}),
@@ -1155,6 +1229,7 @@ export function buildInfrastructureMapModel(
     const memoryTotalBytes = hostMemoryTotalBytesOf(resource);
     const versionLabel = hostVersionLabelOf(resource);
     const temperatureC = hostTemperatureOf(resource);
+    const gpu = hostGpuTelemetryOf(resource);
     const uptimeSeconds = uptimeSecondsOf(resource, health);
     const pendingUpdates = pendingUpdatesOf(resource);
     drafts.set(resource.id, {
@@ -1173,6 +1248,7 @@ export function buildInfrastructureMapModel(
         ...(memoryTotalBytes !== undefined ? { memoryTotalBytes } : {}),
         ...(versionLabel ? { versionLabel } : {}),
         ...(temperatureC !== undefined ? { temperatureC } : {}),
+        ...gpu,
         ...(uptimeSeconds !== undefined ? { uptimeSeconds } : {}),
         ...(pendingUpdates !== undefined ? { pendingUpdates } : {}),
         cpu: finitePercent(resource.cpu?.current),
@@ -1525,6 +1601,9 @@ export function anonymizeInfrastructureMapModel(
     );
   const anonymizeHost = ({ address: _address, ...host }: MapHost): MapHost => ({
     ...host,
+    ...(host.gpuSummary
+      ? { gpuSummary: /^\d+×\s+GPU$/i.test(host.gpuSummary) ? host.gpuSummary : 'GPU' }
+      : {}),
     name: host.isResource ? nameFor(host.id, HOST_STAND_IN[host.platform]) : host.name,
     pools: anonymizePools(host.pools),
     sections: host.sections.map((section) => ({
@@ -1536,10 +1615,15 @@ export function anonymizeInfrastructureMapModel(
 
   return {
     ...model,
-    // A route's hostnames and a gateway's address identify the estate. The
-    // connections and the counts stay: they are the shape of it, not its names.
+    // A route's hostnames, estate-specific volume names, and a gateway's
+    // address identify the estate. The connections and the counts stay: they
+    // are the shape of it, not its names.
     connections: {
-      links: model.connections.links.map((link) => ({ ...link, hosts: [] })),
+      links: model.connections.links.map(({ sensitiveDetail, detail, ...link }) => ({
+        ...link,
+        hosts: [],
+        ...(!sensitiveDetail && detail ? { detail } : {}),
+      })),
       gateways: model.connections.gateways.map((gateway) => ({ ...gateway, address: '' })),
       resolvers: model.connections.resolvers.map((resolver) => ({ ...resolver, address: '' })),
     },

@@ -26,6 +26,7 @@ import type {
   ResourcePolicyPostureSummary,
   ResourcePhysicalDiskMeta,
   ResourcePoolHealth,
+  ResourceRelationship,
   ResourceStatus,
   ResourceStorageMeta,
   ResourceStorageRisk,
@@ -473,6 +474,7 @@ type APIResource = {
   };
   availability?: ResourceAvailabilityMeta;
   availabilityChecks?: ResourceAvailabilityMeta[];
+  relationships?: ResourceRelationship[];
   recentChanges?: ResourceChange[];
   facetCounts?: ResourceFacetCounts;
   physicalDisk?: ResourcePhysicalDiskMeta;
@@ -979,6 +981,7 @@ const toResource = (v2: APIResource): Resource => {
     canonicalIdentity: v2.canonicalIdentity,
     policy: v2.policy as Resource['policy'],
     aiSafeSummary: v2.aiSafeSummary as Resource['aiSafeSummary'],
+    relationships: v2.relationships,
     recentChanges: v2.recentChanges,
     facetCounts: v2.facetCounts,
     platformData: {

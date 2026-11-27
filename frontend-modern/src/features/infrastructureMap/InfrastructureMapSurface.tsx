@@ -288,6 +288,17 @@ const formatHitDiskSummary = (hit: MapHit): string => {
     .join(' · ');
 };
 
+const formatHitGpuSummary = (hit: MapHit): string => {
+  if (!hit.gpuSummary) return '';
+  return [
+    `GPU: ${hit.gpuSummary}`,
+    hit.gpuUtilPercent !== undefined ? `${Math.round(hit.gpuUtilPercent)}%` : '',
+    hit.gpuTempC !== undefined ? `${Math.round(hit.gpuTempC)}°C` : '',
+  ]
+    .filter(Boolean)
+    .join(' · ');
+};
+
 const formatHitVmid = (hit: MapHit): string => {
   if (hit.vmid === undefined) return '';
   const isContainer = /\b(container|lxc)\b/i.test(hit.meta);
@@ -330,6 +341,8 @@ const hitLines = (hit: MapHit, density?: MapDensity): string[] =>
         ? 'Compact draws more of them'
         : '',
     formatHostSpecs(hit),
+    formatHitGpuSummary(hit),
+    hit.accelerators?.length ? `Hardware: ${hit.accelerators.join(', ')}` : '',
     formatHitDiskSummary(hit),
     formatHitStoragePool(hit),
     formatHitPoolAnomalies(hit),
