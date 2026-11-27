@@ -154,7 +154,7 @@ describe('proxmoxCephClusterDrawerModel', () => {
       expect.objectContaining({
         label: 'Readings',
         value:
-          'Proxmox collection error: Proxmox API request timed out. Shown health, quorum, OSDs, pools, and capacity are last reported values.',
+          'Proxmox collection error: Proxmox API request timed out. Shown figures are last reported values.',
         tone: 'warning',
         wrap: true,
       }),
@@ -176,7 +176,7 @@ describe('proxmoxCephClusterDrawerModel', () => {
     };
     expect(getCephClusterStaleNotice(legacyStaleCluster)).toEqual({
       badge: 'Stale data',
-      detail: 'Proxmox has not updated this Ceph cluster recently',
+      detail: 'Proxmox has not updated this cluster recently',
     });
   });
 });

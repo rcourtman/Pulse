@@ -34,7 +34,7 @@ export const getCephClusterStaleNotice = (resource: Resource): CephStaleNotice |
   const prefix =
     error && ERROR_SOURCE_STATUS.test(status)
       ? 'Proxmox collection error'
-      : 'Proxmox has not updated this Ceph cluster recently';
+      : 'Proxmox has not updated this cluster recently';
   return {
     badge: 'Stale data',
     detail: error ? `${prefix}: ${error}` : prefix,
@@ -102,11 +102,10 @@ export const getCephClusterExceptionRows = (
 ): DetailRow[] => {
   const staleNotice = getCephClusterStaleNotice(resource);
   const readingsRow = staleNotice
-    ? makeDetailRow(
-        'Readings',
-        `${staleNotice.detail}. Shown health, quorum, OSDs, pools, and capacity are last reported values.`,
-        { tone: 'warning', wrap: true },
-      )
+    ? makeDetailRow('Readings', `${staleNotice.detail}. Shown figures are last reported values.`, {
+        tone: 'warning',
+        wrap: true,
+      })
     : null;
   const ceph = resource.ceph;
   const stated = statedMessages.map((message) => message.toLowerCase());
