@@ -151,21 +151,163 @@ if [[ -n "${BASELINE_DIR}" ]]; then
   select_packages
 fi
 
-# Keep the slow monitoring and unified-resource families on different hosts.
-# Membership is fixed before either tree runs; both trees and all ten rounds
-# for a package stay together. Fail closed if the inventory grows without an
-# assignment, rather than silently dropping the new package from every shard.
+# Balance benchmark work across the three isolated runners while keeping every
+# benchmark function's baseline, candidate, warm-up and all ten paired rounds on
+# the same host. The two heaviest packages (internal/monitoring and
+# internal/unifiedresources) split their discovered top-level Benchmark* union
+# across two shards using measured per-sample weights from main run 45933545439
+# (unknown/new benchmarks default to 1.00s and still land in exactly one shard).
+# Fail closed if the package inventory grows without a shard assignment.
+benchmark_weight_table() {
+  cat <<'WEIGHTS'
+./internal/monitoring/ BenchmarkMetadataMonitorProjection 5.87
+./internal/monitoring/ BenchmarkBroadcastMetricsSnapshot 4.87
+./internal/monitoring/ BenchmarkMockMetricsTargetResolutionAfterTick 3.77
+./internal/monitoring/ BenchmarkGetGuestMetricsForChartBatch 1.63
+./internal/monitoring/ BenchmarkPMGBackupReadPoll 1.48
+./internal/monitoring/ BenchmarkHistoryReadFilter 1.22
+./internal/monitoring/ BenchmarkHostSensorTemperature 1.18
+./internal/monitoring/ BenchmarkBackupPollingReadCost 1.09
+./internal/monitoring/ BenchmarkLivePointReads 0.99
+./internal/monitoring/ BenchmarkAgentFleetDiagnosticRead 0.93
+./internal/monitoring/ BenchmarkGetNodeMetricsForChartBatch 0.80
+./internal/monitoring/ BenchmarkPVEBackupCarryForwardCost 0.74
+./internal/monitoring/ BenchmarkLiveRegistryMetricsTargetResolution 0.73
+./internal/monitoring/ BenchmarkAgentIdentityLookup 0.55
+./internal/monitoring/ BenchmarkBroadcastInventoryCounts 0.55
+./internal/monitoring/ BenchmarkPreviousGuestContextHostProjection 0.46
+./internal/monitoring/ BenchmarkMetricWindowNodeAlertPass 0.44
+./internal/monitoring/ BenchmarkBroadcastProxmoxPlatformJSON 0.37
+./internal/monitoring/ BenchmarkSnapshotGuestReadCost 0.29
+./internal/monitoring/ BenchmarkAgentLivenessSweep 0.23
+./internal/unifiedresources/ BenchmarkRegistryProjectionSnapshot 4.11
+./internal/unifiedresources/ BenchmarkHistoryIdentityQuery 2.90
+./internal/unifiedresources/ BenchmarkTopLevelOwnerIndexPass 2.73
+./internal/unifiedresources/ BenchmarkTopLevelOwnerIndexResolver 2.65
+./internal/unifiedresources/ BenchmarkRegistryMetadataDirtyReads 1.62
+./internal/unifiedresources/ BenchmarkIngestRecords_MergeDedup 0.80
+./internal/unifiedresources/ BenchmarkFindCandidates 0.75
+./internal/unifiedresources/ BenchmarkCanonicalAliasesVocabulary 0.59
+./internal/unifiedresources/ BenchmarkRegistryMetadataBulkReads 0.57
+./internal/unifiedresources/ BenchmarkTopLevelOwnerIndexConnectedDemo 0.54
+./internal/unifiedresources/ BenchmarkIngestRecords_NewResources 0.53
+./internal/unifiedresources/ BenchmarkResourceRegistry_GetByCanonicalAlias 0.29
+./internal/unifiedresources/ BenchmarkRegistryChangeEmission1000VMs 0.29
+./internal/unifiedresources/ BenchmarkSuccessionGroupSettlement 0.26
+./internal/unifiedresources/ BenchmarkCanonicalResourceSort 0.24
+./internal/unifiedresources/ BenchmarkMonitorAdapterReplaceRegistry1000VMs 0.23
+./internal/unifiedresources/ BenchmarkRegistry_CachedVMReads 0.20
+./internal/unifiedresources/ BenchmarkClassifyResourceSensitivity 0.17
+./internal/unifiedresources/ BenchmarkRegistry_DirtyVMCacheRead 0.15
+./internal/unifiedresources/ BenchmarkRegistryList1000VMs 0.15
+./internal/unifiedresources/ BenchmarkIngestMixed 0.14
+./internal/unifiedresources/ BenchmarkIdentityMatcher_Add 0.14
+./internal/unifiedresources/ BenchmarkRefreshPlatformScopes 0.12
+./internal/unifiedresources/ BenchmarkRegistryIngestSnapshot1000VMs 0.12
+WEIGHTS
+}
+
+list_package_benchmarks() {
+  local package="$1"
+  local combined="${work_dir}/bench-list.raw"
+  local list_dir="${work_dir}/list-data"
+  local label tree out
+  mkdir -p "${list_dir}"
+  : > "${combined}"
+  for label in baseline candidate; do
+    tree="${CURRENT_DIR}"
+    [[ "${label}" != baseline ]] || tree="${BASELINE_DIR}"
+    [[ -n "${tree}" ]] || continue
+    out="${work_dir}/bench-list-${label}.out"
+    if ! (cd "${tree}" && PULSE_DATA_DIR="${list_dir}" go test -list '^Benchmark' "${package}") > "${out}"; then
+      echo "Failed to list benchmarks for ${package} (${label})." >&2
+      return 1
+    fi
+    grep -E '^Benchmark[A-Za-z0-9_]+$' "${out}" >> "${combined}" || true
+  done
+  if [[ ! -s "${combined}" ]]; then
+    echo "No benchmarks discovered for split package: ${package}" >&2
+    return 1
+  fi
+  LC_ALL=C sort -u "${combined}"
+}
+
+select_split_filter() {
+  local package="$1" target_slot="$2"
+  local names_file="${work_dir}/bench-names"
+  local weights_file="${work_dir}/bench-weights"
+  local picked_file="${work_dir}/bench-picked"
+  list_package_benchmarks "${package}" > "${names_file}" || return 1
+  benchmark_weight_table > "${weights_file}"
+  awk -v pkg="${package}" '
+    FILENAME == ARGV[1] {
+      if ($1 == pkg) w[$2] = $3 + 0
+      next
+    }
+    {
+      weight = ($1 in w) ? w[$1] : 1.0
+      printf "%.6f\t%s\n", weight, $1
+    }
+  ' "${weights_file}" "${names_file}" |
+    LC_ALL=C sort -k1,1nr -k2,2 |
+    awk -F '\t' -v target="${target_slot}" '
+      BEGIN { load[0] = 0; load[1] = 0 }
+      {
+        slot = (load[0] <= load[1]) ? 0 : 1
+        load[slot] += $1 + 0
+        if (slot == target) print $2
+      }
+    ' | LC_ALL=C sort > "${picked_file}"
+  if [[ ! -s "${picked_file}" ]]; then
+    printf ''
+    return 0
+  fi
+  local joined
+  joined="$(paste -sd'|' "${picked_file}")"
+  printf '^(%s)$' "${joined}"
+}
+
+UNSPLIT_PACKAGES=()
+SPLIT_PACKAGES=()
+SPLIT_FILTERS=()
+
 shard_packages() {
-  local package owner picked=()
+  local package owner slot filter picked=()
   for package in "${SELECTED[@]}"; do
+    slot=""
     case "${package}" in
-      ./pkg/auth/|./internal/monitoring/|./internal/dockeragent/) owner=0 ;;
-      ./internal/api/|./internal/unifiedresources/|./internal/hostagent/) owner=1 ;;
+      ./internal/monitoring/)
+        if [[ "${SHARD}" == 0 ]]; then owner=0; slot=0
+        elif [[ "${SHARD}" == 2 ]]; then owner=2; slot=1
+        else owner=split
+        fi
+        ;;
+      ./internal/unifiedresources/)
+        if [[ "${SHARD}" == 0 ]]; then owner=0; slot=0
+        elif [[ "${SHARD}" == 1 ]]; then owner=1; slot=1
+        else owner=split
+        fi
+        ;;
+      ./internal/dockeragent/) owner=0 ;;
+      ./internal/api/|./pkg/auth/|./internal/hostagent/) owner=1 ;;
       ./pkg/metrics/|./cmd/pulse-agent/|./internal/hostmetrics/) owner=2 ;;
       *) echo "Benchmark package has no shard: ${package}" >&2; exit 2 ;;
     esac
-    if [[ "${SHARD}" == all || "${SHARD}" == "${owner}" ]]; then
+    if [[ "${SHARD}" == all ]]; then
       picked+=("${package}")
+      UNSPLIT_PACKAGES+=("${package}")
+    elif [[ "${SHARD}" == "${owner}" ]]; then
+      if [[ -n "${slot}" ]]; then
+        filter="$(select_split_filter "${package}" "${slot}")" || exit 1
+        if [[ -n "${filter}" ]]; then
+          picked+=("${package}")
+          SPLIT_PACKAGES+=("${package}")
+          SPLIT_FILTERS+=("${filter}")
+        fi
+      else
+        picked+=("${package}")
+        UNSPLIT_PACKAGES+=("${package}")
+      fi
     fi
   done
   SELECTED=(${picked[@]+"${picked[@]}"})
@@ -188,6 +330,9 @@ revision() {
   printf 'selection=%s\n' "${selection}"
   printf 'shard=%s\nshard_count=3\n' "${SHARD}"
   printf 'packages=%s\n' "${SELECTED[*]:-}"
+  for ((i = 0; i < ${#SPLIT_PACKAGES[@]}; i++)); do
+    printf 'bench_filter=%s,%s\n' "${SPLIT_PACKAGES[i]}" "${SPLIT_FILTERS[i]}"
+  done
   for label in candidate baseline; do
     tree="${CURRENT_DIR}"
     [[ "${label}" != baseline ]] || tree="${BASELINE_DIR}"
@@ -213,6 +358,37 @@ WRAPPER
 chmod +x "${binary_wrapper}"
 export PULSE_BENCH_METADATA="${metadata}"
 
+run_tree_benchmarks() {
+  local tree="$1"
+  local label="$2"
+  local round="$3"
+  local count="$4"
+  local benchtime="$5"
+  local use_exec="$6"
+  local data_dir="$7"
+  local i exec_args=()
+  if [[ "${use_exec}" == yes ]]; then
+    exec_args=(-exec "${binary_wrapper}")
+  fi
+  (
+    cd "${tree}"
+    if ((${#UNSPLIT_PACKAGES[@]} > 0)); then
+      PULSE_BENCH_LABEL="${label}" PULSE_BENCH_ROUND="${round}" \
+      PULSE_DATA_DIR="${data_dir}" go test "${exec_args[@]}" \
+        -bench=. -benchmem -count="${count}" -run='^$' \
+        -benchtime="${benchtime}" -timeout=5m \
+        "${UNSPLIT_PACKAGES[@]}"
+    fi
+    for ((i = 0; i < ${#SPLIT_PACKAGES[@]}; i++)); do
+      PULSE_BENCH_LABEL="${label}" PULSE_BENCH_ROUND="${round}" \
+      PULSE_DATA_DIR="${data_dir}" go test "${exec_args[@]}" \
+        -bench="${SPLIT_FILTERS[i]}" -benchmem -count="${count}" -run='^$' \
+        -benchtime="${benchtime}" -timeout=5m \
+        "${SPLIT_PACKAGES[i]}"
+    done
+  )
+}
+
 run_sample() {
   local tree="$1"
   local output="$2"
@@ -223,14 +399,7 @@ run_sample() {
   mkdir -p "${data_dir}"
   printf 'sample=%s,%s,%s\n' "${label}" "${round}" "$(date -u +%FT%TZ)" >> "${metadata}"
   echo "=== ${label} benchmark sample ${round}/${SAMPLE_COUNT} ==="
-  (
-    cd "${tree}"
-    PULSE_BENCH_LABEL="${label}" PULSE_BENCH_ROUND="${round}" \
-    PULSE_DATA_DIR="${data_dir}" go test -exec "${binary_wrapper}" \
-      -bench=. -benchmem -count=1 -run='^$' \
-      -benchtime="${BENCHTIME}" -timeout=5m \
-      "${SELECTED[@]}"
-  ) | tee -a "${output}"
+  run_tree_benchmarks "${tree}" "${label}" "${round}" 1 "${BENCHTIME}" yes "${data_dir}" | tee -a "${output}"
 }
 
 run_unpaired() {
@@ -238,14 +407,7 @@ run_unpaired() {
   local data_dir="${work_dir}/candidate"
 
   mkdir -p "${data_dir}"
-  (
-    cd "${CURRENT_DIR}"
-    PULSE_BENCH_LABEL=candidate PULSE_BENCH_ROUND=unpaired \
-    PULSE_DATA_DIR="${data_dir}" go test -exec "${binary_wrapper}" \
-      -bench=. -benchmem -count="${SAMPLE_COUNT}" -run='^$' \
-      -benchtime="${BENCHTIME}" -timeout=5m \
-      "${SELECTED[@]}"
-  ) | tee "${output}"
+  run_tree_benchmarks "${CURRENT_DIR}" candidate unpaired "${SAMPLE_COUNT}" "${BENCHTIME}" yes "${data_dir}" | tee "${output}"
 }
 
 if [[ -z "${BASELINE_DIR}" ]]; then
@@ -284,13 +446,9 @@ check_budget() {
 
 # Populate build and filesystem caches without adding a timed sample. This
 # avoids consistently charging the first measured tree for cold setup.
+mkdir -p "${work_dir}/warmup"
 for tree in "${BASELINE_DIR}" "${CURRENT_DIR}"; do
-  (
-    cd "${tree}"
-    PULSE_DATA_DIR="${work_dir}/warmup" go test \
-      -bench=. -count=1 -run='^$' -benchtime=1x -timeout=5m \
-      "${SELECTED[@]}" >/dev/null
-  )
+  run_tree_benchmarks "${tree}" warmup warmup 1 1x no "${work_dir}/warmup" >/dev/null
 done
 
 sampling_started="${SECONDS}"
