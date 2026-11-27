@@ -210,53 +210,30 @@ func (m *Monitor) recordGuestMetric(
 		return
 	}
 
-	if m.metricsHistory != nil {
-		m.metricsHistory.AddGuestMetric(resourceID, "cpu", cpu, now)
-		if memory >= 0 {
-			m.metricsHistory.AddGuestMetric(resourceID, "memory", memory, now)
-		}
-		if memoryUsed >= 0 {
-			m.metricsHistory.AddGuestMetric(resourceID, "memoryused", memoryUsed, now)
-		}
-		if diskUsage >= 0 {
-			m.metricsHistory.AddGuestMetric(resourceID, "disk", diskUsage, now)
-		}
-		if diskRead >= 0 {
-			m.metricsHistory.AddGuestMetric(resourceID, "diskread", float64(diskRead), now)
-		}
-		if diskWrite >= 0 {
-			m.metricsHistory.AddGuestMetric(resourceID, "diskwrite", float64(diskWrite), now)
-		}
-		if networkIn >= 0 {
-			m.metricsHistory.AddGuestMetric(resourceID, "netin", float64(networkIn), now)
-		}
-		if networkOut >= 0 {
-			m.metricsHistory.AddGuestMetric(resourceID, "netout", float64(networkOut), now)
+	// CPU is always submitted; the other readings use negative values for
+	// unknown. Keep observed zeroes and feed the same series to both sinks.
+	samples := [...]guestMetricSample{
+		{"cpu", cpu},
+		{"memory", memory},
+		{"memoryused", memoryUsed},
+		{"disk", diskUsage},
+		{"diskread", float64(diskRead)},
+		{"diskwrite", float64(diskWrite)},
+		{"netin", float64(networkIn)},
+		{"netout", float64(networkOut)},
+	}
+	present := samples[:1]
+	for _, sample := range samples[1:] {
+		if sample.value >= 0 {
+			present = append(present, sample)
 		}
 	}
-
+	if m.metricsHistory != nil {
+		m.metricsHistory.addGuestMetrics(resourceID, now, present)
+	}
 	if m.metricsStore != nil {
-		m.metricsStore.Write(resourceType, resourceID, "cpu", cpu, now)
-		if memory >= 0 {
-			m.metricsStore.Write(resourceType, resourceID, "memory", memory, now)
-		}
-		if memoryUsed >= 0 {
-			m.metricsStore.Write(resourceType, resourceID, "memoryused", memoryUsed, now)
-		}
-		if diskUsage >= 0 {
-			m.metricsStore.Write(resourceType, resourceID, "disk", diskUsage, now)
-		}
-		if diskRead >= 0 {
-			m.metricsStore.Write(resourceType, resourceID, "diskread", float64(diskRead), now)
-		}
-		if diskWrite >= 0 {
-			m.metricsStore.Write(resourceType, resourceID, "diskwrite", float64(diskWrite), now)
-		}
-		if networkIn >= 0 {
-			m.metricsStore.Write(resourceType, resourceID, "netin", float64(networkIn), now)
-		}
-		if networkOut >= 0 {
-			m.metricsStore.Write(resourceType, resourceID, "netout", float64(networkOut), now)
+		for _, sample := range present {
+			m.metricsStore.Write(resourceType, resourceID, sample.kind, sample.value, now)
 		}
 	}
 }

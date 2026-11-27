@@ -155,18 +155,31 @@ func (mh *MetricsHistory) Reset() {
 
 // AddGuestMetric adds a metric value for a guest
 func (mh *MetricsHistory) AddGuestMetric(guestID string, metricType string, value float64, timestamp time.Time) {
+	mh.addGuestMetrics(guestID, timestamp, []guestMetricSample{{metricType, value}})
+}
+
+type guestMetricSample struct {
+	kind  string
+	value float64
+}
+
+// addGuestMetrics records one guest observation under a single write lock.
+func (mh *MetricsHistory) addGuestMetrics(guestID string, timestamp time.Time, samples []guestMetricSample) {
 	mh.mu.Lock()
 	defer mh.mu.Unlock()
 
-	// Initialize guest metrics if not exists
-	if _, exists := mh.guestMetrics[guestID]; !exists {
-		mh.guestMetrics[guestID] = &GuestMetrics{}
+	metrics, exists := mh.guestMetrics[guestID]
+	if !exists {
+		metrics = &GuestMetrics{}
+		mh.guestMetrics[guestID] = metrics
 	}
+	for _, sample := range samples {
+		mh.appendGuestMetric(metrics, sample.kind, MetricPoint{Value: sample.value, Timestamp: timestamp})
+	}
+}
 
-	metrics := mh.guestMetrics[guestID]
-	point := MetricPoint{Value: value, Timestamp: timestamp}
-
-	// Add metric based on type
+// appendGuestMetric requires mh.mu to be write-locked.
+func (mh *MetricsHistory) appendGuestMetric(metrics *GuestMetrics, metricType string, point MetricPoint) {
 	switch metricType {
 	case "cpu":
 		metrics.CPU = mh.appendMetric(metrics.CPU, point)
