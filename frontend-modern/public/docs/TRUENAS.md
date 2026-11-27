@@ -531,8 +531,8 @@ console to collect this evidence.
 
 ### Stale TrueNAS data
 
-A **Pending**, **Stale**, or **Degraded** badge (or **not updated** on a
-service row) is not an authentication diagnosis. Keep the connection and key
+A **Pending**, **Stale**, **Stale data**, or **Degraded** badge (or
+**not updated** on a service or share row) is not an authentication diagnosis. Keep the connection and key
 unchanged while checking whether ordinary polling still collects data. A
 working connection can have missing telemetry or a stalled collection step.
 
