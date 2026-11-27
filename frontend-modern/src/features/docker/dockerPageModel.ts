@@ -249,12 +249,10 @@ export const getDockerStaleNotice = (
   const agentStatus = normalizeDockerToken(agentSource?.status);
   const isStale = Boolean(healthStale) || dockerStatus === 'stale' || agentStatus === 'stale';
   const isError =
-    DOCKER_ERROR_SOURCE_STATUSES.has(dockerStatus) ||
-    DOCKER_ERROR_SOURCE_STATUSES.has(agentStatus);
+    DOCKER_ERROR_SOURCE_STATUSES.has(dockerStatus) || DOCKER_ERROR_SOURCE_STATUSES.has(agentStatus);
   if (!isStale && !isError) return null;
 
-  const sourceError =
-    asTrimmedString(dockerSource?.error) || asTrimmedString(agentSource?.error);
+  const sourceError = asTrimmedString(dockerSource?.error) || asTrimmedString(agentSource?.error);
   const age = healthStale?.age ?? null;
   const base =
     isError && !isStale

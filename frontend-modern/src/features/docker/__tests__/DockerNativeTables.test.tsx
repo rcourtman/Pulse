@@ -2781,7 +2781,9 @@ describe('Docker native tables', () => {
     expect(staleSvcRow.textContent).toContain('Stable');
 
     fireEvent.click(staleSvcRow);
-    const svcDetail = within(document.querySelector<HTMLElement>('[data-testid="docker-service-detail"]')!);
+    const svcDetail = within(
+      document.querySelector<HTMLElement>('[data-testid="docker-service-detail"]')!,
+    );
     expect(svcDetail.getByLabelText('Stale data')).toBeInTheDocument();
     expect(svcDetail.getByTestId('docker-stale-readings-notice')).toHaveTextContent(
       'No Docker report for 16m',
@@ -2814,13 +2816,17 @@ describe('Docker native tables', () => {
     ));
 
     const staleTaskRow = document.querySelector('[data-docker-task-row="task-stale"]')!;
-    expect(staleTaskRow.querySelector('[data-docker-stale="task"]')).toHaveTextContent('Stale data');
+    expect(staleTaskRow.querySelector('[data-docker-stale="task"]')).toHaveTextContent(
+      'Stale data',
+    );
     // Current column preserves the last-reported task state instead of replacing it.
     expect(staleTaskRow.querySelector('[data-docker-task-state="success"]')).toHaveTextContent(
       'Running',
     );
     fireEvent.click(staleTaskRow);
-    const taskDetail = within(document.querySelector<HTMLElement>('[data-testid="docker-task-detail"]')!);
+    const taskDetail = within(
+      document.querySelector<HTMLElement>('[data-testid="docker-task-detail"]')!,
+    );
     expect(taskDetail.getByLabelText('Stale data')).toBeInTheDocument();
     expect(taskDetail.getByTestId('docker-stale-readings-notice')).toHaveTextContent(
       'No Docker report for 16m',

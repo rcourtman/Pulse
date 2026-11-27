@@ -1395,7 +1395,11 @@ describe('Docker stale-reading detection and Swarm / Compose freshness', () => {
           id: 'svc-stale-rollback',
           type: 'docker-service',
           sourceStatus: staleSource,
-          docker: { desiredTasks: 3, runningTasks: 3, serviceUpdate: { state: 'rollback_started' } },
+          docker: {
+            desiredTasks: 3,
+            runningTasks: 3,
+            serviceUpdate: { state: 'rollback_started' },
+          },
         }),
       ),
     ).toEqual({ variant: 'warning', label: 'Rolling back' });
@@ -1465,15 +1469,15 @@ describe('Docker stale-reading detection and Swarm / Compose freshness', () => {
       docker: { desiredTasks: 2, runningTasks: 2 },
     });
 
-    expect(filterDockerResources([staleService, freshService], '', 'online').map((r) => r.id)).toEqual([
-      'svc-fresh',
-    ]);
+    expect(
+      filterDockerResources([staleService, freshService], '', 'online').map((r) => r.id),
+    ).toEqual(['svc-fresh']);
     expect(
       filterDockerResources([staleService, freshService], '', 'degraded').map((r) => r.id),
     ).toEqual(['svc-stale']);
-    expect(filterDockerResources([staleService, freshService], 'stale', 'all').map((r) => r.id)).toEqual(
-      ['svc-stale'],
-    );
+    expect(
+      filterDockerResources([staleService, freshService], 'stale', 'all').map((r) => r.id),
+    ).toEqual(['svc-stale']);
   });
 
   it('detects Compose application staleness from either the runtime host or its containers', () => {
