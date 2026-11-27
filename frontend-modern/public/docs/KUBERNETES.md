@@ -550,9 +550,10 @@ current.
   **Healthy** and appear under **Degraded**. Stale nodes also appear in
   **Nodes needing attention** on **Kubernetes → Overview**.
 - **Inline drawer context.** Expanding a stale Kubernetes row shows a
-  **Stale data** notice (`Showing the last Kubernetes report — no fresh update
-  received recently.`, followed by `Last error:` when Pulse recorded a source
-  error) while keeping the last reported metrics and counts visible.
+  **Stale data** notice
+  (`Showing the last Kubernetes report — no fresh update received recently.`,
+  followed by `Last error:` when Pulse recorded a source error) while keeping
+  the last reported metrics and counts visible.
 
 Check the existing agent pod status, recent agent logs and the Pulse connection
 error before changing configuration. Do not restart pods, reapply the Secret or

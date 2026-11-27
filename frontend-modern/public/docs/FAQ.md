@@ -333,9 +333,9 @@ does not prove that every reading is fresh. Missing or unavailable is not zero.
   as **Offline**, **NotReady**, **Unschedulable**, **Failed**,
   **CrashLoopBackOff** and replica shortfalls stay ahead of staleness. Stale
   resources move out of **Healthy** into **Degraded** and **Nodes needing
-  attention**, and expanded object drawers show `Showing the last Kubernetes
-  report — no fresh update received recently.` without hiding retained metrics
-  or counts.
+  attention**, and expanded object drawers show
+  `Showing the last Kubernetes report — no fresh update received recently.`
+  without hiding retained metrics or counts.
 
 Use the relevant checks for [stale TrueNAS data](TRUENAS.md#stale-truenas-data),
 [stale Kubernetes readings](KUBERNETES.md#stale-kubernetes-readings),
