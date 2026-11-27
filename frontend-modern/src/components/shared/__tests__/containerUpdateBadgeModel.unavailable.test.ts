@@ -4,6 +4,7 @@ import {
   getUpdateUnavailableExplanation,
   hasContainerUpdateError,
   isContainerUpdateUncheckable,
+  isHostCommandsDisabledUpdateRefusal,
 } from '@/components/shared/containerUpdateBadgeModel';
 
 const disconnected = {
@@ -13,38 +14,55 @@ const disconnected = {
 };
 
 describe('locked update explanation', () => {
-  it('names a missing command access and where to turn it on', () => {
-    const text = getUpdateUnavailableExplanation({ ...disconnected, hostCommandsEnabled: false });
-    expect(text).toContain('the Pulse agent on Tower does not accept commands from Pulse');
-    expect(text).toContain(
-      'open Settings → Infrastructure, choose Manage on Tower, and follow Remote commands',
-    );
-    expect(text).not.toContain('advanced');
-    expect(text).not.toContain('not connected');
+  it('keeps the tooltip concise and invites click-to-enable for admins when commands are off', () => {
+    const text = getUpdateUnavailableExplanation({
+      ...disconnected,
+      hostCommandsEnabled: false,
+      canEnableCommands: true,
+    });
+    expect(text).toBe('Update available. Click to enable remote commands on Tower.');
+    expect(text).not.toContain('\n');
+    expect(text).not.toContain('Settings');
   });
 
-  it("reads the server's commands-off code without the host's own flag", () => {
+  it('states read-only status concisely when the viewer cannot enable commands', () => {
     const text = getUpdateUnavailableExplanation({
-      reason:
-        'Commands are not enabled on the Pulse agent on Tower. To allow them, run the Pulse install command on Tower again with "Allow Pulse to run commands on this host" ticked.',
+      reason: 'Commands are not enabled on the Pulse agent on Tower.',
       reasonCode: 'host_commands_disabled',
       hostName: 'Tower',
+      canEnableCommands: false,
     });
-    expect(text).toContain('the Pulse agent on Tower does not accept commands from Pulse');
-    expect(text).toContain('choose Manage on Tower, and follow Remote commands');
-    expect(text).not.toContain('not connected');
+    expect(text).toBe('Update available. Remote commands are off on Tower.');
+    expect(text).not.toContain('Click to enable');
+  });
+
+  it('identifies commands-off refusals from either the explicit code or legacy disconnected + flag', () => {
+    expect(isHostCommandsDisabledUpdateRefusal({ reasonCode: 'host_commands_disabled' })).toBe(
+      true,
+    );
+    expect(
+      isHostCommandsDisabledUpdateRefusal({
+        reasonCode: 'command_agent_disconnected',
+        hostCommandsEnabled: false,
+      }),
+    ).toBe(true);
+    expect(
+      isHostCommandsDisabledUpdateRefusal({
+        reasonCode: 'command_agent_disconnected',
+        hostCommandsEnabled: true,
+      }),
+    ).toBe(false);
   });
 
   it('tells a lost command channel apart from missing access', () => {
     const text = getUpdateUnavailableExplanation({ ...disconnected, hostCommandsEnabled: true });
-    expect(text).toContain('the command channel to the Pulse agent on Tower is not connected');
+    expect(text).toBe('Update available. Command channel to Tower is offline.');
     expect(text).not.toContain('Remote commands');
   });
 
-  it("falls back to the server's reason when command access is unknown", () => {
+  it("falls back to a single concise line using the server's reason when command access is unknown", () => {
     expect(getUpdateUnavailableExplanation(disconnected)).toBe(
-      'Update available. Pulse cannot apply it: Docker / Podman command agent is not connected.\n' +
-        'Apply this update using your container manager on the host.',
+      'Update available. Docker / Podman command agent is not connected.',
     );
     expect(
       getUpdateUnavailableExplanation({

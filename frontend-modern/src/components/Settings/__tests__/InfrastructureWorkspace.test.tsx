@@ -1860,16 +1860,13 @@ describe('InfrastructureWorkspace', () => {
     const section = screen.getByRole('region', { name: 'Remote commands' });
     expect(section).toHaveTextContent('Remote commands are off');
     expect(section).toHaveTextContent('Command access is granted on the host, not from Pulse');
-    expect(section).toHaveTextContent('Allow Pulse to run commands on this host');
     expect(screen.getByText('Linux / macOS / FreeBSD')).toBeInTheDocument();
     expect(screen.queryByText('Windows PowerShell')).not.toBeInTheDocument();
 
-    navigateSpy.mockClear();
-    fireEvent.click(within(section).getByRole('button', { name: 'Get install command' }));
-    expect(setEnableCommandsSpy).toHaveBeenCalledWith(true);
-    expect(navigateSpy).toHaveBeenCalledWith('/settings/infrastructure?add=agent', {
-      scroll: false,
-    });
+    fireEvent.click(within(section).getByRole('button', { name: 'Enable remote commands' }));
+    expect(
+      await screen.findByRole('heading', { name: 'Enable remote commands on Tower' }),
+    ).toBeInTheDocument();
   });
 
   it('shows attached Pulse Agent augmentation details on a grouped platform source', async () => {

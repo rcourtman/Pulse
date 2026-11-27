@@ -2,10 +2,12 @@ import {
   Component,
   Match,
   Show,
+  Suspense,
   Switch,
   createEffect,
   createMemo,
   createSignal,
+  lazy,
   onCleanup,
   untrack,
 } from 'solid-js';
@@ -24,11 +26,15 @@ import {
 } from '@/stores/license';
 import { copyToClipboard } from '@/utils/clipboard';
 import { createLocalStorageBooleanSignal } from '@/utils/localStorage';
-import { getUnifiedAgentCommandAccessOptionLabel } from '@/utils/unifiedAgentInventoryPresentation';
 import { notificationStore } from '@/stores/notifications';
 import { updateStore } from '@/stores/updates';
 import { eventBus } from '@/stores/events';
 import { Dialog } from '@/components/shared/Dialog';
+import { extractConnectionCommandAccessContext } from '@/components/shared/hostCommandAccessContext';
+
+const EnableRemoteCommandsDialog = lazy(
+  () => import('@/components/shared/EnableRemoteCommandsDialog'),
+);
 import { ActionIconButton, Button, ButtonLink } from '@/components/shared/Button';
 import { AgentProfilesPanel } from './AgentProfilesPanel';
 import {
@@ -67,6 +73,7 @@ import {
   deriveAgentDoctorScopeFromLocation,
   deriveAgentDoctorFromLocation,
   deriveAddStepFromLocation,
+  isCommandAccessInstallerStep,
   type InfrastructureAddStep,
   type InfrastructurePanelStep,
 } from './infrastructureWorkspaceModel';
@@ -195,6 +202,9 @@ const InfrastructureWorkspaceContent: Component<InfrastructureWorkspaceProps> = 
     null,
   );
   const [editFocusReturnConnectionId, setEditFocusReturnConnectionId] = createSignal<string | null>(
+    null,
+  );
+  const [enableCommandsConnection, setEnableCommandsConnection] = createSignal<Connection | null>(
     null,
   );
   const readOnly = createMemo(() => presentationPolicyIsReadOnly());
@@ -432,7 +442,10 @@ const InfrastructureWorkspaceContent: Component<InfrastructureWorkspaceProps> = 
   let commandAccessAppliedFor = '';
   createEffect(() => {
     const search = location.search ?? '';
-    if (routeStep() !== 'agent' || !deriveCommandAccessRequestFromSearch(search)) {
+    if (
+      !isCommandAccessInstallerStep(routeStep()) ||
+      !deriveCommandAccessRequestFromSearch(search)
+    ) {
       commandAccessAppliedFor = '';
       return;
     }
@@ -573,23 +586,24 @@ const InfrastructureWorkspaceContent: Component<InfrastructureWorkspaceProps> = 
   );
 
   // A monitoring-only agent sets its command ceiling locally at install time,
-  // so Pulse cannot raise it from here; that is what keeps such a host safe
-  // from a compromised Pulse. The locked Docker update pill sends users to
-  // this dialog, so it names the one host-side step and opens the installer
-  // with that option already ticked.
-  const commandAccessInstallerStep = (connection?: Connection): ManagedAddTypeStep => {
-    const profile = connection?.agentIdentity?.hostProfile?.trim().toLowerCase();
-    if (profile === 'unraid' || profile === 'docker' || profile === 'kubernetes') {
-      return profile;
-    }
-    return 'agent';
+  // so Pulse cannot raise it from here. Open the focused inline setup dialog
+  // directly rather than dropping the operator into the full onboarding wizard.
+  const openEnableCommandsDialog = (connection: Connection) => {
+    closeEditFlow();
+    setEnableCommandsConnection(connection);
   };
 
-  const openCommandAccessInstaller = (connection?: Connection) => {
-    closeEditFlow();
-    void operations.setEnableCommands(true);
-    openAddFlow(commandAccessInstallerStep(connection));
-  };
+  const enableCommandsTarget = createMemo(() => {
+    const connection = enableCommandsConnection();
+    return connection ? extractConnectionCommandAccessContext(connection) : null;
+  });
+
+  const liveEnableCommandsEnabled = createMemo(() => {
+    const connection = enableCommandsConnection();
+    if (!connection) return false;
+    const latest = ledger.findById(connection.id) ?? connection;
+    return latest.agentIdentity?.commandsEnabled === true;
+  });
 
   const openAgentDoctorForConnection = (connectionId: string) => {
     closeEditFlow();
@@ -603,10 +617,8 @@ const InfrastructureWorkspaceContent: Component<InfrastructureWorkspaceProps> = 
           <div class="space-y-1">
             <div class="text-sm font-semibold text-base-content">Remote commands are off</div>
             <p class="text-xs text-muted">
-              Pulse can't apply container updates or other actions on {connection.name}. Command
-              access is granted on the host, not from Pulse: run the install command on{' '}
-              {connection.name} with{' '}
-              <span class="font-medium">{getUnifiedAgentCommandAccessOptionLabel()}</span> ticked.
+              Pulse cannot apply container updates or other actions on {connection.name}. Command
+              access is granted on the host, not from Pulse.
             </p>
           </div>
           <Show when={!readOnly()}>
@@ -614,12 +626,9 @@ const InfrastructureWorkspaceContent: Component<InfrastructureWorkspaceProps> = 
               variant="outline"
               size="settingsAction"
               class="shrink-0"
-              // The install state ignores a command-access change while a token
-              // is minting, so the installer would open without the option.
-              disabled={operations.isGeneratingToken()}
-              onClick={() => openCommandAccessInstaller(connection)}
+              onClick={() => openEnableCommandsDialog(connection)}
             >
-              Get install command
+              Enable remote commands
             </Button>
           </Show>
         </div>
@@ -1478,6 +1487,18 @@ const InfrastructureWorkspaceContent: Component<InfrastructureWorkspaceProps> = 
               </Dialog>
             );
           }}
+        </Show>
+
+        <Show when={Boolean(enableCommandsConnection())}>
+          <Suspense>
+            <EnableRemoteCommandsDialog
+              isOpen={Boolean(enableCommandsConnection())}
+              target={enableCommandsTarget()}
+              commandsEnabled={liveEnableCommandsEnabled()}
+              onEnabled={() => ledger.reload()}
+              onClose={() => setEnableCommandsConnection(null)}
+            />
+          </Suspense>
         </Show>
       </div>
     </Show>

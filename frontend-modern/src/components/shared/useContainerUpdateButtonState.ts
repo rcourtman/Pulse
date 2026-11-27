@@ -8,9 +8,12 @@ import {
   markContainerUpdateSuccess,
   updateStates,
 } from '@/stores/containerUpdates';
+import { presentationPolicyIsReadOnly } from '@/stores/sessionPresentationPolicy';
+import { sessionCanReadInfrastructureSettings } from '@/stores/sessionSettingsCapabilities';
 import { areSystemSettingsLoaded, shouldHideDockerUpdateActions } from '@/stores/systemSettings';
 import { getActionReadinessRefusal } from '@/utils/actionReadiness';
 import type { ActionDetailResponse } from '@/types/actionAudit';
+import type { EnableRemoteCommandsTarget } from './hostCommandAccessContext';
 import {
   getUpdateButtonLabel,
   getUpdateButtonTooltip,
@@ -20,6 +23,7 @@ import {
   hasContainerUpdateCurrent,
   hasContainerUpdateError,
   isContainerUpdateUncheckable,
+  isHostCommandsDisabledUpdateRefusal,
   type UpdateButtonProps,
   type UpdateState,
 } from './containerUpdateBadgeModel';
@@ -35,6 +39,7 @@ export function useContainerUpdateButtonState(props: UpdateButtonProps) {
   const [localState, setLocalState] = createSignal<'idle' | 'planning'>('idle');
   const [errorMessage, setErrorMessage] = createSignal('');
   const [reviewDetail, setReviewDetail] = createSignal<ActionDetailResponse | null>(null);
+  const [enableCommandsOpen, setEnableCommandsOpen] = createSignal(false);
 
   const settingsLoaded = () => areSystemSettingsLoaded();
   const shouldHideButton = () => shouldHideDockerUpdateActions();
@@ -87,15 +92,48 @@ export function useContainerUpdateButtonState(props: UpdateButtonProps) {
       (hasContainerUpdate(props.updateStatus) ? props.updateNotOfferedReason : undefined)
     );
   };
+  const updateUnavailableReasonCode = (): string | undefined =>
+    props.actionReadiness?.find(
+      (item) => item.name?.trim().toLowerCase() === 'update' && item.available === false,
+    )?.reasonCode;
+  const effectiveHostName = (): string | undefined =>
+    props.hostCommandAccess?.hostName || props.hostName;
+  const effectiveHostCommandsEnabled = (): boolean | undefined =>
+    props.hostCommandAccess?.commandsEnabled ?? props.hostCommandsEnabled;
   const isUpdateUnavailable = () => Boolean(updateUnavailableReason());
+  const isHostCommandsDisabled = () =>
+    isUpdateUnavailable() &&
+    isHostCommandsDisabledUpdateRefusal({
+      reasonCode: updateUnavailableReasonCode(),
+      hostCommandsEnabled: effectiveHostCommandsEnabled(),
+    });
+  const canEnableRemoteCommands = () =>
+    isHostCommandsDisabled() &&
+    !presentationPolicyIsReadOnly() &&
+    sessionCanReadInfrastructureSettings();
+  const hostCommandTarget = createMemo<EnableRemoteCommandsTarget | null>(() => {
+    if (!enableCommandsOpen()) return null;
+    const base = props.hostCommandAccess;
+    return {
+      hostResourceId: base?.hostResourceId,
+      hostName: base?.hostName || props.hostName?.trim() || 'this host',
+      agentId: base?.agentId || props.agentId,
+      hostname: base?.hostname,
+      platform: base?.platform,
+      hostProfile: base?.hostProfile,
+      collectionMode: base?.collectionMode,
+      commandsEnabled: effectiveHostCommandsEnabled(),
+      containerName: props.containerName,
+      actionKind: 'update',
+    };
+  });
   const updateUnavailableExplanation = (): string =>
     getUpdateUnavailableExplanation({
       reason: updateUnavailableReason() ?? '',
-      reasonCode: props.actionReadiness?.find(
-        (item) => item.name?.trim().toLowerCase() === 'update' && item.available === false,
-      )?.reasonCode,
-      hostName: props.hostName,
-      hostCommandsEnabled: props.hostCommandsEnabled,
+      reasonCode: updateUnavailableReasonCode(),
+      hostName: effectiveHostName(),
+      hostCommandsEnabled: effectiveHostCommandsEnabled(),
+      canEnableCommands: canEnableRemoteCommands(),
     });
 
   const isButtonDisabled = () =>
@@ -223,14 +261,20 @@ export function useContainerUpdateButtonState(props: UpdateButtonProps) {
   return {
     buttonLabel,
     buttonTooltip,
+    canEnableRemoteCommands,
+    continueAfterEnableCommands: () => void planUpdateReview(),
     currentState,
+    effectiveHostCommandsEnabled,
+    enableCommandsOpen,
     handleClick,
     handleReviewChanged,
     handleReviewClosed,
     hasUpdate,
+    hostCommandTarget,
     isButtonDisabled,
     isUpdateUnavailable,
     reviewDetail,
+    setEnableCommandsOpen,
     settingsLoaded,
     shouldHideButton,
     updateUnavailableExplanation,

@@ -1,5 +1,6 @@
 import type { DockerContainerUpdateStatus } from '@/types/api';
 import type { ResourceActionReadiness, ResourceDockerMeta } from '@/types/resource';
+import type { HostCommandAccessContext } from './hostCommandAccessContext';
 
 export interface ContainerUpdateBadgeProps {
   updateStatus?: DockerContainerUpdateStatus;
@@ -29,9 +30,10 @@ export interface UpdateButtonProps {
   updateNotOfferedReason?: string;
   // The container's host and whether its Pulse agent was installed with
   // command access. The server's refusal reads "not connected" either way;
-  // these let the locked badge say which, and what to do about it.
+  // these let the locked badge say which, and open the inline enable flow.
   hostName?: string;
   hostCommandsEnabled?: boolean;
+  hostCommandAccess?: HostCommandAccessContext;
   compact?: boolean;
   /**
    * A 44px minimum height below the `sm` breakpoint, for a control a phone
@@ -124,42 +126,44 @@ export function getContainerUpdateCurrentTooltip(
   return `Image is current\nDigest: ${current}...`;
 }
 
+export function isHostCommandsDisabledUpdateRefusal(input: {
+  reasonCode?: string;
+  hostCommandsEnabled?: boolean;
+}): boolean {
+  return (
+    input.reasonCode === 'host_commands_disabled' ||
+    (input.reasonCode === 'command_agent_disconnected' && input.hostCommandsEnabled === false)
+  );
+}
+
 /**
- * What the locked "Update available" badge says when Pulse cannot apply the
- * update. An agent that does not accept commands is the common case and has
- * one fix, so it is named outright instead of the server's transport wording,
- * with the exact place that hands over the command. An absent commandsEnabled
- * flag reads as false, so the copy says the agent does not accept commands
- * rather than claiming how it was installed.
+ * Concise hover/accessible explanation for a locked "Update" pill.
+ * When command access is off on the host, clicking the pill opens the inline
+ * setup dialog directly, so the tooltip stays a single scannable line instead
+ * of a multi-step text block.
  */
 export function getUpdateUnavailableExplanation(input: {
   reason: string;
   reasonCode?: string;
   hostName?: string;
   hostCommandsEnabled?: boolean;
+  canEnableCommands?: boolean;
 }): string {
   const host = input.hostName?.trim() || 'this host';
-  // The server names a commands-off agent with its own code. An older server
-  // reported it as disconnected, which the host's own flag then told apart.
-  if (
-    input.reasonCode === 'host_commands_disabled' ||
-    (input.reasonCode === 'command_agent_disconnected' && input.hostCommandsEnabled === false)
-  ) {
-    return (
-      `Update available. Pulse cannot apply it because the Pulse agent on ${host} does not accept commands from Pulse.\n` +
-      `To allow it, open Settings → Infrastructure, choose Manage on ${host}, and follow Remote commands. ` +
-      'Or apply the update with your container manager.'
-    );
-  }
-  if (input.reasonCode === 'command_agent_disconnected') {
-    if (input.hostCommandsEnabled === true) {
-      return (
-        `Update available. Pulse cannot apply it at the moment because the command channel to the Pulse agent on ${host} is not connected.\n` +
-        'Check that the agent is running, or apply the update with your container manager.'
-      );
+  if (isHostCommandsDisabledUpdateRefusal(input)) {
+    if (input.canEnableCommands) {
+      return `Update available. Click to enable remote commands on ${host}.`;
     }
+    return `Update available. Remote commands are off on ${host}.`;
   }
-  return `Update available. Pulse cannot apply it: ${input.reason}\nApply this update using your container manager on the host.`;
+  if (input.reasonCode === 'command_agent_disconnected' && input.hostCommandsEnabled === true) {
+    return `Update available. Command channel to ${host} is offline.`;
+  }
+  const trimmedReason = input.reason.trim();
+  if (!trimmedReason) {
+    return 'Update available, but Pulse cannot apply it right now.';
+  }
+  return `Update available. ${trimmedReason}`;
 }
 
 export function getContainerUpdateBadgeTooltip(updateStatus?: DockerContainerUpdateStatus): string {

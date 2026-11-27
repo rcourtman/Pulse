@@ -88,6 +88,7 @@ const LazyAvailabilityDrawerHistory = lazy(() => import('./AvailabilityDrawerHis
 
 interface ResourceDetailDrawerOverviewTabProps {
   resource: Resource;
+  parentHost?: Resource;
   drawer: UseResourceDetailDrawerStateResult;
   presentation?: ResourceDetailDrawerPresentation;
 }
@@ -361,6 +362,9 @@ export const ResourceDetailDrawerOverviewTab: Component<ResourceDetailDrawerOver
   const summarySections = useResourceSummarySections({
     get resource() {
       return resource();
+    },
+    get parentHost() {
+      return props.parentHost;
     },
     drawer,
     get showPlatformId() {

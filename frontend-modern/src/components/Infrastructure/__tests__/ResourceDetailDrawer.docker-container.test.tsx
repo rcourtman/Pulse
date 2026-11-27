@@ -410,9 +410,7 @@ describe('ResourceDetailDrawer for Docker containers', () => {
       />
     ));
     const lifted = screen.getByTestId('resource-drawer-exceptions');
-    const locked = within(lifted).getByLabelText(
-      /Pulse cannot apply it: Command agent disconnected/,
-    );
+    const locked = within(lifted).getByLabelText(/Update available\. Command agent disconnected/);
     expect(locked).toHaveTextContent('Update');
     expect(locked).toHaveClass('max-sm:min-h-11');
     expect(within(lifted).queryByRole('button')).toBeNull();

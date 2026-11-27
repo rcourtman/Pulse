@@ -79,14 +79,31 @@ export function buildInfrastructureOnboardingPath(step: InfrastructurePanelStep 
   return `${INFRASTRUCTURE_BASE_PATH}?${params.toString()}`;
 }
 
+export type InfrastructureCommandAccessStep =
+  'agent' | 'linux-host' | 'unraid' | 'docker' | 'kubernetes';
+
+export function isCommandAccessInstallerStep(
+  step: InfrastructurePanelStep | null | undefined,
+): step is InfrastructureCommandAccessStep {
+  return (
+    step === 'agent' ||
+    step === 'linux-host' ||
+    step === 'unraid' ||
+    step === 'docker' ||
+    step === 'kubernetes'
+  );
+}
+
 /**
  * The agent installer with command access already ticked. Surfaces that find a
  * host whose agent has commands off link here, because the only way to turn
  * them on is to run the install command on that host with the option ticked.
  */
-export function buildInfrastructureCommandAccessPath(): string {
+export function buildInfrastructureCommandAccessPath(
+  step: InfrastructureCommandAccessStep = 'agent',
+): string {
   const params = new URLSearchParams();
-  params.set(INFRASTRUCTURE_ADD_QUERY_PARAM, 'agent');
+  params.set(INFRASTRUCTURE_ADD_QUERY_PARAM, step);
   params.set(INFRASTRUCTURE_COMMAND_ACCESS_QUERY_PARAM, '1');
   return `${INFRASTRUCTURE_BASE_PATH}?${params.toString()}`;
 }
