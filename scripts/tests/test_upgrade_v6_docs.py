@@ -139,6 +139,18 @@ class UpgradeV6DocsTest(unittest.TestCase):
                 if not anchor.startswith('-'):
                     self.assertIn(anchor, anchors_for(resolved))
 
+    def test_agent_doctor_route_and_top_level_navigation_match_live_source(self):
+        text = prose(guide())
+        self.assertIn("/settings/infrastructure/agent-doctor", text)
+        self.assertIn("Availability, Alerts, Patrol, Actions, and Settings", text)
+        model = (
+            ROOT / "frontend-modern/src/components/Settings/infrastructureWorkspaceModel.ts"
+        ).read_text(encoding="utf-8")
+        self.assertIn("INFRASTRUCTURE_AGENT_DOCTOR_PATH = `${INFRASTRUCTURE_BASE_PATH}/agent-doctor`", model)
+        layout = (ROOT / "frontend-modern/src/AppLayout.tsx").read_text(encoding="utf-8")
+        self.assertIn("label: 'Availability'", layout)
+        self.assertIn("label: 'Actions'", layout)
+
     def test_shipped_guide_is_byte_identical(self):
         self.assertEqual(GUIDE.read_bytes(), (ROOT / 'frontend-modern/public/docs/UPGRADE_v6.md').read_bytes())
 

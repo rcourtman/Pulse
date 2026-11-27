@@ -1,6 +1,6 @@
 # Unified Resource Model
 
-Pulse v6 introduces a **unified resource model** that normalizes all monitored infrastructure — Proxmox VE, Proxmox Backup Server, Proxmox Mail Gateway, Docker, host agents, Kubernetes, and TrueNAS — into a single, consistent data structure.
+Pulse v6 introduces a **unified resource model** that normalizes all monitored infrastructure — Proxmox VE, Proxmox Backup Server, Proxmox Mail Gateway, Docker, host agents, Kubernetes, TrueNAS, VMware vSphere, and Availability checks — into a single, consistent data structure.
 
 ## Why Unified Resources?
 
@@ -54,6 +54,8 @@ The aggregate `status` is computed from all contributing sources.
 | `docker` | Docker/Podman — containers, images, networks |
 | `kubernetes` | Kubernetes — clusters, nodes, pods, deployments |
 | `truenas` | TrueNAS — system info, ZFS pools, datasets, snapshots, replication |
+| `vmware` | VMware vSphere — vCenter and ESXi hosts, VMs, datastores, networks |
+| `availability` | Availability checks — website, service, device, and TLS certificate checks |
 
 ## Unified Navigation
 
@@ -62,6 +64,7 @@ The v6 UI keeps platform-shaped top-level navigation. The unified resource model
 | Page | What it shows |
 |---|---|
 | **Proxmox**, **Docker**, **Kubernetes**, **TrueNAS**, **vSphere**, **Machines** | One page per platform, shown only when Pulse has resources for that platform |
+| **Availability** | Website, service, device, and TLS certificate checks (`/availability`) |
 | **Alerts** | Alerts across all platforms |
 | **Patrol** | Patrol checks, shown only when AI is enabled |
 | **Actions** | Approvals, ready work and recorded outcomes |
@@ -86,10 +89,18 @@ Returns all unified resources. Supports query parameters:
 | Parameter | Description |
 |---|---|
 | `type` | Filter by resource type, comma-separated (`agent`, `vm`, `system-container`, `app-container`, `storage`, `pod`, etc.). Unknown tokens return HTTP 400. |
-| `source` | Filter by data source (`proxmox`, `docker`, `kubernetes`, etc.) |
+| `source` | Filter by data source, comma-separated (`proxmox`, `pbs`, `pmg`, `agent`, `docker`, `kubernetes`, `truenas`, `vmware`, `availability`) |
+| `excludeSource` | Exclude one or more data sources, comma-separated |
 | `status` | Filter by status (`online`, `warning`, `offline`, `unknown`) |
+| `parent` | Filter by parent resource ID |
+| `cluster` | Filter by cluster name |
+| `namespace` | Filter by Kubernetes namespace |
 | `q` | Case-insensitive substring match on resource name |
 | `tags` | Filter by resource tag |
+| `page` | 1-based page number (default `1`) |
+| `limit` | Page size (default `50`, maximum `100`) |
+| `sort` | Sort field (default `name`) |
+| `order` | Sort direction (`asc` or `desc`, default `asc`) |
 
 ### Resource Details
 

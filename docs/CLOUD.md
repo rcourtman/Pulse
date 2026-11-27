@@ -8,7 +8,7 @@ Pulse Cloud is for a hosted Pulse instance. Pulse MSP is a separate provider pat
 
 1. **Sign up** at the Pulse Cloud portal.
 2. **Connect your agents** — install the Pulse agent on your infrastructure pointing to your cloud URL.
-3. **Monitor** — access your dashboard from any browser or supported Pulse Mobile client.
+3. **Monitor** — access your dashboard from any browser on desktop or phone.
 
 Each Cloud account gets a dedicated, isolated Pulse instance with its own subdomain (e.g., `yourname.cloud.pulserelay.pro`).
 
@@ -23,7 +23,7 @@ Pulse Cloud includes everything in the **Pro** plan, plus:
 | **Automatic backups** | Daily encrypted backups with 7-day retention |
 | **Dedicated instance** | Your data runs in an isolated container — not shared with other tenants |
 | **Wildcard TLS** | HTTPS with auto-renewing certificates |
-| **Mobile ready** | Relay is pre-configured for secure Pulse Mobile remote access |
+| **Mobile web access** | Open your Pulse dashboard in any phone browser over HTTPS |
 
 ### Cloud Enterprise (Add-On)
 
@@ -66,9 +66,9 @@ or substitute the top-level GitHub server installer.
 
 Add your Proxmox VE, PBS, PMG, or TrueNAS systems via **Settings → Infrastructure** (**Add infrastructure**).
 
-### 4. Set Up Mobile Access
+### 4. Phone Alerts and Existing Mobile Pairings
 
-Relay is enabled by default on Cloud instances. Open **Settings → Pulse Mobile** to pair a phone. Pulse Mobile is being retired on 31 March 2027.
+Pulse Mobile is being retired on 31 March 2027, and Relay is no longer sold. For alerts on your phone, add an **ntfy**, **Gotify**, or **Pushover** destination under **Alerts → Notifications**, and open your Cloud URL in your phone's browser. Existing paired phones remain managed under **Settings → Security → Pulse Mobile** (`/settings/system-relay`) until 31 March 2027.
 
 ## Data & Privacy
 
@@ -122,8 +122,9 @@ stop before importing rather than cancel the source or run two connected copies.
    destinations so two instances do not send duplicate alerts or remote actions.
 3. **Export** from the source through **Settings → System → Recovery → Create
    Backup**, using a strong, unique passphrase stored separately. If Cloud
-   already has useful configuration, export it first. **Restore Configuration**
-   replaces the included settings and API-token records; it does not merge them.
+   already has useful configuration, export it first. **Restore Configuration →
+   Restore Backup** replaces the included settings and API-token records. It
+   does not merge them.
 4. Re-create the excluded connections and settings you need. Retarget existing
    agents using the [address-change procedure](UNIFIED_AGENT.md#moving-pulse-to-a-new-address),
    not by uninstalling or re-enrolling them. It preserves the saved identity and
@@ -141,8 +142,9 @@ stop before importing rather than cancel the source or run two connected copies.
    from monitored systems, agents and notification destinations.
 3. **Export** from Cloud through **Settings → System → Recovery → Create
    Backup**. Keep its passphrase separately and privately. Export any existing
-   destination configuration first, then use **Restore Configuration** there;
-   import replaces the included settings and API-token records, not a merge.
+   destination configuration first, then use **Restore Configuration → Restore
+   Backup** there. Import replaces the included settings and API-token records,
+   not a merge.
 4. Re-create excluded connections and settings, and verify your Pro licence
    separately if using Pro self-hosted. Retarget existing agents with the
    [address-change procedure](UNIFIED_AGENT.md#moving-pulse-to-a-new-address),
@@ -196,7 +198,7 @@ state need separate handling. Verify the destination before retiring the source.
 
 ## See Also
 
-- [Plans & Entitlements](PULSE_PRO.md) — feature comparison across Community, Relay, Pro, legacy Pro+, and Cloud
+- [Plans & Entitlements](PULSE_PRO.md) — feature comparison across Community, Pro, legacy Relay/Pro+, and Cloud
 - [Installation (Self-Hosted)](INSTALL.md) — self-hosted installation guide
-- [Relay / Mobile Access](RELAY.md) — relay setup and mobile rollout status (pre-configured on Cloud)
+- [Relay / Mobile Access](RELAY.md) — retirement schedule and existing paired-phone guidance
 - [Multi-Tenant](MULTI_TENANT.md), Enterprise/internal multi-organization mode

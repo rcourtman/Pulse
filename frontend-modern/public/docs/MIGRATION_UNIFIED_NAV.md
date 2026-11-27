@@ -3,7 +3,7 @@
 > **This migration has been reverted as of `v6.0.0-rc.6`.** Pulse v6 ships
 > with the platform-shaped top-level navigation existing v5 operators
 > already know (Proxmox, Docker, Kubernetes, TrueNAS, vSphere, Machines,
-> plus Alerts, Patrol, and Settings). The unified
+> Availability, Alerts, Patrol, Actions, and Settings). The unified
 > `/infrastructure` / `/workloads` / `/storage` / `/recovery` layout that
 > briefly shipped across `rc.1` through `rc.5` is retired. The unified
 > resource model and `/api/resources` contract remain on the backend.
@@ -21,7 +21,7 @@
 > The keyboard shortcuts follow the platform-shaped shape:
 >
 > - `g p` Proxmox, `g d` Docker, `g k` Kubernetes, `g n` TrueNAS,
->   `g v` vSphere, `g s` Machines
+>   `g v` vSphere, `g s` Machines, `g c` Availability
 > - `g a` Alerts, `g r` Patrol, `g t` Settings, `?` shortcuts help
 >
 > The "Classic shortcuts" bar referenced in the historical content below
