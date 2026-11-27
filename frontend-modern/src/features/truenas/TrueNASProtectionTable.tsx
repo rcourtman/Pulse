@@ -348,12 +348,8 @@ export const TrueNASProtectionTable: Component<{
   const staleNoticeByPointId = createMemo(() =>
     buildTrueNASProtectionStaleNoticeMap(props.points, props.systems ?? []),
   );
-  const rows = createMemo(() =>
-    sortTrueNASProtectionPoints(props.points, staleNoticeByPointId()),
-  );
-  const posture = createMemo(() =>
-    buildTrueNASProtectionPosture(rows(), staleNoticeByPointId()),
-  );
+  const rows = createMemo(() => sortTrueNASProtectionPoints(props.points, staleNoticeByPointId()));
+  const posture = createMemo(() => buildTrueNASProtectionPosture(rows(), staleNoticeByPointId()));
   const detail = createTrueNASDetailState('truenas-protection-detail');
   const tableState = createPlatformTableFilterState({
     resources: rows,

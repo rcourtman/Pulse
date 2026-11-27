@@ -933,7 +933,9 @@ const buildTrueNASSystemStaleNotice = (system: Resource): TrueNASProtectionStale
   const ageSuffix = age ? ` (last report ${age} ago)` : '';
   if (baseNotice) {
     const detail =
-      age && !baseNotice.detail.includes(age) ? `${baseNotice.detail}${ageSuffix}` : baseNotice.detail;
+      age && !baseNotice.detail.includes(age)
+        ? `${baseNotice.detail}${ageSuffix}`
+        : baseNotice.detail;
     return {
       ...baseNotice,
       detail,
@@ -968,9 +970,7 @@ type IndexedTrueNASSystem = {
   hostnames: Set<string>;
 };
 
-const indexTrueNASSystemsForProtection = (
-  systems: readonly Resource[],
-): IndexedTrueNASSystem[] =>
+const indexTrueNASSystemsForProtection = (systems: readonly Resource[]): IndexedTrueNASSystem[] =>
   systems.map((system) => {
     const connectionIds = new Set<string>();
     const explicitAgentId = normalize(system.agent?.agentId);
@@ -1229,7 +1229,12 @@ export function filterTrueNASProtectionPoints(
     const pointStatus = mapTrueNASProtectionStatus(point);
     const staleNotice = staleNotices?.get(point.id);
     const isStale = Boolean(staleNotice);
-    if (status === 'attention' && pointStatus !== 'warning' && pointStatus !== 'failed' && !isStale) {
+    if (
+      status === 'attention' &&
+      pointStatus !== 'warning' &&
+      pointStatus !== 'failed' &&
+      !isStale
+    ) {
       return false;
     }
     if (status === 'stale' && !isStale) return false;

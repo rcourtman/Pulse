@@ -52,7 +52,7 @@ afterEach(() => {
 });
 
 describe('TrueNAS protection freshness model', () => {
-  it('isolates DR clones sharing a hostname by connectionId so healthy peers never turn stale', () => {
+  it('isolates DR clones sharing a hostname by connectionId', () => {
     const stalePrimary = makeSystem({
       id: 'truenas:agent:system:conn-primary',
       name: 'truenas',
@@ -161,7 +161,9 @@ describe('TrueNAS protection freshness model', () => {
       details: { hostname: 'nas-offline', dataset: 'tank/backups' },
     });
 
-    expect(getTrueNASProtectionStaleNotice(telemetryPoint, [telemetryStale, offlineSystem])).toEqual(
+    expect(
+      getTrueNASProtectionStaleNotice(telemetryPoint, [telemetryStale, offlineSystem]),
+    ).toEqual(
       expect.objectContaining({
         badge: 'Stale data',
         systemName: 'nas-telemetry',
@@ -178,7 +180,7 @@ describe('TrueNAS protection freshness model', () => {
     );
   });
 
-  it('excludes stale success and running points from Healthy and Running posture, ranks stale above fresh, and searches stale details', () => {
+  it('excludes stale success/running from Healthy/Running and ranks stale first', () => {
     const staleNas = makeSystem({
       id: 'truenas:agent:system:conn-stale',
       name: 'nas-east',
@@ -247,9 +249,9 @@ describe('TrueNAS protection freshness model', () => {
       'fresh-ok',
     ]);
 
-    expect(filterTrueNASProtectionPoints(points, '', 'success', staleMap).map((p) => p.id)).toEqual([
-      'fresh-ok',
-    ]);
+    expect(
+      filterTrueNASProtectionPoints(points, '', 'success', staleMap).map((p) => p.id),
+    ).toEqual(['fresh-ok']);
     expect(filterTrueNASProtectionPoints(points, '', 'running', staleMap)).toEqual([]);
     expect(filterTrueNASProtectionPoints(points, '', 'stale', staleMap).map((p) => p.id)).toEqual([
       'stale-ok',
@@ -269,7 +271,7 @@ describe('TrueNAS protection freshness model', () => {
 });
 
 describe('TrueNASProtectionTable stale-reading UI', () => {
-  it('surfaces stale healthy, running, and failed events truthfully and clears them reactively on live recovery', async () => {
+  it('surfaces stale events truthfully and clears them on live recovery', async () => {
     const staleNas = makeSystem({
       id: 'truenas:agent:system:conn-east',
       name: 'nas-east',
@@ -370,9 +372,9 @@ describe('TrueNASProtectionTable stale-reading UI', () => {
     // Stale healthy row shows amber Stale data badge in Outcome and no redundant cue under Dataset
     const staleOkRow = document.querySelector('[data-truenas-protection-row="snap-east-ok"]')!;
     expect(staleOkRow).toHaveAttribute('data-truenas-protection-stale', 'true');
-    expect(staleOkRow.querySelector('[data-truenas-protection-stale-badge="true"]')).toHaveTextContent(
-      'Stale data',
-    );
+    expect(
+      staleOkRow.querySelector('[data-truenas-protection-stale-badge="true"]'),
+    ).toHaveTextContent('Stale data');
     expect(staleOkRow.querySelector('[data-truenas-protection-stale-cue="true"]')).toBeNull();
 
     // Stale failed row preserves red Failed badge AND shows amber Stale data cue under Dataset
@@ -380,9 +382,9 @@ describe('TrueNASProtectionTable stale-reading UI', () => {
       '[data-truenas-protection-row="rep-east-failed"]',
     )!;
     expect(staleFailedRow).toHaveAttribute('data-truenas-protection-stale', 'true');
-    expect(staleFailedRow.querySelector('[data-truenas-protection-stale-cue="true"]')).toHaveTextContent(
-      'Stale data',
-    );
+    expect(
+      staleFailedRow.querySelector('[data-truenas-protection-stale-cue="true"]'),
+    ).toHaveTextContent('Stale data');
     expect(staleFailedRow.querySelectorAll('td')[5]).toHaveTextContent('Failed');
 
     // Stale running row preserves Running text without pulsing dot and shows amber Stale data cue
@@ -390,9 +392,9 @@ describe('TrueNASProtectionTable stale-reading UI', () => {
       '[data-truenas-protection-row="rep-east-running"]',
     )!;
     expect(staleRunningRow).toHaveAttribute('data-truenas-protection-stale', 'true');
-    expect(staleRunningRow.querySelector('[data-truenas-protection-stale-cue="true"]')).toHaveTextContent(
-      'Stale data',
-    );
+    expect(
+      staleRunningRow.querySelector('[data-truenas-protection-stale-cue="true"]'),
+    ).toHaveTextContent('Stale data');
     expect(staleRunningRow.querySelector('.animate-pulse')).toBeNull();
 
     // Fresh row stays Healthy without stale cues
@@ -408,7 +410,9 @@ describe('TrueNASProtectionTable stale-reading UI', () => {
     expect(staleNotice).toHaveTextContent(
       'TrueNAS collection error: API connection refused (last report 14m ago)',
     );
-    expect(detail.getByText('Status', { exact: true }).closest('tr')).toHaveTextContent('Stale data');
+    expect(detail.getByText('Status', { exact: true }).closest('tr')).toHaveTextContent(
+      'Stale data',
+    );
     expect(detail.getByText('Last reported', { exact: true }).closest('tr')).toHaveTextContent(
       'Healthy',
     );
