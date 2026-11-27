@@ -1,0 +1,35 @@
+/*
+ * Keep header connection-status pills above WCAG AA (4.5:1) text contrast in
+ * both light and dark themes across connected, warning/degraded, and
+ * reconnecting states. Scoped strictly to ConnectionStatusBadge's
+ * `.status[role='status']` element; color hex values match src/tailwind-palette.css.
+ */
+.status.connected[role='status'] {
+  background-color: #bbf7d0;
+  color: #166534;
+}
+
+.dark .status.connected[role='status'] {
+  background-color: #166534;
+  color: #dcfce7;
+}
+
+.status.degraded[role='status'] {
+  background-color: #fde68a;
+  color: #92400e;
+}
+
+.dark .status.degraded[role='status'] {
+  background-color: #92400e;
+  color: #fef3c7;
+}
+
+.status.reconnecting[role='status'] {
+  background-color: #fef08a;
+  color: #854d0e;
+}
+
+.dark .status.reconnecting[role='status'] {
+  background-color: #854d0e;
+  color: #fef9c3;
+}

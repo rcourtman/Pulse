@@ -1,0 +1,39 @@
+{
+  "version": 1,
+  "base_sha": "a24532566a2e2569d18a25a054dfacf2cfe0c23b",
+  "verified_at": "2026-11-27T18:27:27Z",
+  "result": "passed",
+  "changed_paths": [
+    "frontend-modern/src/connectionStatusBadge.css",
+    "frontend-modern/src/index.tsx"
+  ],
+  "content_sha256": {
+    "frontend-modern/src/connectionStatusBadge.css": "965640a90be57849a13e3d81bd52b42fbf8c8a5eeaf7b84ca90a90a119155ef3",
+    "frontend-modern/src/index.tsx": "871081d449e02a0d036e6f2b842f60a7147e6e95ee8e6d45e5d1053967d4c40d"
+  },
+  "routes": [
+    "/alerts/overview"
+  ],
+  "viewports": [
+    {
+      "width": 1440,
+      "height": 940
+    },
+    {
+      "width": 390,
+      "height": 844
+    }
+  ],
+  "states": [
+    "paired production builds of unpatched base a24532566a2e and patched candidate served over local HTTP and RFC 6455 WebSocket fixture in Chromium desktop (1440x940, dark and light themes, prefers-reduced-motion: reduce, en-GB, UTC) and touch WebKit phone (390x844, dark theme, prefers-reduced-motion: reduce, en-GB, UTC)",
+    "/alerts/overview waiting-for-data (.status.degraded[role=status] before first resource snapshot): unpatched base reproduced the exact WCAG AA color-contrast failure on .max-w-[170px] in dark mode (4.03:1, #fde68a on #b45309) on desktop and phone; patched candidate raises dark degraded contrast to 6.37:1 (#fef3c7 on #92400e) with 0 axe-core WCAG 2.0/2.1/2.2 A/AA violations while preserving light mode 5.69:1 (#92400e on #fde68a)",
+    "/alerts/overview connected hovered (.status.connected[role=status] after live WebSocket initialState frame without reload): unpatched base failed axe-core color-contrast in dark mode (3.57:1, #86efac on #15803d) and light mode (4.14:1, #15803d on #bbf7d0); patched candidate passes with 0 axe-core violations at 6.49:1 dark (#dcfce7 on #166534) and 5.88:1 light (#166534 on #bbf7d0)",
+    "/alerts/overview sync-reconnecting (.status.degraded[role=status], health 200) and reconnecting (.status.reconnecting[role=status], health 503) after WebSocket close without reload: unpatched base failed axe-core color-contrast in dark sync-reconnecting (4.03:1), dark reconnecting (3.73:1, #fde047 on #a16207), and light reconnecting (4.23:1, #a16207 on #fef08a); patched candidate passes all three with 0 axe-core violations at 6.37:1 dark sync-reconnecting, 6.38:1 dark reconnecting (#fef9c3 on #854d0e), and 5.89:1 light reconnecting (#854d0e on #fef08a)",
+    "0px horizontal overflow, 0 page errors, 0 unexpected failed requests, and 0 off-origin requests across all tested viewports and states; all 14 paired before/after PNGs visually inspected and retained in the lane output directory"
+  ],
+  "interactions": [
+    "loaded /alerts/overview in dark and light desktop Chromium (1440x940) and dark touch WebKit phone (390x844) with an open WebSocket awaiting its first resource snapshot, ran axe-core WCAG A/AA scans and measured computed contrast on ConnectionStatusBadge",
+    "delivered a live RFC 6455 WebSocket initialState frame without reloading, verified ConnectionStatusBadge transitioned to Connected, hovered the badge to expand its label, and ran axe-core WCAG A/AA scans in dark and light themes",
+    "closed the WebSocket while toggling /api/health between 200 and 503 without reloading to exercise Sync reconnecting and Reconnecting... transitions and verified 0 axe-core WCAG A/AA violations across desktop and phone viewports"
+  ]
+}
