@@ -232,7 +232,7 @@ Pulse plan upgrades are activated locally with a license key.
 ### Activation succeeds but Pro features are unavailable
 
 **An accepted key and an installed Pro runtime are separate requirements.**
-Open **Settings → System → Plans & Billing** on the intended Pulse instance and organisation.
+Open **Plans & Billing → Plan** on the intended Pulse instance and organisation.
 Read the current plan, runtime notice and specific error before changing anything:
 
 - **The plan is active, but “Pro runtime missing” or “Pulse Pro runtime required”
