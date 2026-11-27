@@ -191,6 +191,42 @@ class SchedulerHealthAPIHelpDocsTest(unittest.TestCase):
                 self.assertIn(f'ID:      "{check_id}"', readiness)
                 self.assertIn(f"`{check_id}`", api_text)
 
+    def test_staleness_locality_and_deadman_recovery_match_runtime_source(self) -> None:
+        api_text = " ".join(API_DOC.read_text(encoding="utf-8").split())
+        section = " ".join(scheduler_section().split())
+        monitor = (ROOT / "internal/monitoring/monitor.go").read_text(encoding="utf-8")
+        staleness = (ROOT / "internal/monitoring/staleness_tracker.go").read_text(
+            encoding="utf-8"
+        )
+        deadman = (ROOT / "internal/monitoring/deadman.go").read_text(encoding="utf-8")
+
+        self.assertIn('json:"staleness"', monitor)
+        for field in ("instance", "type", "score", "lastSuccess", "lastError"):
+            with self.subTest(staleness_field=field):
+                self.assertIn(f"`{field}`", section)
+                self.assertRegex(staleness, rf'json:"{re.escape(field)}(?:,omitempty)?"')
+        for phrase in (
+            "computed locally inside this monitor",
+            "ages from `0` right after a successful poll up to `1` at the maximum staleness window",
+            "A success from a same-named connection monitored elsewhere does not change this monitor's score.",
+        ):
+            with self.subTest(staleness_phrase=phrase):
+                self.assertIn(phrase, section)
+
+        for field in ("lastSuccessAt", "lastAttemptAt"):
+            with self.subTest(deadman_field=field):
+                self.assertRegex(deadman, rf'json:"{re.escape(field)}(?:,omitempty)?"')
+                self.assertIn(f"`{field}`", api_text)
+        self.assertIn("func (d *deadManRuntime) recordHealthyProgress(", deadman)
+        self.assertIn("func (d *deadManRuntime) notifyConfigChangedFor(", deadman)
+        for phrase in (
+            "When monitoring progress recovers after a stall, `monitor_stalled` clears immediately and reports `starting` or `delivery_failed` if the recovery heartbeat fails.",
+            "Replacing, removing, or saving an invalid watchdog URL clears stale `lastSuccessAt` and `lastAttemptAt` timestamps immediately while re-saving the same configured URL preserves `lastSuccessAt`",
+            "shutdown or configuration changes fence superseded cycles from overwriting clean shutdown records or the new destination's status.",
+        ):
+            with self.subTest(deadman_phrase=phrase):
+                self.assertIn(phrase, api_text)
+
     def test_in_app_links_target_real_shipped_docs_and_headings(self) -> None:
         section = scheduler_section()
         links = re.findall(r"\[[^\]]+\]\(([^)]+)\)", section)

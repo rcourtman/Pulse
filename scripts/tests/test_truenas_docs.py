@@ -331,9 +331,14 @@ class TrueNASDocsTest(unittest.TestCase):
             "keeps the last accepted cached records and poll.lastSuccessAt until a full refresh succeeds",
             "fails client initialization, Pulse closes the previous live connection and clears stale cached records",
             "valid edit that builds a new client preserves the last accepted cached records",
+            "retires the old poller ownership before closing its transport and cancels in-flight RPC work (including a socket blocked in negotiation) without waiting for an appliance timeout or replaying interrupted operations",
         ):
             with self.subTest(phrase=phrase):
                 self.assertIn(phrase, prose)
+
+        transport = (ROOT / "internal/truenas/transport.go").read_text(encoding="utf-8")
+        self.assertIn("var retired []*truenas.Provider", poller)
+        self.assertIn("func (c *Client) rpcLifetimeContext()", transport)
 
     def test_polling_guidance_preserves_evidence_before_a_manual_test(self):
         text = DOC.read_text().split("### Stale TrueNAS data", 1)[1].split("### Disabling", 1)[0]

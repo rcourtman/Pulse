@@ -95,6 +95,33 @@ class WatchdogHelpDocsTest(unittest.TestCase):
             with self.subTest(phrase=phrase):
                 self.assertIn(phrase, self.guide)
 
+    def test_watchdog_recovery_and_replacement_truthfulness_matches_deadman_source(self) -> None:
+        deadman = (ROOT / "internal/monitoring/deadman.go").read_text(encoding="utf-8")
+        for token in (
+            "func (d *deadManRuntime) recordHealthyProgress(",
+            "func (d *deadManRuntime) recordSignalFailure(",
+            "func (d *deadManRuntime) notifyConfigChangedFor(",
+            "d.status.LastSuccessAt = nil",
+            "d.status.LastAttemptAt = nil",
+            "if d.stopping || ctx.Err() != nil {",
+        ):
+            with self.subTest(deadman_token=token):
+                self.assertIn(token, deadman)
+
+        self.assertIn("Last success", self.component)
+        self.assertNotIn("Last attempt", self.component)
+        self.assertIn('json:"lastAttemptAt,omitempty"', deadman)
+        for phrase in (
+            "Monitoring stalled clears immediately and moves to Starting or Delivery failing if the recovery heartbeat fails to deliver",
+            "Replacing, removing, or saving an invalid watchdog URL clears prior Last success and API lastAttemptAt timestamps",
+            "clears prior delivery alerts on replacement",
+            "re-saving the same configured URL preserves its Last success",
+            "Concurrent shutdown or configuration replacement cancels superseded watchdog cycles",
+            "cannot overwrite a clean shutdown record or the new destination's status",
+        ):
+            with self.subTest(phrase=phrase):
+                self.assertIn(phrase, self.guide)
+
 
 if __name__ == "__main__":
     unittest.main()
