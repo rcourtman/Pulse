@@ -99,7 +99,7 @@ if (
     initialTestSource === null ||
     needsJestDomForSource(initialTestPath, initialTestSource))
 ) {
-  await import('@testing-library/jest-dom');
+  await import('./vitest.setup.jestdom');
 }
 
 beforeAll(async () => {
