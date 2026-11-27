@@ -290,6 +290,10 @@ func (m *Monitor) readAvailabilityTargets() ([]config.AvailabilityTarget, error)
 	if err != nil {
 		return nil, err
 	}
+	return orderAvailabilityTargets(targets), nil
+}
+
+func orderAvailabilityTargets(targets []config.AvailabilityTarget) []config.AvailabilityTarget {
 	out := make([]config.AvailabilityTarget, 0, len(targets))
 	for _, target := range targets {
 		target = config.NormalizeAvailabilityTarget(target)
@@ -306,18 +310,39 @@ func (m *Monitor) readAvailabilityTargets() ([]config.AvailabilityTarget, error)
 		}
 		return left < right
 	})
-	return out, nil
+	return out
 }
 
 func (m *Monitor) availabilityTargetByID(id string) (config.AvailabilityTarget, bool) {
 	id = strings.TrimSpace(id)
-	if id == "" {
+	if id == "" || m == nil || m.configPersist == nil {
 		return config.AvailabilityTarget{}, false
 	}
-	for _, target := range m.availabilityTargets() {
-		if target.ID == id {
-			return target, true
+	// Persistence already normalizes IDs. Dispatch and rescheduling each need
+	// the current saved target, not a presentation-ordered copy of the catalog.
+	targets, err := m.configPersist.LoadAvailabilityTargets()
+	if err != nil {
+		return config.AvailabilityTarget{}, false
+	}
+	matched := -1
+	for i := range targets {
+		if targets[i].ID != id {
+			continue
 		}
+		if matched >= 0 {
+			// Keep the old selection for ambiguous persisted IDs. Use the
+			// same loaded data so a concurrent save cannot change this read.
+			for _, target := range orderAvailabilityTargets(targets) {
+				if target.ID == id {
+					return target, true
+				}
+			}
+			return config.AvailabilityTarget{}, false
+		}
+		matched = i
+	}
+	if matched >= 0 {
+		return config.NormalizeAvailabilityTarget(targets[matched]), true
 	}
 	return config.AvailabilityTarget{}, false
 }

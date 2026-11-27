@@ -114,6 +114,57 @@ func newAvailabilityPlanningFixture(t testing.TB, targets []config.AvailabilityT
 	return monitor, writer, counter
 }
 
+func TestAvailabilityPollLookupsUseTheCurrentSavedTarget(t *testing.T) {
+	target := probeAgentTarget("z", "")
+	target.Name, target.PollIntervalSecs = "Z local", 120
+	monitor, writer, reads := newAvailabilityPlanningFixture(t, []config.AvailabilityTarget{
+		target, probeAgentTarget("a", ""),
+	})
+	monitor.SetLicenseChecker(licenseWithExternalProbe(true))
+	provider := availabilityPollProvider{}
+	check := func(id string, interval time.Duration, admitted bool) {
+		t.Helper()
+		before := reads.reads
+		if got := provider.FixedInstanceInterval(monitor, id); got != interval {
+			t.Errorf("FixedInstanceInterval(%q) = %v, want %v", id, got, interval)
+		}
+		task, err := provider.BuildPollTask(monitor, id)
+		if (err == nil) != admitted || (admitted && (task.InstanceName != "z" || task.Run == nil)) {
+			t.Errorf("BuildPollTask(%q) instance = %q, error = %v; want admitted = %v", id, task.InstanceName, err, admitted)
+		}
+		if got := reads.reads - before; got != 2 {
+			t.Errorf("lookups read catalog %d times; want one read each", got)
+		}
+	}
+	check(" z ", 120*time.Second, true)
+
+	// A persisted duplicate must keep the established display-order
+	// selection, not start polling the first entry on disk instead.
+	duplicate := target
+	duplicate.Name, duplicate.PollIntervalSecs, duplicate.Enabled = "A paused", 180, false
+	if err := writer.SaveAvailabilityTargets([]config.AvailabilityTarget{target, duplicate}); err != nil {
+		t.Fatal(err)
+	}
+	check("z", 0, false)
+
+	// Assignment and cadence edits take effect on the next lookup.
+	remote := probeAgentTarget("z", "edge")
+	remote.PollIntervalSecs = 180
+	if err := writer.SaveAvailabilityTargets([]config.AvailabilityTarget{remote}); err != nil {
+		t.Fatal(err)
+	}
+	check("z", 180*time.Second, false)
+	monitor.SetLicenseChecker(licenseWithExternalProbe(false))
+	check("z", 180*time.Second, true)
+
+	if err := writer.SaveAvailabilityTargets(nil); err != nil {
+		t.Fatal(err)
+	}
+	check("z", 0, false)
+	reads.err = errors.New("fixture: catalog read unavailable")
+	check("z", 0, false)
+}
+
 func TestAvailabilityPlanningReadsSavedCatalogOnce(t *testing.T) {
 	for _, mode := range []string{"fixed", "adaptive"} {
 		t.Run(mode, func(t *testing.T) {
