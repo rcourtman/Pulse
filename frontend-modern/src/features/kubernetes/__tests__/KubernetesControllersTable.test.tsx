@@ -350,4 +350,35 @@ describe('KubernetesControllersTable', () => {
       `Last run: ${absoluteTime('2026-05-22T02:00:00Z')}`,
     );
   });
+
+  it('labels stale controller readings without overriding failure dots', () => {
+    const { container } = render(() => (
+      <KubernetesControllersTable
+        resources={[
+          makeResource({
+            id: 'cron-stale',
+            type: 'k8s-cronjob',
+            sourceStatus: { kubernetes: { status: 'stale', lastSeen: '2026-11-26T10:00:00Z' } },
+            kubernetes: {
+              clusterName: 'prod',
+              namespace: 'batch',
+              resourceKind: 'CronJob',
+              schedule: '0 2 * * *',
+              suspend: false,
+            },
+          }),
+        ]}
+        emptyIcon={<span />}
+        emptyTitle="No controllers"
+        emptyDescription="No controllers"
+        showToolbar={false}
+      />
+    ));
+
+    const row = container.querySelector('[data-kubernetes-controller-row="cron-stale"]');
+    expect(row?.querySelector('[title="Stale data"]')).toHaveClass('bg-amber-500');
+    expect(row?.querySelector('[data-kubernetes-stale="controller"]')).toHaveTextContent(
+      'Stale data',
+    );
+  });
 });

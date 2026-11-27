@@ -9,12 +9,14 @@ import {
   kubernetesScopeDisplayLabel,
 } from '../kubernetesPageModel';
 import {
+  KUBERNETES_STALE_READINGS_LABEL,
   KUBERNETES_TAB_SPECS,
   buildKubernetesClusterChildCounts,
   buildKubernetesOverviewPosture,
   buildKubernetesIncidentRows,
   buildKubernetesPageModel,
   compareKubernetesControllers,
+  describeKubernetesStaleReadings,
   filterKubernetesIncidents,
   filterKubernetesResources,
   compareKubernetesDeployments,
@@ -22,8 +24,11 @@ import {
   compareKubernetesNodes,
   compareKubernetesPods,
   getKubernetesPageTabSpecs,
+  hasStaleKubernetesReadings,
+  isKubernetesWorkloadAttention,
   kubernetesClusterLabel,
   kubernetesScopeLabel,
+  mapKubernetesClusterStatus,
   mapKubernetesControllerStatus,
   mapKubernetesCronJobStatus,
   mapKubernetesDaemonSetStatus,
@@ -1266,5 +1271,217 @@ describe('getKubernetesNodesNeedingAttention', () => {
     expect(getKubernetesNodeAttentionRank(ready, warning, true)).toBe(1);
     expect(getKubernetesNodeAttentionRank(cordoned, {}, true)).toBe(1);
     expect(getKubernetesNodeAttentionRank(cordoned, critical, true)).toBe(0);
+  });
+
+  it('surfaces stale merged nodes in Nodes needing attention and clears them when fresh', () => {
+    const staleMerged = makeResource({
+      id: 'node-stale-merged',
+      type: 'agent',
+      status: 'online',
+      sources: ['agent', 'kubernetes'],
+      sourceStatus: {
+        agent: { status: 'online', lastSeen: '2026-11-26T12:00:00Z' },
+        kubernetes: { status: 'stale', lastSeen: '2026-11-26T10:00:00Z' },
+      },
+      kubernetes: { clusterId: 'prod', ready: true },
+    });
+    const freshNode = makeResource({
+      id: 'node-fresh',
+      type: 'k8s-node',
+      status: 'online',
+      sourceStatus: { kubernetes: { status: 'online', lastSeen: '2026-11-26T12:00:00Z' } },
+      kubernetes: { clusterId: 'prod', ready: true },
+    });
+
+    expect(
+      getKubernetesNodesNeedingAttention({ nodes: [freshNode, staleMerged] } as never).map(
+        (entry) => entry.id,
+      ),
+    ).toEqual(['node-stale-merged']);
+  });
+});
+
+describe('Kubernetes source freshness handling', () => {
+  const staleSource = {
+    kubernetes: {
+      status: 'stale',
+      lastSeen: '2026-11-26T10:00:00Z',
+      error: 'cluster collector timed out',
+    },
+  };
+
+  it('flags stale clusters, nodes, pods, deployments, and controllers while preserving worse failures', () => {
+    const staleCluster = makeResource({
+      id: 'cluster-stale',
+      type: 'k8s-cluster',
+      status: 'online',
+      sourceStatus: {
+        ...staleSource,
+        availability: { status: 'online', lastSeen: '2026-11-26T12:00:00Z' },
+      },
+    });
+    expect(hasStaleKubernetesReadings(staleCluster)).toBe(true);
+    expect(describeKubernetesStaleReadings(staleCluster)).toContain('cluster collector timed out');
+    expect(mapKubernetesClusterStatus(staleCluster)).toEqual({
+      variant: 'warning',
+      label: KUBERNETES_STALE_READINGS_LABEL,
+    });
+
+    const offlineCluster = makeResource({
+      id: 'cluster-offline',
+      type: 'k8s-cluster',
+      status: 'offline',
+      sourceStatus: staleSource,
+    });
+    expect(mapKubernetesClusterStatus(offlineCluster)).toEqual({
+      variant: 'danger',
+      label: 'Offline',
+    });
+
+    const staleReadyNode = makeResource({
+      id: 'node-stale',
+      type: 'agent',
+      status: 'online',
+      sources: ['agent', 'kubernetes'],
+      sourceStatus: staleSource,
+      kubernetes: { ready: true },
+    });
+    expect(mapKubernetesNodeStatus(staleReadyNode)).toEqual({
+      variant: 'warning',
+      label: KUBERNETES_STALE_READINGS_LABEL,
+    });
+
+    const offlineReadyNode = makeResource({
+      id: 'node-offline',
+      type: 'k8s-node',
+      status: 'offline',
+      kubernetes: { ready: true },
+    });
+    expect(mapKubernetesNodeStatus(offlineReadyNode)).toEqual({
+      variant: 'danger',
+      label: 'Offline',
+    });
+
+    const staleNotReadyNode = makeResource({
+      id: 'node-not-ready-stale',
+      type: 'k8s-node',
+      status: 'degraded',
+      sourceStatus: staleSource,
+      kubernetes: { ready: false },
+    });
+    expect(mapKubernetesNodeStatus(staleNotReadyNode)).toEqual({
+      variant: 'danger',
+      label: 'NotReady',
+    });
+
+    const staleRunningPod = makeResource({
+      id: 'pod-stale',
+      type: 'pod',
+      status: 'online',
+      sourceStatus: staleSource,
+      kubernetes: {
+        podPhase: 'Running',
+        podContainers: [{ ready: true, state: 'running' }],
+      },
+    });
+    expect(mapKubernetesPodStatus(staleRunningPod)).toEqual({
+      variant: 'warning',
+      label: KUBERNETES_STALE_READINGS_LABEL,
+    });
+
+    const staleCrashPod = makeResource({
+      id: 'pod-crash-stale',
+      type: 'pod',
+      status: 'degraded',
+      sourceStatus: staleSource,
+      kubernetes: {
+        podPhase: 'Running',
+        podContainers: [{ ready: false, state: 'waiting', reason: 'CrashLoopBackOff' }],
+      },
+    });
+    expect(mapKubernetesPodStatus(staleCrashPod)).toEqual({
+      variant: 'danger',
+      label: 'CrashLoopBackOff',
+    });
+
+    const staleReadyDeployment = makeResource({
+      id: 'dep-stale',
+      type: 'k8s-deployment',
+      status: 'online',
+      sourceStatus: staleSource,
+      kubernetes: { desiredReplicas: 2, readyReplicas: 2 },
+    });
+    expect(mapKubernetesDeploymentStatus(staleReadyDeployment)).toEqual({
+      variant: 'warning',
+      label: KUBERNETES_STALE_READINGS_LABEL,
+    });
+
+    const staleCron = makeResource({
+      id: 'cron-stale',
+      type: 'k8s-cronjob',
+      status: 'online',
+      sourceStatus: staleSource,
+      kubernetes: { suspend: false },
+    });
+    expect(mapKubernetesControllerStatus(staleCron)).toEqual({
+      variant: 'warning',
+      label: KUBERNETES_STALE_READINGS_LABEL,
+    });
+
+    // Stale online resources move out of Healthy into Degraded and count as needing attention.
+    expect(filterKubernetesResources([staleCluster, offlineCluster], '', 'online')).toEqual([]);
+    expect(
+      filterKubernetesResources([staleCluster, offlineCluster], '', 'degraded').map((r) => r.id),
+    ).toEqual(['cluster-stale']);
+    expect(
+      filterKubernetesResources([staleCluster, offlineCluster], '', 'offline').map((r) => r.id),
+    ).toEqual(['cluster-offline']);
+    expect(isKubernetesWorkloadAttention(staleRunningPod)).toBe(true);
+    expect(isKubernetesWorkloadAttention(staleReadyDeployment)).toBe(true);
+    expect(isKubernetesWorkloadAttention(staleCron)).toBe(true);
+  });
+
+  it('counts stale children in cluster attention ratios until fresh readings return', () => {
+    const cluster = makeResource({
+      id: 'cluster-prod',
+      type: 'k8s-cluster',
+      kubernetes: { clusterId: 'prod' },
+    });
+    const staleNode = makeResource({
+      id: 'n1',
+      type: 'agent',
+      sources: ['agent', 'kubernetes'],
+      status: 'online',
+      sourceStatus: staleSource,
+      kubernetes: { clusterId: 'prod', ready: true },
+    });
+    const stalePod = makeResource({
+      id: 'p1',
+      type: 'pod',
+      status: 'online',
+      sourceStatus: staleSource,
+      kubernetes: {
+        clusterId: 'prod',
+        podPhase: 'Running',
+        podContainers: [{ ready: true, state: 'running' }],
+      },
+    });
+    const staleDep = makeResource({
+      id: 'd1',
+      type: 'k8s-deployment',
+      status: 'online',
+      sourceStatus: staleSource,
+      kubernetes: { clusterId: 'prod', desiredReplicas: 2, readyReplicas: 2 },
+    });
+
+    expect(
+      buildKubernetesClusterChildCounts([cluster, staleNode, stalePod, staleDep], [cluster]).get(
+        'cluster-prod',
+      ),
+    ).toEqual({
+      nodes: { total: 1, attention: 1 },
+      pods: { total: 1, attention: 1 },
+      deployments: { total: 1, attention: 1 },
+    });
   });
 });

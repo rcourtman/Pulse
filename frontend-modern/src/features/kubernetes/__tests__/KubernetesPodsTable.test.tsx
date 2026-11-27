@@ -137,14 +137,19 @@ describe('KubernetesPodsTable', () => {
     const status = document.querySelector('[data-kubernetes-pod-status]');
     expect(status).toHaveTextContent('Not ready');
     expect(status).toHaveClass('text-amber-700');
-    // A phone hides Status, so the amber words join the pod name on its line.
+    // A phone hides Status, so attention labels stack below the pod name to avoid clipping.
     const phoneStatus = document.querySelector('[data-kubernetes-pod-status-phone]');
     expect(phoneStatus).toHaveTextContent('Not ready');
-    expect(phoneStatus).toHaveClass('platform-table-phone-only-inline', 'text-amber-700');
+    expect(phoneStatus).toHaveClass(
+      'platform-table-phone-only-inline',
+      'text-[11px]',
+      'leading-tight',
+      'text-amber-700',
+    );
     expect(phoneStatus).toHaveClass('min-w-0', 'truncate');
     expect(phoneStatus).not.toHaveClass('sr-only');
-    expect(phoneStatus?.parentElement).toHaveClass('items-center');
-    expect(phoneStatus?.parentElement).not.toHaveClass('flex-col');
+    expect(phoneStatus?.parentElement).toHaveClass('flex-col');
+    expect(phoneStatus?.parentElement).not.toHaveClass('items-center');
     expect(screen.getByText('1/2')).toBeInTheDocument();
     expect(screen.getByText('3')).toBeInTheDocument();
     expect(screen.getByText('Deployment/checkout-api')).toBeInTheDocument();
@@ -286,5 +291,60 @@ describe('KubernetesPodsTable', () => {
 
     expect(screen.getByText('prod-eu/services')).toBeInTheDocument();
     expect(screen.getByText('prod-us/services')).toBeInTheDocument();
+  });
+
+  it('shows Stale data for a stale Running pod while preserving CrashLoopBackOff above staleness', () => {
+    const staleRunning = makeResource({
+      id: 'api-stale-1',
+      status: 'online',
+      sourceStatus: { kubernetes: { status: 'stale', lastSeen: '2026-11-26T10:00:00Z' } },
+      kubernetes: {
+        clusterName: 'prod-eu',
+        namespace: 'services',
+        podName: 'api-stale-1',
+        podPhase: 'Running',
+        podContainers: [{ name: 'api', ready: true, state: 'running' }],
+      },
+    });
+    const staleCrash = makeResource({
+      id: 'worker-crash-1',
+      status: 'degraded',
+      sourceStatus: { kubernetes: { status: 'stale', lastSeen: '2026-11-26T10:00:00Z' } },
+      kubernetes: {
+        clusterName: 'prod-eu',
+        namespace: 'services',
+        podName: 'worker-crash-1',
+        podPhase: 'Running',
+        podContainers: [
+          { name: 'worker', ready: false, state: 'waiting', reason: 'CrashLoopBackOff' },
+        ],
+      },
+    });
+
+    const { container } = render(() => (
+      <KubernetesPodsTable
+        resources={[staleRunning, staleCrash]}
+        emptyIcon={<span />}
+        emptyTitle="No pods"
+        emptyDescription="No pods"
+        showToolbar={false}
+      />
+    ));
+
+    const runningRow = container.querySelector('[data-kubernetes-pod-row="api-stale-1"]');
+    expect(runningRow?.querySelector('[data-kubernetes-pod-status="warning"]')).toHaveTextContent(
+      'Stale data',
+    );
+    expect(
+      runningRow?.querySelector('[data-kubernetes-pod-status-phone="warning"]'),
+    ).toHaveTextContent('Stale data');
+
+    const crashRow = container.querySelector('[data-kubernetes-pod-row="worker-crash-1"]');
+    expect(crashRow?.querySelector('[data-kubernetes-pod-status="danger"]')).toHaveTextContent(
+      'CrashLoopBackOff',
+    );
+    expect(
+      crashRow?.querySelector('[data-kubernetes-pod-status-phone="danger"]'),
+    ).toHaveTextContent('CrashLoopBackOff');
   });
 });

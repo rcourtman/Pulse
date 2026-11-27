@@ -1,24 +1,15 @@
 import { Show, createMemo, type Component, type JSX } from 'solid-js';
-import { StatusDot } from '@/components/shared/StatusDot';
 import { StatusIndicatorBadge } from '@/components/shared/StatusIndicatorBadge';
-import { ResponsiveMetricCell } from '@/components/shared/responsive';
-import { StackedMemoryBar } from '@/components/Workloads/StackedMemoryBar';
 import { TableCell, TableRow } from '@/components/shared/Table';
 import { ResourceNameWithWebInterfaceLink } from '@/components/shared/WebInterfaceLink';
 import { asTrimmedString } from '@/utils/stringUtils';
 import { getUnifiedResourceAlertStyles } from '@/utils/alerts';
 import { useWebSocket } from '@/contexts/appRuntime';
 import { useAlertsActivation } from '@/stores/alertsActivation';
-import { unifiedPlatformOverrideIdCandidates } from '@/features/alerts/alertOverridesModel';
-import { buildMetricKeyForUnifiedResource } from '@/utils/metricsKeys';
 import {
   PlatformWindowedRows,
-  PLATFORM_HEALTH_FILTER_OPTIONS,
   PlatformSortableTableHead,
-  PlatformTableMetricFallback,
-  PlatformTableEmptyState,
   PlatformTableShell,
-  PlatformTableToolbar,
   PlatformResponsiveTableLabel,
   createPlatformTableFilterState,
   createPlatformTableSortState,
@@ -28,15 +19,17 @@ import {
   getPlatformTableFiniteMetric,
   getPlatformTableCellClassForKind,
   type PlatformTableSortValue,
-  withPlatformStatusCounts,
 } from '@/features/platformPage/sharedPlatformPage';
 import {
-  PlatformResourceDetailToggleButton,
-  PlatformResourceDetailTableRow,
   createPlatformResourceDetailState,
   createPlatformResourceLabelResolver,
   getPlatformResourceDetailRowClass,
 } from '@/features/platformPage/PlatformResourceDetailTableRow';
+import {
+  getPlatformInlineStateClass,
+  getPlatformStatusTextToneClass,
+  isPlatformAttentionVariant,
+} from '@/features/platformPage/platformStatusTone';
 import type { Resource } from '@/types/resource';
 import {
   compareKubernetesNodes,
@@ -46,6 +39,13 @@ import {
   mapKubernetesNodeStatus,
   type KubernetesResourceStatusFilter,
 } from './kubernetesPageModel';
+import {
+  KubernetesCpuMemoryCells,
+  KubernetesDetailRow,
+  KubernetesRowLead,
+  KubernetesTableFrame,
+  getKubernetesMemorySortValue,
+} from './KubernetesRecordDetail';
 
 // Kubernetes nodes carry richer Kubelet/runtime metadata than a generic
 // Pulse Agent — kubelet version, container runtime, roles
@@ -106,13 +106,8 @@ const getKubernetesNodeSortValue = (
       return asTrimmedString(node.kubernetes?.containerRuntimeVersion) || null;
     case 'cpu':
       return getPlatformTableFiniteMetric(node.cpu?.current) ?? null;
-    case 'memory': {
-      const total = getPlatformTableFiniteMetric(node.memory?.total) ?? 0;
-      if (total > 0) {
-        return ((getPlatformTableFiniteMetric(node.memory?.used) ?? 0) / total) * 100;
-      }
-      return getPlatformTableFiniteMetric(node.memory?.current) ?? null;
-    }
+    case 'memory':
+      return getKubernetesMemorySortValue(node);
     case 'uptime':
       return getPlatformTableFiniteMetric(node.uptime) ?? null;
     case 'capacity': {
@@ -169,51 +164,21 @@ export const KubernetesNodesTable: Component<{
   });
 
   return (
-    <Show
-      when={props.resources.length > 0}
-      fallback={
-        <PlatformTableEmptyState
-          icon={props.emptyIcon}
-          title={props.emptyTitle}
-          description={props.emptyDescription}
-        />
-      }
+    <KubernetesTableFrame
+      hasResources={props.resources.length > 0}
+      emptyIcon={props.emptyIcon}
+      emptyTitle={props.emptyTitle}
+      emptyDescription={props.emptyDescription}
+      showToolbar={props.showToolbar}
+      rowNoun="nodes"
+      tableState={tableState}
     >
-      <div class="space-y-3">
-        <Show when={props.showToolbar !== false}>
-          <PlatformTableToolbar
-            search={tableState.search}
-            onSearchChange={tableState.setSearch}
-            searchPlaceholder="Search nodes"
-            searchSuggestions={tableState.searchSuggestions}
-            status={tableState.status()}
-            onStatusChange={tableState.setStatus}
-            statusOptions={withPlatformStatusCounts(
-              PLATFORM_HEALTH_FILTER_OPTIONS,
-              tableState.countForStatus,
-            )}
-            visible={tableState.visible()}
-            total={tableState.total()}
-            rowNoun="nodes"
-          />
-        </Show>
-
-        <Show
-          when={tableState.filtered().length > 0}
-          fallback={
-            <PlatformTableEmptyState
-              icon={props.emptyIcon}
-              title="No nodes match current filters"
-              description="Adjust the search or status filter to see more nodes."
-            />
-          }
-        >
-          <PlatformTableShell
-            title={props.title ?? 'Nodes'}
-            tableClass="min-w-full table-fixed text-xs md:min-w-[1100px] 2xl:min-w-[1280px]"
-            header={
-              <>
-                {/*
+      <PlatformTableShell
+        title={props.title ?? 'Nodes'}
+        tableClass="min-w-full table-fixed text-xs md:min-w-[1100px] 2xl:min-w-[1280px]"
+        header={
+          <>
+            {/*
                     Desktop widths: Node gets headroom for cluster-style
                     names, Runtime gets room for "containerd://1.7.20"
                     -style values, Capacity gets room for "6 cores /
@@ -231,295 +196,244 @@ export const KubernetesNodesTable: Component<{
                     the tablet band for each header and for Degraded at a
                     34rem table.
                   */}
-                <PlatformSortableTableHead
-                  kind="name"
-                  sort={sort}
-                  sortKey="node"
-                  class="platform-table-mobile-w-38 md:w-[20%]"
-                  bandWidth={30}
-                >
-                  Node
-                </PlatformSortableTableHead>
-                {/*
+            <PlatformSortableTableHead
+              kind="name"
+              sort={sort}
+              sortKey="node"
+              class="platform-table-mobile-w-38 md:w-[20%]"
+              bandWidth={30}
+            >
+              Node
+            </PlatformSortableTableHead>
+            {/*
                   Status sits beside the name, as in kubectl get nodes: the
                   dot alone made "why is this node amber" a hover. On phones
                   the dot carries the state (and names it to assistive tech),
                   so the column is desktop-only.
                 */}
-                <PlatformSortableTableHead
-                  kind="text"
-                  sort={sort}
-                  sortKey="status"
-                  class="platform-table-phone-hidden md:w-[10.5%]"
-                  bandWidth={14.6}
-                >
-                  Status
-                </PlatformSortableTableHead>
-                <PlatformSortableTableHead
-                  kind="text"
-                  sort={sort}
-                  sortKey="cluster"
-                  class="platform-table-mobile-w-20 md:w-[8%]"
-                  bandWidth={12.1}
-                >
-                  <PlatformResponsiveTableLabel compact="Clus" full="Cluster" />
-                </PlatformSortableTableHead>
-                <PlatformSortableTableHead
-                  kind="text"
-                  sort={sort}
-                  sortKey="roles"
-                  class="platform-table-phone-hidden md:w-[8%]"
-                  bandWidth={9.2}
-                >
-                  <PlatformResponsiveTableLabel compact="Role" full="Roles" />
-                </PlatformSortableTableHead>
-                <PlatformSortableTableHead
-                  kind="text"
-                  sort={sort}
-                  sortKey="kubelet"
-                  class="hidden md:table-cell md:w-[7%]"
-                >
-                  Kubelet
-                </PlatformSortableTableHead>
-                <PlatformSortableTableHead
-                  kind="text"
-                  sort={sort}
-                  sortKey="runtime"
-                  class="hidden md:table-cell md:w-[12%]"
-                >
-                  Runtime
-                </PlatformSortableTableHead>
-                <PlatformSortableTableHead
-                  kind="metric-bar"
-                  sort={sort}
-                  sortKey="cpu"
-                  class="platform-table-mobile-w-20 md:w-[7.5%]"
-                  bandWidth={9.2}
-                >
-                  CPU
-                </PlatformSortableTableHead>
-                <PlatformSortableTableHead
-                  kind="metric-bar"
-                  sort={sort}
-                  sortKey="memory"
-                  class="platform-table-mobile-w-20 md:w-[10%]"
-                  bandWidth={11.8}
-                >
-                  <PlatformResponsiveTableLabel compact="Mem" full="Memory" />
-                </PlatformSortableTableHead>
-                <PlatformSortableTableHead
-                  kind="numeric-value"
-                  sort={sort}
-                  sortKey="uptime"
-                  class="hidden md:table-cell md:w-[6%]"
-                >
-                  Uptime
-                </PlatformSortableTableHead>
-                <PlatformSortableTableHead
-                  kind="numeric-value"
-                  sort={sort}
-                  sortKey="capacity"
-                  class="platform-table-phone-hidden md:w-[16%]"
-                  bandWidth={13.1}
-                >
-                  <PlatformResponsiveTableLabel compact="Cap" full="Capacity" />
-                </PlatformSortableTableHead>
-              </>
-            }
-            body={
-              <>
-                <PlatformWindowedRows items={sortedRows} estimatedRowHeight={32}>
-                  {(node) => {
-                    const meta = () => node.kubernetes;
-                    const name = () => asTrimmedString(node.name) || node.id;
-                    const cluster = () => kubernetesClusterLabel(node) || '—';
-                    const kubelet = () => formatPlatformTableTextValue(meta()?.kubeletVersion);
-                    const runtime = () =>
-                      formatPlatformTableTextValue(meta()?.containerRuntimeVersion);
-                    const capacityLabel = () => {
-                      const cores = meta()?.capacityCpuCores;
-                      const mem = meta()?.capacityMemoryBytes;
-                      const pods = meta()?.capacityPods;
-                      const parts: string[] = [];
-                      if (typeof cores === 'number' && cores > 0) parts.push(`${cores} cores`);
-                      if (typeof mem === 'number' && mem > 0) {
-                        parts.push(formatPlatformTableBytesValue(mem));
-                      }
-                      if (typeof pods === 'number' && pods > 0) parts.push(`${pods} pods`);
-                      return parts.join(' / ') || '—';
-                    };
-                    const compactCapacityLabel = () => {
-                      const cores = meta()?.capacityCpuCores;
-                      if (typeof cores === 'number' && cores > 0) return `${cores} cores`;
-                      return capacityLabel();
-                    };
-                    const indicator = () => mapKubernetesNodeStatus(node);
-                    const metricsKey = () => buildMetricKeyForUnifiedResource(node);
-                    const alertResourceIds = () => unifiedPlatformOverrideIdCandidates(node);
-                    const cpuThresholds = () =>
-                      alertsActivation.getMetricThresholds('kubernetes', 'cpu', alertResourceIds());
-                    const memoryThresholds = () =>
-                      alertsActivation.getMetricThresholds(
-                        'kubernetes',
-                        'memory',
-                        alertResourceIds(),
-                      );
-                    const cpuPercent = () => getPlatformTableFiniteMetric(node.cpu?.current);
-                    const memoryTotal = () => getPlatformTableFiniteMetric(node.memory?.total) ?? 0;
-                    const memoryUsed = () => getPlatformTableFiniteMetric(node.memory?.used) ?? 0;
-                    const memoryPercentOnly = () =>
-                      memoryTotal() > 0
-                        ? undefined
-                        : getPlatformTableFiniteMetric(node.memory?.current);
-                    const hasMemoryMetric = () =>
-                      memoryTotal() > 0 || memoryPercentOnly() !== undefined;
-                    const canRenderMetrics = () => indicator().variant !== 'muted';
-                    const detailRowId = () => drawer.detailRowId(node);
-                    const isExpanded = () => drawer.isExpanded(node);
-                    // The same open alerts the node's drawer lists: a node that
-                    // runs a Pulse agent has its alerts keyed on the agent and
-                    // labelled with its hostname, so matching the row's id or
-                    // display name finds none of them.
-                    const nodeAlertStyles = createMemo(() =>
-                      getUnifiedResourceAlertStyles(node, activeAlerts, alertsEnabled()),
-                    );
-                    const nodeAlertBg = () => {
-                      const s = nodeAlertStyles();
-                      if (!s.hasUnacknowledgedAlert) return '';
-                      return s.severity === 'critical'
-                        ? 'bg-red-50 dark:bg-red-950/25'
-                        : 'bg-yellow-50 dark:bg-yellow-950/25';
-                    };
-                    return (
-                      <>
-                        <TableRow
-                          class={`${getPlatformResourceDetailRowClass(isExpanded())} text-[11px] sm:text-xs ${
-                            isExpanded() ? '' : nodeAlertBg()
-                          }`}
-                          data-kubernetes-node-row={node.id}
-                          onClick={() => drawer.toggle(node)}
-                        >
-                          <TableCell class={getPlatformTableCellClassForKind('name')}>
-                            <div class="flex min-w-0 items-center gap-2">
-                              <PlatformResourceDetailToggleButton
-                                expanded={isExpanded()}
-                                resourceLabel={name()}
-                                controlsId={detailRowId()}
-                                onToggle={() => drawer.toggle(node)}
-                              />
-                              <StatusDot
-                                size="sm"
-                                variant={indicator().variant}
-                                title={indicator().label}
-                                ariaHidden
-                              />
-                              <ResourceNameWithWebInterfaceLink
-                                name={name()}
-                                url={node.customUrl}
-                                class="min-w-0"
-                                nameClass="truncate font-semibold text-base-content"
-                              />
-                              {/* Phones demote the Status column; announce the state there only. */}
-                              <span class="sr-only platform-table-phone-only-inline">
-                                {indicator().label}
-                              </span>
-                            </div>
-                          </TableCell>
-                          <TableCell
-                            class={`${getPlatformTableCellClassForKind('text')} platform-table-phone-hidden`}
-                          >
-                            <Show
-                              when={indicator().variant !== 'success'}
-                              fallback={<span class="text-muted">{indicator().label}</span>}
-                            >
-                              <StatusIndicatorBadge
-                                variant={indicator().variant}
-                                label={indicator().label}
-                                size="xs"
-                              />
-                            </Show>
-                          </TableCell>
-                          <TableCell
-                            class={`${getPlatformTableCellClassForKind('text')} text-base-content`}
-                          >
-                            {cluster()}
-                          </TableCell>
-                          <TableCell
-                            class={`${getPlatformTableCellClassForKind('text')} platform-table-phone-hidden text-base-content`}
-                          >
-                            {formatRoles(meta()?.roles)}
-                          </TableCell>
-                          <TableCell
-                            class={`${getPlatformTableCellClassForKind('text')} hidden font-mono text-[11px] text-base-content md:table-cell`}
-                          >
-                            {kubelet()}
-                          </TableCell>
-                          <TableCell
-                            class={`${getPlatformTableCellClassForKind('text')} hidden font-mono text-[11px] text-base-content md:table-cell`}
-                          >
-                            <span class="block truncate" title={runtime()}>
-                              {runtime()}
-                            </span>
-                          </TableCell>
-                          <TableCell
-                            class={`${getPlatformTableCellClassForKind('metric-bar')} w-[20%] md:w-auto`}
-                          >
-                            <ResponsiveMetricCell
-                              class="w-full"
-                              value={cpuPercent() ?? 0}
-                              type="cpu"
-                              resourceId={metricsKey()}
-                              isRunning={canRenderMetrics() && cpuPercent() !== undefined}
-                              showMobile={false}
-                              thresholds={cpuThresholds()}
-                            />
-                          </TableCell>
-                          <TableCell
-                            class={`${getPlatformTableCellClassForKind('metric-bar')} w-[20%] md:w-auto`}
-                          >
-                            <Show
-                              when={canRenderMetrics() && hasMemoryMetric()}
-                              fallback={<PlatformTableMetricFallback />}
-                            >
-                              <StackedMemoryBar
-                                used={memoryUsed()}
-                                total={memoryTotal()}
-                                percentOnly={memoryPercentOnly()}
-                                thresholds={memoryThresholds()}
-                              />
-                            </Show>
-                          </TableCell>
-                          <TableCell
-                            class={`${getPlatformTableCellClassForKind('numeric-value')} hidden text-base-content md:table-cell`}
-                          >
-                            {formatPlatformTableUptimeValue(node.uptime)}
-                          </TableCell>
-                          <TableCell
-                            class={`${getPlatformTableCellClassForKind('numeric-value')} platform-table-phone-hidden text-base-content tabular-nums`}
-                          >
-                            <span class="md:hidden">{compactCapacityLabel()}</span>
-                            <span class="hidden md:inline">{capacityLabel()}</span>
-                          </TableCell>
-                        </TableRow>
-                        <PlatformResourceDetailTableRow
+            <PlatformSortableTableHead
+              kind="text"
+              sort={sort}
+              sortKey="status"
+              class="platform-table-phone-hidden md:w-[10.5%]"
+              bandWidth={14.6}
+            >
+              Status
+            </PlatformSortableTableHead>
+            <PlatformSortableTableHead
+              kind="text"
+              sort={sort}
+              sortKey="cluster"
+              class="platform-table-mobile-w-20 md:w-[8%]"
+              bandWidth={12.1}
+            >
+              <PlatformResponsiveTableLabel compact="Clus" full="Cluster" />
+            </PlatformSortableTableHead>
+            <PlatformSortableTableHead
+              kind="text"
+              sort={sort}
+              sortKey="roles"
+              class="platform-table-phone-hidden md:w-[8%]"
+              bandWidth={9.2}
+            >
+              <PlatformResponsiveTableLabel compact="Role" full="Roles" />
+            </PlatformSortableTableHead>
+            <PlatformSortableTableHead
+              kind="text"
+              sort={sort}
+              sortKey="kubelet"
+              class="hidden md:table-cell md:w-[7%]"
+            >
+              Kubelet
+            </PlatformSortableTableHead>
+            <PlatformSortableTableHead
+              kind="text"
+              sort={sort}
+              sortKey="runtime"
+              class="hidden md:table-cell md:w-[12%]"
+            >
+              Runtime
+            </PlatformSortableTableHead>
+            <PlatformSortableTableHead
+              kind="metric-bar"
+              sort={sort}
+              sortKey="cpu"
+              class="platform-table-mobile-w-20 md:w-[7.5%]"
+              bandWidth={9.2}
+            >
+              CPU
+            </PlatformSortableTableHead>
+            <PlatformSortableTableHead
+              kind="metric-bar"
+              sort={sort}
+              sortKey="memory"
+              class="platform-table-mobile-w-20 md:w-[10%]"
+              bandWidth={11.8}
+            >
+              <PlatformResponsiveTableLabel compact="Mem" full="Memory" />
+            </PlatformSortableTableHead>
+            <PlatformSortableTableHead
+              kind="numeric-value"
+              sort={sort}
+              sortKey="uptime"
+              class="hidden md:table-cell md:w-[6%]"
+            >
+              Uptime
+            </PlatformSortableTableHead>
+            <PlatformSortableTableHead
+              kind="numeric-value"
+              sort={sort}
+              sortKey="capacity"
+              class="platform-table-phone-hidden md:w-[16%]"
+              bandWidth={13.1}
+            >
+              <PlatformResponsiveTableLabel compact="Cap" full="Capacity" />
+            </PlatformSortableTableHead>
+          </>
+        }
+        body={
+          <>
+            <PlatformWindowedRows items={sortedRows} estimatedRowHeight={32}>
+              {(node) => {
+                const meta = () => node.kubernetes;
+                const name = () => asTrimmedString(node.name) || node.id;
+                const cluster = () => kubernetesClusterLabel(node) || '—';
+                const kubelet = () => formatPlatformTableTextValue(meta()?.kubeletVersion);
+                const runtime = () => formatPlatformTableTextValue(meta()?.containerRuntimeVersion);
+                const capacityLabel = () => {
+                  const cores = meta()?.capacityCpuCores;
+                  const mem = meta()?.capacityMemoryBytes;
+                  const pods = meta()?.capacityPods;
+                  const parts: string[] = [];
+                  if (typeof cores === 'number' && cores > 0) parts.push(`${cores} cores`);
+                  if (typeof mem === 'number' && mem > 0) {
+                    parts.push(formatPlatformTableBytesValue(mem));
+                  }
+                  if (typeof pods === 'number' && pods > 0) parts.push(`${pods} pods`);
+                  return parts.join(' / ') || '—';
+                };
+                const compactCapacityLabel = () => {
+                  const cores = meta()?.capacityCpuCores;
+                  if (typeof cores === 'number' && cores > 0) return `${cores} cores`;
+                  return capacityLabel();
+                };
+                const indicator = () => mapKubernetesNodeStatus(node);
+                const canRenderMetrics = () => indicator().variant !== 'muted';
+                const isExpanded = () => drawer.isExpanded(node);
+                // The same open alerts the node's drawer lists: a node that
+                // runs a Pulse agent has its alerts keyed on the agent and
+                // labelled with its hostname, so matching the row's id or
+                // display name finds none of them.
+                const nodeAlertStyles = createMemo(() =>
+                  getUnifiedResourceAlertStyles(node, activeAlerts, alertsEnabled()),
+                );
+                const nodeAlertBg = () => {
+                  const s = nodeAlertStyles();
+                  if (!s.hasUnacknowledgedAlert) return '';
+                  return s.severity === 'critical'
+                    ? 'bg-red-50 dark:bg-red-950/25'
+                    : 'bg-yellow-50 dark:bg-yellow-950/25';
+                };
+                return (
+                  <>
+                    <TableRow
+                      class={`${getPlatformResourceDetailRowClass(isExpanded())} text-[11px] sm:text-xs ${
+                        isExpanded() ? '' : nodeAlertBg()
+                      }`}
+                      data-kubernetes-node-row={node.id}
+                      onClick={() => drawer.toggle(node)}
+                    >
+                      <TableCell class={getPlatformTableCellClassForKind('name')}>
+                        <KubernetesRowLead
                           resource={node}
-                          statusIndicator={indicator()}
-                          open={isExpanded()}
-                          detailRowId={detailRowId()}
-                          colSpan={10}
-                          resolveResourceLabel={resolveResourceLabel}
-                          onClose={() => drawer.close(node)}
-                        />
-                      </>
-                    );
-                  }}
-                </PlatformWindowedRows>
-              </>
-            }
-          />
-        </Show>
-      </div>
-    </Show>
+                          drawer={drawer}
+                          label={name()}
+                          status={indicator()}
+                        >
+                          <div class="flex min-w-0 flex-1 flex-col">
+                            <ResourceNameWithWebInterfaceLink
+                              name={name()}
+                              url={node.customUrl}
+                              class="min-w-0"
+                              nameClass="truncate font-semibold text-base-content"
+                            />
+                            {/* Phones demote the Status column; stack attention states below the name so node suffixes stay readable, and keep healthy/unknown for screen readers. */}
+                            <span
+                              class={`platform-table-phone-only-inline text-[11px] leading-tight ${getPlatformInlineStateClass(isPlatformAttentionVariant(indicator().variant))} ${getPlatformStatusTextToneClass(indicator().variant)}`}
+                              data-kubernetes-node-status-phone={indicator().variant}
+                            >
+                              {indicator().label}
+                            </span>
+                          </div>
+                        </KubernetesRowLead>
+                      </TableCell>
+                      <TableCell
+                        class={`${getPlatformTableCellClassForKind('text')} platform-table-phone-hidden`}
+                      >
+                        <Show
+                          when={indicator().variant !== 'success'}
+                          fallback={<span class="text-muted">{indicator().label}</span>}
+                        >
+                          <StatusIndicatorBadge
+                            variant={indicator().variant}
+                            label={indicator().label}
+                            size="xs"
+                          />
+                        </Show>
+                      </TableCell>
+                      <TableCell
+                        class={`${getPlatformTableCellClassForKind('text')} text-base-content`}
+                      >
+                        {cluster()}
+                      </TableCell>
+                      <TableCell
+                        class={`${getPlatformTableCellClassForKind('text')} platform-table-phone-hidden text-base-content`}
+                      >
+                        {formatRoles(meta()?.roles)}
+                      </TableCell>
+                      <TableCell
+                        class={`${getPlatformTableCellClassForKind('text')} hidden font-mono text-[11px] text-base-content md:table-cell`}
+                      >
+                        {kubelet()}
+                      </TableCell>
+                      <TableCell
+                        class={`${getPlatformTableCellClassForKind('text')} hidden font-mono text-[11px] text-base-content md:table-cell`}
+                      >
+                        <span class="block truncate" title={runtime()}>
+                          {runtime()}
+                        </span>
+                      </TableCell>
+                      <KubernetesCpuMemoryCells
+                        resource={node}
+                        canRenderMetrics={canRenderMetrics()}
+                      />
+                      <TableCell
+                        class={`${getPlatformTableCellClassForKind('numeric-value')} hidden text-base-content md:table-cell`}
+                      >
+                        {formatPlatformTableUptimeValue(node.uptime)}
+                      </TableCell>
+                      <TableCell
+                        class={`${getPlatformTableCellClassForKind('numeric-value')} platform-table-phone-hidden text-base-content tabular-nums`}
+                      >
+                        <span class="md:hidden">{compactCapacityLabel()}</span>
+                        <span class="hidden md:inline">{capacityLabel()}</span>
+                      </TableCell>
+                    </TableRow>
+                    <KubernetesDetailRow
+                      resource={node}
+                      statusIndicator={indicator()}
+                      drawer={drawer}
+                      colSpan={10}
+                      resolveResourceLabel={resolveResourceLabel}
+                    />
+                  </>
+                );
+              }}
+            </PlatformWindowedRows>
+          </>
+        }
+      />
+    </KubernetesTableFrame>
   );
 };
 
