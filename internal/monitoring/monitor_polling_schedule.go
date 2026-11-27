@@ -45,8 +45,14 @@ func (m *Monitor) describeInstancesForScheduler() []InstanceDescriptor {
 				})
 			}
 		} else {
-			names := slices.Clone(provider.ListInstances(m))
-			slices.Sort(names)
+			names := provider.ListInstances(m)
+			// Built-in Proxmox providers already return names in order.
+			// Only clone when we need to sort: another provider may own
+			// and reuse the returned slice.
+			if !slices.IsSorted(names) {
+				names = slices.Clone(names)
+				slices.Sort(names)
+			}
 			descriptors = slices.Grow(descriptors, len(names))
 			fixedProvider, _ := provider.(FixedIntervalPollProvider)
 			for _, name := range names {

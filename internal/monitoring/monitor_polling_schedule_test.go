@@ -12,6 +12,7 @@ import (
 	"github.com/rcourtman/pulse-go-rewrite/internal/config"
 	"github.com/rcourtman/pulse-go-rewrite/internal/models"
 	"github.com/rcourtman/pulse-go-rewrite/pkg/pbs"
+	"github.com/rcourtman/pulse-go-rewrite/pkg/pmg"
 	"github.com/rcourtman/pulse-go-rewrite/pkg/proxmox"
 )
 
@@ -48,6 +49,31 @@ func TestPlanningListsNonBatchProviderOnceWithoutMutatingRoster(t *testing.T) {
 	}
 	if provider.listCalls != 1 || !slices.Equal(provider.instances, []string{"zeta", "alpha"}) {
 		t.Errorf("provider roster was read %d times (want one), after plan: %v", provider.listCalls, provider.instances)
+	}
+}
+
+func TestPlanningPreservesBuiltinTargetOrderAndFirstDueTime(t *testing.T) {
+	m := &Monitor{
+		config: &config.Config{
+			PBSPollingInterval: 40 * time.Second,
+			PMGPollingInterval: 50 * time.Second,
+			PVEPollingInterval: 30 * time.Second,
+		},
+		pbsClients: map[string]*pbs.Client{"zeta": nil, "alpha": nil},
+		pmgClients: map[string]*pmg.Client{"zeta": nil, "alpha": nil},
+		pveClients: map[string]PVEClientInterface{"zeta": nil, "alpha": nil},
+	}
+	now := time.Now()
+	want := []ScheduledTask{
+		{InstanceName: "alpha", InstanceType: InstanceTypePBS, NextRun: now, Interval: 40 * time.Second},
+		{InstanceName: "zeta", InstanceType: InstanceTypePBS, NextRun: now, Interval: 40 * time.Second},
+		{InstanceName: "alpha", InstanceType: InstanceTypePMG, NextRun: now, Interval: 50 * time.Second},
+		{InstanceName: "zeta", InstanceType: InstanceTypePMG, NextRun: now, Interval: 50 * time.Second},
+		{InstanceName: "alpha", InstanceType: InstanceTypePVE, NextRun: now, Interval: 30 * time.Second},
+		{InstanceName: "zeta", InstanceType: InstanceTypePVE, NextRun: now, Interval: 30 * time.Second},
+	}
+	if got := m.buildScheduledTasks(now); !slices.Equal(got, want) {
+		t.Fatalf("scheduled polls = %+v, want %+v", got, want)
 	}
 }
 
