@@ -99,6 +99,56 @@ func (m mockIntervalSelector) SelectInterval(req IntervalRequest) time.Duration 
 	return m.interval
 }
 
+type testIntervalSelectorFunc func(IntervalRequest) time.Duration
+
+func (f testIntervalSelectorFunc) SelectInterval(req IntervalRequest) time.Duration {
+	return f(req)
+}
+
+func TestAdaptiveSchedulerKeepsProviderCadenceAndSelectorKeyForSharedName(t *testing.T) {
+	now := time.Now()
+	var requests []IntervalRequest
+	selector := testIntervalSelectorFunc(func(req IntervalRequest) time.Duration {
+		requests = append(requests, req)
+		return 25 * time.Second
+	})
+	s := NewAdaptiveScheduler(DefaultSchedulerConfig(), nil, selector, nil)
+	pve := InstanceDescriptor{Name: "office::cluster", Type: InstanceTypePVE}
+	pbs := InstanceDescriptor{Name: pve.Name, Type: InstanceTypePBS, FixedInterval: 40 * time.Second}
+	s.BuildPlan(now, []InstanceDescriptor{pve, pbs}, 0)
+	if len(requests) != 1 || requests[0].InstanceKey != "pve::office::cluster" {
+		t.Fatalf("first plan should only select an adaptive PVE interval: %+v", requests)
+	}
+	for _, want := range []struct {
+		kind     InstanceType
+		interval time.Duration
+	}{{InstanceTypePVE, 25 * time.Second}, {InstanceTypePBS, 40 * time.Second}} {
+		task, ok := s.LastScheduled(want.kind, pve.Name)
+		if !ok || task.InstanceType != want.kind || task.Interval != want.interval || !task.NextRun.Equal(now) {
+			t.Fatalf("cached %s task = %+v (found %t), want interval %s at %s", want.kind, task, ok, want.interval, now)
+		}
+	}
+
+	// Changing PBS to adaptive must keep its prior slot and cadence distinct
+	// from PVE's, and present the original string key to a custom selector.
+	pbs.FixedInterval = 0
+	tick := now.Add(time.Second)
+	s.BuildPlan(tick, []InstanceDescriptor{pve, pbs}, 3)
+	if len(requests) != 3 {
+		t.Fatalf("want two more adaptive selections, got %+v", requests)
+	}
+	for i, want := range []struct {
+		key      string
+		interval time.Duration
+	}{{"pve::office::cluster", 25 * time.Second}, {"pbs::office::cluster", 40 * time.Second}} {
+		req := requests[1+i]
+		if req.InstanceKey != want.key || req.LastInterval != want.interval ||
+			!req.LastScheduled.Equal(now) || !req.Now.Equal(tick) || req.QueueDepth != 3+i {
+			t.Fatalf("request %d lost key, prior cadence, time or queue depth: %+v", i, req)
+		}
+	}
+}
+
 // mockTaskEnqueuer is a test implementation of TaskEnqueuer
 type mockTaskEnqueuer struct {
 	tasks []ScheduledTask

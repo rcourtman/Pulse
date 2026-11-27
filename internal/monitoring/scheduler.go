@@ -84,6 +84,18 @@ type ScheduledTask struct {
 	Metadata     TaskMetadata
 }
 
+type pollPlanKey struct {
+	kind InstanceType
+	name string
+}
+
+type pollPlanEntry struct {
+	task ScheduledTask
+	// Keep the selector's existing textual key without rebuilding it while
+	// holding the planner lock. Fixed-only targets never need one.
+	intervalKey string
+}
+
 // SchedulerConfig contains tunables for the adaptive scheduler.
 type SchedulerConfig struct {
 	BaseInterval time.Duration
@@ -108,7 +120,7 @@ type AdaptiveScheduler struct {
 	enqueuer  TaskEnqueuer
 
 	mu       sync.RWMutex
-	lastPlan map[string]ScheduledTask
+	lastPlan map[pollPlanKey]pollPlanEntry
 }
 
 // normalizedSchedulerConfig fills unset or inconsistent bounds with the
@@ -146,7 +158,7 @@ func NewAdaptiveScheduler(cfg SchedulerConfig, staleness StalenessSource, interv
 		staleness: staleness,
 		interval:  interval,
 		enqueuer:  enqueuer,
-		lastPlan:  make(map[string]ScheduledTask),
+		lastPlan:  make(map[pollPlanKey]pollPlanEntry),
 	}
 }
 
@@ -189,44 +201,41 @@ func (s *AdaptiveScheduler) buildUnsortedPlan(now time.Time, inventory []Instanc
 	defer s.mu.Unlock()
 
 	for i, inst := range inventory {
-		key := schedulerKey(inst.Type, inst.Name)
+		key := pollPlanKey{kind: inst.Type, name: inst.Name}
+		cached := s.lastPlan[key]
 		score := tasks[i].Priority
 
 		lastScheduled := inst.LastScheduled
 		lastInterval := inst.LastInterval
-		if cached, exists := s.lastPlan[key]; exists {
-			if lastScheduled.IsZero() {
-				lastScheduled = cached.NextRun
-			}
-			if lastInterval == 0 {
-				lastInterval = cached.Interval
-			}
+		if lastScheduled.IsZero() {
+			lastScheduled = cached.task.NextRun
+		}
+		if lastInterval == 0 {
+			lastInterval = cached.task.Interval
 		}
 		if lastInterval == 0 {
 			lastInterval = s.cfg.BaseInterval
 		}
 
-		currentDepth := queueDepth + i
-		req := IntervalRequest{
-			Now:            now,
-			BaseInterval:   s.cfg.BaseInterval,
-			MinInterval:    s.cfg.MinInterval,
-			MaxInterval:    s.cfg.MaxInterval,
-			LastInterval:   lastInterval,
-			LastSuccess:    inst.LastSuccess,
-			LastScheduled:  lastScheduled,
-			StalenessScore: score,
-			ErrorCount:     inst.ErrorCount,
-			QueueDepth:     currentDepth,
-			InstanceKey:    key,
-			InstanceType:   inst.Type,
-		}
-
-		var nextInterval time.Duration
-		if inst.FixedInterval > 0 {
-			nextInterval = inst.FixedInterval
-		} else {
-			nextInterval = s.interval.SelectInterval(req)
+		nextInterval := inst.FixedInterval
+		if nextInterval <= 0 {
+			if cached.intervalKey == "" {
+				cached.intervalKey = schedulerKey(inst.Type, inst.Name)
+			}
+			nextInterval = s.interval.SelectInterval(IntervalRequest{
+				Now:            now,
+				BaseInterval:   s.cfg.BaseInterval,
+				MinInterval:    s.cfg.MinInterval,
+				MaxInterval:    s.cfg.MaxInterval,
+				LastInterval:   lastInterval,
+				LastSuccess:    inst.LastSuccess,
+				LastScheduled:  lastScheduled,
+				StalenessScore: score,
+				ErrorCount:     inst.ErrorCount,
+				QueueDepth:     queueDepth + i,
+				InstanceKey:    cached.intervalKey,
+				InstanceType:   inst.Type,
+			})
 			if nextInterval <= 0 {
 				nextInterval = s.cfg.BaseInterval
 			}
@@ -271,7 +280,8 @@ func (s *AdaptiveScheduler) buildUnsortedPlan(now time.Time, inventory []Instanc
 			Metadata:     inst.Metadata,
 		}
 
-		s.lastPlan[key] = task
+		cached.task = task
+		s.lastPlan[key] = cached
 		tasks[i] = task
 	}
 
@@ -332,8 +342,8 @@ func (s *AdaptiveScheduler) LastScheduled(instanceType InstanceType, instanceNam
 	}
 	s.mu.RLock()
 	defer s.mu.RUnlock()
-	task, ok := s.lastPlan[schedulerKey(instanceType, instanceName)]
-	return task, ok
+	entry, ok := s.lastPlan[pollPlanKey{kind: instanceType, name: instanceName}]
+	return entry.task, ok
 }
 
 type noopStalenessSource struct{}
