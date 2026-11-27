@@ -125,4 +125,72 @@ describe('DockerContainerLifecycleControls without hover', () => {
     fireEvent.pointerDown(document.body);
     expect(tooltipText()).toBeNull();
   });
+
+  it('opens the enable-commands dialog from inline buttons and collapsed menu when commands are off', async () => {
+    const host = {
+      id: 'agent:tower-1',
+      type: 'agent',
+      name: 'tower',
+      displayName: 'Tower',
+      agent: {
+        agentId: 'tower-1',
+        hostname: 'tower',
+        platform: 'linux',
+        hostProfile: 'unraid',
+        commandsEnabled: false,
+      },
+    } as unknown as Resource;
+    const container = {
+      ...refusedContainer(),
+      parentId: 'agent:tower-1',
+      actionReadiness: [
+        {
+          name: 'stop',
+          available: false,
+          reasonCode: 'host_commands_disabled',
+          reason:
+            'Commands are not enabled on the Pulse agent on Tower. To allow them, run the Pulse install command on Tower again with "Allow Pulse to run commands on this host" ticked.',
+        },
+        {
+          name: 'restart',
+          available: false,
+          reasonCode: 'host_commands_disabled',
+          reason:
+            'Commands are not enabled on the Pulse agent on Tower. To allow them, run the Pulse install command on Tower again with "Allow Pulse to run commands on this host" ticked.',
+        },
+      ],
+    } as Resource;
+
+    const { unmount } = render(() => (
+      <DockerContainerLifecycleControls resource={container} host={host} />
+    ));
+
+    const restart = screen.getByRole('button', {
+      name: 'Restart unavailable: Remote commands are off on Tower. Click to enable.',
+    });
+    expect(restart).toHaveAttribute('aria-haspopup', 'dialog');
+    fireEvent.click(restart);
+    expect(
+      await screen.findByRole(
+        'heading',
+        { name: 'Enable remote commands on Tower' },
+        { timeout: 5000 },
+      ),
+    ).toBeInTheDocument();
+
+    unmount();
+
+    render(() => <DockerContainerLifecycleControls resource={container} host={host} collapsed />);
+    fireEvent.click(screen.getByRole('button', { name: 'Container actions for web' }));
+    const menu = screen.getByRole('menu', { name: 'Container actions for web' });
+    const reasons = menu.querySelector('[data-docker-lifecycle-disabled-reasons]') as HTMLElement;
+    expect(Array.from(reasons.children).map((reason) => reason.textContent)).toEqual([
+      'Container is already running.',
+      'Remote commands are off on Tower.',
+    ]);
+    fireEvent.click(within(menu).getByRole('menuitem', { name: 'Enable remote commands' }));
+    expect(
+      await screen.findByRole('heading', { name: 'Enable remote commands on Tower' }),
+    ).toBeInTheDocument();
+  });
 });

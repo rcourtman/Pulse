@@ -43,6 +43,7 @@ import type { UseResourceDetailDrawerStateResult } from './useResourceDetailDraw
 
 interface ResourceSummaryPresentationProps {
   resource: Resource;
+  parentHost?: Resource;
   drawer: UseResourceDetailDrawerStateResult;
   showPlatformId: boolean;
   content?: 'all' | 'overview' | 'technical';
@@ -118,8 +119,10 @@ const dockerRuntimeRow = (
 // and where to see the new image. The drawer rebuilds its inventory rows on
 // every refresh and clock tick, so this is created once and reused; a
 // recreated button would drop its state, including an open review dialog.
-const ContainerUpdateNextSteps: Component<{ resource: Resource }> = (props) => {
-  const action = () => getDockerContainerUpdateAction(props.resource);
+const ContainerUpdateNextSteps: Component<{ resource: Resource; parentHost?: Resource }> = (
+  props,
+) => {
+  const action = () => getDockerContainerUpdateAction(props.resource, props.parentHost);
   const registryLink = () => getDockerImageRegistryLink(props.resource.docker?.image);
   // One wrapping flex box (overriding the drawer row's inline children), so on
   // a phone the controls wrap inside the card and keep their own tap sizes.
@@ -137,6 +140,9 @@ const ContainerUpdateNextSteps: Component<{ resource: Resource }> = (props) => {
             resourceId={update().resourceId}
             actionReadiness={update().actionReadiness}
             updateNotOfferedReason={update().updateNotOfferedReason}
+            hostName={update().hostName}
+            hostCommandsEnabled={update().hostCommandsEnabled}
+            hostCommandAccess={update().hostCommandAccess}
             touchTarget
           />
         )}
@@ -505,7 +511,7 @@ export const useResourceSummarySections = (
   let nextSteps: JSX.Element | undefined;
   const updateNextSteps = () =>
     (nextSteps ??= runWithOwner(owner, () => (
-      <ContainerUpdateNextSteps resource={props.resource} />
+      <ContainerUpdateNextSteps resource={props.resource} parentHost={props.parentHost} />
     )));
   return (): DetailSection[] => {
     const docker = dockerContainerMeta(props.resource);

@@ -44,9 +44,23 @@ describe('docker container update action', () => {
       ({ id: 'agent-tower', type: 'agent', name: 'tower', displayName: 'Tower', agent }) as never;
 
     // The facet omits commandsEnabled when false: present facet, absent flag.
-    expect(getDockerContainerUpdateAction(resource, host({ agentId: 'a' }))).toMatchObject({
+    expect(
+      getDockerContainerUpdateAction(
+        resource,
+        host({ agentId: 'a', platform: 'linux', hostProfile: 'unraid', hostname: 'tower' }),
+      ),
+    ).toMatchObject({
       hostName: 'Tower',
       hostCommandsEnabled: false,
+      hostCommandAccess: {
+        hostResourceId: 'agent-tower',
+        hostName: 'Tower',
+        agentId: 'a',
+        hostname: 'tower',
+        platform: 'linux',
+        hostProfile: 'unraid',
+        commandsEnabled: false,
+      },
     });
     expect(
       getDockerContainerUpdateAction(resource, host({ commandsEnabled: true }))

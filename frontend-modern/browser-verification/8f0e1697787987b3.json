@@ -1,0 +1,84 @@
+{
+  "version": 1,
+  "base_sha": "5960eb3709b71b215abcda77f65c3b44787b9a92",
+  "verified_at": "2026-11-27T21:39:57Z",
+  "result": "passed",
+  "changed_paths": [
+    "frontend-modern/src/components/Infrastructure/ResourceDetailDrawer.tsx",
+    "frontend-modern/src/components/Infrastructure/ResourceDetailDrawerOverviewTab.tsx",
+    "frontend-modern/src/components/Infrastructure/ResourceDetailSummary.tsx",
+    "frontend-modern/src/components/Settings/InfrastructureWorkspace.tsx",
+    "frontend-modern/src/components/Settings/infrastructureWorkspaceModel.ts",
+    "frontend-modern/src/components/Workloads/GuestRow.tsx",
+    "frontend-modern/src/components/shared/ContainerUpdateBadge.tsx",
+    "frontend-modern/src/components/shared/EnableRemoteCommandsDialog.tsx",
+    "frontend-modern/src/components/shared/containerUpdateBadgeModel.ts",
+    "frontend-modern/src/components/shared/enableRemoteCommandsModel.ts",
+    "frontend-modern/src/components/shared/hostCommandAccessContext.ts",
+    "frontend-modern/src/components/shared/useContainerUpdateButtonState.ts",
+    "frontend-modern/src/features/docker/DockerContainerLifecycleControls.tsx",
+    "frontend-modern/src/features/docker/DockerContainersTable.tsx",
+    "frontend-modern/src/features/docker/dockerContainerLifecycleActions.ts",
+    "frontend-modern/src/features/docker/dockerContainerUpdateAction.ts",
+    "frontend-modern/src/features/platformPage/PlatformResourceDetailTableRow.tsx"
+  ],
+  "content_sha256": {
+    "frontend-modern/src/components/Infrastructure/ResourceDetailDrawer.tsx": "73484ffb586f1593a7579f1656acd3f80a09d5398e5102f90a50b0785ac6572b",
+    "frontend-modern/src/components/Infrastructure/ResourceDetailDrawerOverviewTab.tsx": "9d9d4f660fd44110ef4a582a112f5c7a5485de02a51651c5e033b866e12d0c33",
+    "frontend-modern/src/components/Infrastructure/ResourceDetailSummary.tsx": "1e732c7d5f4268f7e8d389b0ff0c32c0322142d9f0e47ea1c9bc08fdf680568a",
+    "frontend-modern/src/components/Settings/InfrastructureWorkspace.tsx": "a809b1cf368ed4e6453749319c71988701784ead24d3d31b6ad5b41a52e5e074",
+    "frontend-modern/src/components/Settings/infrastructureWorkspaceModel.ts": "7955394cd9a307024359d64d96979ebf707ef4491c17a52bbd93009b3f7203cc",
+    "frontend-modern/src/components/Workloads/GuestRow.tsx": "7ce713047d85bb7629ceede54af5b5132837a171e2065fdf2ba29973292c9534",
+    "frontend-modern/src/components/shared/ContainerUpdateBadge.tsx": "41589303be885a5275d45d0949e9f5c859fa3fd652a98fa174f13d20e028e2d6",
+    "frontend-modern/src/components/shared/EnableRemoteCommandsDialog.tsx": "674bef93ea2f0a89867e9dad7b8e111c74563569441796d64d4bf0c9a2bffe79",
+    "frontend-modern/src/components/shared/containerUpdateBadgeModel.ts": "fa69fdfe66ebacc2d44a2704478b3c8b8961a0366dd2d65f950851f0b8c354a5",
+    "frontend-modern/src/components/shared/enableRemoteCommandsModel.ts": "e0cfc76d91dd989b136972896df261cf6fea358f9a25f5a235466ffd53590889",
+    "frontend-modern/src/components/shared/hostCommandAccessContext.ts": "19f07cb0d9cd6d11b777b5a578edefbc0126a54a9577ee0bcf3ce29bc0bc8f06",
+    "frontend-modern/src/components/shared/useContainerUpdateButtonState.ts": "64b0380ccb2cc5adebda7a8a8314e32323735e6f37892f616d3050415a04489f",
+    "frontend-modern/src/features/docker/DockerContainerLifecycleControls.tsx": "e8953286e9d9d08a1ad701378ede202224758b827604c53a68c5750b2c50d1c4",
+    "frontend-modern/src/features/docker/DockerContainersTable.tsx": "ee6c02e743e192cc45935fbbc95bdbc751f7504b83ada2f14ba0edd98d5b406c",
+    "frontend-modern/src/features/docker/dockerContainerLifecycleActions.ts": "c9543edf6f8a33aca5e484547e6d3494d97861a83ceab33088786dc359c25ff3",
+    "frontend-modern/src/features/docker/dockerContainerUpdateAction.ts": "27c6b3cacd30d437749be772147f4bfeab68dad68cda6d850cba059e588ff556",
+    "frontend-modern/src/features/platformPage/PlatformResourceDetailTableRow.tsx": "83fa1884fabec3d171bf734684b1117f9d20d64b8bbdc7e33ec093a47329ad3b"
+  },
+  "routes": [
+    "/docker",
+    "/settings/infrastructure"
+  ],
+  "viewports": [
+    {
+      "width": 1680,
+      "height": 960
+    },
+    {
+      "width": 1280,
+      "height": 840
+    },
+    {
+      "width": 390,
+      "height": 844
+    }
+  ],
+  "states": [
+    "Wide desktop dark mode: locked Update pill shows one-line hover tooltip and lazily loads Enable remote commands dialog without expanding the row drawer",
+    "Dialog command-ready state collapses raw shell boilerplate behind View command, presents Copy command and Copy token steps cleanly, and includes collapsible Self-signed HTTPS certificate options",
+    "Closing and reopening the dialog for the same host reuses the in-flight token without minting a duplicate and clears it once commands turn on",
+    "Expanded View command and Self-signed HTTPS options update the generated command live with --insecure and custom CA path without overlapping text",
+    "Live host commandsEnabled transition flips dialog to green confirmation state with Continue to update gluetun action",
+    "Wide desktop inline Restart button, expanded container detail drawer Update button, Workloads GuestRow Update button, and Settings Infrastructure Manage Remote commands section open the same inline dialog with host metadata",
+    "Light mode dialog renders fully opaque with crisp contrast and aligned two-step controls",
+    "Medium desktop collapsed lifecycle menu shows concise Remote commands are off on Tower reason and Enable remote commands menu item",
+    "Phone 390x844 viewport opens dialog from the container drawer and fits cleanly inside the viewport with zero horizontal overflow",
+    "Read-only session keeps locked Update pill non-interactive with concise status tooltip and does not open the dialog"
+  ],
+  "interactions": [
+    "Hovered locked Update pill and verified concise single-line tooltip text",
+    "Clicked locked Update pill, clicked Generate command for Tower, verified POST /api/agent-install-command with enableCommands true",
+    "Verified raw command starts collapsed, toggled View command and Hide command, toggled Self-signed HTTPS --insecure option, toggled Show token and Hide token, and closed and reopened the dialog to verify in-flight token reuse",
+    "Simulated host reconnect with commandsEnabled true and clicked Continue to update gluetun to trigger POST /api/actions/plan",
+    "Clicked disabled Restart button, verified restart-specific copy, dismissed with Escape, and opened dialog from expanded container drawer",
+    "Opened collapsed lifecycle menu at 1280x840 and clicked Enable remote commands",
+    "Opened container drawer and dialog at 390x844 and verified dialog bounds within viewport",
+    "Verified read-only session renders passive Update status without dialog trigger"
+  ]
+}

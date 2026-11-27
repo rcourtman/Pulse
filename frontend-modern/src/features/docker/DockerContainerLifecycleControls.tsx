@@ -2,9 +2,12 @@ import {
   For,
   Match,
   Show,
+  Suspense,
   Switch,
   createEffect,
+  createMemo,
   createSignal,
+  lazy,
   onCleanup,
   type Component,
 } from 'solid-js';
@@ -14,19 +17,34 @@ import MoreHorizontalIcon from 'lucide-solid/icons/more-horizontal';
 import PlayIcon from 'lucide-solid/icons/play';
 import RotateCwIcon from 'lucide-solid/icons/rotate-cw';
 import SquareIcon from 'lucide-solid/icons/square';
+import TerminalIcon from 'lucide-solid/icons/terminal';
 import { ResourceActionsAPI } from '@/api/resourceActions';
 import { ActionReviewDialog } from '@/features/actions/ActionReviewDialog';
+import {
+  extractHostCommandAccessContext,
+  type EnableRemoteCommandsTarget,
+} from '@/components/shared/hostCommandAccessContext';
+
+const EnableRemoteCommandsDialog = lazy(
+  () => import('@/components/shared/EnableRemoteCommandsDialog'),
+);
 import { hideTooltip, showPressedTooltip } from '@/components/shared/Tooltip';
 import { useMenuButton } from '@/components/shared/useMenuButton';
 import { notificationStore } from '@/stores/notifications';
+import { presentationPolicyIsReadOnly } from '@/stores/sessionPresentationPolicy';
+import { sessionCanReadInfrastructureSettings } from '@/stores/sessionSettingsCapabilities';
 import type { ActionDetailResponse } from '@/types/actionAudit';
 import type { Resource } from '@/types/resource';
+import { asTrimmedString } from '@/utils/stringUtils';
 import {
   DOCKER_CONTAINER_LIFECYCLE_ACTIONS,
   dockerContainerLifecycleName,
   dockerContainerRuntimeLabel,
   getDockerContainerLifecycleDisabledReason,
-  getDockerContainerLifecycleDisabledReasons,
+  getDockerContainerLifecycleDisplayReason,
+  getDockerContainerLifecycleDisplayReasons,
+  getFirstHostCommandsDisabledLifecycleAction,
+  isDockerContainerLifecycleHostCommandsDisabled,
   type DockerContainerLifecycleAction,
 } from './dockerContainerLifecycleActions';
 
@@ -38,6 +56,7 @@ export type DockerContainerLifecycleSettledContext = {
 };
 export type DockerContainerLifecycleControlsProps = {
   resource: Resource;
+  host?: Resource | null;
   class?: string;
   surface?: DockerContainerLifecycleSurface;
   collapsed?: boolean;
@@ -49,6 +68,8 @@ const buttonBaseClass =
 const enabledButtonClass =
   'border-border-subtle bg-surface hover:border-blue-400 hover:bg-blue-50 hover:text-blue-700 dark:hover:bg-blue-950/40 dark:hover:text-blue-300';
 const disabledButtonClass = 'cursor-not-allowed border-border-subtle bg-surface-alt opacity-55';
+const enableCommandsButtonClass =
+  'cursor-pointer border-border-subtle bg-surface-alt opacity-65 hover:border-amber-400/80 hover:bg-amber-50/70 hover:text-amber-700 hover:opacity-100 dark:hover:bg-amber-950/35 dark:hover:text-amber-300';
 const runningButtonClass =
   'cursor-wait border-blue-400 bg-blue-50 text-blue-700 dark:bg-blue-950/40';
 
@@ -84,8 +105,11 @@ export const DockerContainerLifecycleControls: Component<DockerContainerLifecycl
   const [lastError, setLastError] = createSignal('');
   const [menuOpen, setMenuOpen] = createSignal(false);
   const [menuPosition, setMenuPosition] = createSignal({ left: 0, top: 0 });
+  const [enableCommandsAction, setEnableCommandsAction] =
+    createSignal<DockerContainerLifecycleAction | null>(null);
   let menuTriggerRef: HTMLButtonElement | undefined;
   let menuRef: HTMLDivElement | undefined;
+  let lastEnableTriggerRef: HTMLElement | undefined;
   const menuButton = useMenuButton({
     isOpen: menuOpen,
     setOpen: setMenuOpen,
@@ -125,8 +149,13 @@ export const DockerContainerLifecycleControls: Component<DockerContainerLifecycl
     });
   });
 
-  const prepareLifecycleReview = async (action: DockerContainerLifecycleAction) => {
-    const disabledReason = getDockerContainerLifecycleDisabledReason(props.resource, action);
+  const prepareLifecycleReview = async (
+    action: DockerContainerLifecycleAction,
+    options?: { bypassReadinessCheck?: boolean },
+  ) => {
+    const disabledReason = options?.bypassReadinessCheck
+      ? undefined
+      : getDockerContainerLifecycleDisabledReason(props.resource, action);
     if (disabledReason || planningAction()) return;
     const containerName = dockerContainerLifecycleName(props.resource);
     const runtimeLabel = dockerContainerRuntimeLabel(props.resource);
@@ -157,16 +186,73 @@ export const DockerContainerLifecycleControls: Component<DockerContainerLifecycl
     }
   };
 
-  const disabledReasons = () => getDockerContainerLifecycleDisabledReasons(props.resource);
+  const hostCommandContext = createMemo(() =>
+    extractHostCommandAccessContext(props.host, {
+      hostName:
+        asTrimmedString(props.resource.docker?.hostname) ||
+        asTrimmedString(props.resource.parentName) ||
+        undefined,
+      agentId:
+        asTrimmedString(props.resource.docker?.agentId) ||
+        asTrimmedString(props.resource.docker?.hostSourceId) ||
+        undefined,
+    }),
+  );
+  const canManageHostCommands = () =>
+    !presentationPolicyIsReadOnly() && sessionCanReadInfrastructureSettings();
+  const isCommandsDisabledForAction = (action: DockerContainerLifecycleAction) =>
+    isDockerContainerLifecycleHostCommandsDisabled(
+      props.resource,
+      action,
+      hostCommandContext().commandsEnabled,
+    );
+  const firstCommandsDisabledAction = createMemo(() =>
+    getFirstHostCommandsDisabledLifecycleAction(
+      props.resource,
+      hostCommandContext().commandsEnabled,
+    ),
+  );
+  const enableCommandsTarget = createMemo<EnableRemoteCommandsTarget | null>(() => {
+    const action = enableCommandsAction();
+    if (!action) return null;
+    return {
+      ...hostCommandContext(),
+      hostResourceId: hostCommandContext().hostResourceId || props.resource.parentId || undefined,
+      containerName: dockerContainerLifecycleName(props.resource),
+      actionKind: action,
+    };
+  });
+  const disabledReasons = () =>
+    getDockerContainerLifecycleDisplayReasons(props.resource, {
+      hostName: hostCommandContext().hostName,
+      hostCommandsEnabled: hostCommandContext().commandsEnabled,
+    });
   const reasonsId = () => `${menuButton.menuId}-reasons`;
 
   const titleForAction = (action: DockerContainerLifecycleAction, label: string): string => {
-    const disabledReason = getDockerContainerLifecycleDisabledReason(props.resource, action);
+    const disabledReason = getDockerContainerLifecycleDisplayReason(props.resource, action, {
+      hostName: hostCommandContext().hostName,
+      hostCommandsEnabled: hostCommandContext().commandsEnabled,
+    });
     const containerName = dockerContainerLifecycleName(props.resource);
-    if (disabledReason) return `${label} unavailable: ${disabledReason}`;
+    if (disabledReason) {
+      if (isCommandsDisabledForAction(action) && canManageHostCommands()) {
+        return `${label} unavailable: ${disabledReason} Click to enable.`;
+      }
+      return `${label} unavailable: ${disabledReason}`;
+    }
     if (planningAction() === action) return `Preparing review for ${action} ${containerName}`;
     if (lastError()) return `${label} ${containerName}. Last error: ${lastError()}`;
     return `Review ${action} for ${containerName}`;
+  };
+
+  const openEnableCommandsFor = (
+    action: DockerContainerLifecycleAction,
+    trigger?: HTMLElement | null,
+  ) => {
+    lastEnableTriggerRef = trigger ?? undefined;
+    hideTooltip();
+    setEnableCommandsAction(action);
   };
 
   return (
@@ -183,24 +269,42 @@ export const DockerContainerLifecycleControls: Component<DockerContainerLifecycl
             {(spec) => {
               const unavailable = () =>
                 Boolean(getDockerContainerLifecycleDisabledReason(props.resource, spec.action));
+              const canEnable = () =>
+                unavailable() &&
+                isCommandsDisabledForAction(spec.action) &&
+                canManageHostCommands();
               const busy = () => planningAction() !== null && planningAction() !== spec.action;
               const Icon = iconForAction(spec.action);
               return (
                 <button
                   type="button"
-                  class={`${buttonBaseClass} ${planningAction() === spec.action ? runningButtonClass : unavailable() || busy() ? disabledButtonClass : enabledButtonClass}`}
+                  class={`${buttonBaseClass} ${
+                    planningAction() === spec.action
+                      ? runningButtonClass
+                      : canEnable() && !busy()
+                        ? enableCommandsButtonClass
+                        : unavailable() || busy()
+                          ? disabledButtonClass
+                          : enabledButtonClass
+                  }`}
                   disabled={busy()}
-                  // Not `disabled`, which would swallow the tap that asks why.
-                  aria-disabled={unavailable() ? 'true' : undefined}
+                  // Not `disabled`, which would swallow the tap that asks why or opens setup.
+                  aria-disabled={unavailable() && !canEnable() ? 'true' : undefined}
+                  aria-haspopup={canEnable() ? 'dialog' : undefined}
                   title={titleForAction(spec.action, spec.label)}
                   aria-label={titleForAction(spec.action, spec.label)}
                   data-docker-container-action={spec.action}
+                  data-enable-remote-commands-trigger={canEnable() ? spec.action : undefined}
                   onMouseDown={(event) => event.stopPropagation()}
                   onMouseLeave={() => hideTooltip()}
                   onBlur={() => hideTooltip()}
                   onKeyDown={(event) => event.stopPropagation()}
                   onClick={(event) => {
                     event.stopPropagation();
+                    if (canEnable()) {
+                      openEnableCommandsFor(spec.action, event.currentTarget);
+                      return;
+                    }
                     if (unavailable()) {
                       showPressedTooltip(
                         titleForAction(spec.action, spec.label),
@@ -315,9 +419,45 @@ export const DockerContainerLifecycleControls: Component<DockerContainerLifecycl
                   <For each={disabledReasons()}>{(reason) => <div>{reason}</div>}</For>
                 </div>
               </Show>
+              <Show when={canManageHostCommands() ? firstCommandsDisabledAction() : undefined}>
+                {(action) => (
+                  <button
+                    type="button"
+                    role="menuitem"
+                    tabindex="-1"
+                    class="mt-1 flex w-full items-center gap-2 rounded-sm border-t border-border-subtle px-2 py-2 text-left text-xs font-medium text-amber-700 transition-colors hover:bg-amber-50 focus:outline-hidden focus-visible:ring-2 focus-visible:ring-blue-500/60 dark:text-amber-300 dark:hover:bg-amber-950/35"
+                    data-enable-remote-commands-trigger="menu"
+                    onClick={(event) => {
+                      event.stopPropagation();
+                      menuButton.closeMenu(false);
+                      openEnableCommandsFor(action(), menuTriggerRef);
+                    }}
+                  >
+                    <TerminalIcon class="h-3.5 w-3.5 shrink-0" aria-hidden="true" />
+                    <span>Enable remote commands</span>
+                  </button>
+                )}
+              </Show>
             </div>
           </Portal>
         </Show>
+      </Show>
+      <Show when={Boolean(enableCommandsAction())}>
+        <Suspense>
+          <EnableRemoteCommandsDialog
+            isOpen={Boolean(enableCommandsAction())}
+            target={enableCommandsTarget()}
+            commandsEnabled={hostCommandContext().commandsEnabled}
+            onClose={() => setEnableCommandsAction(null)}
+            onContinue={() => {
+              const action = enableCommandsAction();
+              if (action) {
+                void prepareLifecycleReview(action, { bypassReadinessCheck: true });
+              }
+            }}
+            returnFocus={() => lastEnableTriggerRef}
+          />
+        </Suspense>
       </Show>
       <ActionReviewDialog
         detail={reviewDetail()}

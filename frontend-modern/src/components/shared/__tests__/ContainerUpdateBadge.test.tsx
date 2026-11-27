@@ -206,11 +206,9 @@ describe('ContainerUpdateBadge', () => {
 
     expect(screen.queryByRole('button')).not.toBeInTheDocument();
     expect(screen.getByText('Update')).toBeInTheDocument();
-    const status = screen.getByLabelText(/Pulse cannot apply it/);
-    expect(status.getAttribute('aria-label')).toContain(
-      'The Pulse agent on this host is still on an older version.',
+    const status = screen.getByLabelText(
+      'Update available. The Pulse agent on this host is still on an older version.',
     );
-    expect(status.getAttribute('aria-label')).toContain('container manager on the host');
     fireEvent.click(status);
     expect(ResourceActionsAPI.planAction).not.toHaveBeenCalled();
   });
@@ -255,7 +253,9 @@ describe('ContainerUpdateBadge', () => {
         />
       ));
 
-      fireEvent.click(screen.getByLabelText(/Pulse cannot apply it/));
+      fireEvent.click(
+        screen.getByLabelText('Update available. Docker / Podman command agent is not connected.'),
+      );
 
       expect(tooltipText()).toContain('Docker / Podman command agent is not connected.');
     });
@@ -297,7 +297,7 @@ describe('ContainerUpdateBadge', () => {
     expect(screen.getByLabelText(/Docker inventory for this host is offline/)).toBeInTheDocument();
   });
 
-  it('tells a host without command access how to turn it on', () => {
+  it('opens the inline enable-commands dialog when an admin clicks the locked update button', async () => {
     render(() => (
       <UpdateButton
         agentId="agent-1"
@@ -323,12 +323,19 @@ describe('ContainerUpdateBadge', () => {
       />
     ));
 
-    expect(screen.queryByRole('button')).not.toBeInTheDocument();
-    const status = screen.getByLabelText(/does not accept commands from Pulse/);
-    expect(status.getAttribute('aria-label')).toContain('the Pulse agent on Tower');
-    expect(status.getAttribute('aria-label')).toContain(
-      'choose Manage on Tower, and follow Remote commands',
-    );
+    const trigger = screen.getByRole('button', {
+      name: 'Update available. Click to enable remote commands on Tower.',
+    });
+    expect(trigger).toHaveAttribute('aria-haspopup', 'dialog');
+    fireEvent.click(trigger);
+
+    expect(
+      await screen.findByRole(
+        'heading',
+        { name: 'Enable remote commands on Tower' },
+        { timeout: 5000 },
+      ),
+    ).toBeInTheDocument();
   });
 
   it('keeps the button enabled when the update readiness entry is available', () => {

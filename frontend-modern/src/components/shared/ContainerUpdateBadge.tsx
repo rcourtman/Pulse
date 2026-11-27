@@ -1,7 +1,8 @@
-import { Component, Match, Show, Switch } from 'solid-js';
+import { Component, Match, Show, Suspense, Switch, lazy } from 'solid-js';
 import LockIcon from 'lucide-solid/icons/lock';
 import { showPressedTooltip, showTooltip, hideTooltip } from '@/components/shared/Tooltip';
 import { ActionReviewDialog } from '@/features/actions/ActionReviewDialog';
+const EnableRemoteCommandsDialog = lazy(() => import('./EnableRemoteCommandsDialog'));
 import {
   getContainerUpdateBadgeTooltip,
   getContainerUpdateCurrentTooltip,
@@ -224,6 +225,7 @@ const UPDATE_TOUCH_TARGET_CLASS = ' max-sm:min-h-11 max-sm:px-3';
 
 export const UpdateButton: Component<UpdateButtonProps> = (props) => {
   const state = useContainerUpdateButtonState(props);
+  let lockedTriggerRef: HTMLButtonElement | undefined;
   const readOnlyUpdateExplanation = () => state.updateUnavailableExplanation();
   const showReadOnlyUpdateExplanation = (target: HTMLElement) => {
     const rect = target.getBoundingClientRect();
@@ -242,112 +244,157 @@ export const UpdateButton: Component<UpdateButtonProps> = (props) => {
 
   return (
     <Show when={state.hasUpdate()}>
-      <Show
-        when={shouldRenderReadOnlyStatus()}
-        fallback={
-          <div class="inline-flex items-center gap-1" data-prevent-toggle>
-            <button
-              type="button"
-              class={`${getUpdateButtonClass(state.currentState(), state.isUpdateUnavailable())}${
-                props.touchTarget ? UPDATE_TOUCH_TARGET_CLASS : ''
-              }`}
-              onClick={(event) => {
-                if (state.currentState() === 'error' || state.currentState() === 'success') {
-                  showPressedTooltip(state.buttonTooltip(), event.currentTarget);
-                }
-                void state.handleClick(event);
-              }}
-              onMouseDown={(e) => {
-                e.stopPropagation();
-              }}
-              disabled={state.isButtonDisabled()}
-              aria-label={state.buttonTooltip() || state.buttonLabel()}
-              data-prevent-toggle
-              onMouseEnter={(e) => {
-                const rect = e.currentTarget.getBoundingClientRect();
-                showTooltip(state.buttonTooltip(), rect.left + rect.width / 2, rect.top, {
-                  align: 'center',
-                  direction: 'up',
-                });
-              }}
-              onMouseLeave={() => hideTooltip()}
-            >
-              <Show when={!state.settingsLoaded()}>
-                <UpdateArrowIcon class="w-3 h-3 animate-pulse opacity-50" />
-              </Show>
-              <Show when={state.settingsLoaded()}>
-                <Switch>
-                  <Match when={state.currentState() === 'updating'}>
-                    <SpinnerIcon class="w-3 h-3 animate-spin" />
-                  </Match>
-                  <Match
-                    when={
-                      state.currentState() === 'queued' || state.currentState() === 'inconclusive'
-                    }
-                  >
-                    <ErrorIndicatorIcon class="w-3 h-3" />
-                  </Match>
-                  <Match when={state.currentState() === 'success'}>
-                    <CheckIcon class="w-3 h-3" />
-                  </Match>
-                  <Match when={state.currentState() === 'error'}>
-                    <XIcon class="w-3 h-3" />
-                  </Match>
-                  <Match when={state.currentState() === 'idle'}>
-                    <UpdateArrowIcon class="w-3 h-3" />
-                  </Match>
-                </Switch>
-              </Show>
-              <Show when={!props.compact}>
-                <span class={!state.settingsLoaded() ? 'opacity-50' : ''}>
-                  {state.buttonLabel()}
-                </span>
-              </Show>
-            </button>
-            <ActionReviewDialog
-              detail={state.reviewDetail()}
-              onClose={state.handleReviewClosed}
-              onChanged={state.handleReviewChanged}
-            />
-          </div>
-        }
-      >
+      <>
         <Show
-          when={hasContainerUpdate(props.updateStatus) && state.isUpdateUnavailable()}
+          when={shouldRenderReadOnlyStatus()}
           fallback={
-            <ContainerUpdateBadge
-              updateStatus={props.updateStatus}
-              compact={props.compact}
-              showCurrent={true}
-            />
+            <div class="inline-flex items-center gap-1" data-prevent-toggle>
+              <button
+                type="button"
+                class={`${getUpdateButtonClass(state.currentState(), state.isUpdateUnavailable())}${
+                  props.touchTarget ? UPDATE_TOUCH_TARGET_CLASS : ''
+                }`}
+                onClick={(event) => {
+                  if (state.currentState() === 'error' || state.currentState() === 'success') {
+                    showPressedTooltip(state.buttonTooltip(), event.currentTarget);
+                  }
+                  void state.handleClick(event);
+                }}
+                onMouseDown={(e) => {
+                  e.stopPropagation();
+                }}
+                disabled={state.isButtonDisabled()}
+                aria-label={state.buttonTooltip() || state.buttonLabel()}
+                data-prevent-toggle
+                onMouseEnter={(e) => {
+                  const rect = e.currentTarget.getBoundingClientRect();
+                  showTooltip(state.buttonTooltip(), rect.left + rect.width / 2, rect.top, {
+                    align: 'center',
+                    direction: 'up',
+                  });
+                }}
+                onMouseLeave={() => hideTooltip()}
+              >
+                <Show when={!state.settingsLoaded()}>
+                  <UpdateArrowIcon class="w-3 h-3 animate-pulse opacity-50" />
+                </Show>
+                <Show when={state.settingsLoaded()}>
+                  <Switch>
+                    <Match when={state.currentState() === 'updating'}>
+                      <SpinnerIcon class="w-3 h-3 animate-spin" />
+                    </Match>
+                    <Match
+                      when={
+                        state.currentState() === 'queued' || state.currentState() === 'inconclusive'
+                      }
+                    >
+                      <ErrorIndicatorIcon class="w-3 h-3" />
+                    </Match>
+                    <Match when={state.currentState() === 'success'}>
+                      <CheckIcon class="w-3 h-3" />
+                    </Match>
+                    <Match when={state.currentState() === 'error'}>
+                      <XIcon class="w-3 h-3" />
+                    </Match>
+                    <Match when={state.currentState() === 'idle'}>
+                      <UpdateArrowIcon class="w-3 h-3" />
+                    </Match>
+                  </Switch>
+                </Show>
+                <Show when={!props.compact}>
+                  <span class={!state.settingsLoaded() ? 'opacity-50' : ''}>
+                    {state.buttonLabel()}
+                  </span>
+                </Show>
+              </button>
+            </div>
           }
         >
-          <span
-            class={`inline-flex items-center gap-1 whitespace-nowrap rounded-full bg-amber-100 px-2 py-0.5 text-xs font-medium text-amber-800 dark:bg-amber-900/25 dark:text-amber-200 cursor-help focus-visible:outline focus-visible:outline-2 focus-visible:outline-primary${
-              props.touchTarget ? UPDATE_TOUCH_TARGET_CLASS : ''
-            }`}
-            tabindex="0"
-            aria-label={readOnlyUpdateExplanation()}
-            data-prevent-toggle
-            onClick={(event) => {
-              event.stopPropagation();
-              showPressedTooltip(readOnlyUpdateExplanation(), event.currentTarget);
-            }}
-            onMouseEnter={(event) => showReadOnlyUpdateExplanation(event.currentTarget)}
-            onMouseLeave={() => hideTooltip()}
-            onFocus={(event) => showReadOnlyUpdateExplanation(event.currentTarget)}
-            onBlur={() => hideTooltip()}
-            onKeyDown={(event) => {
-              if (event.key === 'Escape') hideTooltip();
-            }}
+          <Show
+            when={hasContainerUpdate(props.updateStatus) && state.isUpdateUnavailable()}
+            fallback={
+              <ContainerUpdateBadge
+                updateStatus={props.updateStatus}
+                compact={props.compact}
+                showCurrent={true}
+              />
+            }
           >
-            <LockIcon class="h-3 w-3 shrink-0" aria-hidden="true" />
-            {/* "Update" fits the Updates column at its narrowest; the lock,
-                amber tone and explanation state that Pulse cannot apply it. */}
-            <span>Update</span>
-          </span>
+            <Show
+              when={state.canEnableRemoteCommands()}
+              fallback={
+                <span
+                  class={`inline-flex items-center gap-1 whitespace-nowrap rounded-full bg-amber-100 px-2 py-0.5 text-xs font-medium text-amber-800 dark:bg-amber-900/25 dark:text-amber-200 cursor-help focus-visible:outline focus-visible:outline-2 focus-visible:outline-primary${
+                    props.touchTarget ? UPDATE_TOUCH_TARGET_CLASS : ''
+                  }`}
+                  tabindex="0"
+                  aria-label={readOnlyUpdateExplanation()}
+                  data-prevent-toggle
+                  onClick={(event) => {
+                    event.stopPropagation();
+                    showPressedTooltip(readOnlyUpdateExplanation(), event.currentTarget);
+                  }}
+                  onMouseEnter={(event) => showReadOnlyUpdateExplanation(event.currentTarget)}
+                  onMouseLeave={() => hideTooltip()}
+                  onFocus={(event) => showReadOnlyUpdateExplanation(event.currentTarget)}
+                  onBlur={() => hideTooltip()}
+                  onKeyDown={(event) => {
+                    if (event.key === 'Escape') hideTooltip();
+                  }}
+                >
+                  <LockIcon class="h-3 w-3 shrink-0" aria-hidden="true" />
+                  <span>Update</span>
+                </span>
+              }
+            >
+              <button
+                ref={lockedTriggerRef}
+                type="button"
+                class={`inline-flex cursor-pointer items-center gap-1 whitespace-nowrap rounded-full bg-amber-100 px-2 py-0.5 text-xs font-medium text-amber-800 transition-colors hover:bg-amber-200/80 dark:bg-amber-900/25 dark:text-amber-200 dark:hover:bg-amber-900/45 focus-visible:outline focus-visible:outline-2 focus-visible:outline-primary${
+                  props.touchTarget ? UPDATE_TOUCH_TARGET_CLASS : ''
+                }`}
+                aria-label={readOnlyUpdateExplanation()}
+                aria-haspopup="dialog"
+                data-prevent-toggle
+                data-enable-remote-commands-trigger="update"
+                onMouseDown={(event) => event.stopPropagation()}
+                onClick={(event) => {
+                  event.stopPropagation();
+                  hideTooltip();
+                  state.setEnableCommandsOpen(true);
+                }}
+                onMouseEnter={(event) => showReadOnlyUpdateExplanation(event.currentTarget)}
+                onMouseLeave={() => hideTooltip()}
+                onFocus={(event) => showReadOnlyUpdateExplanation(event.currentTarget)}
+                onBlur={() => hideTooltip()}
+                onKeyDown={(event) => {
+                  if (event.key === 'Escape') hideTooltip();
+                }}
+              >
+                <LockIcon class="h-3 w-3 shrink-0" aria-hidden="true" />
+                <span>Update</span>
+              </button>
+            </Show>
+          </Show>
         </Show>
-      </Show>
+        <ActionReviewDialog
+          detail={state.reviewDetail()}
+          onClose={state.handleReviewClosed}
+          onChanged={state.handleReviewChanged}
+        />
+        <Show when={state.enableCommandsOpen()}>
+          <Suspense>
+            <EnableRemoteCommandsDialog
+              isOpen={state.enableCommandsOpen()}
+              target={state.hostCommandTarget()}
+              commandsEnabled={state.effectiveHostCommandsEnabled()}
+              onClose={() => state.setEnableCommandsOpen(false)}
+              onContinue={state.continueAfterEnableCommands}
+              returnFocus={() => lockedTriggerRef}
+            />
+          </Suspense>
+        </Show>
+      </>
     </Show>
   );
 };

@@ -583,11 +583,11 @@ export const DockerContainersTable: Component<DockerContainersTableProps> = (pro
     const mounts = () => mountsSummary(resource);
     const updates = () => updateStatusLabel(resource);
     const updateTitle = () => updateStatusTitle(resource);
+    const parentHost = () => hostResourceById().get(resource.parentId ?? '');
     // An accessor, not a value: action readiness can arrive after the row
     // mounts (the REST revalidation follows a websocket paint), and a value
     // captured at mount kept offering an update the server had refused.
-    const action = () =>
-      getDockerContainerUpdateAction(resource, hostResourceById().get(resource.parentId ?? ''));
+    const action = () => getDockerContainerUpdateAction(resource, parentHost());
     const detailRowId = () => drawer.detailRowId(resource);
     const isExpanded = () => drawer.isExpanded(resource);
     const renderColumnCell = (column: DockerContainerTableColumn): JSX.Element => {
@@ -744,6 +744,7 @@ export const DockerContainersTable: Component<DockerContainersTableProps> = (pro
                     updateNotOfferedReason={updateAction().updateNotOfferedReason}
                     hostName={updateAction().hostName}
                     hostCommandsEnabled={updateAction().hostCommandsEnabled}
+                    hostCommandAccess={updateAction().hostCommandAccess}
                   />
                 )}
               </Show>
@@ -754,6 +755,7 @@ export const DockerContainersTable: Component<DockerContainersTableProps> = (pro
             <TableCell class={getPlatformTableCellClassForKind(column.kind)}>
               <DockerContainerLifecycleControls
                 resource={resource}
+                host={parentHost()}
                 collapsed={layoutMode() !== 'wide'}
                 onActionSettled={props.onLifecycleActionSettled}
               />
@@ -776,6 +778,7 @@ export const DockerContainersTable: Component<DockerContainersTableProps> = (pro
         </TableRow>
         <PlatformResourceDetailTableRow
           resource={resource}
+          parentHost={parentHost()}
           open={isExpanded()}
           detailRowId={detailRowId()}
           colSpan={drawerColSpan()}

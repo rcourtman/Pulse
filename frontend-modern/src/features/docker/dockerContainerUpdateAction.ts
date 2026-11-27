@@ -1,6 +1,7 @@
 import type { DockerContainerUpdateStatus } from '@/types/api';
 import type { Resource } from '@/types/resource';
 import type { UpdateButtonProps } from '@/components/shared/containerUpdateBadgeModel';
+import { extractHostCommandAccessContext } from '@/components/shared/hostCommandAccessContext';
 import { asTrimmedString } from '@/utils/stringUtils';
 import { dockerContainerRuntimeLabel } from './dockerContainerLifecycleActions';
 
@@ -63,6 +64,9 @@ export const getDockerContainerUpdateAction = (
   const containerId = asTrimmedString(resource.docker?.containerId);
   if (!updateStatus || !agentId || !containerId) return undefined;
 
+  const hostName = asTrimmedString(host?.displayName) || asTrimmedString(host?.name) || undefined;
+  const hostCommandsEnabled = host?.agent ? host.agent.commandsEnabled === true : undefined;
+
   return {
     agentId,
     containerId,
@@ -75,9 +79,18 @@ export const getDockerContainerUpdateAction = (
     resourceId: resource.id,
     actionReadiness: resource.actionReadiness,
     updateNotOfferedReason: updateNotOfferedReason(resource),
-    hostName: asTrimmedString(host?.displayName) || asTrimmedString(host?.name) || undefined,
+    hostName,
     // The agent facet omits commandsEnabled when false, so its presence is
     // what makes an absent flag mean "installed without command access".
-    hostCommandsEnabled: host?.agent ? host.agent.commandsEnabled === true : undefined,
+    hostCommandsEnabled,
+    hostCommandAccess: extractHostCommandAccessContext(host, {
+      hostName:
+        hostName ||
+        asTrimmedString(resource.docker?.hostname) ||
+        asTrimmedString(resource.parentName) ||
+        undefined,
+      agentId: asTrimmedString(resource.docker?.agentId) || agentId,
+      hostCommandsEnabled,
+    }),
   };
 };

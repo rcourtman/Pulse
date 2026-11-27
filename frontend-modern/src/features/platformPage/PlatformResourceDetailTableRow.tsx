@@ -142,6 +142,7 @@ const CollapsedResourceDisclosure: Component<{
 
 export const PlatformResourceDetailTableRow: Component<{
   resource: Resource;
+  parentHost?: Resource;
   open: boolean;
   detailRowId: string;
   colSpan: number;
@@ -167,6 +168,7 @@ export const PlatformResourceDetailTableRow: Component<{
   const drawer = (closesRow: boolean) => (
     <ResourceDetailDrawer
       resource={props.resource}
+      parentHost={props.parentHost}
       statusIndicator={props.statusIndicator}
       presentation="table-row"
       resolveResourceLabel={props.resolveResourceLabel}

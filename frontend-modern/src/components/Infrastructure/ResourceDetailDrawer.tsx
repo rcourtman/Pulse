@@ -30,10 +30,12 @@ import { CONTAINER_CPU_CAPACITY_DESCRIPTION } from '@/features/docker/dockerCpuP
 import { InlineNotice } from '@/components/shared/InlineNotice';
 import { GUEST_DRAWER_BACKUP_PRECAUTION } from '@/components/Workloads/guestDrawerModel';
 import { GuestDrawerHistoryRangeSelect } from '@/components/Workloads/GuestDrawerHistoryRangeSelect';
+import { useResolvedResource } from '@/features/platformNavigation/useResolvedResource';
 import { getShippedDocUrl } from '@/utils/docsLinks';
 
 interface ResourceDetailDrawerProps {
   resource: Resource;
+  parentHost?: Resource;
   onClose?: () => void;
   /**
    * The status the table row's own dot shows. Rows judge staleness, impaired
@@ -79,6 +81,12 @@ const DrawerContent: Component<ResourceDetailDrawerProps> = (props) => {
     initialShowHostDetails: props.initialShowHostDetails,
   });
   const headingId = () => `resource-detail-drawer-heading-${props.resource.id}`;
+  const resolvedParentHost = useResolvedResource(() =>
+    props.parentHost || props.resource.type !== 'app-container'
+      ? undefined
+      : props.resource.parentId,
+  );
+  const parentHost = () => props.parentHost ?? resolvedParentHost() ?? undefined;
   const statusIndicator = () => props.statusIndicator ?? drawer.statusIndicator();
   const customUrl = () => props.resource.customUrl?.trim() ?? '';
   // The Kubernetes page scopes its rows by cluster id, or by name when no id
@@ -125,6 +133,7 @@ const DrawerContent: Component<ResourceDetailDrawerProps> = (props) => {
       <Show when={isDockerContainerLifecycleResource(props.resource)}>
         <DockerContainerLifecycleControls
           resource={props.resource}
+          host={parentHost()}
           surface="resource-detail"
           onActionSettled={props.onResourceActionSettled}
         />
@@ -201,6 +210,7 @@ const DrawerContent: Component<ResourceDetailDrawerProps> = (props) => {
       <div class={`[overflow-anchor:none] ${drawer.activeTab() === 'overview' ? '' : 'hidden'}`}>
         <ResourceDetailDrawerOverviewTab
           resource={props.resource}
+          parentHost={parentHost()}
           drawer={drawer}
           presentation={presentation()}
         />
@@ -305,6 +315,7 @@ export const ResourceDetailDrawer: Component<ResourceDetailDrawerProps> = (props
       {(_resourceId) => (
         <DrawerContent
           resource={props.resource}
+          parentHost={props.parentHost}
           onClose={props.onClose}
           statusIndicator={props.statusIndicator}
           presentation={props.presentation}

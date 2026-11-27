@@ -1183,6 +1183,14 @@ export function GuestRow(props: GuestRowProps) {
                   containerName={props.guest.name}
                   resourceId={props.guest.id}
                   actionReadiness={props.guest.actionReadiness}
+                  hostName={props.guest.dockerHostName || props.guest.node || undefined}
+                  hostCommandAccess={{
+                    hostResourceId: dockerHostId().startsWith('agent:')
+                      ? dockerHostId()
+                      : `agent:${dockerHostId()}`,
+                    hostName: props.guest.dockerHostName || props.guest.node || 'this host',
+                    agentId: dockerHostId(),
+                  }}
                   compact={true}
                 />
               </Show>

@@ -95,6 +95,73 @@ const actionReadinessDisabledReason = (
   action: DockerContainerLifecycleAction,
 ): string | undefined => getActionReadinessRefusal(resource.actionReadiness, action);
 
+const actionReadinessDisabledReasonCode = (
+  resource: Resource,
+  action: DockerContainerLifecycleAction,
+): string | undefined =>
+  resource.actionReadiness?.find(
+    (item) => item.name?.trim().toLowerCase() === action && item.available === false,
+  )?.reasonCode;
+
+/**
+ * True when an otherwise-available lifecycle action is blocked specifically
+ * because remote commands are off on the host's Pulse agent (and not because
+ * of container state, stale inventory, or host policy).
+ */
+export const isDockerContainerLifecycleHostCommandsDisabled = (
+  resource: Resource,
+  action: DockerContainerLifecycleAction,
+  hostCommandsEnabled?: boolean,
+): boolean => {
+  const runtime = normalizeToken(resource.docker?.runtime);
+  if (!runtime || !SUPPORTED_RUNTIMES.has(runtime)) return false;
+  if (!asTrimmedString(resource.docker?.agentId)) return false;
+  if (sourceStatusDisabledReason(resource, dockerContainerRuntimeLabel(resource))) return false;
+  if (resource.docker?.security?.mutatingCommandsBlocked) return false;
+  if (stateDisabledReason(resource, action)) return false;
+  const code = actionReadinessDisabledReasonCode(resource, action);
+  return (
+    code === 'host_commands_disabled' ||
+    (code === 'command_agent_disconnected' && hostCommandsEnabled === false)
+  );
+};
+
+export const getDockerContainerLifecycleDisplayReason = (
+  resource: Resource,
+  action: DockerContainerLifecycleAction,
+  options?: { hostName?: string; hostCommandsEnabled?: boolean },
+): string | undefined => {
+  if (
+    isDockerContainerLifecycleHostCommandsDisabled(resource, action, options?.hostCommandsEnabled)
+  ) {
+    const host =
+      asTrimmedString(options?.hostName) ||
+      asTrimmedString(resource.docker?.hostname) ||
+      'this host';
+    return `Remote commands are off on ${host}.`;
+  }
+  return getDockerContainerLifecycleDisabledReason(resource, action);
+};
+
+export const getDockerContainerLifecycleDisplayReasons = (
+  resource: Resource,
+  options?: { hostName?: string; hostCommandsEnabled?: boolean },
+): string[] => [
+  ...new Set(
+    DOCKER_CONTAINER_LIFECYCLE_ACTIONS.flatMap(
+      ({ action }) => getDockerContainerLifecycleDisplayReason(resource, action, options) ?? [],
+    ),
+  ),
+];
+
+export const getFirstHostCommandsDisabledLifecycleAction = (
+  resource: Resource,
+  hostCommandsEnabled?: boolean,
+): DockerContainerLifecycleAction | undefined =>
+  DOCKER_CONTAINER_LIFECYCLE_ACTIONS.find(({ action }) =>
+    isDockerContainerLifecycleHostCommandsDisabled(resource, action, hostCommandsEnabled),
+  )?.action;
+
 export const getDockerContainerLifecycleDisabledReason = (
   resource: Resource,
   action: DockerContainerLifecycleAction,
