@@ -3,17 +3,23 @@ package alerts
 import (
 	"encoding/json"
 	"fmt"
-	"github.com/rcourtman/pulse-go-rewrite/internal/alerts/eventlog"
 	"sort"
 	"strconv"
 	"strings"
 	"time"
 
+	"github.com/rcourtman/pulse-go-rewrite/internal/alerts/eventlog"
 	"github.com/rcourtman/pulse-go-rewrite/internal/models"
 )
 
 // GetActiveAlerts returns all active alerts
 func (m *Manager) GetActiveAlerts() []Alert {
+	return sortActiveAlerts(m.collectActiveAlertReadCopies(nil))
+}
+
+// collectActiveAlertReadCopies applies keep under the read lock, before cloning.
+// It never returns pointers to manager-owned alerts.
+func (m *Manager) collectActiveAlertReadCopies(keep func(*Alert) bool) []Alert {
 	if m == nil {
 		return nil
 	}
@@ -21,8 +27,14 @@ func (m *Manager) GetActiveAlerts() []Alert {
 	m.mu.RLock()
 	defer m.mu.RUnlock()
 
-	alerts := make([]Alert, 0, len(m.activeAlerts))
+	var alerts []Alert
+	if keep == nil {
+		alerts = make([]Alert, 0, len(m.activeAlerts))
+	}
 	for _, alert := range m.activeAlerts {
+		if keep != nil && !keep(alert) {
+			continue
+		}
 		a := *cloneAlertForOutput(alert)
 		// Ensure display name is current (handles upgrades, renames, and
 		// alerts created before the cache was populated).
@@ -31,7 +43,13 @@ func (m *Manager) GetActiveAlerts() []Alert {
 		}
 		alerts = append(alerts, a)
 	}
+	return alerts
+}
 
+func sortActiveAlerts(alerts []Alert) []Alert {
+	if len(alerts) < 2 {
+		return alerts
+	}
 	sort.Slice(alerts, func(i, j int) bool {
 		if left, right := alertSeveritySortRank(alerts[i]), alertSeveritySortRank(alerts[j]); left != right {
 			return left > right

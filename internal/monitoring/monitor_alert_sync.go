@@ -195,59 +195,11 @@ func (m *Monitor) pruneStaleDockerAlerts() bool {
 		}
 	}
 
-	if len(knownHosts) == 0 {
-		// Still allow stale entries to be cleared if no hosts remain.
-	}
-
-	active := m.alertManager.GetActiveAlerts()
-	processed := make(map[string]struct{})
 	cleared := false
-
-	for _, alert := range active {
-		var hostID string
-
-		switch {
-		case alert.Type == "docker-host-offline":
-			hostID = strings.TrimPrefix(strings.TrimSpace(alert.ResourceID), "docker:")
-		case strings.HasPrefix(alert.ResourceID, "docker:"):
-			resource := strings.TrimPrefix(alert.ResourceID, "docker:")
-			if idx := strings.Index(resource, "/"); idx >= 0 {
-				hostID = resource[:idx]
-			} else {
-				hostID = resource
-			}
-		default:
-			continue
-		}
-
-		hostID = strings.TrimSpace(hostID)
-		if hostID == "" {
-			continue
-		}
-
-		if _, known := knownHosts[hostID]; known {
-			continue
-		}
-		if _, alreadyCleared := processed[hostID]; alreadyCleared {
-			continue
-		}
-
-		host := models.DockerHost{
-			ID:          hostID,
-			DisplayName: alert.ResourceName,
-			Hostname:    alert.Node,
-		}
-		if host.DisplayName == "" {
-			host.DisplayName = hostID
-		}
-		if host.Hostname == "" {
-			host.Hostname = hostID
-		}
-
+	for _, host := range m.alertManager.OrphanedDockerAlertHosts(knownHosts) {
 		if !scope.run(func() { m.alertManager.HandleDockerHostRemoved(host) }) {
 			return cleared
 		}
-		processed[hostID] = struct{}{}
 		cleared = true
 	}
 
