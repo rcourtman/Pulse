@@ -1,7 +1,6 @@
 import { createMemo, type Component, type JSX } from 'solid-js';
 import { TableCell, TableRow } from '@/components/shared/Table';
 import { ResourceNameWithWebInterfaceLink } from '@/components/shared/WebInterfaceLink';
-import { getSimpleStatusIndicator } from '@/utils/status';
 import { asTrimmedString } from '@/utils/stringUtils';
 import {
   PlatformWindowedRows,
@@ -23,6 +22,7 @@ import type { Resource } from '@/types/resource';
 import {
   filterKubernetesResources,
   kubernetesScopeLabel,
+  mapKubernetesInventoryStatus,
   type KubernetesResourceStatusFilter,
   isSingleKubernetesCluster,
 } from './kubernetesPageModel';
@@ -201,7 +201,7 @@ export const KubernetesServicesTable: Component<{
           <>
             <PlatformWindowedRows items={sortedRows} estimatedRowHeight={32}>
               {(resource) => {
-                const indicator = () => getSimpleStatusIndicator(resource.status);
+                const indicator = () => mapKubernetesInventoryStatus(resource);
                 const name = () => serviceName(resource);
                 const serviceType = () =>
                   formatPlatformTableTextValue(resource.kubernetes?.serviceType);
@@ -225,7 +225,7 @@ export const KubernetesServicesTable: Component<{
                           drawer={drawer}
                           label={name()}
                           status={indicator()}
-                          dotTitle={resource.status || 'unknown'}
+                          staleScope="service"
                         >
                           <ResourceNameWithWebInterfaceLink
                             name={name()}

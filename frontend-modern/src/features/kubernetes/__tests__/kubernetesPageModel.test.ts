@@ -35,6 +35,7 @@ import {
   mapKubernetesDeploymentStatus,
   mapKubernetesEventSeverity,
   mapKubernetesIncidentSeverity,
+  mapKubernetesInventoryStatus,
   mapKubernetesJobStatus,
   mapKubernetesNodeStatus,
   mapKubernetesPodStatus,
@@ -1483,5 +1484,68 @@ describe('Kubernetes source freshness handling', () => {
       pods: { total: 1, attention: 1 },
       deployments: { total: 1, attention: 1 },
     });
+  });
+
+  it('maps generic Kubernetes inventory staleness while preserving worse failures and searchability', () => {
+    const freshService = makeResource({
+      id: 'svc-fresh',
+      type: 'k8s-service',
+      status: 'online',
+      sourceStatus: { kubernetes: { status: 'online', lastSeen: '2026-11-26T12:00:00Z' } },
+    });
+    const staleService = makeResource({
+      id: 'svc-stale',
+      type: 'k8s-service',
+      status: 'online',
+      sourceStatus: staleSource,
+    });
+    const impairedClaim = makeResource({
+      id: 'pvc-impaired',
+      type: 'k8s-persistent-volume-claim',
+      status: 'online',
+      sourceStatus: { kubernetes: { status: 'error', lastSeen: '2026-11-26T10:00:00Z' } },
+    });
+    const offlineStalePolicy = makeResource({
+      id: 'pol-offline-stale',
+      type: 'k8s-network-policy',
+      status: 'offline',
+      sourceStatus: staleSource,
+    });
+    const degradedStaleHpa = makeResource({
+      id: 'hpa-degraded-stale',
+      type: 'k8s-horizontal-pod-autoscaler',
+      status: 'degraded',
+      sourceStatus: staleSource,
+    });
+
+    expect(mapKubernetesInventoryStatus(freshService)).toEqual({
+      variant: 'success',
+      label: 'Online',
+    });
+    expect(mapKubernetesInventoryStatus(staleService)).toEqual({
+      variant: 'warning',
+      label: KUBERNETES_STALE_READINGS_LABEL,
+    });
+    expect(mapKubernetesInventoryStatus(impairedClaim)).toEqual({
+      variant: 'warning',
+      label: 'Degraded',
+    });
+    expect(mapKubernetesInventoryStatus(offlineStalePolicy)).toEqual({
+      variant: 'danger',
+      label: 'Offline',
+    });
+    expect(mapKubernetesInventoryStatus(degradedStaleHpa)).toEqual({
+      variant: 'warning',
+      label: 'Degraded',
+    });
+
+    expect(
+      filterKubernetesResources([freshService, staleService], 'stale', 'all').map((r) => r.id),
+    ).toEqual(['svc-stale']);
+    expect(
+      filterKubernetesResources([freshService, staleService], 'collector timed out', 'all').map(
+        (r) => r.id,
+      ),
+    ).toEqual(['svc-stale']);
   });
 });

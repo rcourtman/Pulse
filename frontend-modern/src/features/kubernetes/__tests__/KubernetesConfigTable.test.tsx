@@ -289,4 +289,61 @@ describe('KubernetesConfigTable', () => {
     expect(screen.getByText('cm-0')).toBeInTheDocument();
     expect(screen.getByRole('button', { name: 'Hide routine metadata-only' })).toBeInTheDocument();
   });
+
+  it('surfaces stale readings on config rows and inside expanded record drawers', () => {
+    const staleSource = {
+      kubernetes: {
+        status: 'stale',
+        lastSeen: '2026-11-26T10:00:00Z',
+        error: 'kube-apiserver unreachable',
+      },
+    };
+    const { container } = render(() => (
+      <KubernetesConfigTable
+        resources={[
+          makeResource({
+            id: 'fresh-sa',
+            type: 'k8s-serviceaccount',
+            status: 'online',
+            kubernetes: { clusterName: 'prod', namespace: 'apps', resourceKind: 'ServiceAccount' },
+          }),
+          makeResource({
+            id: 'stale-secret',
+            type: 'k8s-secret',
+            status: 'online',
+            sourceStatus: staleSource,
+            kubernetes: {
+              clusterName: 'edge',
+              namespace: 'apps',
+              resourceKind: 'Secret',
+              secretType: 'Opaque',
+              dataKeys: ['token'],
+              metadataOnly: true,
+            },
+          }),
+        ]}
+        emptyIcon={<span />}
+        emptyTitle="No config"
+        emptyDescription="No config"
+        showToolbar={false}
+      />
+    ));
+
+    const freshRow = container.querySelector('[data-kubernetes-config-row="fresh-sa"]');
+    expect(freshRow?.querySelector('[title="Online"]')).toHaveClass('bg-emerald-500');
+    expect(freshRow?.querySelector('[data-kubernetes-stale="config"]')).toBeNull();
+
+    const staleRow = container.querySelector('[data-kubernetes-config-row="stale-secret"]');
+    expect(staleRow?.querySelector('[title="Stale data"]')).toHaveClass('bg-amber-500');
+    expect(staleRow?.querySelector('[data-kubernetes-stale="config"]')).toHaveTextContent(
+      'Stale data',
+    );
+
+    fireEvent.click(staleRow as HTMLElement);
+    const panel = container.querySelector<HTMLElement>('[data-testid="kubernetes-config-detail"]')!;
+    const notice = within(panel).getByTestId('kubernetes-stale-readings-notice');
+    expect(notice).toHaveTextContent('Stale data.');
+    expect(notice).toHaveTextContent('kube-apiserver unreachable');
+    expect(panel.textContent).not.toContain('token');
+  });
 });

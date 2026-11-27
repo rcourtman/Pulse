@@ -1,0 +1,59 @@
+{
+  "version": 1,
+  "base_sha": "3957f5057b4f27a8b131c77e153390989a58a8af",
+  "verified_at": "2026-11-27T17:55:25Z",
+  "result": "passed",
+  "changed_paths": [
+    "frontend-modern/src/features/kubernetes/KubernetesAutoscalingTable.tsx",
+    "frontend-modern/src/features/kubernetes/KubernetesConfigTable.tsx",
+    "frontend-modern/src/features/kubernetes/KubernetesEventsTable.tsx",
+    "frontend-modern/src/features/kubernetes/KubernetesNetworkingTable.tsx",
+    "frontend-modern/src/features/kubernetes/KubernetesPolicyTable.tsx",
+    "frontend-modern/src/features/kubernetes/KubernetesRecordDetail.tsx",
+    "frontend-modern/src/features/kubernetes/KubernetesServicesTable.tsx",
+    "frontend-modern/src/features/kubernetes/KubernetesStorageTable.tsx",
+    "frontend-modern/src/features/kubernetes/kubernetesPageModel.ts"
+  ],
+  "content_sha256": {
+    "frontend-modern/src/features/kubernetes/KubernetesAutoscalingTable.tsx": "ff941db75c7d40743c1d8ccab65c332ac6fdd41073740d9c56179b02103213c4",
+    "frontend-modern/src/features/kubernetes/KubernetesConfigTable.tsx": "ea7b86aaee55d63fe3dfc0a4c0d8c691ba5f051b4d46f7786c5db4fa5aa3e2aa",
+    "frontend-modern/src/features/kubernetes/KubernetesEventsTable.tsx": "94fa17fd433ba110140edff7dfc2634b3ef1101bc26d4d348846d413e5b19c61",
+    "frontend-modern/src/features/kubernetes/KubernetesNetworkingTable.tsx": "be3c95259b2c0fdd53e645cf79245cd47d89debd597eeed00d1b8cce06ad7af8",
+    "frontend-modern/src/features/kubernetes/KubernetesPolicyTable.tsx": "c1d93a10390c0a58acec331ac8af150b4c1ac0eae9da913c7968a68d76cf4ef9",
+    "frontend-modern/src/features/kubernetes/KubernetesRecordDetail.tsx": "070062e000e88f05f2a36a4afc90f86f442b350c6d90a223be5bdbb9ac04565b",
+    "frontend-modern/src/features/kubernetes/KubernetesServicesTable.tsx": "8cf5aa6ee2eeab1df67e7c60ed5561daed6fb7c5bf0c2665db379da46a5b08ac",
+    "frontend-modern/src/features/kubernetes/KubernetesStorageTable.tsx": "f591730666d20cf4f6412b9d8f347421db2b0bfadab6899f14204d3f1893340a",
+    "frontend-modern/src/features/kubernetes/kubernetesPageModel.ts": "20cfc3d3bbf591dc7ac9a0a62535f412e605eac484d6e5b6cd69720624de92b0"
+  },
+  "routes": [
+    "/kubernetes/services",
+    "/kubernetes/storage",
+    "/kubernetes/configuration",
+    "/kubernetes/events",
+    "/kubernetes/workloads"
+  ],
+  "viewports": [
+    {
+      "width": 1440,
+      "height": 940
+    },
+    {
+      "width": 360,
+      "height": 820
+    }
+  ],
+  "states": [
+    "before and after /kubernetes/services showing stale Services (stale-api-svc) and Ingresses (stale-gateway-ingress) shifting from green dots to amber Stale data indicators, offline+stale resources (offline-edge-svc, offline-billing-eps) preserving red Offline dots plus Stale data cues, fresh rows staying green, and expanded stale-api-svc drawer shifting to amber dot with stale-readings notice",
+    "live RFC 6455 WebSocket rawData recovery on /kubernetes/services clearing all Stale data cues and the open drawer warning notice without page reload while keeping offline rows red",
+    "before and after /kubernetes/storage showing stale PVC (billing-postgres-pvc) shifting from green to amber dot plus Stale data cue and amber expanded drawer dot with stale-readings notice while preserving Bound, 100 GB, and fast-csi fields, and offline+stale PV (archive-pv-01) preserving red Offline dot plus Stale data",
+    "before and after /kubernetes/configuration showing stale Namespace, Secret, and ResourceQuota shifting from green to amber dots plus Stale data cues, offline+stale PodDisruptionBudget keeping red Offline dot plus Stale data, and expanded Secret and ResourceQuota record drawers (KubernetesRecordDetailPanel) rendering the wrapped stale-readings warning banner with last error without exposing metadata-only secret keys",
+    "before and after /kubernetes/events showing stale Warning and Normal events gaining Stale data row cues and an expanded Event record drawer warning notice while preserving Warning (amber) and Normal (muted) severity dots and Open links",
+    "before and after /kubernetes/workloads HorizontalPodAutoscalers showing stale checkout-api-hpa shifting from false green dot to amber dot plus Stale data cue and amber expanded drawer dot aligned with the Degraded filter count, while offline+stale batch-worker-hpa keeps red Offline dot plus Stale data"
+  ],
+  "interactions": [
+    "loaded paired production Vite builds (base 3957f5057b4f vs patched) via pulse-worker-browser in Chromium 141.0.7390.37 (1440x940 light) and touch WebKit 26.0 (360x820 dark) with 0 console errors, 0 JS page errors, 0 failed/4xx+ requests, 0 off-origin requests, and 0px horizontal overflow across all five routes",
+    "expanded stale-api-svc drawer on /kubernetes/services and pushed a live WebSocket rawData recovery frame without reload, verifying immediate clearing of Stale data cues and drawer notice",
+    "expanded billing-postgres-pvc on /kubernetes/storage, stale-api-secret and stale-apps-quota record drawers on /kubernetes/configuration, checkout-api-0.18a event drawer on /kubernetes/events, and checkout-api-hpa on /kubernetes/workloads",
+    "tapped stale-api-secret on 360x820 dark WebKit touch phone to inspect wrapped record-drawer warning notice and verified 0px overflow on all five Kubernetes routes, then visually inspected all 16 paired PNG captures"
+  ]
+}

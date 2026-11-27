@@ -6,7 +6,6 @@ import {
 } from '@/components/shared/DetailSectionTable';
 import { InlineDetailTableRow } from '@/components/shared/InlineDetailTableRow';
 import { TableCell, TableHead, TableRow } from '@/components/shared/Table';
-import { getSimpleStatusIndicator } from '@/utils/status';
 import { asTrimmedString } from '@/utils/stringUtils';
 import {
   PlatformWindowedRows,
@@ -23,6 +22,7 @@ import { getPlatformResourceDetailRowClass } from '@/features/platformPage/Platf
 import type { Resource } from '@/types/resource';
 import {
   filterKubernetesResources,
+  mapKubernetesInventoryStatus,
   type KubernetesResourceStatusFilter,
   isSingleKubernetesCluster,
 } from './kubernetesPageModel';
@@ -346,7 +346,7 @@ export const KubernetesPolicyTable: Component<{
           <>
             <PlatformWindowedRows items={tableState.filtered} estimatedRowHeight={32}>
               {(resource) => {
-                const indicator = () => getSimpleStatusIndicator(resource.status);
+                const indicator = () => mapKubernetesInventoryStatus(resource);
                 const name = () => policyName(resource);
                 const shape = () => policyShape(resource);
                 const spec = () => policySpec(resource);
@@ -368,7 +368,7 @@ export const KubernetesPolicyTable: Component<{
                           drawer={drawer}
                           label={name()}
                           status={indicator()}
-                          dotTitle={resource.status || 'unknown'}
+                          staleScope="policy"
                         />
                       </TableCell>
                       <TableCell
