@@ -78,8 +78,10 @@ class DocsScopeTest(unittest.TestCase):
         for suite in (
             SUITE,
             "scripts/tests/test_alerting_outage_help_docs.py",
+            "scripts/tests/test_availability_help_docs.py",
             "scripts/tests/test_paid_docker_help_docs.py",
             "scripts/tests/test_scheduler_health_api_help_docs.py",
+            "scripts/tests/test_stale_reading_help_docs.py",
             "scripts/tests/test_watchdog_help_docs.py",
         ):
             self.assertIn(suite.encode(), SCOPE.DOC_SUITES)
