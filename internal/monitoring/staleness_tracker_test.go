@@ -2,6 +2,7 @@ package monitoring
 
 import (
 	"encoding/json"
+	"strconv"
 	"testing"
 	"testing/synctest"
 	"time"
@@ -314,6 +315,56 @@ func TestStalenessTracker_Snapshot_Empty(t *testing.T) {
 	snapshots := tracker.Snapshot()
 	if len(snapshots) != 0 {
 		t.Errorf("empty tracker snapshot count = %d, want 0", len(snapshots))
+	}
+}
+
+func TestStalenessTracker_SnapshotTypedPosture(t *testing.T) {
+	synctest.Test(t, func(t *testing.T) {
+		tracker := NewStalenessTracker(nil)
+		tracker.SetBounds(0, time.Minute)
+		now := time.Now()
+		lastSuccess := now.Add(-15 * time.Second)
+		lastError := now.Add(-5 * time.Second)
+		tracker.setSnapshot(FreshnessSnapshot{
+			InstanceType: InstanceTypePVE,
+			Instance:     "shared",
+			LastSuccess:  lastSuccess,
+			LastError:    lastError,
+			LastMutated:  now,
+			ChangeHash:   "not exposed",
+		})
+		tracker.UpdateError(InstanceTypePBS, "shared")
+		want := map[string]StalenessSnapshot{
+			string(InstanceTypePVE): {Instance: "shared", Type: string(InstanceTypePVE), Score: 0.25, LastSuccess: lastSuccess, LastError: lastError},
+			string(InstanceTypePBS): {Instance: "shared", Type: string(InstanceTypePBS), Score: 1, LastError: now},
+		}
+		rows := tracker.Snapshot()
+		if len(rows) != len(want) {
+			t.Fatalf("snapshot has %d rows, want %d", len(rows), len(want))
+		}
+		for i, row := range rows {
+			if expected, ok := want[row.Type]; !ok || row != expected {
+				t.Errorf("snapshot row = %+v, want %+v", row, expected)
+			}
+			delete(want, row.Type)
+			rows[i] = StalenessSnapshot{}
+		}
+		if got := tracker.Snapshot(); len(got) != 2 || got[0].Instance != "shared" || got[1].Instance != "shared" {
+			t.Fatalf("editing returned rows changed the tracker: %+v", got)
+		}
+	})
+}
+
+func BenchmarkStalenessTrackerSnapshot(b *testing.B) {
+	tracker := NewStalenessTracker(nil)
+	for i := range 1000 {
+		tracker.UpdateSuccess(InstanceTypeAvailability, strconv.Itoa(i), nil)
+	}
+	b.ReportAllocs()
+	for b.Loop() {
+		if rows := tracker.Snapshot(); len(rows) != 1000 {
+			b.Fatalf("snapshot has %d rows, want 1000", len(rows))
+		}
 	}
 }
 

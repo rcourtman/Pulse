@@ -215,23 +215,23 @@ func (t *StalenessTracker) Snapshot() []StalenessSnapshot {
 	}
 
 	t.mu.RLock()
-	entries := make([]FreshnessSnapshot, 0, len(t.entries))
+	result := make([]StalenessSnapshot, 0, len(t.entries))
 	maxStale := t.maxStale
 	now := time.Now()
 	for _, entry := range t.entries {
-		entries = append(entries, entry)
-	}
-	t.mu.RUnlock()
-
-	result := make([]StalenessSnapshot, 0, len(entries))
-	for _, entry := range entries {
 		result = append(result, StalenessSnapshot{
 			Instance:    entry.Instance,
 			Type:        string(entry.InstanceType),
-			Score:       stalenessAt(now, entry.LastSuccess, maxStale),
 			LastSuccess: entry.LastSuccess,
 			LastError:   entry.LastError,
 		})
+	}
+	t.mu.RUnlock()
+
+	// Score the copied rows without delaying a poll result waiting to update
+	// the tracker. Every row uses the same clock and bounds as the snapshot.
+	for i := range result {
+		result[i].Score = stalenessAt(now, result[i].LastSuccess, maxStale)
 	}
 	return result
 }
