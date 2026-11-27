@@ -33,7 +33,8 @@ MACHINE_FACING_STRINGS = (
     "kubectl exec -it <pod> -- /app/pulse bootstrap-token",
     "sudo pulse bootstrap-token",
     "Settings → Infrastructure → Install on a host",
-    "Settings → Plans & Billing → License recovery",
+    "Settings → System → Plans & Billing",
+    "License recovery",
     "ppk_live_",
     "http://<your-ip>:7655",
     "/install.sh",
@@ -98,6 +99,24 @@ class LocalizedPublicDocsTest(unittest.TestCase):
             for phrase in forbidden:
                 with self.subTest(path=rel, phrase=phrase):
                     self.assertNotIn(phrase, content)
+
+
+    def test_localized_docs_keep_90_day_history_in_community_and_current_plans_path(self) -> None:
+        community_history = {
+            "docs/i18n/de/README.md": ("90 Tage Verlauf", "und 90 Tage Verlauf"),
+            "docs/i18n/es/README.md": ("historial de 90 días", "e historial de 90 días"),
+            "docs/i18n/fr/README.md": ("90 jours d'historique", "et 90 jours d'historique"),
+        }
+        for rel, (expected, stale_pro_claim) in community_history.items():
+            content = read(rel)
+            prose = " ".join(content.split())
+            with self.subTest(path=rel):
+                self.assertIn(expected, prose)
+                self.assertNotIn(stale_pro_claim, prose)
+                self.assertIn("**Settings → System → Plans & Billing**", content)
+                self.assertNotIn("Settings → Plans & Billing → License recovery", content)
+                shipped = ROOT / "frontend-modern/public/docs" / rel.removeprefix("docs/")
+                self.assertEqual(shipped.read_text(encoding="utf-8"), content)
 
 
 if __name__ == "__main__":

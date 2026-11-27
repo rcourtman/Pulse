@@ -10,9 +10,10 @@ absichtlich unverändert.
 
 Pulse ist ein self-hosted Monitoring-Arbeitsbereich für Proxmox, Docker,
 Kubernetes, TrueNAS und verwandte Infrastruktur. Community deckt das
-Kernmonitoring kostenlos ab. Pro ergänzt Ursachenanalyse, sichere
-Remediation-Workflows, Operations-Werkzeuge, Governance-Funktionen und 90 Tage
-Verlauf.
+Kernmonitoring, 90 Tage Verlauf, SSO und Pulse Patrol im Watch-only-Modus mit
+eigenem Anbieter oder lokalem Modell kostenlos ab. Pro ergänzt
+Patrol-Ursachenanalyse, sichere Remediation-Workflows, RBAC, Audit Logging,
+Reporting und zentrale Agent-Profile.
 
 Relay wird nicht mehr verkauft. Bestehende Relay-Abonnenten erhalten
 Pro-Funktionen zum bisherigen Preis, solange ihr Abonnement weiterläuft.
@@ -26,7 +27,7 @@ hinzu und öffne Pulse im Browser deines Telefons.
 
 GitHub-Release-Assets und das öffentliche Docker-Image `rcourtman/pulse` sind
 Community-Builds. Aktiviere deinen Lizenzschlüssel unter
-**Settings → Plans & Billing → License recovery**, um Pro-Funktionen freizuschalten.
+**Settings → System → Plans & Billing** (**Plan** → **License recovery**), um Pro-Funktionen freizuschalten.
 
 Diese Community-Builds enthalten nicht die privaten Pulse-Pro-Runtime-Hooks
 für Audit Log, Audit Webhooks, RBAC und governed remediation. Für diese
