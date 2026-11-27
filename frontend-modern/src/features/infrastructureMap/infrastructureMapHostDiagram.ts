@@ -1198,7 +1198,7 @@ const sizeHostFrame = (
     };
   }
 
-  // Named mode: Goblinmine-inspired horizontal service cards
+  // Named mode: dense horizontal service cards
   const baseRowW = inner < 520 ? Math.min(216, Math.max(180, inner - CARD_PAD * 2)) : 228;
   const maxFitCols = Math.max(
     1,
@@ -2800,7 +2800,7 @@ const lowerConnectorLabel = (group: DiagramGroup): string => {
   return 'disks and volumes';
 };
 
-/** Lays out the service diagram with Goblinmine-inspired architectural host frames. */
+/** Lays out the service diagram inside architectural host frames. */
 export function layoutHostDiagram(diagram: ServiceDiagram, options: MapLayoutOptions): MapScene {
   const margin = options.header ? 28 : 0;
   const width = Math.max(MIN_WIDTH + margin * 2, Math.floor(options.width));

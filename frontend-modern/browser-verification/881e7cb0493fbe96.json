@@ -1,0 +1,31 @@
+{
+  "version": 1,
+  "base_sha": "cadc948c4eba6b132cb2f28a132f4bc39c04d48f",
+  "verified_at": "2026-11-27T16:13:50Z",
+  "result": "passed",
+  "changed_paths": [
+    "frontend-modern/src/features/infrastructureMap/infrastructureMapHostDiagram.ts"
+  ],
+  "content_sha256": {
+    "frontend-modern/src/features/infrastructureMap/infrastructureMapHostDiagram.ts": "faa08c76abea853aa78f2f06ab90190a5645886db72812b9d4c8ac5dd821871b"
+  },
+  "routes": [
+    "/map"
+  ],
+  "viewports": [
+    {
+      "width": 1440,
+      "height": 900
+    },
+    {
+      "width": 390,
+      "height": 844
+    }
+  ],
+  "states": [
+    "comment-only documentation refinement with identical compiled output verified on /map in By host mode (desktop dark/light, live homelab, and mobile 390x844)"
+  ],
+  "interactions": [
+    "verified live /map By host layout, hover spotlight, drawers, and mobile responsive layout against the identical compiled bundle"
+  ]
+}
