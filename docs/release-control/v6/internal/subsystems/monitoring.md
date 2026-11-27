@@ -6602,6 +6602,15 @@ tighten it only when a freshly shortened interval justifies an earlier run.
 Without this, a sixty-second availability target polls at the ten-second
 tick cadence whenever adaptive polling is off, which is the default.
 
+Periodic adaptive plans read the prior cached slot and interval in the same
+planner critical section that publishes the updated plan. Roster assembly
+does not take a separate planner lock per target or carry older cached slots
+across freshness reads. Workers still plan their successor from the claim
+they executed, and the live queue still owns eligibility. In
+`TestMonitorAdaptivePlanReadsCurrentSuccessor`, a late PVE poll publishes
+while a periodic plan waits on a peer's freshness; the periodic plan then
+uses the newer cached slot without changing the poll interval.
+
 ### Base poll cadence is read through the monitor, not its config copy
 
 `Monitor.BasePollInterval` (`internal/monitoring/monitor_runtime_settings.go`)

@@ -60,12 +60,9 @@ func (m *Monitor) describeInstancesForScheduler() []InstanceDescriptor {
 
 		for i := first; i < len(descriptors); i++ {
 			desc := &descriptors[i]
-			if m.scheduler != nil {
-				if last, ok := m.scheduler.LastScheduled(providerType, desc.Name); ok {
-					desc.LastScheduled = last.NextRun
-					desc.LastInterval = last.Interval
-				}
-			}
+			// BuildPlan reads the prior slot and interval under its planner
+			// lock. Copying those here could mask a newer worker successor
+			// published while the periodic plan is preparing its inputs.
 			if m.stalenessTracker != nil {
 				if snap, ok := m.stalenessTracker.snapshot(providerType, desc.Name); ok {
 					desc.LastSuccess = snap.LastSuccess
