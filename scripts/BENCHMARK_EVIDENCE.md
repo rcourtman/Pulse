@@ -54,14 +54,24 @@ refused. A benchmark reading files outside that closure at run time
 escapes selection. Unpaired runs select every package before sharding.
 
 CI now partitions that inventory across three isolated hosted jobs using
-`PULSE_BENCH_SHARD=0`, `1` and `2`. The fixed assignment in the collector keeps
-monitoring and unified resources apart. Each package's baseline, candidate,
-warmups and all ten alternating pairs stay on the **same** runner; samples for
-one comparison are never combined across hosts. Each shard still uses the
-existing duration, budget and regression rules. With no shard specified,
-local collection retains the full inventory. Invalid shards and unassigned
-packages fail; an empty affected shard records an explicit empty package list
-without invoking Go on the repository root.
+`PULSE_BENCH_SHARD=0`, `1` and `2`. The two heaviest packages,
+`./internal/monitoring/` (shards `0` and `2`) and `./internal/unifiedresources/`
+(shards `0` and `1`), split their discovered top-level `Benchmark*` union
+deterministically across two shards using measured per-sample weights while the
+remaining seven packages each run whole on one fixed shard (`./internal/dockeragent/`
+on `0`; `./internal/api/`, `./pkg/auth/` and `./internal/hostagent/` on `1`;
+`./pkg/metrics/`, `./cmd/pulse-agent/` and `./internal/hostmetrics/` on `2`).
+Split packages list top-level `Benchmark*` functions from both trees (failing
+closed if discovery fails or returns none), assign every discovered function—
+including newly added or removed benchmarks—to exactly one shard, and record
+`bench_filter=<package>,<regex>` in `bench-metadata.txt`. Each benchmark
+function's baseline, candidate, warmups and all ten alternating pairs still
+stay on the **same** runner; samples for one comparison are never combined
+across hosts. Each shard still uses the existing duration, budget and
+regression rules. With no shard specified (`all`), local collection retains the
+full unsplit inventory. Invalid shards and unassigned packages fail; an empty
+affected shard records an explicit empty package list without invoking Go on
+the repository root.
 
 The aggregate `Benchmarks` check requires every shard to succeed, with matrix
 fail-fast disabled so a failed sibling does not cancel another comparison.

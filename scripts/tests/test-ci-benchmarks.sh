@@ -10,9 +10,19 @@ trap 'rm -rf "${WORK_DIR}"' EXIT
 mkdir -p "${WORK_DIR}/bin" "${WORK_DIR}/candidate" "${WORK_DIR}/baseline"
 cat > "${WORK_DIR}/bin/fixture.test" <<'EOF'
 #!/usr/bin/env bash
-[[ "$1" == '-test.bench=.' ]] || exit 91
+[[ "$1" == -test.bench=* ]] || exit 91
 [[ "${FAKE_BINARY_FAIL:-0}" == 0 ]] || exit 23
-echo 'BenchmarkExample-4  1  100 ns/op  0 B/op  0 allocs/op'
+filter="${1#-test.bench=}"
+if [[ "${filter}" == '.' ]]; then
+  echo 'BenchmarkExample-4  1  100 ns/op  0 B/op  0 allocs/op'
+else
+  inner="${filter#^(}"
+  inner="${inner%)\$}"
+  IFS='|' read -r -a names <<< "${inner}"
+  for name in "${names[@]}"; do
+    echo "${name}-4  1  100 ns/op  0 B/op  0 allocs/op"
+  done
+fi
 EOF
 chmod +x "${WORK_DIR}/bin/fixture.test"
 export FAKE_BINARY="${WORK_DIR}/bin/fixture.test"
@@ -50,11 +60,49 @@ if [[ "$1" == list ]]; then
   [[ "${package}" == pkg/auth ]] || echo "$PWD/internal/shared"
   exit 0
 fi
+if [[ "$1" == test && "$2" == -list ]]; then
+  [[ "${FAKE_GO_BENCH_LIST_FAIL:-0}" == 0 ]] || exit 1
+  package="${!#}"
+  if [[ "${FAKE_GO_BENCH_LIST_EMPTY:-0}" == 1 ]]; then
+    printf 'ok  \t%s\t0.001s\n' "${package}"
+    exit 0
+  fi
+  if [[ "${FAKE_GO_BENCH_LIST_SINGLE:-0}" == 1 ]]; then
+    printf 'BenchmarkSolo\nok  \t%s\t0.001s\n' "${package}"
+    exit 0
+  fi
+  case "${package}" in
+    ./internal/monitoring/)
+      printf 'BenchmarkMetadataMonitorProjection\nBenchmarkBroadcastMetricsSnapshot\nBenchmarkPMGBackupReadPoll\n'
+      if [[ "${FAKE_GO_BENCH_DIFF:-0}" == 1 ]]; then
+        if [[ "$PWD" == */candidate ]]; then
+          printf 'BenchmarkCandidateOnly\n'
+        else
+          printf 'BenchmarkBaselineOnly\n'
+        fi
+      fi
+      ;;
+    ./internal/unifiedresources/)
+      printf 'BenchmarkRegistryProjectionSnapshot\nBenchmarkHistoryIdentityQuery\nBenchmarkFindCandidates\n'
+      ;;
+    *)
+      printf 'BenchmarkExample\n'
+      ;;
+  esac
+  printf 'ok  \t%s\t0.001s\n' "${package}"
+  exit 0
+fi
 printf '%s\t%s\n' "$PWD" "$*" >> "${FAKE_GO_LOG}"
 args=("$@")
+bench_filter='.'
+for ((i=0; i<${#args[@]}; i++)); do
+  if [[ "${args[i]}" == -bench=* ]]; then
+    bench_filter="${args[i]#-bench=}"
+  fi
+done
 for ((i=0; i<${#args[@]}; i++)); do
   if [[ "${args[i]}" == -exec ]]; then
-    "${args[i+1]}" "${FAKE_BINARY}" '-test.bench=.' || exit
+    "${args[i+1]}" "${FAKE_BINARY}" "-test.bench=${bench_filter}" || exit
     printf 'ok  \texample.test/bench\t1.500s\n'
     exit 0
   fi
@@ -199,13 +247,13 @@ grep -qF 'packages=./pkg/metrics/ ./pkg/auth/' "${metadata}"
 # stdout holds a directory and none of the visible dirs matches the diff.
 FAKE_GO_PARTIAL_GRAPH=1 PULSE_BENCH_SHARD=2 run_paired
 grep -qFx 'selection=all (package graph unreadable)' "${metadata}"
-grep -qFx 'packages=./pkg/metrics/ ./cmd/pulse-agent/ ./internal/hostmetrics/' "${metadata}"
+grep -qFx 'packages=./pkg/metrics/ ./internal/monitoring/ ./cmd/pulse-agent/ ./internal/hostmetrics/' "${metadata}"
 [[ "$(grep -c '^sample=' "${metadata}")" == 2 ]]
 
 # Several main modules cannot safely be compared against one directory root.
 FAKE_GO_MULTI_ROOT=1 PULSE_BENCH_SHARD=0 run_paired
 grep -qFx 'selection=all (package graph unreadable)' "${metadata}"
-grep -qFx 'packages=./pkg/auth/ ./internal/monitoring/ ./internal/dockeragent/' "${metadata}"
+grep -qFx 'packages=./internal/monitoring/ ./internal/unifiedresources/ ./internal/dockeragent/' "${metadata}"
 
 # Uncommitted edits are measured but invisible to the committed trees.
 echo '// local edit' >> "${WORK_DIR}/baseline/internal/api/handler.go"
@@ -220,14 +268,31 @@ run_paired
 grep -qFx 'selection=all (module files changed)' "${metadata}"
 grep -qF 'packages=./pkg/metrics/ ./pkg/auth/' "${metadata}"
 
-# Every package belongs to exactly one shard. Each shard retains both warmups,
-# all ten base/candidate samples, alternating order and executable provenance.
-: > "${WORK_DIR}/partition"
+# Every unsplit package belongs to exactly one shard, and split packages
+# (internal/monitoring on 0+2; internal/unifiedresources on 0+1) partition
+# their discovered top-level Benchmark* union disjointly across their two
+# shards. Each shard retains both warmups, all ten base/candidate samples,
+# alternating order, filter provenance and executable hashes.
+: > "${WORK_DIR}/unsplit-partition"
+: > "${WORK_DIR}/mon-partition"
+: > "${WORK_DIR}/ur-partition"
 for shard in 0 1 2; do
   case "${shard}" in
-    0) expected='./pkg/auth/ ./internal/monitoring/ ./internal/dockeragent/' ;;
-    1) expected='./internal/api/ ./internal/unifiedresources/ ./internal/hostagent/' ;;
-    2) expected='./pkg/metrics/ ./cmd/pulse-agent/ ./internal/hostmetrics/' ;;
+    0)
+      expected='./internal/monitoring/ ./internal/unifiedresources/ ./internal/dockeragent/'
+      expected_unsplit='./internal/dockeragent/'
+      calls_per_tree=3
+      ;;
+    1)
+      expected='./pkg/auth/ ./internal/api/ ./internal/unifiedresources/ ./internal/hostagent/'
+      expected_unsplit='./pkg/auth/ ./internal/api/ ./internal/hostagent/'
+      calls_per_tree=2
+      ;;
+    2)
+      expected='./pkg/metrics/ ./internal/monitoring/ ./cmd/pulse-agent/ ./internal/hostmetrics/'
+      expected_unsplit='./pkg/metrics/ ./cmd/pulse-agent/ ./internal/hostmetrics/'
+      calls_per_tree=2
+      ;;
   esac
   : > "${WORK_DIR}/go.log"
   PATH="${WORK_DIR}/bin:${PATH}" FAKE_GO_LOG="${WORK_DIR}/go.log" \
@@ -237,25 +302,39 @@ for shard in 0 1 2; do
     bash "${ROOT_DIR}/scripts/run-ci-benchmarks.sh" >/dev/null
   grep -qFx "shard=${shard}" "${metadata}"
   grep -qFx "packages=${expected}" "${metadata}"
-  printf '%s\n' "${expected}" | tr ' ' '\n' >> "${WORK_DIR}/partition"
+  printf '%s\n' "${expected_unsplit}" | tr ' ' '\n' >> "${WORK_DIR}/unsplit-partition"
   [[ "$(grep -c '^sample=' "${metadata}")" == 20 ]]
-  [[ "$(grep -c '^binary=' "${metadata}")" == 20 ]]
+  [[ "$(grep -c '^binary=' "${metadata}")" == $((20 * calls_per_tree)) ]]
   [[ "$(grep -c '^BenchmarkExample' "${WORK_DIR}/candidate/bench-baseline.txt")" == 10 ]]
   [[ "$(grep -c '^BenchmarkExample' "${WORK_DIR}/candidate/bench-results.txt")" == 10 ]]
+  if [[ "${shard}" == 0 || "${shard}" == 2 ]]; then
+    mon_filter="$(awk -F, '$1 == "bench_filter=./internal/monitoring/" { print $2 }' "${metadata}")"
+    [[ "${mon_filter}" == ^\(*\)\$ ]]
+    inner="${mon_filter#^(}"; inner="${inner%)\$}"
+    printf '%s\n' "${inner}" | tr '|' '\n' >> "${WORK_DIR}/mon-partition"
+  fi
+  if [[ "${shard}" == 0 || "${shard}" == 1 ]]; then
+    ur_filter="$(awk -F, '$1 == "bench_filter=./internal/unifiedresources/" { print $2 }' "${metadata}")"
+    [[ "${ur_filter}" == ^\(*\)\$ ]]
+    inner="${ur_filter#^(}"; inner="${inner%)\$}"
+    printf '%s\n' "${inner}" | tr '|' '\n' >> "${WORK_DIR}/ur-partition"
+  fi
   mapfile -t calls < "${WORK_DIR}/go.log"
-  [[ "${#calls[@]}" == 22 ]]
-  for call in "${calls[@]}"; do [[ "${call}" == *" ${expected}" ]]; done
+  [[ "${#calls[@]}" == $((22 * calls_per_tree)) ]]
   for ((round=1; round<=10; round++)); do
     first=baseline; second=candidate
     if ((round % 2 == 0)); then first=candidate; second=baseline; fi
-    [[ "${calls[2*round]}" == "${WORK_DIR}/${first}"$'\t'* ]]
-    [[ "${calls[2*round+1]}" == "${WORK_DIR}/${second}"$'\t'* ]]
+    base_idx=$((2 * round * calls_per_tree))
+    for ((offset=0; offset<calls_per_tree; offset++)); do
+      [[ "${calls[base_idx + offset]}" == "${WORK_DIR}/${first}"$'\t'* ]]
+      [[ "${calls[base_idx + calls_per_tree + offset]}" == "${WORK_DIR}/${second}"$'\t'* ]]
+    done
     for label in baseline candidate; do
       grep -qFx "binary=${label},${round},fixture.test,${digest}" "${metadata}"
     done
   done
-  # Branch collection partitions the same inventory but still uses Go's ten
-  # counts in a single invocation; it must not fall back to the full package set.
+  # Branch collection partitions the same inventory using Go's ten counts per
+  # invocation; it must not fall back to the full package set.
   : > "${WORK_DIR}/go.log"
   PATH="${WORK_DIR}/bin:${PATH}" FAKE_GO_LOG="${WORK_DIR}/go.log" \
     PULSE_BENCH_CURRENT_DIR="${WORK_DIR}/candidate" PULSE_BENCH_BASELINE_DIR='' \
@@ -263,11 +342,51 @@ for shard in 0 1 2; do
     bash "${ROOT_DIR}/scripts/run-ci-benchmarks.sh" >/dev/null
   grep -qFx 'selection=all (no baseline)' "${metadata}"
   grep -qFx "packages=${expected}" "${metadata}"
-  [[ "$(wc -l < "${WORK_DIR}/go.log")" == 1 ]]
-  grep -qF -- "-count=10 -run=^$ -benchtime=100ms -timeout=5m ${expected}" "${WORK_DIR}/go.log"
+  [[ "$(wc -l < "${WORK_DIR}/go.log")" == "${calls_per_tree}" ]]
+  grep -qF -- "-bench=. -benchmem -count=10 -run=^$ -benchtime=100ms -timeout=5m ${expected_unsplit}" "${WORK_DIR}/go.log"
 done
-[[ "$(wc -l < "${WORK_DIR}/partition")" == 9 ]]
-[[ -z "$(sort "${WORK_DIR}/partition" | uniq -d)" ]]
+[[ "$(wc -l < "${WORK_DIR}/unsplit-partition")" == 7 ]]
+[[ -z "$(sort "${WORK_DIR}/unsplit-partition" | uniq -d)" ]]
+[[ "$(sort "${WORK_DIR}/mon-partition" | paste -sd',')" == 'BenchmarkBroadcastMetricsSnapshot,BenchmarkMetadataMonitorProjection,BenchmarkPMGBackupReadPoll' ]]
+[[ -z "$(sort "${WORK_DIR}/mon-partition" | uniq -d)" ]]
+[[ "$(sort "${WORK_DIR}/ur-partition" | paste -sd',')" == 'BenchmarkFindCandidates,BenchmarkHistoryIdentityQuery,BenchmarkRegistryProjectionSnapshot' ]]
+[[ -z "$(sort "${WORK_DIR}/ur-partition" | uniq -d)" ]]
+
+# Newly added (candidate-only) and removed (baseline-only) benchmarks in a split
+# package are both discovered from the two-tree union and assigned to exactly
+# one shard.
+: > "${WORK_DIR}/mon-diff-partition"
+for shard in 0 2; do
+  FAKE_GO_BENCH_DIFF=1 PULSE_BENCH_SHARD="${shard}" run_paired
+  mon_filter="$(awk -F, '$1 == "bench_filter=./internal/monitoring/" { print $2 }' "${metadata}")"
+  inner="${mon_filter#^(}"; inner="${inner%)\$}"
+  printf '%s\n' "${inner}" | tr '|' '\n' >> "${WORK_DIR}/mon-diff-partition"
+done
+[[ "$(sort "${WORK_DIR}/mon-diff-partition" | paste -sd',')" == 'BenchmarkBaselineOnly,BenchmarkBroadcastMetricsSnapshot,BenchmarkCandidateOnly,BenchmarkMetadataMonitorProjection,BenchmarkPMGBackupReadPoll' ]]
+[[ -z "$(sort "${WORK_DIR}/mon-diff-partition" | uniq -d)" ]]
+
+# A single-benchmark split package runs on its primary shard and drops cleanly
+# from the secondary shard rather than invoking go test with an empty regex.
+FAKE_GO_BENCH_LIST_SINGLE=1 PULSE_BENCH_SHARD=0 run_paired
+grep -qFx 'bench_filter=./internal/monitoring/,^(BenchmarkSolo)$' "${metadata}"
+FAKE_GO_BENCH_LIST_SINGLE=1 PULSE_BENCH_SHARD=2 run_paired
+! grep -qF './internal/monitoring/' "${metadata}"
+! grep -qF 'bench_filter=./internal/monitoring/' "${metadata}"
+
+# Failed or empty benchmark discovery for a split package fails closed before
+# running any timed benchmark.
+for bad_env in FAKE_GO_BENCH_LIST_FAIL=1 FAKE_GO_BENCH_LIST_EMPTY=1; do
+  : > "${WORK_DIR}/go.log"
+  set +e
+  output="$(env "${bad_env}" PATH="${WORK_DIR}/bin:${PATH}" FAKE_GO_LOG="${WORK_DIR}/go.log" \
+    PULSE_BENCH_CURRENT_DIR="${WORK_DIR}/candidate" \
+    PULSE_BENCH_BASELINE_DIR="${WORK_DIR}/baseline" PULSE_BENCH_SAMPLE_COUNT=1 \
+    PULSE_BENCH_SHARD=0 bash "${ROOT_DIR}/scripts/run-ci-benchmarks.sh" 2>&1)"
+  status=$?
+  set -e
+  [[ "${status}" != 0 ]]
+  [[ ! -s "${WORK_DIR}/go.log" ]]
+done
 
 # A malformed shard is a collection error, never a silent no-op or an all-tree
 # fallback. This must stop before any Go invocation.
