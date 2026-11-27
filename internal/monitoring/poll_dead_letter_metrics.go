@@ -4,11 +4,16 @@ import (
 	"context"
 	"sync"
 	"sync/atomic"
+	"time"
 
 	"github.com/prometheus/client_golang/prometheus"
 )
 
 const schedulerDeadLetterDepthHelp = "Number of tasks currently parked in the dead-letter queue per instance."
+
+// Leave a short explicit zero for usual scrape intervals after the last
+// positive sample, without retaining removed connection labels indefinitely.
+const deadLetterZeroWindow = 5 * time.Minute
 
 // The queue is the only source of live depth. A sampled gauge may outlive
 // both the entry and its scheduler, so snapshots never write back to it.
@@ -19,7 +24,7 @@ type pollDeadLetterCollector struct {
 
 	mu      sync.Mutex
 	sources map[*pollDeadLetterRuntime]struct{}
-	seen    map[metricKey]struct{}
+	recent  map[metricKey]time.Time
 }
 
 type pollDeadLetterRuntime struct {
@@ -42,7 +47,7 @@ func newPollDeadLetterCollector(sampled *prometheus.GaugeVec) *pollDeadLetterCol
 		depth: prometheus.NewDesc("pulse_scheduler_dead_letter_depth", schedulerDeadLetterDepthHelp,
 			[]string{"instance_type", "instance"}, nil),
 		sources: make(map[*pollDeadLetterRuntime]struct{}),
-		seen:    make(map[metricKey]struct{}),
+		recent:  make(map[metricKey]time.Time),
 	}
 }
 
@@ -88,6 +93,7 @@ func (c *pollDeadLetterCollector) Collect(ch chan<- prometheus.Metric) {
 	}
 	c.mu.Unlock()
 
+	observedAt := time.Now()
 	counts := make(map[metricKey]int)
 	for _, source := range sources {
 		if !source.active() {
@@ -103,13 +109,19 @@ func (c *pollDeadLetterCollector) Collect(ch chan<- prometheus.Metric) {
 	}
 
 	c.mu.Lock()
+	now := time.Now()
+	expires := observedAt.Add(deadLetterZeroWindow)
 	for key := range counts {
-		c.seen[key] = struct{}{}
+		// An overlapping scrape can finish out of order. Use the time it
+		// began collecting, never its finish time, to extend retention.
+		if expires.After(now) && expires.After(c.recent[key]) {
+			c.recent[key] = expires
+		}
 	}
-	// Keep a zero for a previously scraped label. Never cache positive
-	// samples here, so an older scrape cannot restore a retired queue.
-	for key := range c.seen {
-		if _, ok := counts[key]; !ok {
+	for key, expires := range c.recent {
+		if !expires.After(now) {
+			delete(c.recent, key)
+		} else if _, ok := counts[key]; !ok {
 			counts[key] = 0
 		}
 	}
