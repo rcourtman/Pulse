@@ -333,22 +333,92 @@ export function renderMapSceneBody(
     .join('');
 }
 
+/** Maximum number of curved connection arcs drawn when hovering or focusing one tile. */
+export const MAP_MAX_LINK_ARCS = 16;
+
+type HitSceneNode = Extract<SceneNode, { kind: 'hit' }>;
+
 /**
- * A ring round every tile that a connection joins to the given one: the
- * container whose network it uses, the proxy that routes it, or the other
- * way about. The map draws no line for these, so nothing crosses a card. The
- * rings are shown only while that one tile is pointed at or focused.
+ * A ring round every tile that a connection joins to the given one, paired with
+ * curved arcs from the hovered or focused tile to its linked peers (capped at
+ * MAP_MAX_LINK_ARCS so busy hosts stay legible). Shown only interactively while
+ * a tile is pointed at or focused, never in static exports.
  */
-export function renderMapLinkRings(scene: MapScene, of: MapHit, palette: MapPalette): string {
+export function renderMapLinkRings(
+  scene: MapScene,
+  of: MapHit,
+  palette: MapPalette,
+  options?: { liveTraffic?: boolean },
+): string {
   const linked = new Set(of.linked ?? []);
   if (linked.size === 0) return '';
-  return scene.nodes
-    .map((node) =>
-      node.kind === 'hit' && linked.has(node.hit.id)
-        ? `<rect x="${n(node.x)}" y="${n(node.y)}" width="${n(node.w)}" height="${n(node.h)}" rx="${n(node.r)}" fill="none" stroke="${palette.accent}" stroke-width="1.5"/>`
-        : '',
+  let source: HitSceneNode | undefined;
+  const targets: HitSceneNode[] = [];
+  for (const node of scene.nodes) {
+    if (node.kind !== 'hit') continue;
+    if (node.hit.id === of.id) source = node;
+    if (linked.has(node.hit.id)) targets.push(node);
+  }
+  if (targets.length === 0) return '';
+
+  const liveTraffic = Boolean(options?.liveTraffic);
+  const arcs: string[] = [];
+  const dots: string[] = [];
+  if (source) {
+    const sx = source.x + source.w / 2;
+    const sy = source.y + source.h / 2;
+    const drawnTargets = targets.slice(0, MAP_MAX_LINK_ARCS);
+    drawnTargets.forEach((target, index) => {
+      const tx = target.x + target.w / 2;
+      const ty = target.y + target.h / 2;
+      const dx = tx - sx;
+      const dy = ty - sy;
+      const dist = Math.hypot(dx, dy);
+      if (dist < 1) return;
+      const mx = (sx + tx) / 2;
+      const my = (sy + ty) / 2;
+      let nx = -dy / dist;
+      let ny = dx / dist;
+      if (Math.abs(dy) < 20) {
+        if (ny > 0) {
+          nx = -nx;
+          ny = -ny;
+        }
+      } else if (dx < 0 ? nx > 0 : dx > 0 ? nx < 0 : index % 2 === 1) {
+        nx = -nx;
+        ny = -ny;
+      }
+      const bend = Math.min(48, Math.max(18, dist * 0.16));
+      const cx = mx + nx * bend;
+      const cy = my + ny * bend;
+      const d = `M${n(sx)} ${n(sy)} Q${n(cx)} ${n(cy)} ${n(tx)} ${n(ty)}`;
+      arcs.push(
+        `<path d="${d}" fill="none" stroke="${palette.accent}" stroke-width="1.5" stroke-opacity="0.65" class="pulse-map-link-arc"/>`,
+      );
+      if (liveTraffic) {
+        arcs.push(
+          `<path d="${d}" fill="none" stroke="${palette.accent}" stroke-width="2" stroke-dasharray="4 10" stroke-linecap="round" class="pulse-map-link-flow"/>`,
+        );
+      }
+      dots.push(
+        `<circle cx="${n(tx)}" cy="${n(ty)}" r="2.5" fill="${palette.accent}" fill-opacity="0.85"/>`,
+      );
+    });
+    if (dots.length > 0) {
+      dots.unshift(
+        `<circle cx="${n(sx)}" cy="${n(sy)}" r="2.5" fill="${palette.accent}" fill-opacity="0.85"/>`,
+      );
+    }
+  }
+
+  const rings = targets
+    .map(
+      (node) =>
+        `<rect x="${n(node.x)}" y="${n(node.y)}" width="${n(node.w)}" height="${n(node.h)}" rx="${n(node.r)}" fill="none" stroke="${palette.accent}" stroke-width="1.5"/>`,
     )
     .join('');
+
+  return `${arcs.join('')}${dots.join('')}${rings}`;
 }
 
 /**

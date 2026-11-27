@@ -1032,4 +1032,126 @@ describe('InfrastructureMapSurface live traffic and network telemetry', () => {
     fireEvent.pointerOver(tile(container, 'core-router'));
     expect(await screen.findByText(/Latency 2\.4 ms/)).toBeInTheDocument();
   });
+
+  it('shows the estate live traffic summary pill, opens the Live traffic drawer, and toggles curved arc flow', async () => {
+    resourcesMock.value = [
+      ...resourcesMock.value,
+      resource({
+        id: 'docker-app-host',
+        type: 'docker-host',
+        name: 'docker-app-host',
+        platformType: 'docker',
+      }),
+      resource({
+        id: 'ctr-app',
+        type: 'app-container',
+        name: 'plex',
+        platformType: 'docker',
+        parentId: 'docker-app-host',
+        status: 'running',
+        network: { rxBytes: 5_242_880, txBytes: 1_048_576 },
+        docker: {
+          hostSourceId: 'docker-app-host',
+          containerId: 'a'.repeat(64),
+          containerState: 'running',
+          image: 'lscr.io/linuxserver/plex:latest',
+          networkMode: 'bridge',
+          networks: [
+            { name: 'bridge' },
+            { name: 'media-net' },
+            { name: 'proxy-net' },
+            { name: 'internal-net' },
+          ],
+        },
+      }),
+      resource({
+        id: 'chk-web',
+        type: 'network-endpoint',
+        name: 'app-https',
+        platformType: 'availability',
+        status: 'online',
+        availability: {
+          targetKind: 'service',
+          address: 'https://app.example.com',
+          protocol: 'https',
+          applicationStatusCode: 200,
+          available: true,
+          latencyMillis: 14,
+          linkedResourceId: 'ctr-app',
+          certificateMonitoring: true,
+          certificateExpiryWarningDays: 14,
+          certificate: {
+            observedAt: new Date().toISOString(),
+            notBefore: '2026-01-01T00:00:00Z',
+            notAfter: new Date(Date.now() + 5 * 86_400_000).toISOString(),
+            fingerprintSha256: 'abc',
+            trustStatus: 'trusted',
+            chainValid: true,
+            hostnameValid: true,
+            selfSigned: false,
+          },
+        },
+      }),
+    ];
+
+    const { container } = render(() => <InfrastructureMapSurface />);
+
+    // Estate traffic pill appears above threshold and opens the Live traffic drawer.
+    const pill = screen.getByTestId('infrastructure-map-traffic-summary');
+    expect(pill).toHaveTextContent('6.00 MB/s');
+
+    fireEvent.click(pill);
+    const drawer = screen.getByTestId('infrastructure-map-drawer');
+    expect(drawer).toBeInTheDocument();
+    expect(screen.getByRole('heading', { name: 'Live traffic' })).toBeInTheDocument();
+    const list = screen.getByTestId('infrastructure-map-drawer-list');
+    // Defaults to Traffic sort with the busiest talker first.
+    expect(list.querySelectorAll('li')[0]?.textContent).toContain('plex');
+    const sortGroup = screen.getByTestId('infrastructure-map-drawer-sort');
+    expect(sortGroup.querySelectorAll('button')[1]).toHaveAttribute('aria-pressed', 'true');
+    fireEvent.keyDown(document, { key: 'Escape' });
+    expect(screen.queryByTestId('infrastructure-map-drawer')).not.toBeInTheDocument();
+
+    // Hovering a connected tile draws curved connection arcs and live flow overlays.
+    fireEvent.pointerOver(tile(container, 'plex'));
+    expect(await screen.findByText(/Docker net: internal-net, media-net \+1/)).toBeInTheDocument();
+    expect(
+      container.querySelectorAll('[data-map-rings] .pulse-map-link-arc').length,
+    ).toBeGreaterThan(0);
+    expect(
+      container.querySelectorAll('[data-map-rings] .pulse-map-link-flow').length,
+    ).toBeGreaterThan(0);
+
+    // Toggling Live traffic off removes animated arc flow while keeping static curved arcs.
+    fireEvent.click(screen.getByTestId('infrastructure-map-live-traffic'));
+    expect(
+      container.querySelectorAll('[data-map-rings] .pulse-map-link-arc').length,
+    ).toBeGreaterThan(0);
+    expect(container.querySelectorAll('[data-map-rings] .pulse-map-link-flow')).toHaveLength(0);
+
+    // Availability check tooltip combines probeSummary + latency and includes cert warning.
+    fireEvent.pointerOver(tile(container, 'app-https'));
+    expect(await screen.findByText(/HTTPS 200 · 14 ms/)).toBeInTheDocument();
+    expect(screen.getByText(/Cert expiring soon/)).toBeInTheDocument();
+
+    // Hide names strips user-defined Docker network names from tooltips.
+    fireEvent.click(screen.getByRole('button', { name: 'Hide names' }));
+    fireEvent.pointerOver(tile(container, 'Plex'));
+    await waitFor(() => expect(screen.queryByText(/Docker net:/)).not.toBeInTheDocument());
+  });
+
+  it('hides the estate live traffic summary pill when estate traffic is below threshold', () => {
+    resourcesMock.value = [
+      resource({
+        id: 'pve-quiet',
+        type: 'agent',
+        name: 'pve-quiet',
+        platformType: 'proxmox-pve',
+        network: { rxBytes: 1024, txBytes: 512 },
+      }),
+    ];
+
+    render(() => <InfrastructureMapSurface />);
+    expect(screen.queryByTestId('infrastructure-map-traffic-summary')).not.toBeInTheDocument();
+  });
 });

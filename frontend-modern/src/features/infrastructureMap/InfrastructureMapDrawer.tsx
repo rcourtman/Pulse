@@ -13,6 +13,7 @@ import type { StatusIndicatorVariant } from '@/utils/status';
 import type { MapInspectTarget } from './infrastructureMapLayout';
 import type { MapHealth } from './infrastructureMapModel';
 import {
+  collectActiveTrafficTiles,
   collectDiagramGroups,
   collectNetworkTiles,
   compareDiagramTilesByAttention,
@@ -97,6 +98,23 @@ const networkSubtitle = (network: DiagramNetwork): string => {
   return [network.detail, count, throughput, linkSpeed].filter(Boolean).join(' · ');
 };
 
+const formatDockerNetworks = (networks?: string[]): string => {
+  if (!networks?.length) return '';
+  const shown = networks.slice(0, 2).join(', ');
+  const extra = networks.length > 2 ? ` +${networks.length - 2}` : '';
+  return `Docker net: ${shown}${extra}`;
+};
+
+const formatProbeAndLatency = (probeSummary?: string, latencyMs?: number): string => {
+  const latency = latencyMs !== undefined ? formatMapLatency(latencyMs) : '';
+  if (probeSummary && latency) return `${probeSummary} · ${latency}`;
+  if (probeSummary) return probeSummary;
+  return latency ? `Latency ${latency}` : '';
+};
+
+const certWarningTone = (warning: string): 'danger' | 'warning' =>
+  warning === 'Cert expired' || warning === 'Cert invalid' ? 'danger' : 'warning';
+
 const tileSubtitle = (entry: DrawerEntry): string =>
   [
     entry.groupLabel,
@@ -106,6 +124,7 @@ const tileSubtitle = (entry: DrawerEntry): string =>
       ? entry.tile.address
       : '',
     entry.tile.detail ? `Published ${entry.tile.detail}` : '',
+    formatDockerNetworks(entry.tile.dockerNetworks),
   ]
     .filter(Boolean)
     .join(' · ');
@@ -115,7 +134,7 @@ const tileMetrics = (tile: DiagramTile): string =>
     tile.cpu !== undefined ? `CPU ${Math.round(tile.cpu)}%` : '',
     tile.memory !== undefined ? `Mem ${Math.round(tile.memory)}%` : '',
     formatDrawerNet(tile),
-    tile.latencyMs !== undefined ? `Latency ${formatMapLatency(tile.latencyMs)}` : '',
+    formatProbeAndLatency(tile.probeSummary, tile.latencyMs),
     tile.linkSpeedMbps ? `${formatMapLinkSpeed(tile.linkSpeedMbps)} link` : '',
   ]
     .filter(Boolean)
@@ -129,7 +148,7 @@ export function InfrastructureMapDrawer(props: InfrastructureMapDrawerProps) {
   createEffect(() => {
     const current = props.target;
     setQuery('');
-    setSortMode('attention');
+    setSortMode(current?.kind === 'traffic' ? 'traffic' : 'attention');
     if (current?.kind === 'group' && current.initialFilter) {
       setHealthFilter(current.initialFilter);
     } else {
@@ -162,6 +181,9 @@ export function InfrastructureMapDrawer(props: InfrastructureMapDrawerProps) {
     }
     if (current.kind === 'network') {
       return collectNetworkTiles(diagram, current.networkId);
+    }
+    if (current.kind === 'traffic') {
+      return collectActiveTrafficTiles(diagram);
     }
     return [];
   });
@@ -198,6 +220,9 @@ export function InfrastructureMapDrawer(props: InfrastructureMapDrawerProps) {
     if (sortMode() === 'traffic' && hasTrafficEntries()) {
       return [...filtered].sort((a, b) => compareDiagramTilesByTraffic(a.tile, b.tile));
     }
+    if (props.target?.kind === 'traffic') {
+      return [...filtered].sort((a, b) => compareDiagramTilesByAttention(a.tile, b.tile));
+    }
     return filtered;
   });
 
@@ -220,6 +245,7 @@ export function InfrastructureMapDrawer(props: InfrastructureMapDrawerProps) {
     if (!current) return '';
     if (current.kind === 'group') return activeGroup()?.label ?? 'Group';
     if (current.kind === 'network') return activeNetwork()?.label ?? 'Network';
+    if (current.kind === 'traffic') return 'Live traffic';
     return 'Networks';
   });
 
@@ -233,6 +259,14 @@ export function InfrastructureMapDrawer(props: InfrastructureMapDrawerProps) {
     if (current.kind === 'network') {
       const network = activeNetwork();
       return network ? networkSubtitle(network) : '';
+    }
+    if (current.kind === 'traffic') {
+      const total = allEntries().length;
+      if (total === 0) return 'No active network traffic reported';
+      const estateBytes = props.diagram?.estateTrafficBytes;
+      const totalRate =
+        estateBytes && estateBytes > 0 ? ` · ${formatSpeed(estateBytes)} total` : '';
+      return `${total.toLocaleString()} active ${total === 1 ? 'resource' : 'resources'}${totalRate}`;
     }
     const total = props.diagram?.networks.length ?? 0;
     return `${total.toLocaleString()} ${total === 1 ? 'network' : 'networks'} across the estate`;
@@ -516,6 +550,17 @@ export function InfrastructureMapDrawer(props: InfrastructureMapDrawerProps) {
                                 >
                                   NIC firewall
                                 </MetadataBadge>
+                              </Show>
+                              <Show when={entry.tile.certWarning}>
+                                {(warning) => (
+                                  <MetadataBadge
+                                    tone={certWarningTone(warning())}
+                                    size="xs"
+                                    shape="pill"
+                                  >
+                                    {warning()}
+                                  </MetadataBadge>
+                                )}
                               </Show>
                             </div>
                             <p class="mt-0.5 truncate text-xs text-muted">{tileSubtitle(entry)}</p>

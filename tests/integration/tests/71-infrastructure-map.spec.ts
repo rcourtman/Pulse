@@ -591,6 +591,22 @@ test.describe("Infrastructure map", () => {
     await page.keyboard.press("Escape");
     await expect(drawer).toBeHidden();
 
+    // If the estate reports active live traffic, clicking the traffic summary
+    // pill opens the Live traffic drawer and Escape closes it cleanly.
+    const trafficSummary = page.getByTestId(
+      "infrastructure-map-traffic-summary",
+    );
+    if (await trafficSummary.isVisible()) {
+      await trafficSummary.click();
+      const trafficDrawer = page.getByTestId("infrastructure-map-drawer");
+      await expect(trafficDrawer).toBeVisible();
+      await expect(
+        trafficDrawer.getByRole("heading", { name: "Live traffic" }),
+      ).toBeVisible();
+      await page.keyboard.press("Escape");
+      await expect(trafficDrawer).toBeHidden();
+    }
+
     // Live traffic starts active, toggles cleanly off and back on.
     const liveTraffic = page.getByTestId("infrastructure-map-live-traffic");
     await expect(liveTraffic).toBeVisible();

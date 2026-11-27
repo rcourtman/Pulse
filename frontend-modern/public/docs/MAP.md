@@ -20,10 +20,12 @@ Each tile has a status dot: healthy, needs attention, critical, not reporting
 or off. When there is more than one network, a coloured mark beside a tile
 matches the dot on its network's pill.
 
-- **Hover** a tile to read what it is, its address, what it is connected to,
-  and collected metrics (CPU, memory, live network throughput, check latency,
-  NIC link speed, link-down count and Proxmox firewall status). Tiles it is
-  connected to are ringed.
+- **Hover** a tile to read what it is, its address, Docker user-defined
+  networks, what it is connected to, and collected metrics (CPU, memory, live
+  network throughput, check protocol and HTTP status with latency, TLS
+  certificate warnings, NIC link speed, link-down count and Proxmox firewall
+  status). Tiles it is connected to are ringed and joined by curved connection
+  arcs (with gentle animated flow when **Live traffic** is on).
 - **Click** a tile to open it.
 - **With a keyboard**, Tab reaches the map and the arrow keys move between
   tiles. Enter opens a tile or a **+N** overflow drawer, Escape closes a
@@ -51,6 +53,10 @@ toolbar and drawers let you find any resource without leaving the map:
 - **N need attention** beside the title is a filter button. Click it to show
   only critical and degraded resources, and click it again (or choose **Clear
   filters**) to return to the full estate.
+- **Estate live traffic pill** appears beside the title whenever combined
+  network throughput across the estate reaches at least 10 KB/s. Click it to
+  open the **Live traffic** drawer and inspect the busiest talkers across
+  every group, sorted by throughput by default (or switch to **Attention**).
 - **Group and network drawers** open when you click a **+N** overflow tile,
   a box header, or any network pill (including the **+N more** networks
   pill). Each drawer sorts items needing attention first, lets you switch
@@ -67,18 +73,29 @@ Pulse surfaces real network telemetry it already collects across your estate:
 
 - **Live traffic** in the toolbar is on by default. When enabled, active tiles
   and network pills carrying at least 10 KB/s get a subtle accent highlight
-  and live throughput readout, and the connectors feeding active groups and
-  networks show gentle rate-paced motion. Click **Live traffic** to turn
-  highlights and motion off at any time.
+  and live throughput readout, connectors feeding active groups and networks
+  show gentle rate-paced motion, and hover connection arcs carry a subtle
+  animated flow overlay. Click **Live traffic** to turn highlights and motion
+  off at any time.
+- **Estate live traffic summary and Top Talkers** aggregate throughput across
+  workloads and standalone hosts without double-counting Proxmox hosts
+  alongside their guests. Click the speed pill beside the title to open the
+  **Live traffic** drawer and jump straight to the busiest resources.
 - **Network throughput** appears on active tiles (in **Names** mode, while
   preserving stated connection captions such as `via` a container or a Traefik
-  hostname), on active network pills, in hover tooltips (`Net ↓ ... ↑ ...`),
-  and on rows and network summaries in the slide-over drawer. Inside group and
-  network drawers, switch the sort toggle from **Attention** to **Traffic** to
-  bring the busiest talkers to the top.
-- **Check latency** appears on monitored router, switch and access point tiles
-  in **Ways in**, in check tooltips, and in drawer rows whenever an
-  availability check reports a response time.
+  or Caddy hostname), on active network pills, in hover tooltips
+  (`Net ↓ ... ↑ ...`), and on rows and network summaries in the slide-over
+  drawer. Inside group and network drawers, switch the sort toggle from
+  **Attention** to **Traffic** to bring the busiest talkers to the top.
+- **Docker user-defined networks** appear in container tooltips and drawer
+  rows (`Docker net: ...`), omitting default Docker bridges such as `bridge`
+  and `host`. Enabling **Hide names** strips user-defined Docker network names
+  from both the page and saved images.
+- **Check protocol, HTTP status, latency and TLS certificate warnings** appear
+  on monitored router, switch and access point tiles in **Ways in**, in check
+  tooltips (such as `HTTPS 200 · 14 ms`), and in drawer rows. Expiring,
+  expired, invalid or untrusted certificates also surface as warning or danger
+  badges in drawer rows.
 - **NIC link speed and link-down warnings** appear in host tooltips, drawer
   rows, and network drawer summaries (for example `10G` link speed and a
   **Link down** warning badge when an online host has a down interface).
@@ -90,7 +107,8 @@ Pulse surfaces real network telemetry it already collects across your estate:
 Live traffic motion only appears where Pulse actually collects traffic. Idle
 resources, unmonitored hops, and the Internet connector never display
 fabricated motion. If your operating system requests reduced motion, connector
-animations stop automatically while static traffic highlights remain visible.
+and connection-arc animations stop automatically while static traffic
+highlights and arcs remain visible.
 
 ## How Pulse recognises an app
 
@@ -130,15 +148,21 @@ Click a check's tile to open that check.
 
 ## Connections
 
-The map draws no lines between tiles. A connection is written under the tile
-and shown on hover:
+The map draws no permanent lines between tiles. Connections are written under
+tiles and drawn as curved arcs with ringed endpoints on hover or keyboard
+focus (up to 16 arcs at once so dense hosts stay readable, while all linked
+targets remain ringed):
 
 - a container that uses another container's network, such as a download
   client behind a VPN container, reads "via" that container, and they are
   drawn side by side in the box most of them belong in,
-- a container routed by Traefik shows the hostname it answers on,
-- a machine's default gateway and DNS server are named on the tile that
-  answers at that address,
+- a container routed by Traefik or Caddy Docker Proxy (`caddy` labels) shows
+  the hostname it answers on and links to its proxy container,
+- an availability check linked to a monitored resource connects to that
+  resource on hover and names the check and latency on the resource's card,
+- a machine's default gateway (including an unmonitored dashed gateway tile)
+  and DNS server name the machines that use them and arc to those machines on
+  hover,
 - a machine's hover counts what it runs by kind, such as "Media 5 ·
   Monitoring 4", and rings every one of them and its storage,
 - a backup target names the hosts it is set up on, and each host names the

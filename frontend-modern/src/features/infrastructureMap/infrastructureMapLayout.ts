@@ -34,7 +34,8 @@ export type MapGlyphKey = MapPlatform | 'internet' | 'gateway' | 'switch' | 'acc
 export type MapInspectTarget =
   | { kind: 'group'; groupKey: string; initialFilter?: 'all' | 'attention' | 'off' }
   | { kind: 'network'; networkId: string }
-  | { kind: 'all-networks' };
+  | { kind: 'all-networks' }
+  | { kind: 'traffic' };
 
 export interface MapHit {
   id: string;
@@ -49,6 +50,9 @@ export interface MapHit {
   linkSpeedMbps?: number;
   linkDownCount?: number;
   firewallEnabled?: boolean;
+  dockerNetworks?: string[];
+  probeSummary?: string;
+  certWarning?: string;
   address?: string;
   detail?: string;
   /** What the thing's connections say about it, one sentence each. */

@@ -5,10 +5,10 @@ import type { Resource } from '@/types/resource';
  * Each one names both of its ends in data Pulse already holds:
  *
  * - a container whose network mode is `container:<id>` uses that container's
- *   network, so everything it sends leaves through the other one;
- * - a container carrying Traefik router labels is routed by the one running
- *   Traefik container on the same Docker host that shares a Docker network
- *   with it, at the hostnames its rules name;
+ *   network, so everything it sends leaves through the other one,
+ * - a container carrying Traefik router labels or Caddy Docker Proxy labels is
+ *   routed by the one running proxy container on the same Docker host that
+ *   shares a Docker network with it, at the hostnames its labels name,
  * - a machine's default route names the address its outbound traffic goes
  *   to, and its resolver list names where it asks for names.
  *
@@ -69,6 +69,9 @@ const collator = new Intl.Collator(undefined, { numeric: true, sensitivity: 'bas
 
 const CONTAINER_MODE = /^container:([0-9a-f]{12,64})$/i;
 const ROUTER_RULE = /^traefik\.(?:http|tcp)\.routers\.[^.]+\.rule$/i;
+const CADDY_ADDRESS_LABEL = /^caddy(?:_\d+)?$/i;
+const VALID_HOSTNAME =
+  /^[a-z0-9](?:[a-z0-9-]{0,61}[a-z0-9])?(?:\.[a-z0-9](?:[a-z0-9-]{0,61}[a-z0-9])?)+$/;
 // `Host(...)` and `HostSNI(...)`, but not `HostRegexp(...)`: a pattern is not
 // a hostname anyone can read off the map.
 const HOST_CALL = /\bHost(?:SNI)?\s*\(([^)]*)\)/gi;
@@ -96,12 +99,20 @@ const attachedNetworks = (container: Resource): string[] =>
 const isTraefik = (container: Resource): boolean =>
   imageRepository(container.docker?.image) === 'traefik';
 
+// Caddy or lucaslorentz/caddy-docker-proxy, by the image repository name.
+const isCaddy = (container: Resource): boolean => {
+  const repo = imageRepository(container.docker?.image);
+  return repo === 'caddy' || repo === 'caddy-docker-proxy';
+};
+
 /** What is written for a route: its first hostname, and how many more it has. */
 export const mapRouteLabel = (hosts: readonly string[]): string =>
   hosts.length === 0 ? '' : hosts.length === 1 ? hosts[0] : `${hosts[0]} +${hosts.length - 1}`;
 
-const isRunning = (resource: Resource): boolean =>
-  (resource.docker?.containerState ?? resource.status ?? '').toLowerCase() === 'running';
+const isRunning = (resource: Resource): boolean => {
+  const state = (resource.docker?.containerState ?? resource.status ?? '').toLowerCase();
+  return state === 'running' || state === 'online';
+};
 
 // Containers on one Docker host share a daemon, which is the only scope a
 // container ID or a proxy's label discovery reaches.
@@ -129,6 +140,36 @@ export const traefikRouteHosts = (
     }
   }
   return { routed, hosts };
+};
+
+/**
+ * The hostnames a container's Caddy Docker Proxy labels name, in label order.
+ * Parses comma or whitespace separated site addresses on `caddy` / `caddy_N`
+ * labels, ignoring wildcards, catch-all ports, paths, and bare IP addresses.
+ */
+export const caddyRouteHosts = (
+  labels: Record<string, string> | undefined,
+): { routed: boolean; hosts: string[] } => {
+  if (!labels) return { routed: false, hosts: [] };
+  const hosts: string[] = [];
+  for (const key of Object.keys(labels).sort()) {
+    if (!CADDY_ADDRESS_LABEL.test(key)) continue;
+    for (const raw of labels[key].split(/[\s,]+/)) {
+      const stripped = raw.trim().replace(/^https?:\/\//i, '');
+      if (
+        !stripped ||
+        stripped.includes('*') ||
+        stripped.includes('/') ||
+        stripped.startsWith(':')
+      ) {
+        continue;
+      }
+      const withoutPort = stripped.replace(/:\d+$/, '').toLowerCase();
+      if (!VALID_HOSTNAME.test(withoutPort) || !/[a-z]/.test(withoutPort)) continue;
+      if (!hosts.includes(withoutPort)) hosts.push(withoutPort);
+    }
+  }
+  return { routed: hosts.length > 0, hosts };
 };
 
 const groupByAddress = (
@@ -190,17 +231,38 @@ export function resolveMapConnections(resources: readonly Resource[]): MapConnec
       return networksOf(target).some((name) => reachable.has(name));
     };
 
-    const proxies = siblings.filter((container) => isRunning(container) && isTraefik(container));
+    const routePairs = new Set<string>();
+    const addRoute = (fromId: string, toId: string, hosts: string[]) => {
+      const key = `${fromId}>${toId}`;
+      if (routePairs.has(key)) return;
+      routePairs.add(key);
+      links.push({ kind: 'route', fromId, toId, hosts });
+    };
+
+    const traefikProxies = siblings.filter(
+      (container) => isRunning(container) && isTraefik(container),
+    );
+    const caddyProxies = siblings.filter((container) => isRunning(container) && isCaddy(container));
     for (const container of siblings) {
-      const { routed, hosts } = traefikRouteHosts(container.docker?.labels);
-      if (!routed) continue;
-      // The labels are written for a Traefik that can reach the container.
-      // With none that can, or several, they do not say which one routes.
-      const able = proxies.filter(
-        (proxy) => proxy.id !== container.id && canReach(proxy, container),
-      );
-      if (able.length === 1) {
-        links.push({ kind: 'route', fromId: able[0].id, toId: container.id, hosts });
+      const traefik = traefikRouteHosts(container.docker?.labels);
+      if (traefik.routed) {
+        // The labels are written for a Traefik that can reach the container.
+        // With none that can, or several, they do not say which one routes.
+        const able = traefikProxies.filter(
+          (proxy) => proxy.id !== container.id && canReach(proxy, container),
+        );
+        if (able.length === 1) {
+          addRoute(able[0].id, container.id, traefik.hosts);
+        }
+      }
+      const caddy = caddyRouteHosts(container.docker?.labels);
+      if (caddy.routed) {
+        const able = caddyProxies.filter(
+          (proxy) => proxy.id !== container.id && canReach(proxy, container),
+        );
+        if (able.length === 1) {
+          addRoute(able[0].id, container.id, caddy.hosts);
+        }
       }
     }
   }
