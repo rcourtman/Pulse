@@ -83,7 +83,14 @@ func TestRBACUserActionPathsKeepSupportedRequests(t *testing.T) {
 	// as the canonical /roles, /permissions and bare-identity DELETE contracts.
 	for _, suffix := range []string{"", "/"} {
 		t.Run("suffix="+suffix, func(t *testing.T) {
-			h, manager, _ := rbacJSONFixture(t)
+			h, manager, dir := rbacJSONFixture(t)
+			resetSessionTracking()
+			resetPersistentAuthStoresForTests()
+			t.Cleanup(func() {
+				resetPersistentAuthStoresForTests()
+				resetSessionTracking()
+			})
+			InitPersistentAuthStores(dir)
 			serve := func(method, path, body string) *httptest.ResponseRecorder {
 				request := httptest.NewRequest(method, "/api/admin/users/"+path+suffix, strings.NewReader(body))
 				request = request.WithContext(auth.WithUser(request.Context(), "maintainer"))
