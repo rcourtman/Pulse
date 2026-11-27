@@ -3,6 +3,7 @@ package monitoring
 import (
 	"container/heap"
 	"context"
+	"maps"
 	"sync"
 	"time"
 )
@@ -76,10 +77,11 @@ func (h *taskHeap) Pop() interface{} {
 // TaskQueue is a thread-safe min-heap over scheduled tasks. The index also
 // holds claimed tasks, which are not part of the heap or queue snapshots.
 type TaskQueue struct {
-	mu          sync.Mutex
-	entries     map[string]*scheduledTaskEntry
-	heap        taskHeap
-	earlierHead chan struct{} // lazily shared by workers waiting for new eligibility
+	mu           sync.Mutex
+	entries      map[string]*scheduledTaskEntry
+	heap         taskHeap
+	queuedByType map[string]int // heap membership only; claimed entries do not count
+	earlierHead  chan struct{}  // lazily shared by workers waiting for new eligibility
 
 	// Serialize availability settings refreshes from catalog read through
 	// reconciliation. Planners and workers never need the refresh mutex.
@@ -90,8 +92,9 @@ type TaskQueue struct {
 // NewTaskQueue constructs an empty queue.
 func NewTaskQueue() *TaskQueue {
 	tq := &TaskQueue{
-		entries: make(map[string]*scheduledTaskEntry),
-		heap:    make(taskHeap, 0),
+		entries:      make(map[string]*scheduledTaskEntry),
+		heap:         make(taskHeap, 0),
+		queuedByType: make(map[string]int),
 	}
 	heap.Init(&tq.heap)
 	return tq
@@ -149,7 +152,7 @@ func (q *TaskQueue) upsertLocked(task ScheduledTask, fromPlanner bool) {
 	}
 
 	entry := &scheduledTaskEntry{task: task, keepSchedule: !fromPlanner}
-	heap.Push(&q.heap, entry)
+	q.pushLocked(entry)
 	q.entries[key] = entry
 	q.wakeEarlierHeadLocked(previous, hadHead)
 }
@@ -211,7 +214,7 @@ func (q *TaskQueue) completeClaim(task, next ScheduledTask, reschedule pollResch
 	}
 	entry.followup = followWorkerSchedule
 	previous, hadHead := q.headTimeLocked()
-	heap.Push(&q.heap, entry)
+	q.pushLocked(entry)
 	q.wakeEarlierHeadLocked(previous, hadHead)
 }
 
@@ -245,7 +248,22 @@ func (q *TaskQueue) removeLocked(key string, entry *scheduledTaskEntry) {
 		return
 	}
 	heap.Remove(&q.heap, entry.index)
+	q.uncountLocked(entry.task.InstanceType)
 	delete(q.entries, key)
+}
+
+func (q *TaskQueue) pushLocked(entry *scheduledTaskEntry) {
+	heap.Push(&q.heap, entry)
+	q.queuedByType[string(entry.task.InstanceType)]++
+}
+
+func (q *TaskQueue) uncountLocked(kind InstanceType) {
+	key := string(kind)
+	if remaining := q.queuedByType[key] - 1; remaining > 0 {
+		q.queuedByType[key] = remaining
+	} else {
+		delete(q.queuedByType, key)
+	}
 }
 
 func (q *TaskQueue) headTimeLocked() (time.Time, bool) {
@@ -280,6 +298,7 @@ func (q *TaskQueue) WaitNext(ctx context.Context) (ScheduledTask, bool) {
 		next, hasHead := q.headTimeLocked()
 		if hasHead && time.Until(next) <= 0 {
 			task := heap.Pop(&q.heap).(*scheduledTaskEntry).task
+			q.uncountLocked(task.InstanceType)
 			q.mu.Unlock()
 			return task, true
 		}
@@ -342,28 +361,42 @@ func (q *TaskQueue) Snapshot() QueueSnapshot {
 	q.mu.Lock()
 	defer q.mu.Unlock()
 
-	snapshot := emptyQueueSnapshot()
-	snapshot.Depth = len(q.heap)
-
 	now := time.Now()
-	var oldestOverdue time.Duration
-	for _, entry := range q.heap {
-		typeStr := string(entry.task.InstanceType)
-		snapshot.PerType[typeStr]++
-
-		lateness := now.Sub(entry.task.NextRun)
-		if lateness >= -12*time.Second {
-			snapshot.DueWithinSeconds++
-		}
-		// A zero deadline means immediately eligible, not a measured wait
-		// since year one. Claimed work is not in the heap at all.
-		if !entry.task.NextRun.IsZero() {
-			oldestOverdue = max(oldestOverdue, lateness)
-		}
+	snapshot := QueueSnapshot{
+		Depth:            len(q.heap),
+		DueWithinSeconds: q.heap.countDue(0, now.Add(12*time.Second)),
+		PerType:          maps.Clone(q.queuedByType),
 	}
-	snapshot.OldestOverdueSeconds = oldestOverdue.Seconds()
+	if oldest := q.heap.oldestTimestamped(0); !oldest.IsZero() {
+		snapshot.OldestOverdueSeconds = max(0, now.Sub(oldest)).Seconds()
+	}
 
 	return snapshot
+}
+
+// A subtree rooted after the cutoff contains no due tasks. Follow only the
+// eligible part of the time-ordered heap while holding the worker lock.
+func (h taskHeap) countDue(i int, cutoff time.Time) int {
+	if i >= len(h) || h[i].task.NextRun.After(cutoff) {
+		return 0
+	}
+	return 1 + h.countDue(2*i+1, cutoff) + h.countDue(2*i+2, cutoff)
+}
+
+func (h taskHeap) oldestTimestamped(i int) time.Time {
+	if i >= len(h) {
+		return time.Time{}
+	}
+	if next := h[i].task.NextRun; !next.IsZero() {
+		return next // The root is the earliest task in this subtree.
+	}
+	// A zero deadline means immediately eligible, not a wait since year one.
+	left := h.oldestTimestamped(2*i + 1)
+	right := h.oldestTimestamped(2*i + 2)
+	if left.IsZero() || (!right.IsZero() && right.Before(left)) {
+		return right
+	}
+	return left
 }
 
 // DeadLetterTask represents a task in the dead-letter queue.
