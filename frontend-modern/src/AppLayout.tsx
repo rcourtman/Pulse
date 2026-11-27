@@ -216,13 +216,13 @@ export function ConnectionStatusBadge(props: {
   const showLabelByDefault = () => status().tone !== 'healthy';
   const containerClass = () => {
     if (status().tone === 'healthy') {
-      return 'connected bg-green-200 dark:bg-green-700 text-green-700 dark:text-green-300 min-w-6 h-6 group-hover:px-3';
+      return 'connected bg-green-200 dark:bg-green-900 text-green-900 dark:text-green-100 min-w-6 h-6 group-hover:px-3';
     }
     if (status().tone === 'warning') {
-      return 'degraded bg-amber-200 dark:bg-amber-700 text-amber-800 dark:text-amber-200 py-1 px-2';
+      return 'degraded bg-amber-200 dark:bg-amber-900 text-amber-900 dark:text-amber-100 py-1 px-2';
     }
     if (status().kind === 'reconnecting') {
-      return 'reconnecting bg-yellow-200 dark:bg-yellow-700 text-yellow-700 dark:text-yellow-300 py-1 px-2';
+      return 'reconnecting bg-yellow-200 dark:bg-yellow-900 text-yellow-900 dark:text-yellow-100 py-1 px-2';
     }
     return 'disconnected bg-surface-hover text-base-content py-1 px-2';
   };

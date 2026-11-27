@@ -463,4 +463,148 @@ describe('default gateways and resolvers', () => {
       ]),
     ).toEqual({ links: [], gateways: [], resolvers: [] });
   });
+
+  it('links shared Docker volumes, shared bind mounts, mount-to-pool paths, Compose data backends, and canonical relationships', () => {
+    const host: Resource = {
+      id: 'agent-tower',
+      type: 'agent',
+      name: 'Tower',
+      displayName: 'Tower',
+      status: 'online',
+      platformType: 'generic',
+      platformId: 'tower',
+      sourceType: 'agent',
+      lastSeen: 1,
+      relationships: [
+        {
+          sourceId: 'agent-tower',
+          targetId: 'agent-db',
+          type: 'communicates_with',
+          confidence: 0.9,
+          active: true,
+          discoverer: 'host_socket_table',
+          observedAt: '2026-01-01T00:00:00Z',
+          lastSeenAt: '2026-01-01T00:00:00Z',
+          metadata: { port: 5432, ports: [5432], protocol: 'tcp' },
+        },
+        {
+          sourceId: 'agent-tower',
+          targetId: 'agent-db',
+          type: 'depends_on',
+          confidence: 1,
+          active: false,
+          discoverer: 'manual',
+          observedAt: '2026-01-01T00:00:00Z',
+          lastSeenAt: '2026-01-01T00:00:00Z',
+        },
+      ],
+    };
+    const dbHost: Resource = {
+      id: 'agent-db',
+      type: 'agent',
+      name: 'db-node',
+      displayName: 'db-node',
+      status: 'online',
+      platformType: 'generic',
+      platformId: 'db',
+      sourceType: 'agent',
+      lastSeen: 1,
+    };
+    const cachePool: Resource = {
+      id: 'pool-cache',
+      type: 'pool',
+      name: 'cachepool',
+      displayName: 'cachepool',
+      parentId: 'agent-tower',
+      status: 'online',
+      platformType: 'generic',
+      platformId: 'tower',
+      sourceType: 'agent',
+      lastSeen: 1,
+      storage: { path: '/mnt/cachepool' },
+    };
+    const appA: Resource = {
+      ...container('immich-server', {
+        image: 'ghcr.io/immich-app/immich-server:latest',
+        composeProject: 'immich',
+        mounts: [
+          {
+            type: 'volume',
+            source: '/var/lib/docker/volumes/immich_uploads/_data',
+            destination: '/upload',
+          },
+          { type: 'bind', source: '/mnt/cachepool/immich/library', destination: '/library' },
+          { type: 'bind', source: '/etc/localtime', destination: '/etc/localtime' },
+        ],
+      }),
+      parentId: 'agent-tower',
+    };
+    const appB: Resource = {
+      ...container('immich-worker', {
+        image: 'ghcr.io/immich-app/immich-machine-learning:latest',
+        composeProject: 'immich',
+        mounts: [
+          {
+            type: 'volume',
+            source: '/var/lib/docker/volumes/immich_uploads/_data',
+            destination: '/upload',
+          },
+          { type: 'bind', source: '/mnt/cachepool/immich/library', destination: '/library' },
+          { type: 'bind', source: '/etc/localtime', destination: '/etc/localtime' },
+        ],
+      }),
+      parentId: 'agent-tower',
+    };
+    const pg: Resource = {
+      ...container('immich-postgres', {
+        image: 'tensorchord/pgvecto-rs:pg16',
+        composeProject: 'immich',
+        networks: [{ name: 'immich_net' }],
+      }),
+      parentId: 'agent-tower',
+    };
+    const redis: Resource = {
+      ...container('immich-redis', {
+        image: 'redis:7-alpine',
+        composeProject: 'immich',
+        networks: [{ name: 'immich_net' }],
+      }),
+      parentId: 'agent-tower',
+    };
+
+    const { links } = resolveMapConnections([host, dbHost, cachePool, appA, appB, pg, redis]);
+    expect(links).toContainEqual({
+      kind: 'volume',
+      fromId: appA.id,
+      toId: appB.id,
+      hosts: [],
+      detail: 'immich_uploads',
+      sensitiveDetail: true,
+    });
+    expect(links).toContainEqual({
+      kind: 'mount',
+      fromId: appA.id,
+      toId: appB.id,
+      hosts: [],
+    });
+    expect(links).toContainEqual({
+      kind: 'storage',
+      fromId: appA.id,
+      toId: cachePool.id,
+      hosts: [],
+    });
+    expect(links).toContainEqual({
+      kind: 'stack',
+      fromId: appA.id,
+      toId: redis.id,
+      hosts: [],
+    });
+    expect(links).toContainEqual({
+      kind: 'peer',
+      fromId: 'agent-tower',
+      toId: 'agent-db',
+      hosts: [],
+      detail: ':5432',
+    });
+  });
 });

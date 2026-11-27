@@ -10244,3 +10244,10 @@ recovery persistence contracts.
 adds `RelCommunicatesWith` (`communicates_with`) projected strictly between
 monitored resources. Storage, backup, and recovery persistence formats and
 read/write paths are unchanged.
+
+### Preserve canonical resource relationships during REST hydration (27 November 2026)
+
+`frontend-modern/src/hooks/useUnifiedResources.ts` carries `v2.relationships`
+through `convertAPIResource` so the Infrastructure Map can render canonical
+relationships (including `communicates_with` and `stores_on`). Storage,
+backup, and recovery persistence paths are unchanged.

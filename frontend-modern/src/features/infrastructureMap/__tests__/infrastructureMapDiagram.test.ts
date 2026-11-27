@@ -3584,5 +3584,53 @@ describe('layoutServiceDiagram', () => {
       expect(staticSvg).not.toContain('pulse-map-spike');
       expect(staticSvg).not.toContain('animation-duration:');
     });
+
+    it('renders host GPU badges and workload hardware accelerator pills on cards and hits', () => {
+      const model = buildInfrastructureMapModel([
+        resource({
+          id: 'host-gpu',
+          type: 'agent',
+          name: 'gpu-box',
+          platformType: 'generic',
+          agent: {
+            sensors: {
+              temperatureCelsius: { cpu: 49 },
+              gpu: [
+                {
+                  id: 'gpu0',
+                  name: 'NVIDIA GeForce RTX 4090',
+                  utilizationPercent: 55,
+                  temperatureCelsius: 64,
+                },
+              ],
+            },
+          },
+        }),
+        resource({
+          id: 'c-frigate',
+          type: 'app-container',
+          name: 'frigate',
+          parentId: 'host-gpu',
+          platformType: 'docker',
+          docker: {
+            image: 'ghcr.io/blakeblackshear/frigate:stable',
+            accelerators: ['TPU', 'iGPU'],
+          },
+        }),
+      ]);
+      const diagram = buildServiceDiagram(model);
+      const scene = layoutHostDiagram(diagram, {
+        width: 1280,
+        density: 'names',
+        liveTraffic: false,
+      });
+      const texts = ofKind(scene, 'text').map((node) => node.text);
+      expect(texts).toContain('GPU 55%');
+      expect(texts).toContain('iGPU +1');
+      const hostHit = ofKind(scene, 'hit').find((node) => node.hit.id === 'host-gpu')?.hit;
+      expect(hostHit?.gpuSummary).toBe('RTX 4090');
+      const frigateHit = ofKind(scene, 'hit').find((node) => node.hit.id === 'c-frigate')?.hit;
+      expect(frigateHit?.accelerators).toEqual(['iGPU', 'TPU']);
+    });
   });
 });

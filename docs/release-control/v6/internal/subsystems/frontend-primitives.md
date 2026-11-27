@@ -11888,3 +11888,12 @@ sets `pointer-events: none` on `.pulse-map-network-ring` and
 `InfrastructureMapSurface.test.tsx`, `InfrastructureMapScale.test.tsx`,
 `tests/integration/tests/71-infrastructure-map.spec.ts`, and Playwright browser
 verification.
+
+
+### Infrastructure Map GPU badges, Docker mounts, and passive peer arcs (27 November 2026)
+
+`frontend-modern/src/features/infrastructureMap/` renders host GPU pills,
+workload hardware accelerator pills and drawer badges, and hover arcs for
+Docker shared volumes, shared non-system bind mounts, bind-mount-to-pool
+links, Compose stack data backends, and canonical `resource.relationships`
+using existing semantic palette tokens and `MetadataBadge` primitives.

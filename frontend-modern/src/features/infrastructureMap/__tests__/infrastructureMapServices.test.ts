@@ -22,6 +22,7 @@ import {
   findDiagramGroup,
   formatMapLatency,
   formatMapLinkSpeed,
+  matchesDiagramTileQuery,
   type DiagramGroup,
   type DiagramTile,
 } from '../infrastructureMapServices';
@@ -2882,6 +2883,129 @@ describe('buildServiceDiagram', () => {
       expect(hiddenFrame.clusterPools?.find((tile) => tile.id === 'cluster-pool')).toMatchObject({
         zfsState: 'FAULTED',
         zfsErrorCount: 4,
+      });
+    });
+
+    it('wires GPU/accelerator metadata and volume, mount-to-pool, stack, and passive peer links into DiagramTile and DiagramLink', () => {
+      const model = buildInfrastructureMapModel([
+        resource({
+          id: 'host-app',
+          type: 'agent',
+          name: 'app-box',
+          platformType: 'generic',
+          agent: {
+            sensors: {
+              gpu: [
+                {
+                  id: 'gpu0',
+                  name: 'NVIDIA GeForce RTX 3080',
+                  utilizationPercent: 48,
+                  temperatureCelsius: 62,
+                },
+              ],
+            },
+          },
+          relationships: [
+            {
+              sourceId: 'host-app',
+              targetId: 'host-db',
+              type: 'communicates_with',
+              confidence: 0.9,
+              active: true,
+              discoverer: 'host_socket_table',
+              observedAt: '2026-01-01T00:00:00Z',
+              lastSeenAt: '2026-01-01T00:00:00Z',
+              metadata: { port: 5432, ports: [5432], protocol: 'tcp' },
+            },
+          ],
+        }),
+        resource({
+          id: 'host-db',
+          type: 'agent',
+          name: 'db-box',
+          platformType: 'generic',
+        }),
+        resource({
+          id: 'pool-fast',
+          type: 'pool',
+          name: 'fastpool',
+          parentId: 'host-app',
+          platformType: 'generic',
+          storage: { path: '/mnt/fastpool' },
+          disk: { current: 40, used: 400e9, total: 1000e9 },
+        }),
+        resource({
+          id: 'c-plex',
+          type: 'app-container',
+          name: 'plex',
+          parentId: 'host-app',
+          platformType: 'docker',
+          docker: {
+            image: 'lscr.io/linuxserver/plex:latest',
+            composeProject: 'media',
+            accelerators: ['iGPU'],
+            mounts: [
+              {
+                type: 'volume',
+                source: '/var/lib/docker/volumes/media_cache/_data',
+                destination: '/cache',
+              },
+              { type: 'bind', source: '/mnt/fastpool/media', destination: '/media' },
+            ],
+          },
+        }),
+        resource({
+          id: 'c-redis',
+          type: 'app-container',
+          name: 'redis',
+          parentId: 'host-app',
+          platformType: 'docker',
+          docker: {
+            image: 'redis:7-alpine',
+            composeProject: 'media',
+            mounts: [
+              {
+                type: 'volume',
+                source: '/var/lib/docker/volumes/media_cache/_data',
+                destination: '/cache',
+              },
+            ],
+          },
+        }),
+      ]);
+
+      const diagram = buildServiceDiagram(model);
+      const appFrame = diagram.hostFrames.find((frame) => frame.id === 'host-app')!;
+      expect(appFrame.host.gpuSummary).toBe('RTX 3080');
+      expect(appFrame.host.gpuUtilPercent).toBe(48);
+      const plexTile = appFrame.allTiles.find((tile) => tile.id === 'c-plex')!;
+      expect(plexTile.accelerators).toEqual(['iGPU']);
+      expect(matchesDiagramTileQuery(plexTile, 'igpu')).toBe(true);
+      expect(matchesDiagramTileQuery(appFrame.host, 'rtx')).toBe(true);
+
+      expect(diagram.links).toContainEqual({
+        fromId: 'host-app',
+        toId: 'host-db',
+        label: 'talks :5432',
+      });
+      expect(diagram.links).toContainEqual({
+        fromId: 'c-plex',
+        toId: 'pool-fast',
+        label: 'storage',
+      });
+      expect(diagram.links).toContainEqual({
+        fromId: 'c-plex',
+        toId: 'c-redis',
+        label: 'uses redis',
+      });
+
+      // Anonymized diagram strips estate-specific volume name while keeping port-based peer link.
+      const anonDiagram = buildServiceDiagram(anonymizeInfrastructureMapModel(model));
+      expect(JSON.stringify(anonDiagram)).not.toContain('media_cache');
+      expect(anonDiagram.links).toContainEqual({
+        fromId: 'host-app',
+        toId: 'host-db',
+        label: 'talks :5432',
       });
     });
   });

@@ -402,6 +402,10 @@ const buildHit = (
     ...(tile.probeSummary ? { probeSummary: tile.probeSummary } : {}),
     ...(tile.certWarning ? { certWarning: tile.certWarning } : {}),
     ...(tile.temperatureC !== undefined ? { temperatureC: tile.temperatureC } : {}),
+    ...(tile.gpuSummary ? { gpuSummary: tile.gpuSummary } : {}),
+    ...(tile.gpuUtilPercent !== undefined ? { gpuUtilPercent: tile.gpuUtilPercent } : {}),
+    ...(tile.gpuTempC !== undefined ? { gpuTempC: tile.gpuTempC } : {}),
+    ...(tile.accelerators?.length ? { accelerators: tile.accelerators } : {}),
     ...(tile.diskSummary ? { diskSummary: tile.diskSummary } : {}),
     ...(tile.diskMaxTempC !== undefined ? { diskMaxTempC: tile.diskMaxTempC } : {}),
     ...(tile.unhealthyDiskCount !== undefined
@@ -559,15 +563,53 @@ const drawHorizontalTile = (
     out.nodes.push({ kind: 'dot', x: dotX, y: dotY, r: 3.5, health: tile.health });
   }
 
-  const topBadge = dashed ? undefined : rightTopBadge(tile, inStack);
+  const rawTopBadge = dashed ? undefined : rightTopBadge(tile, inStack);
   const bottomBadge = dashed ? undefined : extractLastOctet(tile.address);
+  const accelText =
+    !dashed && tile.accelerators?.length
+      ? tile.accelerators.length === 1
+        ? tile.accelerators[0]
+        : `${tile.accelerators[0]} +${tile.accelerators.length - 1}`
+      : undefined;
+  const useAccelTopPill = Boolean(accelText && (!rawTopBadge || rawTopBadge === 'App'));
+  const useAccelBottomPill = Boolean(accelText && !useAccelTopPill && !bottomBadge);
+  const topBadge = useAccelTopPill ? undefined : rawTopBadge;
+  const accelPillW =
+    accelText && (useAccelTopPill || useAccelBottomPill) ? textWidth(accelText, 9, 600) + 10 : 0;
   const rightX = x + w - 8;
   const rightColW = Math.max(
     topBadge ? textWidth(topBadge, 10, 500) : 0,
     bottomBadge ? textWidth(bottomBadge, 10, 400) : 0,
+    accelPillW,
   );
 
-  if (topBadge) {
+  if (useAccelTopPill && accelText) {
+    const px = rightX - accelPillW;
+    const py = y + 7;
+    out.nodes.push({
+      kind: 'rect',
+      x: px,
+      y: py,
+      w: accelPillW,
+      h: 15,
+      r: 3.5,
+      fill: 'accent',
+      opacity: off ? 0.08 : 0.14,
+      stroke: 'accent',
+      ...(off ? { dim: true } : {}),
+    });
+    out.nodes.push({
+      kind: 'text',
+      x: px + accelPillW / 2,
+      y: py + 10.5,
+      text: accelText,
+      size: 9,
+      weight: 600,
+      fill: 'accent',
+      anchor: 'middle',
+      ...(off ? { dim: true } : {}),
+    });
+  } else if (topBadge) {
     out.nodes.push({
       kind: 'text',
       x: rightX,
@@ -580,7 +622,33 @@ const drawHorizontalTile = (
       ...(off ? { dim: true } : {}),
     });
   }
-  if (bottomBadge) {
+  if (useAccelBottomPill && accelText) {
+    const px = rightX - accelPillW;
+    const py = y + 23;
+    out.nodes.push({
+      kind: 'rect',
+      x: px,
+      y: py,
+      w: accelPillW,
+      h: 15,
+      r: 3.5,
+      fill: 'accent',
+      opacity: off ? 0.08 : 0.14,
+      stroke: 'accent',
+      ...(off ? { dim: true } : {}),
+    });
+    out.nodes.push({
+      kind: 'text',
+      x: px + accelPillW / 2,
+      y: py + 10.5,
+      text: accelText,
+      size: 9,
+      weight: 600,
+      fill: 'accent',
+      anchor: 'middle',
+      ...(off ? { dim: true } : {}),
+    });
+  } else if (bottomBadge) {
     out.nodes.push({
       kind: 'text',
       x: rightX,
@@ -641,6 +709,14 @@ const drawHorizontalTile = (
     const withPort = `${subText} · ${tile.detail}`;
     if (textWidth(withPort, 10, subAccent ? 500 : 400) <= textMaxW) {
       subText = withPort;
+    }
+  }
+  if (accelText && !useAccelTopPill && !useAccelBottomPill) {
+    const candidate = subText ? `${subText} · ${accelText}` : accelText;
+    if (textWidth(candidate, 10, subAccent ? 500 : 400) <= textMaxW) {
+      subText = candidate;
+    } else if (!subText) {
+      subText = fitMapText(accelText, textMaxW, 10, 500);
     }
   }
 
@@ -1631,10 +1707,24 @@ const drawHostFrame = (
     frame.host.linkDownCount !== undefined && frame.host.linkDownCount > 0
       ? `${frame.host.linkDownCount} DOWN`
       : undefined;
+  const gpuLabel = frame.host.gpuSummary
+    ? frame.host.gpuUtilPercent !== undefined && frame.host.gpuUtilPercent > 0
+      ? `GPU ${Math.round(frame.host.gpuUtilPercent)}%`
+      : frame.host.gpuTempC !== undefined
+        ? `GPU ${Math.round(frame.host.gpuTempC)}°C`
+        : 'GPU'
+    : undefined;
+  const tempReserveW =
+    frame.host.temperatureC !== undefined && Number.isFinite(frame.host.temperatureC)
+      ? textWidth(`${Math.round(frame.host.temperatureC)}°C`, 10, 500) +
+        (hostTempTone(Math.round(frame.host.temperatureC)) !== 'muted' ? 16 : 6)
+      : 0;
   const priorityRightW =
     (liveRate ? textWidth(liveRate, 11, 600) + 6 : 0) +
     (busyText ? textWidth(busyText, 9.5, 600) + 16 : 0) +
-    (downText ? textWidth(downText, 9.5, 600) + 16 : 0);
+    (downText ? textWidth(downText, 9.5, 600) + 16 : 0) +
+    tempReserveW +
+    (gpuLabel ? textWidth(gpuLabel, 9.5, 600) + 16 : 0);
 
   let hitW = w;
   if (frame.totalCount > 0) {
@@ -1812,6 +1902,37 @@ const drawHostFrame = (
         });
         rightCursor -= tempW + 6;
       }
+    }
+  }
+
+  // 6. Inline host GPU pill when host GPU sensors are reported
+  if (gpuLabel) {
+    const gpuW = textWidth(gpuLabel, 9.5, 600) + 10;
+    const gpuH = 16;
+    if (rightCursor - gpuW > leftStart + minNameReserve) {
+      const gx = rightCursor - gpuW;
+      out.nodes.push({
+        kind: 'rect',
+        x: gx,
+        y: row1PillY,
+        w: gpuW,
+        h: gpuH,
+        r: 4,
+        fill: 'accent',
+        opacity: 0.14,
+        stroke: 'accent',
+      });
+      out.nodes.push({
+        kind: 'text',
+        x: gx + gpuW / 2,
+        y: row1PillY + 11.5,
+        text: gpuLabel,
+        size: 9.5,
+        weight: 600,
+        fill: 'accent',
+        anchor: 'middle',
+      });
+      rightCursor = gx - 6;
     }
   }
 

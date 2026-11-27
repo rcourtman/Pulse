@@ -860,6 +860,7 @@ export const mergeCanonicalResource = (incoming: Resource, existing?: Resource):
     ),
     policy: incoming.policy ?? existingCanonical.policy,
     aiSafeSummary: incoming.aiSafeSummary ?? existingCanonical.aiSafeSummary,
+    relationships: incoming.relationships ?? existingCanonical.relationships,
     recentChanges: incoming.recentChanges ?? existingCanonical.recentChanges,
     facetCounts: incoming.facetCounts ?? existingCanonical.facetCounts,
     diskIO: incoming.diskIO ?? existingCanonical.diskIO,

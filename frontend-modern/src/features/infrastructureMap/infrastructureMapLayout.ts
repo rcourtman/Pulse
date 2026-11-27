@@ -66,6 +66,10 @@ export interface MapHit {
   probeSummary?: string;
   certWarning?: string;
   temperatureC?: number;
+  gpuSummary?: string;
+  gpuUtilPercent?: number;
+  gpuTempC?: number;
+  accelerators?: string[];
   diskSummary?: string;
   diskMaxTempC?: number;
   unhealthyDiskCount?: number;

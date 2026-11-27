@@ -1719,4 +1719,64 @@ describe('live network telemetry extraction', () => {
     ]);
     expect(hostNamed(model.blocks, 'mac-mini.local').versionLabel).toBe('macOS');
   });
+
+  it('extracts host GPU telemetry and workload hardware accelerators and anonymizes GPU model names', () => {
+    const model = buildInfrastructureMapModel([
+      resource({
+        id: 'gpu-host',
+        type: 'agent',
+        name: 'ai-box',
+        platformType: 'generic',
+        agent: {
+          sensors: {
+            gpu: [
+              {
+                id: 'gpu0',
+                name: 'NVIDIA GeForce RTX 4090',
+                utilizationPercent: 64,
+                temperatureCelsius: 68.4,
+              },
+            ],
+          },
+        },
+      }),
+      resource({
+        id: 'c-frigate',
+        type: 'app-container',
+        name: 'frigate',
+        parentId: 'gpu-host',
+        platformType: 'docker',
+        docker: {
+          accelerators: ['TPU'],
+          mounts: [
+            { type: 'bind', source: '/dev/dri/renderD128', destination: '/dev/dri/renderD128' },
+          ],
+        },
+      }),
+      resource({
+        id: 'vm-ollama',
+        type: 'vm',
+        name: 'ollama-vm',
+        parentId: 'gpu-host',
+        platformType: 'proxmox-pve',
+        proxmox: { vmid: 210, accelerators: ['GPU'] },
+      }),
+    ]);
+
+    const host = hostNamed(model.blocks, 'ai-box');
+    expect(host.gpuSummary).toBe('RTX 4090');
+    expect(host.gpuUtilPercent).toBe(64);
+    expect(host.gpuTempC).toBe(68);
+    const items = host.sections.flatMap((section) => section.items);
+    expect(items.find((item) => item.id === 'c-frigate')?.accelerators).toEqual(['iGPU', 'TPU']);
+    expect(items.find((item) => item.id === 'vm-ollama')?.accelerators).toEqual(['GPU']);
+
+    const anon = anonymizeInfrastructureMapModel(model);
+    const anonHost =
+      anon.blocks[0].kind === 'host' ? anon.blocks[0].host : anon.blocks[0].group.hosts[0];
+    expect(anonHost.gpuSummary).toBe('GPU');
+    expect(anonHost.gpuUtilPercent).toBe(64);
+    expect(anonHost.gpuTempC).toBe(68);
+    expect(JSON.stringify(anon)).not.toContain('RTX 4090');
+  });
 });
