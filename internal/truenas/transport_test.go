@@ -1554,6 +1554,71 @@ func TestJSONRPCConfiguredTimeoutDoesNotExtendCallerDeadline(t *testing.T) {
 	}
 }
 
+func TestClientCloseCancelsStalledRPC(t *testing.T) {
+	for _, method := range []string{"auth.login_ex", "app.start"} {
+		t.Run(method, func(t *testing.T) {
+			entered := make(chan struct{}, 1)
+			release := make(chan struct{})
+			var actions atomic.Int32
+			fixture := newProtocolFixture(t, func(_ int, request trueNASRPCRequest) protocolFixtureReply {
+				if request.Method == "app.start" {
+					actions.Add(1)
+				}
+				if request.Method == method {
+					entered <- struct{}{}
+					<-release
+				}
+				return protocolFixtureReply{result: map[string]any{"response_type": "SUCCESS"}}
+			}, nil)
+			client := protocolFixtureClient(t, fixture.server.URL, ClientConfig{
+				APIKey: "fixture-key", Username: "fixture-user", Timeout: 30 * time.Second,
+			})
+			t.Cleanup(func() { close(release) })
+
+			actionDone := make(chan error, 1)
+			go func() { actionDone <- client.StartApp(context.Background(), "fixture-app") }()
+			select {
+			case <-entered:
+			case <-time.After(3 * time.Second):
+				t.Fatal("test did not reach the selected RPC phase")
+			}
+			closeDone := make(chan struct{})
+			go func() {
+				client.Close()
+				close(closeDone)
+			}()
+			select {
+			case <-closeDone:
+			case <-time.After(3 * time.Second):
+				t.Fatal("Close waited for a reply that the appliance was still withholding")
+			}
+			select {
+			case err := <-actionDone:
+				if !errors.Is(err, context.Canceled) {
+					t.Fatalf("interrupted operation error = %v, want cancellation", err)
+				}
+				if strings.Contains(err.Error(), "outcome is unknown") != (method == "app.start") {
+					t.Fatalf("wrong action outcome for %s: %v", method, err)
+				}
+			case <-time.After(3 * time.Second):
+				t.Fatal("operation survived Close")
+			}
+
+			if _, err := client.GetSystemInfo(context.Background()); !errors.Is(err, context.Canceled) {
+				t.Fatalf("closed client accepted a new read: %v", err)
+			}
+			var wantActions int32
+			if method == "app.start" {
+				wantActions = 1
+			}
+			if client.TransportStatus().Connected || fixture.sessions.Load() != 1 ||
+				fixture.restRequests.Load() != 0 || actions.Load() != wantActions {
+				t.Fatal("closed client retained connectivity, dispatched work, or changed transport")
+			}
+		})
+	}
+}
+
 func TestJSONRPCConfiguredTimeoutDoesNotReplayAction(t *testing.T) {
 	release := make(chan struct{})
 	var actions atomic.Int32

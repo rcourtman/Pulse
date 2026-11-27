@@ -45,10 +45,19 @@ func (m *rpcSessionMutex) LockContext(ctx context.Context) error {
 func (m *rpcSessionMutex) Lock()   { _ = m.LockContext(context.Background()) }
 func (m *rpcSessionMutex) Unlock() { <-m.token }
 
+// The zero value is usable by transport fixtures as well as NewClient.
+func (c *Client) rpcLifetimeContext() context.Context {
+	c.rpcLifetimeOnce.Do(func() {
+		c.rpcLifetime, c.cancelRPC = context.WithCancel(context.Background())
+	})
+	return c.rpcLifetime
+}
+
 // rpcOperationContext applies the same configured timeout as HTTP requests to
 // a serialized RPC/negotiation operation: lock wait, inline authentication, exchange or
 // subscription, and its one permitted read retry share a single budget. A
-// shorter caller deadline is never extended. Keepalive has its own lifetime.
+// shorter caller deadline is never extended. Closing the client interrupts
+// the current owner as well as queued callers. Keepalive is session-owned.
 func (c *Client) rpcOperationContext(ctx context.Context) (context.Context, context.CancelFunc) {
 	if ctx == nil {
 		ctx = context.Background()
@@ -57,7 +66,16 @@ func (c *Client) rpcOperationContext(ctx context.Context) (context.Context, cont
 	if timeout <= 0 {
 		timeout = defaultHTTPTimeout
 	}
-	return context.WithTimeout(ctx, timeout)
+	ctx, cancel := context.WithTimeout(ctx, timeout)
+	lifetime := c.rpcLifetimeContext()
+	stop := context.AfterFunc(lifetime, cancel)
+	if lifetime.Err() != nil {
+		cancel()
+	}
+	return ctx, func() {
+		stop()
+		cancel()
+	}
 }
 
 type discardRPCSessionError struct {
@@ -231,8 +249,8 @@ func (c *Client) useLegacyREST(ctx context.Context) (bool, error) {
 }
 
 func (c *Client) ensureTransportLocked(ctx context.Context) (TransportMode, error) {
-	if c.closed {
-		return TransportUnknown, fmt.Errorf("truenas client is closed")
+	if err := ctx.Err(); err != nil {
+		return TransportUnknown, err
 	}
 	if c.mode == TransportLegacyREST {
 		return c.mode, nil

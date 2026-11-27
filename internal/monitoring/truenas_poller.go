@@ -260,8 +260,17 @@ func (p *TrueNASPoller) syncConnections() {
 		}
 	}
 
+	var retired []*truenas.Provider
 	p.mu.Lock()
-	defer p.mu.Unlock()
+	defer func() {
+		// Publish the ownership change before closing old transports. Even
+		// if teardown is still unwinding, reads can proceed and the identity
+		// fence already rejects results from the retired provider.
+		p.mu.Unlock()
+		for _, provider := range retired {
+			provider.Close()
+		}
+	}()
 
 	// Ensure providers exist for active connections.
 	for orgID, byConn := range active {
@@ -291,7 +300,7 @@ func (p *TrueNASPoller) syncConnections() {
 			}
 
 			if existingProvider != nil {
-				existingProvider.Close()
+				retired = append(retired, existingProvider)
 				delete(p.providersByOrg[orgID], connID)
 			}
 
@@ -346,7 +355,7 @@ func (p *TrueNASPoller) syncConnections() {
 				continue
 			}
 			if provider != nil {
-				provider.Close()
+				retired = append(retired, provider)
 			}
 			delete(providers, connID)
 		}

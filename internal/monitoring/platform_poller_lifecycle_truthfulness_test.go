@@ -333,17 +333,22 @@ func TestTrueNASPollerInFlightRefreshCannotResurrectRevokedOrReplacedConnection(
 		t.Run(tc.name, func(t *testing.T) {
 			entered := make(chan struct{}, 1)
 			release := make(chan struct{})
-			var gate atomic.Bool
-			gate.Store(true)
+			// A cold handshake is cancellable on retirement. Gate a legacy
+			// request already on the wire instead, to exercise a genuinely
+			// late completion independently of handshake cancellation.
+			gatePath := "/api/v2.0/replication"
+			if tc.failPoll {
+				gatePath = "/api/v2.0/pool"
+			}
 
 			oldServer := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-				if gate.CompareAndSwap(true, false) {
+				if r.URL.Path == gatePath {
 					entered <- struct{}{}
 					<-release
-				}
-				if tc.failPoll {
-					http.Error(w, "boom", http.StatusInternalServerError)
-					return
+					if tc.failPoll {
+						http.Error(w, "fixture read failed", http.StatusInternalServerError)
+						return
+					}
 				}
 				w.Header().Set("Content-Type", "application/json")
 				switch r.URL.Path {
@@ -379,6 +384,7 @@ func TestTrueNASPollerInFlightRefreshCannotResurrectRevokedOrReplacedConnection(
 			})
 
 			poller.syncConnections()
+			oldProvider := poller.providersByOrg["default"][conn.ID]
 
 			done := make(chan struct{})
 			go func() {
@@ -425,6 +431,10 @@ func TestTrueNASPollerInFlightRefreshCannotResurrectRevokedOrReplacedConnection(
 			case <-done:
 			case <-time.After(5 * time.Second):
 				t.Fatal("in-flight TrueNAS pollAll did not complete")
+			}
+
+			if snapshot := oldProvider.Snapshot(); (snapshot == nil) != tc.failPoll {
+				t.Fatalf("late provider completion did not exercise the expected success path: success = %t", snapshot != nil)
 			}
 
 			switch tc.transition {

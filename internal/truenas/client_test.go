@@ -2735,7 +2735,7 @@ func TestClientFixtureOwnsRPCSessionLifetime(t *testing.T) {
 		t.Fatal("fixture failed before opening its session")
 	}
 	client.rpcMu.Lock()
-	closed, retained := client.closed, client.rpc != nil
+	closed, retained := client.rpcLifetimeContext().Err() != nil, client.rpc != nil
 	client.rpcMu.Unlock()
 	if !closed || retained {
 		t.Fatal("fixture cleanup left its authenticated RPC client open")

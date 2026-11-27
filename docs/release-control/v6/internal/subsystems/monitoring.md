@@ -8499,6 +8499,19 @@ TrueNAS monitoring ownership now also includes provider rebind semantics in
 host, auth, TLS, or fingerprint settings change, the poller must replace the
 live provider instance instead of keeping stale connection state in memory
 until the process restarts.
+
+TrueNAS publishes revocation/replacement under the poller data lock, but
+releases retired transports after dropping that lock. Closing a client cancels
+queued and active RPC work, including a socket waiting for upgrade or
+authentication, without waiting for the appliance's handshake timeout.
+Cancellation does not authorize REST downgrade or replay a dispatched action.
+A legacy REST read already on the wire may finish; late success or failure
+cannot update the removed or replacement provider's poll status or inventory.
+`TestTrueNASPollerReplacementCancelsStalledUpgrade`,
+`TestClientCloseCancelsStalledRPC`, and
+`TestTrueNASPollerInFlightRefreshCannotResurrectRevokedOrReplacedConnection`
+exercise the handshake, RPC and ownership boundaries with local peers.
+
 That same monitoring boundary now also owns canonical per-connection poll
 health and discovered-summary state for the settings platform-connections
 surface. `internal/monitoring/truenas_poller.go` must honor each configured
