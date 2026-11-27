@@ -413,7 +413,26 @@ class SchedulerPollingDocsTest(unittest.TestCase):
         self.assertIn("ADAPTIVE_POLLING_ENABLED=false", text)
         self.assertIn("merely removing `true`", text)
         self.assertIn("interrupts monitoring and notifications", text)
-        self.assertIn("not a monitoring-health verdict", (ROOT / "docs/monitoring/ADAPTIVE_POLLING.md").read_text())
+        adaptive = (ROOT / "docs/monitoring/ADAPTIVE_POLLING.md").read_text()
+        self.assertIn("not a monitoring-health verdict", adaptive)
+
+    def test_adaptive_polling_guide_matches_metrics_env_and_local_freshness_runtime(self):
+        adaptive = " ".join((ROOT / "docs/monitoring/ADAPTIVE_POLLING.md").read_text().split())
+        for expected in (
+            "`PULSE_METRICS_PORT`",
+            "legacy `METRICS_PORT`",
+            "`PULSE_METRICS_BIND_ADDRESS`",
+            "`PULSE_METRICS_TOKEN`",
+            "`pulse_monitor_poll_last_success_timestamp`",
+            "`pulse_scheduler_queued_poll_overdue_seconds`",
+            "`pulse_scheduler_claimed_poll_overdue_seconds`",
+            "`pulse_scheduler_dead_letter_depth`",
+            "from its own local timestamp rather than the process-wide Prometheus series",
+            "Stopped or replaced schedulers drop out of the live queue and dead-letter gauges",
+            "report zero for up to five minutes, then expire from the scrape",
+            "without moving the latest completion timestamp or staleness age backwards",
+        ):
+            self.assertIn(expected, adaptive)
 
 
 if __name__ == "__main__":

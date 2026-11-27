@@ -29,10 +29,12 @@ Patrol mode sets how far Pulse can go when Patrol finds something that needs att
 | **Safe auto-fix** | `assisted` | Yes | Yes | Execute automatically | Approval required | Pro / legacy Pro+ / Cloud |
 | **Autopilot** | `full` | Yes | Yes | Execute automatically | Execute automatically | Pro / legacy Pro+ / Cloud |
 
-- **Watch only**: Patrol creates findings but takes no action. This is the Community and Relay baseline and the default without Pro. Suitable for learning what Patrol detects before enabling investigation or fix execution.
+- **Watch only**: Patrol creates findings but takes no action. This is the Community baseline and the default without Pro. Suitable for learning what Patrol detects before enabling investigation or fix execution.
 - **Ask first** (Pro and above): Patrol investigates findings and proposes fixes. All fixes queue for manual approval before execution.
 - **Safe auto-fix** (Pro and above): Warning-level safe fix plans can execute automatically. Critical findings still require approval. This is the recommended starting point for most Pro and legacy Pro+ users who enable fix execution.
 - **Autopilot** (Pro and above): Safe fix plans can execute without approval. Activation requires an explicit human-session acknowledgement and a Pro, legacy Pro+, or Cloud license. Recommended only for environments with thorough alert coverage.
+
+Relay is no longer sold, and Pulse Mobile and Relay retire on 31 March 2027. Continuing Relay subscribers receive Pro entitlements, including Pro Patrol modes, at their current price while their subscription continues.
 
 On Pro, an install that has never chosen a mode runs **Ask first**, so new warning and critical findings are investigated without an extra step. Until you choose, the Patrol page explains this and offers to keep Ask first or switch to Watch only; either choice is saved and the notice goes away. Investigations use your AI provider and count toward the 30-day budget. A mode you have saved, including Watch only, is never changed.
 
@@ -89,8 +91,8 @@ licence and policy enforcement still apply.
 
 ### License Requirements
 
-- `monitor`: Available on all plans. Community and Relay can run Patrol with BYOK.
-- `approval`, `assisted`, and `full`: Require the `ai_autofix` capability (Pro, legacy Pro+, or Cloud license).
+- `monitor`: Available on all plans. Community installs can run Patrol in Watch only mode with BYOK.
+- `approval`, `assisted`, and `full`: Require the `ai_autofix` capability (Pro, continuing Relay, legacy Pro+, or Cloud license).
 
 Without the `ai_autofix` capability, the effective Patrol mode is clamped to `monitor` at runtime, regardless of the saved configuration. If you previously had a Pro license and downgraded, your saved setting is preserved but enforcement reverts to `monitor`.
 
@@ -155,12 +157,12 @@ JSON
 
 When Patrol mode is `approval`, `assisted`, or `full`, Patrol investigates findings. These parameters tune investigation behavior:
 
-| Setting | Default | Range | Description |
-|---------|---------|-------|-------------|
-| `patrol_investigation_budget` | 10 | 5–30 | Maximum evidence-tool calls per investigation; Patrol derives a separate model-response safety ceiling |
-| `patrol_investigation_timeout_sec` | 600 (1500 for subscription CLIs) | 60–1800 | Maximum seconds per investigation. Subscription agent CLIs (`codex-subscription`, `claude-subscription`) default to 1500 seconds (25 minutes) when unset. |
+| Stored config key | API field (`/api/ai/patrol/autonomy`) | Default | Range | Description |
+|---------|---------|---------|-------|-------------|
+| `patrol_investigation_budget` | `investigation_budget` | 10 | 5-30 | Maximum evidence-tool calls per investigation. Patrol derives a separate model-response safety ceiling. |
+| `patrol_investigation_timeout_sec` | `investigation_timeout_sec` | 600 (1500 for subscription CLIs) | 60-1800 | Maximum seconds per investigation. Subscription agent CLIs (`codex-subscription`, `claude-subscription`) default to 1500 seconds (25 minutes) when unset. |
 
-The following limits are fixed and cannot be changed: up to 3 investigations run in parallel, up to 3 attempts per finding, a 1 hour cooldown before re-investigating a finding, and a shorter 10 minute cooldown after a timeout failure.
+The following limits are fixed in the runtime and cannot be changed: up to 3 investigations run in parallel (up to 64 additional findings can wait in memory for a free slot, prioritised critical-first), up to 3 attempts per finding, a 1 hour default cooldown between investigation attempts, a 20 minute cooldown after a failed fix or failed fix verification, and a 10 minute cooldown after a timed-out outcome. Runs that fail before producing a conclusion, are interrupted by a restart, or end with unknown fix verification carry no extra cooldown and wait for the next scheduled Patrol cycle.
 
 ---
 
@@ -210,24 +212,28 @@ For new deployments, gradually increase Patrol mode:
 
 ## Monitoring AI Activity
 
-### Patrol Metrics
+### Prometheus Metrics
 
-Prometheus counters (prefix `pulse_patrol_*`) track:
-- Patrol runs, findings, investigations, fixes
-- Fix outcomes (success, failure, verification status)
-- Circuit breaker trips
+Pulse does not export a `pulse_patrol_*` Prometheus metric family. On the separate Prometheus metrics listener (`docs/monitoring/PROMETHEUS_METRICS.md`), two metric families cover AI runtime guardrails and governed action outcomes:
+
+- **AI loop and safety counters (`pulse_ai_*`):** `pulse_ai_agentic_iterations_total`, `pulse_ai_strict_resolution_block_total`, `pulse_ai_routing_mismatch_block_total`, and `pulse_ai_phantom_detected_total`
+- **Operational Trust action counters (`pulse_operational_trust_*`):** `pulse_operational_trust_action_offers_total` and `pulse_operational_trust_action_verification_total`
+
+For Patrol run counts, finding investigation status, and provider circuit-breaker state, use the Patrol UI or the API endpoints below.
 
 ### Cost Tracking
 
 Token usage and estimated costs are tracked per provider:
 - **UI:** Settings → Pulse Intelligence → Provider & Models → Provider Usage & Spend
 - **API:** `GET /api/ai/cost/summary`
-- Set monthly budget limits to cap spending
+- Set a 30-day budget limit (`30-day budget (USD)`) to flag spend over budget
 
-### Investigation Status
+### Patrol and Circuit Status
 
-- **API:** `GET /api/ai/patrol/findings` — List all findings with investigation status
-- **API:** `GET /api/ai/circuit/status` — Check circuit breaker state
+- **API:** `GET /api/ai/patrol/status` for current Patrol runtime status
+- **API:** `GET /api/ai/patrol/runs` for recent Patrol run history
+- **API:** `GET /api/ai/patrol/findings` for active findings and investigation status
+- **API:** `GET /api/ai/circuit/status` for AI provider circuit breaker state
 
 ---
 
