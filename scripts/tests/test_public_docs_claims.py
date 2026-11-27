@@ -5,6 +5,7 @@ from __future__ import annotations
 
 import importlib.util
 from pathlib import Path
+import re
 import sys
 import tempfile
 import unittest
@@ -340,6 +341,23 @@ class PublicDocsProsePunctuationTest(unittest.TestCase):
 
 
 class AIAutonomyHelpDocsTest(unittest.TestCase):
+    @staticmethod
+    def _extract_prometheus_metrics(source_path: Path) -> set[str]:
+        text = source_path.read_text(encoding="utf-8")
+        metrics: set[str] = set()
+        for match in re.finditer(r"Opts\{([^}]*)\}", text, re.S):
+            block = match.group(1)
+            namespace = re.search(r'Namespace:\s*"([^"]+)"', block)
+            subsystem = re.search(r'Subsystem:\s*"([^"]+)"', block)
+            name = re.search(r'Name:\s*"([^"]+)"', block)
+            if not name:
+                continue
+            parts = [part.group(1) for part in (namespace, subsystem, name) if part]
+            full_name = "_".join(parts)
+            if full_name.startswith("pulse_"):
+                metrics.add(full_name)
+        return metrics
+
     def test_prometheus_section_matches_exported_metrics_and_endpoints(self) -> None:
         doc = (ROOT / "docs/AI_AUTONOMY.md").read_text(encoding="utf-8")
         mirror = (ROOT / "frontend-modern/public/docs/AI_AUTONOMY.md").read_text(
@@ -347,19 +365,28 @@ class AIAutonomyHelpDocsTest(unittest.TestCase):
         )
         self.assertEqual(doc, mirror)
         self.assertNotIn("Prometheus counters (prefix `pulse_patrol_*`) track:", doc)
-        self.assertIn(
+        self.assertNotIn(
             "Pulse does not export a `pulse_patrol_*` Prometheus metric family.",
             doc,
         )
-        for metric in (
-            "`pulse_ai_agentic_iterations_total`",
-            "`pulse_ai_strict_resolution_block_total`",
-            "`pulse_ai_routing_mismatch_block_total`",
-            "`pulse_ai_phantom_detected_total`",
-            "`pulse_operational_trust_action_offers_total`",
-            "`pulse_operational_trust_action_verification_total`",
+        patrol_metrics = self._extract_prometheus_metrics(
+            ROOT / "internal/ai/patrol_metrics.go"
+        )
+        self.assertGreaterEqual(len(patrol_metrics), 18)
+        ai_metrics = self._extract_prometheus_metrics(
+            ROOT / "internal/ai/chat/metrics.go"
+        )
+        self.assertEqual(len(ai_metrics), 4)
+        for metric in sorted(
+            patrol_metrics
+            | ai_metrics
+            | {
+                "pulse_operational_trust_action_offers_total",
+                "pulse_operational_trust_action_verification_total",
+            }
         ):
-            self.assertIn(metric, doc)
+            with self.subTest(metric=metric):
+                self.assertIn(f"`{metric}`", doc)
         for endpoint in (
             "`GET /api/ai/patrol/status`",
             "`GET /api/ai/patrol/runs`",
@@ -367,6 +394,76 @@ class AIAutonomyHelpDocsTest(unittest.TestCase):
             "`GET /api/ai/circuit/status`",
         ):
             self.assertIn(endpoint, doc)
+
+    def test_prometheus_metrics_reference_covers_live_server_and_agent_families(
+        self,
+    ) -> None:
+        prom_doc = (ROOT / "docs/monitoring/PROMETHEUS_METRICS.md").read_text(
+            encoding="utf-8"
+        )
+        source_files = (
+            ROOT / "internal/api/http_metrics.go",
+            ROOT / "pkg/db/slowlog.go",
+            ROOT / "internal/discovery/service.go",
+            ROOT / "internal/api/access_metrics_handlers.go",
+            ROOT / "internal/ai/chat/metrics.go",
+            ROOT / "internal/ai/patrol_metrics.go",
+            ROOT / "cmd/pulse-agent/main.go",
+            ROOT / "internal/agenttarget/metrics.go",
+            ROOT / "internal/hostagent/commands.go",
+        )
+        for source_file in source_files:
+            exported = self._extract_prometheus_metrics(source_file)
+            self.assertTrue(exported, f"no metrics extracted from {source_file}")
+            for metric in sorted(exported):
+                with self.subTest(source=source_file.name, metric=metric):
+                    self.assertIn(f"`{metric}`", prom_doc)
+        self.assertIn("`127.0.0.1:9191/metrics`", prom_doc)
+        self.assertIn("`PULSE_HEALTH_ADDR=off`", prom_doc)
+
+    def test_inline_enable_remote_commands_dialog_docs_match_ui(self) -> None:
+        dialog_src = (
+            ROOT
+            / "frontend-modern/src/components/shared/EnableRemoteCommandsDialog.tsx"
+        ).read_text(encoding="utf-8")
+        model_src = (
+            ROOT
+            / "frontend-modern/src/components/shared/enableRemoteCommandsModel.ts"
+        ).read_text(encoding="utf-8")
+        for ui_marker in (
+            "Enable remote commands on",
+            "Generate command for",
+            "View command",
+            "Copy command",
+            "Self-signed HTTPS certificate?",
+            "Open Agent Doctor",
+        ):
+            self.assertIn(ui_marker, dialog_src)
+        self.assertIn("typed-helper-summary", model_src)
+        self.assertIn("Continue", model_src)
+
+        for rel in ("docs/AGENT_SECURITY.md", "docs/UNIFIED_AGENT.md"):
+            doc = (ROOT / rel).read_text(encoding="utf-8")
+            mirror = (ROOT / "frontend-modern/public" / rel).read_text(encoding="utf-8")
+            self.assertEqual(doc, mirror)
+            norm = " ".join(doc.split())
+            for phrase in (
+                "Enable remote commands",
+                "Generate command",
+                "View command",
+                "Self-signed HTTPS certificate?",
+                "Open Agent Doctor",
+            ):
+                with self.subTest(doc=rel, phrase=phrase):
+                    self.assertIn(phrase, norm)
+        security_norm = " ".join(
+            (ROOT / "docs/AGENT_SECURITY.md").read_text(encoding="utf-8").split()
+        )
+        self.assertIn("typed-helper-summary", security_norm)
+        self.assertIn(
+            "Read-only and non-admin sessions stay passive with no token generation triggers.",
+            security_norm,
+        )
 
     def test_relay_entitlements_and_investigation_runtime_limits_match_code(self) -> None:
         normalized = " ".join(

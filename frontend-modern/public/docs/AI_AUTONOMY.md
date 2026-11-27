@@ -216,12 +216,13 @@ For new deployments, gradually increase Patrol mode:
 
 ### Prometheus Metrics
 
-Pulse does not export a `pulse_patrol_*` Prometheus metric family. On the separate Prometheus metrics listener (`docs/monitoring/PROMETHEUS_METRICS.md`), two metric families cover AI runtime guardrails and governed action outcomes:
+On the separate Prometheus metrics listener (`docs/monitoring/PROMETHEUS_METRICS.md`), three metric families cover Patrol execution, AI runtime guardrails, and governed action outcomes:
 
-- **AI loop and safety counters (`pulse_ai_*`):** `pulse_ai_agentic_iterations_total`, `pulse_ai_strict_resolution_block_total`, `pulse_ai_routing_mismatch_block_total`, and `pulse_ai_phantom_detected_total`
-- **Operational Trust action counters (`pulse_operational_trust_*`):** `pulse_operational_trust_action_offers_total` and `pulse_operational_trust_action_verification_total`
+- **Patrol runtime and attention metrics (`pulse_patrol_*`):** `pulse_patrol_run_total`, `pulse_patrol_circuit_block_total`, `pulse_patrol_finding_rejected_total`, `pulse_patrol_investigation_outcome_total`, `pulse_patrol_fix_verification_total`, `pulse_patrol_triage_flags`, `pulse_patrol_triage_quiet_total`, `pulse_patrol_scoped_dropped_total`, `pulse_patrol_scoped_dropped_final_total`, `pulse_patrol_stream_resume_outcome_total`, `pulse_patrol_stream_resync_reason_total`, `pulse_patrol_stream_replay_events_total`, `pulse_patrol_stream_replay_batch_size`, `pulse_patrol_stream_subscriber_drop_total`, `pulse_patrol_attention_items`, `pulse_patrol_attention_oldest_age_seconds`, `pulse_patrol_attention_acknowledgement_latest_seconds`, and `pulse_patrol_calm_evaluation_timestamp_seconds`. These register lazily when Patrol or the attention projection records its first observation.
+- **AI loop and safety counters (`pulse_ai_*`):** `pulse_ai_agentic_iterations_total`, `pulse_ai_strict_resolution_block_total`, `pulse_ai_routing_mismatch_block_total`, and `pulse_ai_phantom_detected_total`.
+- **Operational Trust action counters (`pulse_operational_trust_*`):** `pulse_operational_trust_action_offers_total` and `pulse_operational_trust_action_verification_total`.
 
-For Patrol run counts, finding investigation status, and provider circuit-breaker state, use the Patrol UI or the API endpoints below.
+For current Patrol run detail, finding investigation state, and provider circuit-breaker status, use the Patrol UI or the API endpoints below.
 
 ### Cost Tracking
 

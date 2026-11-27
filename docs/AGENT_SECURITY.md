@@ -89,11 +89,9 @@ cannot enable it. Enabling commands then waits for a verified response from the
 signed remote configuration endpoint. Selecting **Allow Pulse to run commands on this host** at install time (the combined
 command profile) adds `--enable-commands`, records `command-capable`, and issues an execution-
 scoped credential. The root monitoring process can then also accept server
-command requests through the existing policy and approval surfaces. Existing
-unmarked services upgrade as `legacy` during the migration window so upgrades
-do not silently revoke an operator's prior command choice. Agent Doctor shows
-the process privilege, local authority ceiling, and credential execution scope
-separately and warns about mismatches.
+command requests through the existing policy and approval surfaces. Existing unmarked services upgrade as `legacy` during the migration window so upgrades do not silently revoke an operator's prior command choice. Agent Doctor shows the process privilege, local authority ceiling, and credential execution scope separately and warns about mismatches.
+
+On a monitoring-only host, an administrator who clicks a locked container **Update** pill (in Docker Overview, the container detail drawer, or Workloads), a disabled container **Start**, **Stop**, or **Restart** control, or **Enable remote commands** inside **Settings → Infrastructure → Manage** opens the **Enable remote commands** dialog directly. That dialog keeps the host-side trust boundary intact: it mints a host-scoped command-capable token only when the administrator clicks **Generate command**, caches that in-flight token in tab memory for the host until commands reconnect so accidental closes do not mint duplicate tokens, keeps the shell script collapsed behind **View command** beside **Copy command**, offers a collapsible **Self-signed HTTPS certificate?** disclosure (with a custom CA certificate path or explicit `--insecure` opt-in) when Pulse uses HTTPS, and still requires running the update command on the host itself. For a least-privilege (`typed-helper-summary`) host, the dialog does not mint a root command token and instead points to **Open Agent Doctor** to issue and install a separate action-runner credential. Read-only and non-admin sessions stay passive with no token generation triggers.
 
 Custom numeric sensors are a separate, local configuration boundary. Enabling
 them with `--custom-sensors-file` does not enable remote commands and
