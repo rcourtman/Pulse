@@ -106,6 +106,77 @@ func TestMaybeRefreshClusterInfo_SkipsWithinCooldown(t *testing.T) {
 	}
 }
 
+func TestGetNodesSkipsAutomaticClusterDetectionWhilePaused(t *testing.T) {
+	cfg := &config.Config{
+		DataPath: t.TempDir(),
+		PVEInstances: []config.PVEInstance{
+			{Name: "paused-pve", Host: "https://paused.invalid:8006", TokenValue: "synthetic-paused", Disabled: true},
+			{Name: "saved-pve", Host: "https://saved.invalid:8006", TokenValue: "synthetic-saved", Disabled: true, IsCluster: true,
+				ClusterEndpoints: []config.ClusterEndpoint{{NodeName: "saved-member", Host: "https://saved-member.invalid:8006"}}},
+			{Name: "active-pve", Host: "https://active.invalid:8006", TokenValue: "synthetic-active"},
+		},
+	}
+	h := newTestConfigHandlers(t, cfg)
+	t.Cleanup(h.Stop)
+	originalDetect := detectPVEClusterContext
+	t.Cleanup(func() { detectPVEClusterContext = originalDetect })
+	var detected []string
+	detectPVEClusterContext = func(_ context.Context, _ proxmox.ClientConfig, name string, _ []config.ClusterEndpoint) (bool, string, []config.ClusterEndpoint) {
+		detected = append(detected, name)
+		return true, name + "-cluster", []config.ClusterEndpoint{{NodeName: name + "-member", Host: "https://" + name + ".invalid:8006"}}
+	}
+	read := func() []NodeResponse {
+		t.Helper()
+		rec := httptest.NewRecorder()
+		h.HandleGetNodes(rec, httptest.NewRequest(http.MethodGet, "/api/config/nodes", nil))
+		var nodes []NodeResponse
+		if err := json.Unmarshal(rec.Body.Bytes(), &nodes); rec.Code != http.StatusOK || err != nil || len(nodes) != 3 {
+			t.Fatalf("node list: status %d, %d nodes, decode error %v", rec.Code, len(nodes), err)
+		}
+		return nodes
+	}
+	nodes := read()
+	if !reflect.DeepEqual(detected, []string{"active-pve"}) {
+		t.Fatalf("automatic discovery ran for %v, want only the active connection", detected)
+	}
+	if nodes[0].Enabled || nodes[0].IsCluster || nodes[1].Enabled || !nodes[1].IsCluster ||
+		len(nodes[1].ClusterEndpoints) != 1 || nodes[1].ClusterEndpoints[0].NodeName != "saved-member" ||
+		!nodes[2].Enabled || nodes[2].ClusterName != "active-pve-cluster" {
+		t.Fatal("listing did not preserve paused state, saved members, and active discovery")
+	}
+
+	// A paused list read must not consume the cooldown needed for discovery
+	// as soon as the connection is enabled again.
+	config.Mu.Lock()
+	cfg.PVEInstances[0].Disabled = false
+	config.Mu.Unlock()
+	nodes = read()
+	if !reflect.DeepEqual(detected, []string{"active-pve", "paused-pve"}) ||
+		!nodes[0].Enabled || nodes[0].ClusterName != "paused-pve-cluster" {
+		t.Fatal("automatic discovery did not resume for the re-enabled connection")
+	}
+}
+
+func TestMaybeRefreshClusterInfoDiscardsResultAfterPause(t *testing.T) {
+	cfg := &config.Config{DataPath: t.TempDir(), PVEInstances: []config.PVEInstance{{
+		Name: "pve", Host: "https://pve.invalid:8006", TokenValue: "synthetic",
+	}}}
+	h := newTestConfigHandlers(t, cfg)
+	t.Cleanup(h.Stop)
+	originalDetect := detectPVEClusterContext
+	t.Cleanup(func() { detectPVEClusterContext = originalDetect })
+	detectPVEClusterContext = func(_ context.Context, _ proxmox.ClientConfig, _ string, _ []config.ClusterEndpoint) (bool, string, []config.ClusterEndpoint) {
+		config.Mu.Lock()
+		cfg.PVEInstances[0].Disabled = true
+		config.Mu.Unlock()
+		return true, "late", []config.ClusterEndpoint{{NodeName: "late-member", Host: "https://pve.invalid:8006"}}
+	}
+	h.maybeRefreshClusterInfo(context.Background(), cfg.PVEInstances[0].DeepCopy())
+	if instance := cfg.PVEInstances[0]; !instance.Disabled || instance.IsCluster || len(instance.ClusterEndpoints) != 0 {
+		t.Fatal("a passive discovery result changed the connection after it was paused")
+	}
+}
+
 // Detection waits on the monitored server. A connection removed meanwhile
 // hands its list slot to the next connection, which must not inherit the
 // cluster members the removed server reported: its credential is sent to them.
