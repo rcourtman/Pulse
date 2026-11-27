@@ -1,6 +1,5 @@
 import { createMemo, type Component, type JSX } from 'solid-js';
 import { TableCell, TableRow } from '@/components/shared/Table';
-import { getSimpleStatusIndicator } from '@/utils/status';
 import { asTrimmedString } from '@/utils/stringUtils';
 import {
   PlatformWindowedRows,
@@ -23,6 +22,7 @@ import type { Resource } from '@/types/resource';
 import {
   filterKubernetesStorageResources,
   kubernetesScopeLabel,
+  mapKubernetesInventoryStatus,
   type KubernetesStorageKindFilter,
   isSingleKubernetesCluster,
 } from './kubernetesPageModel';
@@ -326,7 +326,7 @@ export const KubernetesStorageTable: Component<{
           <>
             <PlatformWindowedRows items={sortedRows} estimatedRowHeight={32}>
               {(resource) => {
-                const indicator = () => getSimpleStatusIndicator(resource.status);
+                const indicator = () => mapKubernetesInventoryStatus(resource);
                 const name = () => storageName(resource);
                 const kind = () => storageKind(resource);
                 const policy = () => policyLabel(resource);
@@ -346,7 +346,7 @@ export const KubernetesStorageTable: Component<{
                           drawer={drawer}
                           label={name()}
                           status={indicator()}
-                          dotTitle={resource.status || 'unknown'}
+                          staleScope="storage"
                         />
                       </TableCell>
                       <TableCell

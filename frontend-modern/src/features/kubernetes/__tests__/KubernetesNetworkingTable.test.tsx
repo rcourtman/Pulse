@@ -76,4 +76,75 @@ describe('KubernetesNetworkingTable', () => {
     expect(screen.getAllByText('3/3 ready')).toHaveLength(1);
     expect(screen.getByText('checkout-api · 3/3 ready')).toBeInTheDocument();
   });
+
+  it('surfaces stale readings on ingresses and endpoint slices without losing failure severity', () => {
+    const staleSource = {
+      kubernetes: { status: 'stale', lastSeen: '2026-11-26T10:00:00Z' },
+    };
+    const { container } = render(() => (
+      <KubernetesNetworkingTable
+        resources={[
+          makeResource({
+            id: 'fresh-ingress',
+            type: 'k8s-ingress',
+            status: 'online',
+            kubernetes: {
+              clusterId: 'prod',
+              namespace: 'apps',
+              className: 'nginx',
+              hosts: ['fresh.example.com'],
+            },
+          }),
+          makeResource({
+            id: 'stale-ingress',
+            type: 'k8s-ingress',
+            status: 'online',
+            sourceStatus: staleSource,
+            kubernetes: {
+              clusterId: 'edge',
+              namespace: 'apps',
+              className: 'traefik',
+              hosts: ['stale.example.com'],
+            },
+          }),
+          makeResource({
+            id: 'offline-endpoint',
+            type: 'k8s-endpoint-slice',
+            status: 'offline',
+            sourceStatus: staleSource,
+            kubernetes: {
+              clusterId: 'edge',
+              namespace: 'apps',
+              serviceName: 'billing',
+              endpointCount: 2,
+              readyEndpointCount: 0,
+            },
+          }),
+        ]}
+        emptyIcon={<span />}
+        emptyTitle="No networking"
+        emptyDescription="No networking"
+        showToolbar={false}
+      />
+    ));
+
+    const freshRow = container.querySelector('[data-kubernetes-networking-row="fresh-ingress"]');
+    expect(freshRow?.querySelector('[title="Online"]')).toHaveClass('bg-emerald-500');
+    expect(freshRow?.querySelector('[data-kubernetes-stale="networking"]')).toBeNull();
+
+    const staleRow = container.querySelector('[data-kubernetes-networking-row="stale-ingress"]');
+    expect(staleRow?.querySelector('[title="Stale data"]')).toHaveClass('bg-amber-500');
+    expect(staleRow?.querySelector('[data-kubernetes-stale="networking"]')).toHaveTextContent(
+      'Stale data',
+    );
+    expect(staleRow).toHaveTextContent('stale.example.com');
+
+    const offlineRow = container.querySelector(
+      '[data-kubernetes-networking-row="offline-endpoint"]',
+    );
+    expect(offlineRow?.querySelector('[title="Offline"]')).toHaveClass('bg-red-500');
+    expect(offlineRow?.querySelector('[data-kubernetes-stale="networking"]')).toHaveTextContent(
+      'Stale data',
+    );
+  });
 });

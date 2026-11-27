@@ -38,6 +38,7 @@ import {
 import {
   KUBERNETES_STALE_READINGS_LABEL,
   describeKubernetesStaleReadings,
+  hasStaleKubernetesReadings,
   kubernetesClusterLabel,
   mapKubernetesEventSeverity,
   type KubernetesResourceStatusFilter,
@@ -113,6 +114,22 @@ export const KubernetesStaleDataCue: Component<{ when: boolean; scope: string }>
   </Show>
 );
 
+export const KubernetesStaleReadingsNotice: Component<{
+  resource: Resource;
+  class?: string;
+}> = (props) => {
+  const staleMessage = () => describeKubernetesStaleReadings(props.resource);
+  return (
+    <Show when={staleMessage()}>
+      <div class={props.class} data-testid="kubernetes-stale-readings-notice">
+        <InlineNotice tone="warning" role="status">
+          <span class="font-medium">{KUBERNETES_STALE_READINGS_LABEL}.</span> {staleMessage()}
+        </InlineNotice>
+      </div>
+    </Show>
+  );
+};
+
 export const KubernetesRowLead: Component<{
   resource: Resource;
   drawer: PlatformResourceDetailState;
@@ -120,6 +137,7 @@ export const KubernetesRowLead: Component<{
   status: StatusIndicator;
   dotTitle?: string;
   statusDot?: JSX.Element;
+  staleScope?: string;
   children?: JSX.Element;
 }> = (props) => (
   <div class="flex min-w-0 items-center gap-2">
@@ -137,10 +155,24 @@ export const KubernetesRowLead: Component<{
         ariaHidden
       />
     )}
-    {props.children ?? (
-      <span class="truncate font-semibold text-base-content" title={props.label}>
-        {props.label}
-      </span>
+    {props.staleScope ? (
+      <div class="min-w-0">
+        {props.children ?? (
+          <span class="block truncate font-semibold text-base-content" title={props.label}>
+            {props.label}
+          </span>
+        )}
+        <KubernetesStaleDataCue
+          when={hasStaleKubernetesReadings(props.resource)}
+          scope={props.staleScope}
+        />
+      </div>
+    ) : (
+      (props.children ?? (
+        <span class="truncate font-semibold text-base-content" title={props.label}>
+          {props.label}
+        </span>
+      ))
     )}
   </div>
 );
@@ -151,29 +183,18 @@ export const KubernetesDetailRow: Component<{
   drawer: PlatformResourceDetailState;
   colSpan: number;
   resolveResourceLabel?: (resourceId: string) => string | null | undefined;
-}> = (props) => {
-  const staleMessage = () => describeKubernetesStaleReadings(props.resource);
-  return (
-    <PlatformResourceDetailTableRow
-      resource={props.resource}
-      statusIndicator={props.statusIndicator}
-      open={props.drawer.isExpanded(props.resource)}
-      detailRowId={props.drawer.detailRowId(props.resource)}
-      colSpan={props.colSpan}
-      resolveResourceLabel={props.resolveResourceLabel}
-      context={
-        <Show when={staleMessage()}>
-          <div class="mb-3" data-testid="kubernetes-stale-readings-notice">
-            <InlineNotice tone="warning" role="status">
-              <span class="font-medium">{KUBERNETES_STALE_READINGS_LABEL}.</span> {staleMessage()}
-            </InlineNotice>
-          </div>
-        </Show>
-      }
-      onClose={() => props.drawer.close(props.resource)}
-    />
-  );
-};
+}> = (props) => (
+  <PlatformResourceDetailTableRow
+    resource={props.resource}
+    statusIndicator={props.statusIndicator}
+    open={props.drawer.isExpanded(props.resource)}
+    detailRowId={props.drawer.detailRowId(props.resource)}
+    colSpan={props.colSpan}
+    resolveResourceLabel={props.resolveResourceLabel}
+    context={<KubernetesStaleReadingsNotice resource={props.resource} class="mb-3" />}
+    onClose={() => props.drawer.close(props.resource)}
+  />
+);
 
 export function KubernetesTableFrame<
   Status extends string = KubernetesResourceStatusFilter,
@@ -275,7 +296,9 @@ export const KubernetesRecordDetailPanel: Component<{
       actions={props.actions}
       sections={compactDetailSections(props.sections(now()))}
       onClose={props.onClose}
-    />
+    >
+      <KubernetesStaleReadingsNotice resource={props.resource} />
+    </InlineDetailPanel>
   );
 };
 

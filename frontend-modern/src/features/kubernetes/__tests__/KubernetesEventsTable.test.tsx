@@ -211,4 +211,59 @@ describe('KubernetesEventsTable', () => {
     expect(screen.getByText('BackOff')).toBeInTheDocument();
     expect(screen.queryByText('Scheduled')).toBeNull();
   });
+
+  it('marks stale cached events with a row cue and drawer notice while keeping event severity', () => {
+    const { container } = render(() => (
+      <Router>
+        <Route
+          path="/"
+          component={() => (
+            <KubernetesEventsTable
+              resources={[
+                makeResource({
+                  id: 'stale-normal-event',
+                  type: 'k8s-event',
+                  status: 'online',
+                  sourceStatus: {
+                    kubernetes: {
+                      status: 'stale',
+                      lastSeen: '2026-11-26T10:00:00Z',
+                      error: 'watch stream dropped',
+                    },
+                  },
+                  kubernetes: {
+                    clusterName: 'edge',
+                    namespace: 'apps',
+                    eventType: 'Normal',
+                    reason: 'Pulled',
+                    involvedKind: 'Pod',
+                    involvedName: 'api-0',
+                    message: 'Successfully pulled image',
+                  },
+                }),
+              ]}
+              emptyIcon={<span />}
+              emptyTitle="No events"
+              emptyDescription="No events"
+              showToolbar={false}
+            />
+          )}
+        />
+      </Router>
+    ));
+
+    const staleRow = container.querySelector('[data-kubernetes-event-row="stale-normal-event"]');
+    // Event severity dot remains Normal (muted), not overwritten by staleness.
+    expect(staleRow?.querySelector('[title="Normal"]')).toHaveClass('bg-slate-400');
+    expect(staleRow?.querySelector('[data-kubernetes-stale="event"]')).toHaveTextContent(
+      'Stale data',
+    );
+
+    fireEvent.click(staleRow as HTMLElement);
+    const panel = container.querySelector<HTMLElement>('[data-testid="kubernetes-event-detail"]')!;
+    const notice = within(panel).getByTestId('kubernetes-stale-readings-notice');
+    expect(notice).toHaveTextContent('Stale data.');
+    expect(notice).toHaveTextContent('watch stream dropped');
+    expect(within(panel).getByLabelText('Normal')).toBeInTheDocument();
+  });
 });
