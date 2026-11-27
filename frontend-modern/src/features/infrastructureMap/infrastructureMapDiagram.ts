@@ -6,6 +6,7 @@ import {
   fitMapName,
   fitMapText,
   mapHitMeta,
+  tagMapNodesSince,
   wrapMapText,
   type MapCursor,
   type MapInspectTarget,
@@ -213,6 +214,7 @@ const drawTile = (
   groupKey?: string,
 ) => {
   const { out, metrics } = painter;
+  const startIndex = out.nodes.length;
   const off = tile.health === 'off';
   const cx = x + metrics.tileW / 2;
   // What stands for several things, or for something Pulse does not monitor,
@@ -318,7 +320,10 @@ const drawTile = (
   }
   // A dashed tile is a place, not a thing: only one with something to say
   // about its connections can be pointed at.
-  if (dashed && !tile.links?.length) return;
+  if (dashed && !tile.links?.length) {
+    tagMapNodesSince(out.nodes, startIndex, tile.id);
+    return;
+  }
   if (real) {
     // The status dot sits on the icon's corner, ringed in the card's colour,
     // the way a badge sits on an avatar.
@@ -327,6 +332,7 @@ const drawTile = (
     out.nodes.push({ kind: 'rect', x: dotX - 6, y: dotY - 6, w: 12, h: 12, r: 6, fill: 'surface' });
     out.nodes.push({ kind: 'dot', x: dotX, y: dotY, r: 4, health: tile.health });
   }
+  tagMapNodesSince(out.nodes, startIndex, tile.id);
   const inspectTarget: MapInspectTarget | undefined =
     !real && !dashed && groupKey
       ? tile.id === 'other:off'
@@ -380,6 +386,12 @@ const drawTile = (
       ...(tile.dockerNetworks?.length ? { dockerNetworks: tile.dockerNetworks } : {}),
       ...(tile.probeSummary ? { probeSummary: tile.probeSummary } : {}),
       ...(tile.certWarning ? { certWarning: tile.certWarning } : {}),
+      ...(tile.temperatureC !== undefined ? { temperatureC: tile.temperatureC } : {}),
+      ...(tile.diskSummary ? { diskSummary: tile.diskSummary } : {}),
+      ...(tile.diskMaxTempC !== undefined ? { diskMaxTempC: tile.diskMaxTempC } : {}),
+      ...(tile.unhealthyDiskCount !== undefined
+        ? { unhealthyDiskCount: tile.unhealthyDiskCount }
+        : {}),
       ...(segmentIds ? { segmentIds } : {}),
       address: tile.address,
       detail: tile.detail,

@@ -170,9 +170,22 @@ const monogramFontSize = (size: number, letters: string): number => {
   return size * 0.45;
 };
 
+export const MAP_TILE_NODE_ATTRIBUTE = 'data-map-tile';
+export const MAP_SPOTLIGHT_CLASS = 'pulse-map-spotlight';
+export const MAP_SPOTLIGHT_LIT_CLASS = 'pulse-map-spotlight-lit';
+
+const tileAttr = (node: SceneNode, live: boolean): string =>
+  live && 'tileId' in node && node.tileId
+    ? ` ${MAP_TILE_NODE_ATTRIBUTE}="${escapeXml(node.tileId)}"`
+    : '';
+
 // A known app is its logo on its brand colour. Anything else is its initials
 // on a slate tile, so the logos are the only colour that is not the product's.
-const appToSvg = (node: Extract<SceneNode, { kind: 'app' }>, palette: MapPalette): string => {
+const appToSvg = (
+  node: Extract<SceneNode, { kind: 'app' }>,
+  palette: MapPalette,
+  live: boolean,
+): string => {
   const logo = resolveMapAppLogo(node.icon);
   const corner = n(node.size * 0.2);
   const square = `<rect x="${n(node.x)}" y="${n(node.y)}" width="${n(node.size)}" height="${n(node.size)}" rx="${corner}" fill="${logo ? `#${logo.hex}` : MONOGRAM_TILE}" stroke="${logo ? palette.border : MONOGRAM_EDGE}"/>`;
@@ -180,7 +193,11 @@ const appToSvg = (node: Extract<SceneNode, { kind: 'app' }>, palette: MapPalette
   const mark = logo
     ? `<path transform="translate(${n(node.x + inset)} ${n(node.y + inset)}) scale(${n((node.size - inset * 2) / 24)})" d="${logo.d}" fill="${readsDarkOn(logo.hex) ? '#0f172a' : '#ffffff'}"/>`
     : `<text x="${n(node.x + node.size / 2)}" y="${n(node.y + node.size * 0.65)}" font-size="${n(monogramFontSize(node.size, node.letters))}" font-weight="700" text-anchor="middle" fill="${MONOGRAM_LETTERS}">${escapeXml(node.letters)}</text>`;
-  return node.dim ? `<g opacity="0.45">${square}${mark}</g>` : square + mark;
+  const attr = tileAttr(node, live);
+  if (node.dim && attr) return `<g${attr}><g opacity="0.45">${square}${mark}</g></g>`;
+  if (node.dim) return `<g opacity="0.45">${square}${mark}</g>`;
+  if (attr) return `<g${attr}>${square}${mark}</g>`;
+  return square + mark;
 };
 
 const ARROW_LENGTH = 7;
@@ -230,6 +247,7 @@ const lineToSvg = (
 };
 
 const nodeToSvg = (node: SceneNode, palette: MapPalette, live: boolean): string => {
+  const attr = tileAttr(node, live);
   switch (node.kind) {
     case 'rect':
       if (node.activity) {
@@ -239,13 +257,13 @@ const nodeToSvg = (node: SceneNode, palette: MapPalette, live: boolean): string 
             node.stroke ? ` stroke="${palette[node.stroke]}"` : ''
           }${node.dashed ? ' stroke-dasharray="4 3"' : ''}/>`;
         }
-        return `<rect x="${n(node.x)}" y="${n(node.y)}" width="${n(node.w)}" height="${n(node.h)}" rx="${n(node.r)}" fill="${palette.accent}" fill-opacity="${ACTIVITY_FILL_OPACITY[node.activity]}" stroke="${palette.accent}" stroke-opacity="${ACTIVITY_STROKE_OPACITY[node.activity]}" stroke-width="1.25" class="pulse-map-active pulse-map-active-${node.activity}"/>`;
+        return `<rect x="${n(node.x)}" y="${n(node.y)}" width="${n(node.w)}" height="${n(node.h)}" rx="${n(node.r)}" fill="${palette.accent}" fill-opacity="${ACTIVITY_FILL_OPACITY[node.activity]}" stroke="${palette.accent}" stroke-opacity="${ACTIVITY_STROKE_OPACITY[node.activity]}" stroke-width="1.25" class="pulse-map-active pulse-map-active-${node.activity}"${attr}/>`;
       }
       return `<rect x="${n(node.x)}" y="${n(node.y)}" width="${n(node.w)}" height="${n(node.h)}" rx="${n(node.r)}" fill="${palette[node.fill]}"${
         node.opacity !== undefined ? ` fill-opacity="${n(node.opacity)}"` : ''
       }${node.stroke ? ` stroke="${palette[node.stroke]}"` : ''}${
         node.dashed ? ' stroke-dasharray="4 3"' : ''
-      }/>`;
+      }${attr}/>`;
     case 'text':
       return `<text x="${n(node.x)}" y="${n(node.y)}" font-size="${n(node.size)}" font-weight="${node.weight}" fill="${palette[node.fill]}"${
         node.anchor === 'end'
@@ -253,22 +271,22 @@ const nodeToSvg = (node: SceneNode, palette: MapPalette, live: boolean): string 
           : node.anchor === 'middle'
             ? ' text-anchor="middle"'
             : ''
-      }${node.caps ? ' letter-spacing="0.6"' : ''}${node.dim ? ' opacity="0.6"' : ''}>${escapeXml(node.text)}</text>`;
+      }${node.caps ? ' letter-spacing="0.6"' : ''}${node.dim ? ' opacity="0.6"' : ''}${attr}>${escapeXml(node.text)}</text>`;
     case 'app':
-      return appToSvg(node, palette);
+      return appToSvg(node, palette, live);
     case 'line':
       return lineToSvg(node, palette, live);
     case 'dot':
       return node.health === 'off'
-        ? `<circle cx="${n(node.x)}" cy="${n(node.y)}" r="${n(node.r - 0.75)}" fill="none" stroke="${palette.off}" stroke-width="1.5"/>`
-        : `<circle cx="${n(node.x)}" cy="${n(node.y)}" r="${n(node.r)}" fill="${palette[node.health]}"/>`;
+        ? `<circle cx="${n(node.x)}" cy="${n(node.y)}" r="${n(node.r - 0.75)}" fill="none" stroke="${palette.off}" stroke-width="1.5"${attr}/>`
+        : `<circle cx="${n(node.x)}" cy="${n(node.y)}" r="${n(node.r)}" fill="${palette[node.health]}"${attr}/>`;
     case 'icon': {
       const glyph = MAP_GLYPHS[node.platform];
       const paint =
         glyph.mode === 'fill'
           ? `fill="${palette.muted}"`
           : `fill="none" stroke="${palette.muted}" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"`;
-      return `<path transform="translate(${n(node.x)} ${n(node.y)}) scale(${n(node.size / 24)})" d="${glyph.d}" ${paint}/>`;
+      return `<path transform="translate(${n(node.x)} ${n(node.y)}) scale(${n(node.size / 24)})" d="${glyph.d}" ${paint}${attr}/>`;
     }
     case 'inspect':
     case 'hit':
@@ -327,14 +345,33 @@ export function renderMapSceneBody(
       const label = escapeXml(`${node.hit.name}, ${node.hit.meta}${adds ? ', add a check' : ''}`);
       const interactive = Boolean(href || node.hit.inspectTarget);
       const rect = `x="${n(node.x)}" y="${n(node.y)}" width="${n(node.w)}" height="${n(node.h)}" rx="${n(node.r)}" pointer-events="all" class="${interactive ? HIT_CLASS : HIT_STATIC_CLASS}"`;
+      const hitTileAttr = ` ${MAP_TILE_NODE_ATTRIBUTE}="${escapeXml(node.hit.id)}"`;
       if (href) {
-        return `<a href="${escapeXml(href)}" class="${LINK_CLASS}" ${MAP_HIT_ATTRIBUTE}="${index}" aria-label="${label}"><rect ${rect}/></a>`;
+        return `<a href="${escapeXml(href)}" class="${LINK_CLASS}" ${MAP_HIT_ATTRIBUTE}="${index}"${hitTileAttr} aria-label="${label}"><rect ${rect}/></a>`;
       }
       const role = node.hit.inspectTarget ? 'button' : 'img';
-      return `<rect ${rect} ${MAP_HIT_ATTRIBUTE}="${index}" tabindex="0" role="${role}" aria-label="${label}"/>`;
+      return `<rect ${rect} ${MAP_HIT_ATTRIBUTE}="${index}"${hitTileAttr} tabindex="0" role="${role}" aria-label="${label}"/>`;
     })
     .concat(`<g ${MAP_RINGS_ATTRIBUTE}="" pointer-events="none"></g>`)
     .join('');
+}
+
+/**
+ * Toggles spotlight dimming on an interactive map SVG without re-rendering markup.
+ * Passing `null` or an empty set restores every tile to full brightness.
+ */
+export function applyMapSpotlight(
+  svg: SVGSVGElement | undefined,
+  highlightedIds: ReadonlySet<string> | null,
+): void {
+  if (!svg) return;
+  const active = highlightedIds !== null && highlightedIds.size > 0;
+  svg.classList.toggle(MAP_SPOTLIGHT_CLASS, active);
+  const tagged = svg.querySelectorAll(`[${MAP_TILE_NODE_ATTRIBUTE}]`);
+  for (const el of tagged) {
+    const id = el.getAttribute(MAP_TILE_NODE_ATTRIBUTE);
+    el.classList.toggle(MAP_SPOTLIGHT_LIT_CLASS, Boolean(active && id && highlightedIds.has(id)));
+  }
 }
 
 /** Maximum number of curved connection arcs drawn when hovering or focusing one tile. */

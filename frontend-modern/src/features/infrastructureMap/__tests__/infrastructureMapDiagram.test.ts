@@ -20,9 +20,13 @@ import {
   buildInfrastructureMapModel,
 } from '../infrastructureMapModel';
 import {
+  applyMapSpotlight,
   MAP_MAX_LINK_ARCS,
   MAP_PAGE_PALETTES,
   MAP_PALETTES,
+  MAP_SPOTLIGHT_CLASS,
+  MAP_SPOTLIGHT_LIT_CLASS,
+  MAP_TILE_NODE_ATTRIBUTE,
   renderMapLinkRings,
   renderMapNetworkRings,
   renderMapSceneBody,
@@ -2805,6 +2809,117 @@ describe('layoutServiceDiagram', () => {
         },
       });
       expect(texts(withoutKey)).not.toContain('Link speed');
+    });
+
+    it('tags live tile nodes for spotlight dimming while keeping static exports clean', () => {
+      const diagram = buildServiceDiagram(buildInfrastructureMapModel(richEstate()));
+      const hostScene = layoutHostDiagram(diagram, { width: 1400, density: 'names' });
+      const liveBody = renderMapSceneBody(hostScene, MAP_PAGE_PALETTES.dark, () => null);
+      const staticSvg = renderMapSceneToSvg(hostScene, MAP_PALETTES.dark);
+
+      expect(liveBody).toContain(`${MAP_TILE_NODE_ATTRIBUTE}="pve-1"`);
+      expect(liveBody).toContain(`${MAP_TILE_NODE_ATTRIBUTE}="ct-102"`);
+      expect(staticSvg).not.toContain(`${MAP_TILE_NODE_ATTRIBUTE}=`);
+
+      const svg = document.createElementNS('http://www.w3.org/2000/svg', 'svg');
+      svg.innerHTML = liveBody;
+      applyMapSpotlight(svg, new Set(['pve-1', 'ct-102']));
+      expect(svg.classList.contains(MAP_SPOTLIGHT_CLASS)).toBe(true);
+      expect(
+        svg
+          .querySelector(`[${MAP_TILE_NODE_ATTRIBUTE}="pve-1"]`)
+          ?.classList.contains(MAP_SPOTLIGHT_LIT_CLASS),
+      ).toBe(true);
+      expect(
+        svg
+          .querySelector(`[${MAP_TILE_NODE_ATTRIBUTE}="docker-1"]`)
+          ?.classList.contains(MAP_SPOTLIGHT_LIT_CLASS),
+      ).toBe(false);
+
+      applyMapSpotlight(svg, null);
+      expect(svg.classList.contains(MAP_SPOTLIGHT_CLASS)).toBe(false);
+      expect(svg.querySelectorAll(`.${MAP_SPOTLIGHT_LIT_CLASS}`)).toHaveLength(0);
+    });
+
+    it('renders zero-truncation host specs alongside meters, host thermals, physical disk strips, and equal-height cluster rows', () => {
+      const resources: Resource[] = [
+        resource({
+          id: 'pve-a',
+          type: 'agent',
+          name: 'pve-01',
+          platformType: 'proxmox-pve',
+          clusterId: 'homelab',
+          cpu: { current: 28 },
+          memory: { current: 58, total: 64 * 1024 ** 3, used: 37 * 1024 ** 3 },
+          proxmox: { cpus: 16, pveVersion: '8.3.2', temperature: 51 },
+        }),
+        guest('jellyfin', { id: 'g-1', parentId: 'pve-a' }),
+        guest('grafana', { id: 'g-2', parentId: 'pve-a' }),
+        guest('plex', { id: 'g-3', parentId: 'pve-a' }),
+        resource({
+          id: 'disk-1',
+          type: 'physical_disk',
+          name: 'nvme0n1',
+          parentId: 'pve-a',
+          physicalDisk: { diskType: 'nvme', temperature: 41, health: 'PASSED' },
+        }),
+        resource({
+          id: 'disk-2',
+          type: 'physical_disk',
+          name: 'sda',
+          parentId: 'pve-a',
+          health: { verdict: 'attention', reasons: [] },
+          physicalDisk: { diskType: 'hdd', temperature: 56, health: 'WARN' },
+        }),
+        resource({
+          id: 'pve-b',
+          type: 'agent',
+          name: 'pve-02',
+          platformType: 'proxmox-pve',
+          clusterId: 'homelab',
+          cpu: { current: 18 },
+          memory: { current: 42, total: 64 * 1024 ** 3, used: 27 * 1024 ** 3 },
+          proxmox: { cpus: 12, pveVersion: '8.3.2' },
+        }),
+        guest('nextcloud', { id: 'g-4', parentId: 'pve-b' }),
+        resource({
+          id: 'nas-box',
+          type: 'agent',
+          name: 'nas-01',
+          platformType: 'truenas',
+          cpu: { current: 31 },
+          memory: { current: 66, total: 32 * 1024 ** 3, used: 21 * 1024 ** 3 },
+          truenas: { version: '24.10.1' },
+          agent: { cpuCount: 8 },
+        }),
+      ];
+
+      const diagram = buildServiceDiagram(buildInfrastructureMapModel(resources));
+      const scene = layoutHostDiagram(diagram, { width: 1400, density: 'names' });
+      const drawn = texts(scene);
+
+      // Zero-truncation version labels on Row 2 alongside live CPU/MEM meters
+      expect(drawn.some((text) => text.includes('PVE 8.3') && !text.includes('…'))).toBe(true);
+      expect(drawn.some((text) => text.includes('TrueNAS 24.10') && !text.includes('…'))).toBe(
+        true,
+      );
+      expect(drawn.some((text) => text.includes('51°C'))).toBe(true);
+
+      // Physical disk summary strip on pve-01
+      expect(drawn).toContain('DISKS');
+      expect(drawn.some((text) => text.includes('1× NVMe · 1× HDD'))).toBe(true);
+      expect(drawn.some((text) => text.includes('56°C'))).toBe(true);
+      expect(drawn.some((text) => text.includes('1 WARN'))).toBe(true);
+
+      // Equal-height sibling host frames inside cluster row (both share the same frame height)
+      const hostFrameRects = ofKind(scene, 'rect').filter(
+        (node) => node.r === 8 && node.fill === 'surface' && node.stroke === 'border',
+      );
+      const pveARect = hostFrameRects[0];
+      const pveBRect = hostFrameRects[1];
+      expect(pveARect).toBeDefined();
+      expect(pveBRect).toBeDefined();
+      expect(pveARect.h).toBe(pveBRect.h);
     });
   });
 });

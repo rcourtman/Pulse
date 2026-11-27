@@ -4344,6 +4344,10 @@ application resource-provider or WebSocket lifecycle.
 
 ## Current State
 
+### Infrastructure Map host temperature and physical disk telemetry summaries (27 November 2026)
+
+`buildInfrastructureMapModel` (`infrastructureMapModel.ts`) now extracts truthful host temperature (`temperatureC`, finite `1..150` °C across Proxmox, Docker, universal resource temperature, and agent sensor maxima) and aggregates child `physical_disk` resources per host (direct `parentId` or 1 hop through a host-owned storage pool) into `diskSummary` (`NVMe`, `SSD`, `HDD`, `Disk` counts), `diskMaxTempC` (finite `1..120` °C), and `unhealthyDiskCount` without altering `model.totals` or `attentionCount`. All four fields survive `anonymizeInfrastructureMapModel` because they carry no names, models, or serial numbers, and `buildServiceDiagram` propagates them onto host tiles and `matchesDiagramTileQuery`.
+
 ### Infrastructure Map automatic cluster metadata, category labels, link-speed flag, and factual arc labels (27 November 2026)
 
 `buildServiceDiagram` (`infrastructureMapServices.ts`) now attaches factual relationship labels onto `DiagramLink` (reverse-proxy route hostnames or `routes` when names are hidden, `via <container>`, `checks`, `gateway`, `DNS`, `mounts`, `storage`, `backups`, and `runs on` with higher-specificity precedence), projects `categoryLabel` and `isRouted` onto `DiagramTile`, projects `clusterId`, `clusterTypeLabel`, and non-backup `clusterPools` onto `DiagramHostFrame` without duplicating 2+ node cluster pools in `sharedStorage`, and computes `ServiceDiagram.hasLinkSpeeds` from collected NIC speeds. All projections remain 100% automatic from live unified resource telemetry.

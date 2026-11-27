@@ -1234,4 +1234,229 @@ describe('live network telemetry extraction', () => {
     ).toBeUndefined();
     expect(JSON.stringify(anonymous)).not.toContain('media-stack');
   });
+
+  it('extracts host temperature across Proxmox, Docker, universal, and agent sensors while ignoring invalid values', () => {
+    const model = buildInfrastructureMapModel([
+      resource({
+        id: 'pve-temp',
+        type: 'agent',
+        name: 'pve-hot',
+        platformType: 'proxmox-pve',
+        proxmox: { temperature: 48.4 },
+      }),
+      resource({
+        id: 'dock-temp',
+        type: 'docker-host',
+        name: 'docker-hot',
+        platformType: 'docker',
+        docker: { temperature: 61.6 },
+      }),
+      resource({
+        id: 'agent-temp',
+        type: 'agent',
+        name: 'linux-sensors',
+        platformType: 'agent',
+        proxmox: { temperature: 0 },
+        agent: {
+          sensors: {
+            temperatureCelsius: {
+              cpu_package: 54.2,
+              core_0: 57.6,
+              cold: 0,
+              sub_one: 0.5,
+              wild: 151,
+              broken: Number.NaN,
+            },
+          },
+        },
+      }),
+      resource({
+        id: 'universal-temp',
+        type: 'agent',
+        name: 'universal-box',
+        platformType: 'agent',
+        temperature: 43.3,
+      }),
+      resource({
+        id: 'invalid-temp',
+        type: 'agent',
+        name: 'bad-sensors',
+        platformType: 'proxmox-pve',
+        proxmox: { temperature: Number.POSITIVE_INFINITY },
+        temperature: -4,
+        agent: {
+          sensors: {
+            temperatureCelsius: { zero: 0, negative: -10, over: 160, nan: Number.NaN },
+          },
+        },
+      }),
+    ]);
+
+    expect(hostNamed(model.blocks, 'pve-hot').temperatureC).toBe(48);
+    expect(hostNamed(model.blocks, 'docker-hot').temperatureC).toBe(62);
+    expect(hostNamed(model.blocks, 'linux-sensors').temperatureC).toBe(58);
+    expect(hostNamed(model.blocks, 'universal-box').temperatureC).toBe(43);
+    expect(hostNamed(model.blocks, 'bad-sensors').temperatureC).toBeUndefined();
+  });
+
+  it('summarizes child physical disks, max disk temperature, and unhealthy count without altering totals or anonymization safety', () => {
+    const model = buildInfrastructureMapModel([
+      resource({
+        id: 'pve-1',
+        type: 'agent',
+        name: 'secret-pve',
+        platformType: 'proxmox-pve',
+        proxmox: { temperature: 51.2 },
+      }),
+      resource({
+        id: 'disk-nvme-1',
+        type: 'physical_disk',
+        name: 'Samsung 990 Pro',
+        platformType: 'proxmox-pve',
+        parentId: 'pve-1',
+        status: 'online',
+        physicalDisk: {
+          diskType: 'NVMe',
+          model: 'Samsung-990-PRO-Secret',
+          serial: 'SN-SECRET-001',
+          temperature: 46.6,
+          health: 'PASSED',
+        },
+      }),
+      resource({
+        id: 'disk-nvme-2',
+        type: 'physical_disk',
+        name: 'WD Black',
+        platformType: 'proxmox-pve',
+        parentId: 'pve-1',
+        status: 'online',
+        physicalDisk: { diskType: 'nvme', temperature: 121, health: 'OK' },
+      }),
+      ...Array.from({ length: 4 }, (_, index) =>
+        resource({
+          id: `disk-hdd-${index}`,
+          type: 'physical_disk',
+          name: `Seagate Exos ${index}`,
+          platformType: 'proxmox-pve',
+          parentId: 'pve-1',
+          status: index === 0 ? 'degraded' : 'online',
+          physicalDisk: {
+            diskType: index % 2 === 0 ? 'HDD' : 'hdd',
+            temperature: index === 1 ? 39.2 : 0,
+            health: index === 2 ? 'PREFAIL' : 'PASSED',
+          },
+        }),
+      ),
+      resource({
+        id: 'nas-1',
+        type: 'agent',
+        name: 'generic-nas',
+        platformType: 'truenas',
+      }),
+      resource({
+        id: 'pool-1',
+        type: 'storage',
+        name: 'tank',
+        platformType: 'truenas',
+        parentId: 'nas-1',
+      }),
+      resource({
+        id: 'generic-1',
+        type: 'physical_disk',
+        name: 'sda',
+        platformType: 'truenas',
+        parentId: 'pool-1',
+        status: 'online',
+        physicalDisk: { diskType: 'sata', temperature: 34, health: 'PASSED' },
+      }),
+      resource({
+        id: 'generic-2',
+        type: 'physical_disk',
+        name: 'sdb',
+        platformType: 'truenas',
+        parentId: 'pool-1',
+        status: 'online',
+        physicalDisk: { diskType: 'sas', temperature: 36.4, health: 'warning' },
+      }),
+      resource({
+        id: 'generic-3',
+        type: 'physical_disk',
+        name: 'sdc',
+        platformType: 'truenas',
+        parentId: 'nas-1',
+        status: 'online',
+        physicalDisk: { temperature: Number.NaN },
+      }),
+      resource({
+        id: 'mixed-host',
+        type: 'agent',
+        name: 'mixed-box',
+        platformType: 'agent',
+      }),
+      resource({
+        id: 'mix-ssd',
+        type: 'physical_disk',
+        name: 'ssd-0',
+        parentId: 'mixed-host',
+        physicalDisk: { diskType: 'ssd', health: 'OK' },
+      }),
+      resource({
+        id: 'mix-other',
+        type: 'physical_disk',
+        name: 'raw-0',
+        parentId: 'mixed-host',
+        physicalDisk: { diskType: 'usb', health: 'OK' },
+      }),
+    ]);
+
+    const pve = hostNamed(model.blocks, 'secret-pve');
+    expect(pve).toMatchObject({
+      temperatureC: 51,
+      diskSummary: '2× NVMe · 4× HDD',
+      diskMaxTempC: 47,
+      unhealthyDiskCount: 2,
+    });
+    expect(pve.sections).toEqual([]);
+
+    const nas = hostNamed(model.blocks, 'generic-nas');
+    expect(nas).toMatchObject({
+      diskSummary: '3 disks',
+      diskMaxTempC: 36,
+      unhealthyDiskCount: 1,
+    });
+
+    const mixed = hostNamed(model.blocks, 'mixed-box');
+    expect(mixed.diskSummary).toBe('1× SSD · 1× Disk');
+    expect(mixed.diskMaxTempC).toBeUndefined();
+    expect(mixed.unhealthyDiskCount).toBeUndefined();
+
+    // Physical disks do not perturb model.totals or model.attentionCount.
+    expect(Object.fromEntries(model.totals.map((total) => [total.label, total.count]))).toEqual({
+      Hosts: 3,
+      Storage: 1,
+    });
+    expect(model.attentionCount).toBe(0);
+
+    // Anonymization preserves generic thermal and disk summaries while revealing no names or serials.
+    const anonymous = anonymizeInfrastructureMapModel(model);
+    const anonPve = hostsOf(anonymous.blocks).find((host) => host.id === 'pve-1')!;
+    const anonNas = hostsOf(anonymous.blocks).find((host) => host.id === 'nas-1')!;
+    expect(anonPve).toMatchObject({
+      name: 'Proxmox 1',
+      temperatureC: 51,
+      diskSummary: '2× NVMe · 4× HDD',
+      diskMaxTempC: 47,
+      unhealthyDiskCount: 2,
+    });
+    expect(anonNas).toMatchObject({
+      name: 'TrueNAS 1',
+      diskSummary: '3 disks',
+      diskMaxTempC: 36,
+      unhealthyDiskCount: 1,
+    });
+    const serialized = JSON.stringify(anonymous);
+    expect(serialized).not.toContain('secret-pve');
+    expect(serialized).not.toContain('Samsung-990-PRO-Secret');
+    expect(serialized).not.toContain('SN-SECRET-001');
+  });
 });

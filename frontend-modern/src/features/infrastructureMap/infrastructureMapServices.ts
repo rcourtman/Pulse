@@ -77,6 +77,10 @@ export interface DiagramTile {
   cpuCores?: number;
   memoryTotalBytes?: number;
   versionLabel?: string;
+  temperatureC?: number;
+  diskSummary?: string;
+  diskMaxTempC?: number;
+  unhealthyDiskCount?: number;
   usedPercent?: number;
   sizeLabel?: string;
   vdevLayout?: string;
@@ -644,6 +648,7 @@ export const matchesDiagramTileQuery = (
     tile.composeProject,
     tile.hostName,
     tile.versionLabel,
+    tile.diskSummary,
     tile.sizeLabel,
     tile.vdevLayout,
     tile.storageType,
@@ -1162,6 +1167,12 @@ export function buildServiceDiagram(
       ...(host.cpuCores !== undefined ? { cpuCores: host.cpuCores } : {}),
       ...(host.memoryTotalBytes !== undefined ? { memoryTotalBytes: host.memoryTotalBytes } : {}),
       ...(host.versionLabel ? { versionLabel: host.versionLabel } : {}),
+      ...(host.temperatureC !== undefined ? { temperatureC: host.temperatureC } : {}),
+      ...(host.diskSummary ? { diskSummary: host.diskSummary } : {}),
+      ...(host.diskMaxTempC !== undefined ? { diskMaxTempC: host.diskMaxTempC } : {}),
+      ...(host.unhealthyDiskCount !== undefined
+        ? { unhealthyDiskCount: host.unhealthyDiskCount }
+        : {}),
       cpu: host.cpu,
       memory: host.memory,
       ...tileNetworkTelemetry(host),

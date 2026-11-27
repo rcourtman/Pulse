@@ -2614,5 +2614,105 @@ describe('buildServiceDiagram', () => {
       expect(diagramOf(archEstate()).hasLinkSpeeds).toBe(true);
       expect(diagramOf(homelab()).hasLinkSpeeds).toBeUndefined();
     });
+
+    it('propagates host temperature and physical disk metadata onto hostFrames and hardware tiles and matches diskSummary in search', () => {
+      const resources: Resource[] = [
+        resource({
+          id: 'pve-1',
+          type: 'agent',
+          name: 'pve-nvme',
+          platformType: 'proxmox-pve',
+          proxmox: { temperature: 48.3 },
+        }),
+        resource({
+          id: 'd-nvme-1',
+          type: 'physical_disk',
+          name: 'nvme0n1',
+          platformType: 'proxmox-pve',
+          parentId: 'pve-1',
+          status: 'online',
+          physicalDisk: { diskType: 'nvme', temperature: 42, health: 'PASSED' },
+        }),
+        resource({
+          id: 'd-nvme-2',
+          type: 'physical_disk',
+          name: 'nvme1n1',
+          platformType: 'proxmox-pve',
+          parentId: 'pve-1',
+          status: 'online',
+          physicalDisk: { diskType: 'nvme', temperature: 45, health: 'PASSED' },
+        }),
+        resource({
+          id: 'd-hdd-1',
+          type: 'physical_disk',
+          name: 'sda',
+          platformType: 'proxmox-pve',
+          parentId: 'pve-1',
+          status: 'degraded',
+          physicalDisk: { diskType: 'hdd', temperature: 38, health: 'FAILED' },
+        }),
+        resource({
+          id: 'dock-1',
+          type: 'docker-host',
+          name: 'docker-ssd',
+          platformType: 'docker',
+          docker: { temperature: 55 },
+        }),
+        resource({
+          id: 'd-ssd-1',
+          type: 'physical_disk',
+          name: 'sdb',
+          platformType: 'docker',
+          parentId: 'dock-1',
+          status: 'online',
+          physicalDisk: { diskType: 'ssd', temperature: 33, health: 'OK' },
+        }),
+      ];
+
+      const model = buildInfrastructureMapModel(resources);
+      const diagram = buildServiceDiagram(model);
+
+      const pveFrameHost = diagram.hostFrames.find((frame) => frame.id === 'pve-1')?.host;
+      const pveHardware = diagram.hardware?.tiles.find((tile) => tile.id === 'pve-1');
+      const expectedPve = {
+        temperatureC: 48,
+        diskSummary: '2× NVMe · 1× HDD',
+        diskMaxTempC: 45,
+        unhealthyDiskCount: 1,
+      };
+      expect(pveFrameHost).toMatchObject(expectedPve);
+      expect(pveHardware).toMatchObject(expectedPve);
+
+      const dockFrameHost = diagram.hostFrames.find((frame) => frame.id === 'dock-1')?.host;
+      const dockHardware = diagram.hardware?.tiles.find((tile) => tile.id === 'dock-1');
+      const expectedDock = {
+        temperatureC: 55,
+        diskSummary: '1× SSD',
+        diskMaxTempC: 33,
+      };
+      expect(dockFrameHost).toMatchObject(expectedDock);
+      expect(dockHardware).toMatchObject(expectedDock);
+      expect(dockFrameHost?.unhealthyDiskCount).toBeUndefined();
+
+      // Query matching finds hosts by diskSummary tokens (e.g. "nvme", "hdd", "ssd").
+      const nvmeSearch = buildServiceDiagram(model, { filter: { query: 'nvme' } });
+      expect(nvmeSearch.hostFrames.map((frame) => frame.id)).toEqual(['pve-1']);
+      expect(nvmeSearch.hardware?.tiles.map((tile) => tile.id)).toEqual(['pve-1']);
+
+      const hddSearch = buildServiceDiagram(model, { filter: { query: 'hdd' } });
+      expect(hddSearch.hostFrames.map((frame) => frame.id)).toEqual(['pve-1']);
+      expect(hddSearch.hardware?.tiles.map((tile) => tile.id)).toEqual(['pve-1']);
+
+      const ssdSearch = buildServiceDiagram(model, { filter: { query: 'ssd' } });
+      expect(ssdSearch.hostFrames.map((frame) => frame.id)).toEqual(['dock-1']);
+      expect(ssdSearch.hardware?.tiles.map((tile) => tile.id)).toEqual(['dock-1']);
+
+      // Hide names preserves thermal and disk summaries on host tiles.
+      const hidden = buildServiceDiagram(anonymizeInfrastructureMapModel(model));
+      expect(hidden.hostFrames.find((frame) => frame.id === 'pve-1')?.host).toMatchObject(
+        expectedPve,
+      );
+      expect(hidden.hardware?.tiles.find((tile) => tile.id === 'pve-1')).toMatchObject(expectedPve);
+    });
   });
 });

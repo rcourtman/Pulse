@@ -76,6 +76,7 @@ import {
   MAP_TRAFFIC_ACTIVE_BYTES,
 } from './infrastructureMapModel';
 import {
+  applyMapSpotlight,
   MAP_HIT_ATTRIBUTE,
   MAP_INSPECT_ATTRIBUTE,
   MAP_PAGE_PALETTES,
@@ -227,6 +228,19 @@ const formatHostSpecs = (hit: MapHit): string =>
     .filter(Boolean)
     .join(' · ');
 
+const formatHitDiskSummary = (hit: MapHit): string => {
+  if (!hit.diskSummary) return '';
+  return [
+    `Disks: ${hit.diskSummary}`,
+    hit.diskMaxTempC !== undefined ? `max ${Math.round(hit.diskMaxTempC)}°C` : '',
+    hit.unhealthyDiskCount && hit.unhealthyDiskCount > 0
+      ? `${hit.unhealthyDiskCount} unhealthy`
+      : '',
+  ]
+    .filter(Boolean)
+    .join(' · ');
+};
+
 const formatHitVmid = (hit: MapHit): string => {
   if (hit.vmid === undefined) return '';
   const isContainer = /\b(container|lxc)\b/i.test(hit.meta);
@@ -256,6 +270,7 @@ const hitLines = (hit: MapHit, density?: MapDensity): string[] =>
         ? 'Compact draws more of them'
         : '',
     formatHostSpecs(hit),
+    formatHitDiskSummary(hit),
     formatHitStoragePool(hit),
     [
       formatHitVmid(hit),
@@ -274,6 +289,7 @@ const hitLines = (hit: MapHit, density?: MapDensity): string[] =>
     [
       hit.cpu !== undefined ? `CPU ${Math.round(hit.cpu)}%` : '',
       hit.memory !== undefined ? `Memory ${Math.round(hit.memory)}%` : '',
+      hit.temperatureC !== undefined ? `${Math.round(hit.temperatureC)}°C` : '',
       formatNetTelemetry(hit.netRxBytes, hit.netTxBytes),
       formatProbeAndLatency(hit.probeSummary, hit.latencyMs),
       hit.certWarning ?? '',
@@ -711,10 +727,15 @@ export function InfrastructureMapSurface() {
     const shown = hover();
     const hoveredNet = hoveredNetworkInfo();
     const showLiveTraffic = liveTraffic();
-    const layer = svgElement()?.querySelector(`[${MAP_RINGS_ATTRIBUTE}]`);
-    if (!layer) return;
+    const svg = svgElement();
+    const layer = svg?.querySelector(`[${MAP_RINGS_ATTRIBUTE}]`);
+    if (!layer) {
+      applyMapSpotlight(svg, null);
+      return;
+    }
     if (!current) {
       layer.innerHTML = '';
+      applyMapSpotlight(svg, null);
       return;
     }
     if (shown) {
@@ -723,14 +744,27 @@ export function InfrastructureMapSurface() {
       layer.innerHTML =
         (armed() === null ? '' : renderMapTappedTile(current, shown.hit, palette())) +
         renderMapLinkRings(current, shown.hit, palette(), { liveTraffic: showLiveTraffic });
+      if (shown.hit.linked?.length) {
+        applyMapSpotlight(svg, new Set([shown.hit.id, ...shown.hit.linked]));
+      } else {
+        applyMapSpotlight(svg, null);
+      }
       return;
     }
     if (hoveredNet) {
       const color = palette()[networkTone(hoveredNet.colorIndex)];
       layer.innerHTML = renderMapNetworkRings(current, hoveredNet.id, color);
+      const highlighted = new Set<string>();
+      for (const hit of hits()) {
+        if (hit.segmentIds?.includes(hoveredNet.id)) {
+          highlighted.add(hit.id);
+        }
+      }
+      applyMapSpotlight(svg, highlighted.size > 0 ? highlighted : null);
       return;
     }
     layer.innerHTML = '';
+    applyMapSpotlight(svg, null);
   });
 
   const hitFromEvent = (event: Event): { hit: MapHit; element: Element } | null => {
@@ -1071,8 +1105,8 @@ export function InfrastructureMapSurface() {
           </button>
         </Show>
         <Show when={!liveModel().isEmpty}>
-          <div class="flex w-full flex-wrap items-center gap-2 sm:ml-auto sm:w-auto">
-            <div class="relative w-full sm:w-48 sm:flex-none md:w-56">
+          <div class="flex w-full flex-wrap items-center gap-1.5 sm:ml-auto sm:w-auto">
+            <div class="relative w-full sm:w-40 sm:flex-none md:w-44 lg:w-52">
               <SearchIcon
                 class="pointer-events-none absolute top-1/2 left-2.5 h-3.5 w-3.5 -translate-y-1/2 text-muted"
                 aria-hidden="true"
