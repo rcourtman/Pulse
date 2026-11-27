@@ -76,6 +76,9 @@ export interface DiagramTile {
   linkSpeedMbps?: number;
   linkDownCount?: number;
   firewallEnabled?: boolean;
+  dockerNetworks?: string[];
+  probeSummary?: string;
+  certWarning?: string;
   address?: string;
   detail?: string;
   /** What the thing's connections say about it, one sentence each, for the hover. */
@@ -142,6 +145,8 @@ export interface ServiceDiagram {
   backups?: DiagramGroup;
   hardware?: DiagramGroup;
   serviceCount: number;
+  /** Aggregate live estate network throughput in bytes per second, avoiding host/guest double-counting. */
+  estateTrafficBytes?: number;
 }
 
 export interface ServiceDiagramFilter {
@@ -489,6 +494,7 @@ const serviceTile = (item: MapItem, host: MapHost, plan: NetworkPlan): DiagramTi
   cpu: item.cpu,
   memory: item.memory,
   ...tileNetworkTelemetry(item),
+  ...(item.dockerNetworks?.length ? { dockerNetworks: item.dockerNetworks } : {}),
   address: plan.where(item.address, item.segmentIds),
   detail: item.detail,
   navigable: true,
@@ -519,6 +525,8 @@ const gearTile = (
     ...plannedTileNetworks(item.segmentIds, plan),
     address: plan.where(item.address, item.segmentIds),
     ...tileNetworkTelemetry(item),
+    ...(item.probeSummary ? { probeSummary: item.probeSummary } : {}),
+    ...(item.certWarning ? { certWarning: item.certWarning } : {}),
     navigable: true,
   };
 };
@@ -560,6 +568,9 @@ export const matchesDiagramTileQuery = (
     tile.health,
     tile.address,
     tile.detail,
+    ...(tile.dockerNetworks ?? []),
+    tile.probeSummary,
+    tile.certWarning,
     extraText,
   ]
     .filter(Boolean)
@@ -595,6 +606,24 @@ export const collectNetworkTiles = (
     }
   }
   return out.sort((a, b) => compareDiagramTilesByAttention(a.tile, b.tile));
+};
+
+/** Return every unique navigable tile across the diagram with live traffic (> 0 B/s), busiest first. */
+export const collectActiveTrafficTiles = (
+  diagram: ServiceDiagram,
+): Array<{ tile: DiagramTile; groupLabel: string }> => {
+  const seen = new Set<string>();
+  const out: Array<{ tile: DiagramTile; groupLabel: string }> = [];
+  for (const group of collectDiagramGroups(diagram)) {
+    for (const tile of group.allTiles) {
+      if (!tile.navigable || seen.has(tile.id)) continue;
+      if (tile.netTotalBytes !== undefined && tile.netTotalBytes > 0) {
+        seen.add(tile.id);
+        out.push({ tile, groupLabel: group.label });
+      }
+    }
+  }
+  return out.sort((a, b) => compareDiagramTilesByTraffic(a.tile, b.tile));
 };
 
 // Running things first, then by name, so the tiles that fold away when a
@@ -790,6 +819,8 @@ export function buildServiceDiagram(
   const hardware: DiagramTile[] = [];
   const backupServers: DiagramTile[] = [];
   const checks: DiagramTile[] = [];
+  const hostIds = new Set<string>();
+  const checkTargets = new Map<string, string>();
   // What each machine runs, by tile id and by how many of each kind.
   const runsOn = new Map<string, Array<{ id: string; category: MapCategoryId }>>();
   const mountsOf = new Map<string, MapMount[]>();
@@ -872,6 +903,7 @@ export function buildServiceDiagram(
     if (host.platform === 'checks' && !host.isResource) {
       for (const section of host.sections) {
         for (const item of section.items) {
+          if (item.linkedResourceId) checkTargets.set(item.id, item.linkedResourceId);
           if (isNetworkGearKind(item.checkKind)) {
             const list = byCategory.get('access') ?? [];
             const gear = gearTile(item, item.checkKind, plan);
@@ -892,6 +924,8 @@ export function buildServiceDiagram(
             ...plannedTileNetworks(item.segmentIds, plan),
             address: plan.where(item.address, item.segmentIds),
             ...tileNetworkTelemetry(item),
+            ...(item.probeSummary ? { probeSummary: item.probeSummary } : {}),
+            ...(item.certWarning ? { certWarning: item.certWarning } : {}),
             navigable: true,
           });
         }
@@ -905,6 +939,7 @@ export function buildServiceDiagram(
       });
     }
     if (!host.isResource) continue;
+    hostIds.add(host.id);
     recordTileNetworks(host.id, host.ownSegmentIds);
     const tile: DiagramTile = {
       id: host.id,
@@ -1039,8 +1074,13 @@ export function buildServiceDiagram(
   };
 
   const links: DiagramLink[] = [];
+  const linkPairs = new Set<string>();
   const tie = (fromId: string, toId: string) => {
-    if (drawn.has(fromId) && drawn.has(toId)) links.push({ fromId, toId });
+    if (fromId === toId || !drawn.has(fromId) || !drawn.has(toId)) return;
+    const key = fromId < toId ? `${fromId}>${toId}` : `${toId}>${fromId}`;
+    if (linkPairs.has(key)) return;
+    linkPairs.add(key);
+    links.push({ fromId, toId });
   };
 
   // A machine is linked to what runs on it and the storage it has, and
@@ -1197,7 +1237,7 @@ export function buildServiceDiagram(
       }
       routedBy.set(from.id, (routedBy.get(from.id) ?? 0) + 1);
     }
-    links.push({ fromId: link.fromId, toId: link.toId });
+    tie(link.fromId, link.toId);
   }
   for (const [id, count] of carried) {
     const tile = drawn.get(id);
@@ -1208,10 +1248,26 @@ export function buildServiceDiagram(
     if (tile) say(tile, `Routes ${plural(count, 'container', 'containers')}`);
   }
 
+  for (const [checkId, targetId] of checkTargets) {
+    if (checkId === targetId) continue;
+    const check = drawn.get(checkId);
+    const target = drawn.get(targetId);
+    if (!check || !target) continue;
+    tie(check.id, target.id);
+    say(check, `Checks ${target.name}`);
+    say(
+      target,
+      check.latencyMs !== undefined
+        ? `Checked by ${check.name} · ${formatMapLatency(check.latencyMs)}`
+        : `Checked by ${check.name}`,
+    );
+  }
+
   const machineNames = (ids: string[]): string[] =>
     ids.map((id) => drawn.get(id)?.name).filter((name): name is string => Boolean(name));
   const gateways: DiagramTile[] = [];
   const gatewayTiles = new Map<number, DiagramTile>();
+  const gatewayMachineIds = new Map<string, string[]>();
   model.connections.gateways.forEach((gateway, index) => {
     const names = machineNames(gateway.machineIds);
     // A gateway only machines that are not drawn point at says nothing here.
@@ -1219,6 +1275,9 @@ export function buildServiceDiagram(
     const owner = gateway.resourceId ? drawn.get(gateway.resourceId) : undefined;
     if (owner) {
       say(owner, `Default gateway of ${nameList(names)}`);
+      for (const machineId of gateway.machineIds) {
+        if (machineId !== owner.id) tie(owner.id, machineId);
+      }
       return;
     }
     const tile: DiagramTile = {
@@ -1237,6 +1296,7 @@ export function buildServiceDiagram(
     };
     gateways.push(tile);
     gatewayTiles.set(index, tile);
+    gatewayMachineIds.set(tile.id, [...gateway.machineIds]);
   });
   // A resolver is only said where it is already on the map: a monitored
   // thing, or a gateway with the same address. An address nothing else
@@ -1245,13 +1305,71 @@ export function buildServiceDiagram(
     const owner =
       (resolver.resourceId ? drawn.get(resolver.resourceId) : undefined) ??
       (resolver.gateway === undefined ? undefined : gatewayTiles.get(resolver.gateway));
-    const names = machineNames(resolver.machineIds.filter((id) => id !== resolver.resourceId));
-    if (owner && names.length > 0) say(owner, `Resolves names for ${nameList(names)}`);
+    const machineIds = resolver.machineIds.filter((id) => id !== resolver.resourceId);
+    const names = machineNames(machineIds);
+    if (owner && names.length > 0) {
+      say(owner, `Resolves names for ${nameList(names)}`);
+      if (resolver.resourceId && drawn.has(owner.id)) {
+        for (const machineId of machineIds) {
+          if (machineId !== owner.id) tie(owner.id, machineId);
+        }
+      } else if (resolver.gateway !== undefined) {
+        const existing = gatewayMachineIds.get(owner.id) ?? [];
+        gatewayMachineIds.set(owner.id, [...new Set([...existing, ...machineIds])]);
+      }
+    }
   }
 
   const visibleGateways = (
     hasFilter ? gateways.filter((tile) => matchesFilter(tile, 'Gateway')) : gateways
   ).slice(0, DIAGRAM_MAX_GATEWAYS);
+  for (const gatewayTile of visibleGateways) {
+    drawn.set(gatewayTile.id, gatewayTile);
+    for (const machineId of gatewayMachineIds.get(gatewayTile.id) ?? []) {
+      tie(gatewayTile.id, machineId);
+    }
+  }
+
+  // Aggregate live network throughput across the estate without double-counting
+  // hosts alongside their reporting workloads: for each host, contribute the
+  // sum of its reporting children when any report traffic, otherwise the host's
+  // own rate. Include any standalone reporting workloads not counted under a host.
+  const allNavigable = new Map<string, DiagramTile>();
+  for (const entry of boxes) {
+    if (!entry) continue;
+    for (const tile of entry.allTiles) {
+      if (tile.navigable && !allNavigable.has(tile.id)) allNavigable.set(tile.id, tile);
+    }
+  }
+  const countedTrafficIds = new Set<string>();
+  let estateTrafficSum = 0;
+  for (const hostId of hostIds) {
+    const hostTile = allNavigable.get(hostId);
+    if (!hostTile) continue;
+    countedTrafficIds.add(hostId);
+    let childrenReporting = 0;
+    let childrenSum = 0;
+    for (const { id: childId } of runsOn.get(hostId) ?? []) {
+      const child = allNavigable.get(childId);
+      if (!child || countedTrafficIds.has(childId)) continue;
+      countedTrafficIds.add(childId);
+      if (child.netTotalBytes !== undefined && child.netTotalBytes > 0) {
+        childrenReporting += 1;
+        childrenSum += child.netTotalBytes;
+      }
+    }
+    if (childrenReporting > 0) {
+      estateTrafficSum += childrenSum;
+    } else if (hostTile.netTotalBytes !== undefined && hostTile.netTotalBytes > 0) {
+      estateTrafficSum += hostTile.netTotalBytes;
+    }
+  }
+  for (const [id, tile] of allNavigable) {
+    if (countedTrafficIds.has(id)) continue;
+    if (tile.netTotalBytes !== undefined && tile.netTotalBytes > 0) {
+      estateTrafficSum += tile.netTotalBytes;
+    }
+  }
 
   return {
     ...(internetRoles.length > 0 && (!hasFilter || access !== undefined)
@@ -1266,5 +1384,6 @@ export function buildServiceDiagram(
     ...(backupBox ? { backups: backupBox } : {}),
     ...(hardwareBox ? { hardware: hardwareBox } : {}),
     serviceCount,
+    ...(estateTrafficSum > 0 ? { estateTrafficBytes: estateTrafficSum } : {}),
   };
 }

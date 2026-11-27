@@ -560,4 +560,111 @@ describe('InfrastructureMapSurface scale interactions', () => {
     expect(drawer.textContent).toContain('10G');
     expect(drawer.textContent).toContain('Link down');
   });
+
+  it('inspects estate-wide Live traffic drawer with default Traffic sort, Docker networks, probe summaries, and cert badges', () => {
+    resourcesMock.value = [
+      resource({
+        id: 'pve-talker-host',
+        type: 'agent',
+        name: 'pve-talker-host',
+        platformType: 'proxmox-pve',
+      }),
+      resource({
+        id: 'docker-01',
+        type: 'docker-host',
+        name: 'docker-01',
+        platformType: 'docker',
+      }),
+      resource({
+        id: 'ctr-jellyfin',
+        type: 'app-container',
+        name: 'jellyfin',
+        platformType: 'docker',
+        parentId: 'docker-01',
+        status: 'running',
+        network: { rxBytes: 15_728_640, txBytes: 5_242_880 },
+        docker: {
+          hostSourceId: 'docker-01',
+          containerId: 'b'.repeat(64),
+          containerState: 'running',
+          image: 'jellyfin/jellyfin:latest',
+          networkMode: 'bridge',
+          networks: [{ name: 'bridge' }, { name: 'frontend' }, { name: 'media' }],
+        },
+      }),
+      resource({
+        id: 'vm-degraded-talker',
+        type: 'vm',
+        name: 'degraded-talker',
+        platformType: 'proxmox-pve',
+        parentId: 'pve-talker-host',
+        status: 'degraded',
+        network: { rxBytes: 524_288, txBytes: 524_288 },
+      }),
+      resource({
+        id: 'chk-expired',
+        type: 'network-endpoint',
+        name: 'portal-check',
+        platformType: 'availability',
+        status: 'degraded',
+        availability: {
+          targetKind: 'service',
+          address: 'https://portal.example.com',
+          protocol: 'https',
+          applicationStatusCode: 200,
+          available: true,
+          latencyMillis: 14,
+          certificate: {
+            observedAt: '2026-11-27T10:00:00Z',
+            notBefore: '2025-01-01T00:00:00Z',
+            notAfter: '2026-11-01T00:00:00Z',
+            fingerprintSha256: 'def',
+            trustStatus: 'expired',
+            chainValid: false,
+            hostnameValid: true,
+            selfSigned: false,
+          },
+        },
+      }),
+    ];
+
+    const { container } = render(() => <InfrastructureMapSurface />);
+
+    // Open estate-wide Live traffic drawer via summary pill (20 MB/s + 1 MB/s = 21.0 MB/s).
+    const trafficPill = screen.getByTestId('infrastructure-map-traffic-summary');
+    expect(trafficPill).toHaveTextContent('21.0 MB/s');
+    fireEvent.click(trafficPill);
+
+    const drawer = screen.getByTestId('infrastructure-map-drawer');
+    expect(drawer).toBeInTheDocument();
+    expect(screen.getByRole('heading', { name: 'Live traffic' })).toBeInTheDocument();
+    expect(drawer.textContent).toContain('2 active resources');
+    expect(drawer.textContent).toContain('21.0 MB/s total');
+
+    const list = screen.getByTestId('infrastructure-map-drawer-list');
+    // Traffic sort is default: jellyfin (20 MB/s) before degraded-talker (1 MB/s).
+    expect(list.querySelectorAll('li')[0]?.textContent).toContain('jellyfin');
+    expect(list.querySelectorAll('li')[0]?.textContent).toContain('Docker net: frontend, media');
+    expect(list.querySelectorAll('li')[1]?.textContent).toContain('degraded-talker');
+
+    // Switching to Attention sort promotes degraded-talker to the top.
+    const sortGroup = screen.getByTestId('infrastructure-map-drawer-sort');
+    const attentionBtn = sortGroup.querySelectorAll('button')[0]!;
+    const trafficBtn = sortGroup.querySelectorAll('button')[1]!;
+    expect(trafficBtn).toHaveAttribute('aria-pressed', 'true');
+    fireEvent.click(attentionBtn);
+    expect(attentionBtn).toHaveAttribute('aria-pressed', 'true');
+    expect(list.querySelectorAll('li')[0]?.textContent).toContain('degraded-talker');
+
+    // Inspect Checks drawer to verify combined probeSummary + latency and Cert expired badge.
+    fireEvent.keyDown(document, { key: 'Escape' });
+    const checksHeader = container.querySelector(
+      `[${MAP_INSPECT_ATTRIBUTE}][aria-label^="Inspect Checks"]`,
+    );
+    expect(checksHeader).not.toBeNull();
+    fireEvent.click(checksHeader!);
+    const checksList = screen.getByTestId('infrastructure-map-drawer-list');
+    expect(checksList.textContent).toContain('HTTPS 200 · 14 ms');
+    expect(checksList.textContent).toContain('Cert expired');
+  });
 });

@@ -69,6 +69,7 @@ import {
 import {
   anonymizeInfrastructureMapModel,
   buildInfrastructureMapModel,
+  MAP_TRAFFIC_ACTIVE_BYTES,
 } from './infrastructureMapModel';
 import {
   MAP_HIT_ATTRIBUTE,
@@ -136,6 +137,20 @@ const formatNetTelemetry = (rxBytes?: number, txBytes?: number): string => {
   return `Net ↓ ${formatSpeed(rx)} ↑ ${formatSpeed(tx)}`;
 };
 
+const formatDockerNetworks = (networks?: string[]): string => {
+  if (!networks?.length) return '';
+  const shown = networks.slice(0, 2).join(', ');
+  const extra = networks.length > 2 ? ` +${networks.length - 2}` : '';
+  return `Docker net: ${shown}${extra}`;
+};
+
+const formatProbeAndLatency = (probeSummary?: string, latencyMs?: number): string => {
+  const latency = latencyMs !== undefined ? formatMapLatency(latencyMs) : '';
+  if (probeSummary && latency) return `${probeSummary} · ${latency}`;
+  if (probeSummary) return probeSummary;
+  return latency ? `Latency ${latency}` : '';
+};
+
 /** What a tile's card says under its name: what it is, where, what it is connected to, how busy. */
 const hitLines = (hit: MapHit, density?: MapDensity): string[] =>
   [
@@ -149,6 +164,7 @@ const hitLines = (hit: MapHit, density?: MapDensity): string[] =>
       // A plain check's caption is its address, so the line above has said it.
       hit.address && !hit.meta.includes(hit.address) ? hit.address : '',
       hit.detail ? `Published ${hit.detail}` : '',
+      formatDockerNetworks(hit.dockerNetworks),
       hit.linkSpeedMbps ? `Link ${formatMapLinkSpeed(hit.linkSpeedMbps)}` : '',
       hit.linkDownCount && hit.linkDownCount > 0 ? `${hit.linkDownCount} link down` : '',
       hit.firewallEnabled ? 'NIC firewall flag' : '',
@@ -160,7 +176,8 @@ const hitLines = (hit: MapHit, density?: MapDensity): string[] =>
       hit.cpu !== undefined ? `CPU ${Math.round(hit.cpu)}%` : '',
       hit.memory !== undefined ? `Memory ${Math.round(hit.memory)}%` : '',
       formatNetTelemetry(hit.netRxBytes, hit.netTxBytes),
-      hit.latencyMs !== undefined ? `Latency ${formatMapLatency(hit.latencyMs)}` : '',
+      formatProbeAndLatency(hit.probeSummary, hit.latencyMs),
+      hit.certWarning ?? '',
     ]
       .filter(Boolean)
       .join(' · '),
@@ -341,7 +358,7 @@ export function InfrastructureMapSurface() {
     () => fitted()?.density ?? densityChoice() ?? resolveDefaultMapDensity(liveModel()),
   );
   const activeDiagram = createMemo(() => fitted()?.diagram ?? null);
-  // Full unfiltered diagram for inspecting networks and total counts while a filter is active.
+  // Full unfiltered diagram for inspecting networks, estate traffic, and total counts while a filter is active.
   const fullDiagram = createMemo(() => {
     if (!hasActiveFilter()) return activeDiagram();
     if (model().isEmpty) return null;
@@ -349,6 +366,7 @@ export function InfrastructureMapSurface() {
       maxTilesPerGroup: resolveDiagramTileLimit(density()),
     });
   });
+  const estateTrafficBytes = createMemo(() => fullDiagram()?.estateTrafficBytes ?? 0);
   const matchedResourceCount = createMemo(() => {
     const diagram = activeDiagram();
     return diagram ? countDiagramResources(diagram) : 0;
@@ -550,14 +568,15 @@ export function InfrastructureMapSurface() {
     }),
   );
 
-  // The map draws no line between two tiles. While one is pointed at or
-  // focused, the tiles its connections join it to are ringed, and its card
-  // says what each connection is. Declared after the effect above, so it
-  // runs once the drawing it adds to has been replaced.
+  // The map draws no permanent lines between tiles. While one is pointed at or
+  // focused, the tiles its connections join it to are ringed with curved
+  // connection arcs, and its card says what each connection is. Declared after
+  // the effect above, so it runs once the drawing it adds to has been replaced.
   createEffect(() => {
     body();
     const current = scene();
     const shown = hover();
+    const showLiveTraffic = liveTraffic();
     const layer = svgElement()?.querySelector(`[${MAP_RINGS_ATTRIBUTE}]`);
     if (!layer) return;
     if (!current || !shown) {
@@ -568,7 +587,7 @@ export function InfrastructureMapSurface() {
     // tile the card is about.
     layer.innerHTML =
       (armed() === null ? '' : renderMapTappedTile(current, shown.hit, palette())) +
-      renderMapLinkRings(current, shown.hit, palette());
+      renderMapLinkRings(current, shown.hit, palette(), { liveTraffic: showLiveTraffic });
   });
 
   const hitFromEvent = (event: Event): { hit: MapHit; element: Element } | null => {
@@ -847,6 +866,18 @@ export function InfrastructureMapSurface() {
             <Show when={attentionOnly()}>
               <XIcon class="h-3 w-3 shrink-0" aria-hidden="true" />
             </Show>
+          </button>
+        </Show>
+        <Show when={estateTrafficBytes() >= MAP_TRAFFIC_ACTIVE_BYTES}>
+          <button
+            type="button"
+            title="Inspect active network traffic across the estate"
+            data-testid="infrastructure-map-traffic-summary"
+            class="inline-flex items-center gap-1.5 rounded-full border border-blue-300 bg-blue-50 px-2.5 py-0.5 text-xs font-medium whitespace-nowrap text-blue-700 tabular-nums transition-colors hover:bg-blue-100 focus-visible:outline-solid focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-blue-500 dark:border-blue-700/80 dark:bg-blue-950/50 dark:text-blue-300 dark:hover:bg-blue-900/50"
+            onClick={() => openDrawer({ kind: 'traffic' })}
+          >
+            <ActivityIcon class="h-3.5 w-3.5 shrink-0" aria-hidden="true" />
+            <span>{formatSpeed(estateTrafficBytes())}</span>
           </button>
         </Show>
         <Show when={!liveModel().isEmpty}>

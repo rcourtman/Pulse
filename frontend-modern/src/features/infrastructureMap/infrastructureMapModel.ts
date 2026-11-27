@@ -72,6 +72,14 @@ export interface MapItem {
   linkDownCount?: number;
   /** True when a Proxmox guest has firewall enabled on any network interface. */
   firewallEnabled?: boolean;
+  /** The resource an availability check is explicitly linked to, when set. */
+  linkedResourceId?: string;
+  /** Sorted unique user-defined Docker networks a container is attached to. */
+  dockerNetworks?: string[];
+  /** Concise factual summary of an availability check probe (e.g. `HTTPS 200`, `TCP :443`). */
+  probeSummary?: string;
+  /** Concise TLS certificate warning for an availability check, when unhealthy or expiring. */
+  certWarning?: string;
   /** The address the item answers on, when Pulse knows one. */
   address?: string;
   /** Published ports, for a container. */
@@ -330,6 +338,78 @@ const proxmoxFirewallEnabled = (resource: Resource): boolean =>
   resource.platformType === 'proxmox-pve' &&
   (resource.proxmox?.networkInterfaces ?? []).some((nic) => nic.firewall === true);
 
+const DEFAULT_DOCKER_NETWORKS = new Set(['bridge', 'host', 'none', 'ingress', 'docker_gwbridge']);
+
+const dockerNetworksOf = (resource: Resource): string[] | undefined => {
+  if (resource.type !== 'app-container') return undefined;
+  const names = new Set<string>();
+  for (const network of resource.docker?.networks ?? []) {
+    const name = clean(network.name);
+    if (!name || DEFAULT_DOCKER_NETWORKS.has(name.toLowerCase())) continue;
+    names.add(name);
+  }
+  if (names.size === 0) return undefined;
+  return [...names].sort(collator.compare);
+};
+
+const probeSummaryOf = (resource: Resource): string | undefined => {
+  if (resource.type !== 'network-endpoint') return undefined;
+  const avail = resource.availability;
+  if (!avail) return undefined;
+  const protocol = clean(avail.protocol).toLowerCase();
+  const statusCode =
+    typeof avail.applicationStatusCode === 'number' &&
+    Number.isFinite(avail.applicationStatusCode) &&
+    avail.applicationStatusCode > 0
+      ? Math.round(avail.applicationStatusCode)
+      : undefined;
+  const port =
+    typeof avail.port === 'number' && Number.isFinite(avail.port) && avail.port > 0
+      ? Math.round(avail.port)
+      : undefined;
+  if (!protocol) {
+    return statusCode !== undefined ? `HTTP ${statusCode}` : undefined;
+  }
+  if (protocol === 'http' || protocol === 'https') {
+    const label = protocol.toUpperCase();
+    return statusCode !== undefined ? `${label} ${statusCode}` : label;
+  }
+  if (protocol === 'tcp' || protocol === 'udp') {
+    const label = protocol.toUpperCase();
+    return port !== undefined ? `${label} :${port}` : label;
+  }
+  if (protocol === 'push') return 'Push';
+  return protocol.toUpperCase();
+};
+
+const certWarningOf = (resource: Resource): string | undefined => {
+  if (resource.type !== 'network-endpoint') return undefined;
+  const cert = resource.availability?.certificate;
+  if (!cert) return undefined;
+  const trust = clean(cert.trustStatus).toLowerCase();
+  if (trust === 'expired') return 'Cert expired';
+  if (trust === 'untrusted') return 'Cert untrusted';
+  if (
+    trust === 'invalid' ||
+    trust === 'not-yet-valid' ||
+    (trust !== 'self-signed' && cert.chainValid === false) ||
+    cert.hostnameValid === false
+  ) {
+    return 'Cert invalid';
+  }
+  if (trust === 'expiring_soon') return 'Cert expiring soon';
+  if (resource.availability?.certificateMonitoring && cert.notAfter) {
+    const expiryMs = Date.parse(cert.notAfter);
+    const warnDays = resource.availability.certificateExpiryWarningDays ?? 30;
+    if (Number.isFinite(expiryMs) && warnDays > 0) {
+      const remainingMs = expiryMs - Date.now();
+      if (remainingMs <= 0) return 'Cert expired';
+      if (remainingMs <= warnDays * 86_400_000) return 'Cert expiring soon';
+    }
+  }
+  return undefined;
+};
+
 export const resolveMapHealth = (resource: Resource): MapHealth => {
   const verdict = resource.health?.verdict;
   if (verdict) return verdict;
@@ -391,6 +471,13 @@ const toItem = (resource: Resource, typeLabel: string, attachments: Attachments)
   const health = resolveMapHealth(resource);
   const latencyMs = latencyOf(resource);
   const firewallEnabled = proxmoxFirewallEnabled(resource);
+  const linkedResourceId =
+    resource.type === 'network-endpoint'
+      ? clean(resource.availability?.linkedResourceId) || undefined
+      : undefined;
+  const dockerNetworks = dockerNetworksOf(resource);
+  const probeSummary = probeSummaryOf(resource);
+  const certWarning = certWarningOf(resource);
   return {
     id: resource.id,
     name: displayName(resource),
@@ -403,6 +490,10 @@ const toItem = (resource: Resource, typeLabel: string, attachments: Attachments)
     ...interfaceTelemetryOf(resource, health),
     ...(latencyMs !== undefined ? { latencyMs } : {}),
     ...(firewallEnabled ? { firewallEnabled: true } : {}),
+    ...(linkedResourceId ? { linkedResourceId } : {}),
+    ...(dockerNetworks ? { dockerNetworks } : {}),
+    ...(probeSummary ? { probeSummary } : {}),
+    ...(certWarning ? { certWarning } : {}),
     ...(attached[0]?.address ? { address: attached[0].address } : {}),
     ...(attached.length > 0 ? { segmentIds: attached.map((entry) => entry.segmentId) } : {}),
     ...(resource.type === 'app-container' && publishedPorts(resource)
@@ -897,7 +988,7 @@ export function anonymizeInfrastructureMapModel(
   const anonymizePools = (pools: MapPool[]): MapPool[] =>
     pools.map((pool) => ({ ...pool, name: nameFor(`pool-name:${pool.name}`, 'Pool') }));
   const anonymizeItems = (items: MapItem[]): MapItem[] =>
-    items.map(({ address: _address, ...item }) => ({
+    items.map(({ address: _address, dockerNetworks: _dockerNetworks, ...item }) => ({
       ...item,
       // A well-known app keeps its own name: it says what runs here and
       // gives nothing away about the estate.

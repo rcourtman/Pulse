@@ -13,6 +13,7 @@ import {
 } from '../infrastructureMapModel';
 import {
   buildServiceDiagram,
+  collectActiveTrafficTiles,
   collectNetworkTiles,
   compareDiagramTilesByTraffic,
   formatMapLatency,
@@ -775,7 +776,10 @@ describe('buildServiceDiagram', () => {
         ),
       ]);
 
-      expect(between(diagram)).toEqual([{ fromId: 'c-traefik', toId: 'c-wiki-internal' }]);
+      expect(between(diagram)).toEqual([
+        { fromId: 'c-traefik', toId: 'c-wiki-internal' },
+        { fromId: 'gateway:0', toId: 'tower' },
+      ]);
       expect(diagram.gateways.map((tile) => tile.name)).toEqual(['Gateway']);
       expect(written).toContain('Routed by Traefik');
       expect(written).not.toContain('example.test');
@@ -1466,6 +1470,196 @@ describe('buildServiceDiagram', () => {
       expect(dlTile?.caption).toBe('via gluetun');
       expect(dlTile?.hasConnectionCaption).toBe(true);
       expect(dlTile?.trafficTier).toBe('medium');
+    });
+
+    it('wires links for availability check targets, monitored gateways, resolvers, and unmonitored gateways', () => {
+      const diagram = diagramOf([
+        resource({
+          id: 'pve-1',
+          type: 'agent',
+          name: 'delly',
+          platformType: 'proxmox-pve',
+          agent: {
+            networkInterfaces: [{ name: 'vmbr0', addresses: ['192.168.10.10/24'] }],
+            defaultGateways: [{ address: '192.168.10.1', interface: 'vmbr0' }],
+            dnsServers: ['192.168.10.53'],
+          },
+        }),
+        resource({
+          id: 'pve-2',
+          type: 'agent',
+          name: 'minipc',
+          platformType: 'proxmox-pve',
+          agent: {
+            networkInterfaces: [{ name: 'vmbr0', addresses: ['192.168.10.11/24'] }],
+            defaultGateways: [{ address: '10.99.0.1', interface: 'eth0' }],
+            dnsServers: ['192.168.10.53'],
+          },
+        }),
+        guest('adguard', 'pve-1', { identity: { ips: ['192.168.10.53'] } }),
+        guest('jellyfin', 'pve-1', { identity: { ips: ['192.168.10.50'] } }),
+        resource({
+          id: 'check-router',
+          type: 'network-endpoint',
+          name: 'Edge Router',
+          availability: {
+            address: '192.168.10.1',
+            targetKind: 'router',
+            protocol: 'icmp',
+            available: true,
+            latencyMillis: 1.5,
+          },
+        }),
+        resource({
+          id: 'check-jf',
+          type: 'network-endpoint',
+          name: 'Jellyfin HTTPS',
+          availability: {
+            address: '192.168.10.50',
+            targetKind: 'service',
+            linkedResourceId: 'ct-jellyfin',
+            protocol: 'https',
+            applicationStatusCode: 200,
+            available: true,
+            latencyMillis: 12,
+            certificate: {
+              observedAt: '2026-11-27T00:00:00Z',
+              notBefore: '2026-01-01T00:00:00Z',
+              notAfter: '2027-01-01T00:00:00Z',
+              fingerprintSha256: 'abc',
+              trustStatus: 'expiring_soon' as unknown as 'trusted',
+              chainValid: true,
+              hostnameValid: true,
+              selfSigned: false,
+            },
+          },
+        }),
+        resource({
+          id: 'check-plain',
+          type: 'network-endpoint',
+          name: 'Minipc Check',
+          availability: {
+            address: '192.168.10.11',
+            linkedResourceId: 'pve-2',
+            protocol: 'tcp',
+            port: 8006,
+          },
+        }),
+      ]);
+
+      const joined = (id: string) =>
+        diagram.links
+          .flatMap((link) =>
+            link.fromId === id ? [link.toId] : link.toId === id ? [link.fromId] : [],
+          )
+          .sort();
+      const allTiles = [
+        diagram.access,
+        ...diagram.groups,
+        diagram.storage,
+        diagram.backups,
+        diagram.hardware,
+      ].flatMap((group) => group?.tiles ?? []);
+      const tileOf = (id: string) => allTiles.find((tile) => tile.id === id);
+
+      // Check -> linked resource with bidirectional sentences and metadata propagation.
+      expect(joined('check-jf')).toEqual(['ct-jellyfin']);
+      expect(tileOf('check-jf')).toMatchObject({
+        probeSummary: 'HTTPS 200',
+        certWarning: 'Cert expiring soon',
+        links: ['Checks jellyfin'],
+      });
+      expect(tileOf('ct-jellyfin')?.links).toEqual(['Checked by Jellyfin HTTPS · 12 ms']);
+      expect(joined('check-plain')).toEqual(['pve-2']);
+      expect(tileOf('pve-2')?.links).toContain('Checked by Minipc Check');
+
+      // Monitored gateway -> machine, monitored resolver -> cross-host machine, unmonitored gateway -> machine.
+      expect(joined('check-router')).toEqual(['pve-1']);
+      expect(tileOf('check-router')?.probeSummary).toBe('ICMP');
+      expect(joined('ct-adguard')).toEqual(['pve-1', 'pve-2']);
+      expect(diagram.gateways.map((tile) => tile.id)).toEqual(['gateway:0']);
+      expect(joined('gateway:0')).toEqual(['pve-2']);
+    });
+
+    it('propagates dockerNetworks, aggregates estateTrafficBytes without double-counting, and lists active traffic tiles', () => {
+      const diagram = diagramOf([
+        // Proxmox host reporting 20 MB/s with two reporting guests (3 MB/s + 1 MB/s = 4 MB/s).
+        resource({
+          id: 'pve',
+          type: 'agent',
+          name: 'delly',
+          platformType: 'proxmox-pve',
+          network: { rxBytes: 12_000_000, txBytes: 8_000_000 },
+        }),
+        guest('jellyfin', 'pve', { network: { rxBytes: 2_000_000, txBytes: 1_000_000 } }),
+        guest('sonarr', 'pve', { network: { rxBytes: 600_000, txBytes: 400_000 } }),
+        // Docker host reporting 30 MB/s whose container reports no traffic -> host contributes 30 MB/s.
+        resource({
+          id: 'tower',
+          type: 'docker-host',
+          name: 'Tower',
+          platformType: 'docker',
+          network: { rxBytes: 20_000_000, txBytes: 10_000_000 },
+        }),
+        resource({
+          id: 'c-radarr',
+          type: 'app-container',
+          name: 'radarr',
+          platformType: 'docker',
+          parentId: 'tower',
+          status: 'running',
+          docker: { networks: [{ name: 'bridge' }, { name: 'media_net' }, { name: 'proxy_net' }] },
+        }),
+        // Standalone machine with no children reporting 5 MB/s -> contributes 5 MB/s.
+        resource({
+          id: 'nas',
+          type: 'agent',
+          name: 'truenas',
+          platformType: 'truenas',
+          network: { rxBytes: 4_000_000, txBytes: 1_000_000 },
+        }),
+        // Idle host with 0 B/s is excluded from active traffic tiles.
+        resource({
+          id: 'idle-box',
+          type: 'agent',
+          name: 'idle-box',
+          platformType: 'agent',
+          network: { rxBytes: 0, txBytes: 0 },
+        }),
+      ]);
+
+      const radarr = diagram.groups
+        .find((group) => group.key === 'media')
+        ?.tiles.find((tile) => tile.id === 'c-radarr');
+      expect(radarr?.dockerNetworks).toEqual(['media_net', 'proxy_net']);
+
+      // Estate traffic = (3M + 1M from pve guests) + 30M (tower) + 5M (nas) = 39 MB/s (pve's 20M not double-counted).
+      expect(diagram.estateTrafficBytes).toBe(39_000_000);
+
+      // collectActiveTrafficTiles lists every unique navigable tile with netTotalBytes > 0, busiest first.
+      const active = collectActiveTrafficTiles(diagram);
+      expect(
+        active.map(({ tile, groupLabel }) => [tile.id, groupLabel, tile.netTotalBytes]),
+      ).toEqual([
+        ['tower', 'Hardware', 30_000_000],
+        ['pve', 'Hardware', 20_000_000],
+        ['nas', 'Hardware', 5_000_000],
+        ['ct-jellyfin', 'Media', 3_000_000],
+        ['ct-sonarr', 'Media', 1_000_000],
+      ]);
+
+      // Quiet estate omits estateTrafficBytes and returns empty active list.
+      const quiet = diagramOf([
+        resource({
+          id: 'quiet',
+          type: 'agent',
+          name: 'quiet',
+          platformType: 'agent',
+          network: { rxBytes: 0, txBytes: 0 },
+        }),
+      ]);
+      expect(quiet.estateTrafficBytes).toBeUndefined();
+      expect(collectActiveTrafficTiles(quiet)).toEqual([]);
     });
   });
 });

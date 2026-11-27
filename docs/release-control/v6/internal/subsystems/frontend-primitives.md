@@ -11830,3 +11830,22 @@ and `Link down` / `NIC firewall` `MetadataBadge` pills, plus an `Attention` /
 `Traffic` sort control whenever drawer entries report live network throughput.
 Shared primitives are unchanged. Verified by `InfrastructureMapSurface.test.tsx`,
 `InfrastructureMapScale.test.tsx`, and Playwright browser verification.
+
+### Infrastructure Map estate traffic summary pill, Live traffic drawer, and hover connection arcs (27 November 2026)
+
+`InfrastructureMapSurface.tsx` adds a clickable estate live traffic summary
+pill (`infrastructure-map-traffic-summary`, rendered when estate throughput is
+at least 10 KB/s) beside the title and attention filter button, passes reactive
+`{ liveTraffic: liveTraffic() }` state into `renderMapLinkRings` so hover and
+keyboard focus draw curved connection arcs with reduced-motion-safe
+`.pulse-map-link-flow` styling in `infrastructureMap.css`, and enriches
+tooltips with Docker user-defined networks (`Docker net: ...`), combined check
+probe summaries and latency (`HTTPS 200 · 14 ms`), and TLS certificate
+warnings. `InfrastructureMapDrawer.tsx` supports `{ kind: 'traffic' }`
+(**Live traffic**, using the unfiltered estate diagram, defaulting to `Traffic`
+sort while allowing a switch to `Attention` sort) and renders Docker networks,
+combined probe/latency metrics, and `MetadataBadge` certificate warning pills
+(`danger` for expired or invalid, `warning` for expiring soon or untrusted).
+Shared primitives are unchanged. Verified by `InfrastructureMapSurface.test.tsx`,
+`InfrastructureMapScale.test.tsx`, `tests/integration/tests/71-infrastructure-map.spec.ts`,
+and Playwright browser verification.

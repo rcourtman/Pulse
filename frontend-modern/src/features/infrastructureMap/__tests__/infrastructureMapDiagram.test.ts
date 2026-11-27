@@ -19,6 +19,7 @@ import {
   buildInfrastructureMapModel,
 } from '../infrastructureMapModel';
 import {
+  MAP_MAX_LINK_ARCS,
   MAP_PAGE_PALETTES,
   MAP_PALETTES,
   renderMapLinkRings,
@@ -961,8 +962,8 @@ describe('layoutServiceDiagram', () => {
         navigable: false,
         links: ['Used by Tower'],
       });
-      // No tile is ringed for it: the machines that use it are named on its hover.
-      expect(gateway?.hit.linked).toBeUndefined();
+      // Unmonitored gateway tiles link to the drawn machines that use them.
+      expect(gateway?.hit.linked).toEqual(['tower']);
       expect(texts(scene)).toContain('192.168.0.1');
       expect(texts(scene)).toContain('default gateway');
       expect(
@@ -1719,6 +1720,112 @@ describe('layoutServiceDiagram', () => {
         (node) => node.kind === 'rect' && node.activity !== undefined,
       );
       expect(activeRects.length).toBeGreaterThanOrEqual(2);
+    });
+
+    it('propagates dockerNetworks, probeSummary, and certWarning onto hit targets', () => {
+      const resources: Resource[] = [
+        resource({ id: 'docker-1', type: 'docker-host', name: 'docker-1', status: 'online' }),
+        resource({
+          id: 'c-app',
+          type: 'app-container',
+          name: 'jellyfin',
+          parentId: 'docker-1',
+          status: 'running',
+          docker: { networks: [{ name: 'bridge' }, { name: 'proxy_net' }] },
+        }),
+        resource({
+          id: 'chk-app',
+          type: 'network-endpoint',
+          name: 'Jellyfin HTTPS',
+          availability: {
+            linkedResourceId: 'c-app',
+            protocol: 'https',
+            applicationStatusCode: 200,
+            available: true,
+            latencyMillis: 14,
+            certificate: {
+              observedAt: '2026-11-27T00:00:00Z',
+              notBefore: '2026-01-01T00:00:00Z',
+              notAfter: '2027-01-01T00:00:00Z',
+              fingerprintSha256: 'abc',
+              trustStatus: 'expired',
+              chainValid: false,
+              hostnameValid: true,
+              selfSigned: false,
+            },
+          },
+        }),
+      ];
+
+      const scene = sceneOf(resources, 1400);
+      const appHit = ofKind(scene, 'hit').find((node) => node.hit.id === 'c-app')?.hit;
+      const chkHit = ofKind(scene, 'hit').find((node) => node.hit.id === 'chk-app')?.hit;
+      expect(appHit?.dockerNetworks).toEqual(['proxy_net']);
+      expect(appHit?.linked).toEqual(['docker-1', 'chk-app']);
+      expect(chkHit).toMatchObject({
+        probeSummary: 'HTTPS 200',
+        certWarning: 'Cert expired',
+        linked: ['c-app'],
+      });
+    });
+
+    it('renders curved hover arcs with optional liveTraffic flow overlay and caps arcs at MAP_MAX_LINK_ARCS', () => {
+      const manyContainers = Array.from({ length: 20 }, (_, index) =>
+        resource({
+          id: `c-svc-${index}`,
+          type: 'app-container',
+          name: `svc-${index}`,
+          platformType: 'docker',
+          parentId: 'docker-1',
+          status: 'running',
+        }),
+      );
+      const resources: Resource[] = [
+        resource({
+          id: 'docker-1',
+          type: 'docker-host',
+          name: 'Tower',
+          platformType: 'docker',
+          agent: { defaultGateways: [{ address: '192.168.0.1', interface: 'eth0' }] },
+        }),
+        ...manyContainers,
+      ];
+      const diagram = buildServiceDiagram(buildInfrastructureMapModel(resources), {
+        maxTilesPerGroup: 30,
+      });
+      const scene = layoutServiceDiagram(diagram, { width: 1400, density: 'names' });
+      const hostHit = ofKind(scene, 'hit').find((node) => node.hit.id === 'docker-1')!.hit;
+      const gatewayHit = ofKind(scene, 'hit').find((node) => node.hit.id === 'gateway:0')!.hit;
+      const palette = MAP_PAGE_PALETTES.dark;
+
+      // 20 containers + 1 unmonitored gateway = 21 linked tiles.
+      expect(hostHit.linked).toHaveLength(21);
+      expect(gatewayHit.linked).toEqual(['docker-1']);
+
+      // Static mode: all 21 linked tiles get rings, curved arcs capped at MAP_MAX_LINK_ARCS (16), no flow overlay.
+      const staticOverlay = renderMapLinkRings(scene, hostHit, palette);
+      expect(staticOverlay.match(/<rect /g)).toHaveLength(21);
+      expect(staticOverlay.match(/class="pulse-map-link-arc"/g)).toHaveLength(MAP_MAX_LINK_ARCS);
+      expect(staticOverlay).toMatch(/d="M[\d.]+ [\d.]+ Q[\d.]+ [\d.]+ [\d.]+ [\d.]+"/);
+      expect(staticOverlay.match(/<circle /g)).toHaveLength(MAP_MAX_LINK_ARCS + 1);
+      expect(staticOverlay).not.toContain('pulse-map-link-flow');
+
+      // Live traffic mode: emits matching animated flow paths alongside base arcs.
+      const liveOverlay = renderMapLinkRings(scene, hostHit, palette, { liveTraffic: true });
+      expect(liveOverlay.match(/class="pulse-map-link-arc"/g)).toHaveLength(MAP_MAX_LINK_ARCS);
+      expect(liveOverlay.match(/class="pulse-map-link-flow"/g)).toHaveLength(MAP_MAX_LINK_ARCS);
+      expect(liveOverlay).toContain('stroke-dasharray="4 10"');
+
+      // Unmonitored gateway hover draws 1 ring and 1 curved arc to its host.
+      const gatewayOverlay = renderMapLinkRings(scene, gatewayHit, palette, { liveTraffic: true });
+      expect(gatewayOverlay.match(/<rect /g)).toHaveLength(1);
+      expect(gatewayOverlay.match(/class="pulse-map-link-arc"/g)).toHaveLength(1);
+      expect(gatewayOverlay.match(/class="pulse-map-link-flow"/g)).toHaveLength(1);
+
+      // Exported SVG never contains hover rings or arcs.
+      const exported = renderMapSceneToSvg(scene, MAP_PALETTES.dark);
+      expect(exported).not.toContain('pulse-map-link-arc');
+      expect(exported).not.toContain('pulse-map-link-flow');
     });
   });
 });

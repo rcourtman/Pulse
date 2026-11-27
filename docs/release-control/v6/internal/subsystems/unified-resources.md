@@ -10725,3 +10725,34 @@ connection captions (`via` a container or a Traefik route) visible at rest, and
 omits all animation marks from exported images (`infrastructureMapExport.ts`).
 Verified by the 7-file Infrastructure Map Vitest suite, `tsc --noEmit`,
 `vite build`, and `frontend-modern/browser-verification/64a918d04bbc8fea.json`.
+
+### Infrastructure Map interactive connection arcs, estate traffic rollup, and check/Docker metadata (27 November 2026)
+
+`frontend-modern/src/features/infrastructureMap/` extends the map model,
+connection resolver, service diagram, and SVG renderer using only existing
+unified resource fields:
+
+- `infrastructureMapConnections.ts` adds Caddy Docker Proxy (`caddy` and
+  `caddy_N` container labels) route discovery alongside Traefik, matching a
+  routed container to the unique reachable running Caddy container on the same
+  Docker host and stripping hostnames under `anonymizeInfrastructureMapModel`.
+- `infrastructureMapModel.ts` projects `MapItem.linkedResourceId`,
+  user-defined `MapItem.dockerNetworks` (excluding built-in Docker networks
+  and stripped when names are hidden), concise `MapItem.probeSummary` (protocol
+  and HTTP status or port), and `MapItem.certWarning` (`Cert expired`,
+  `Cert invalid`, `Cert untrusted`, `Cert expiring soon`) from
+  `resource.availability`.
+- `infrastructureMapServices.ts` computes non-double-counted estate throughput
+  (`ServiceDiagram.estateTrafficBytes`), exports `collectActiveTrafficTiles`
+  for the estate-wide `Live traffic` view, and wires bidirectional tile links
+  for availability checks (`linkedResourceId`), gateways (including unmonitored
+  dashed gateway tiles), and DNS resolvers.
+- `infrastructureMapLayout.ts` adds `{ kind: 'traffic' }` to
+  `MapInspectTarget`, and `infrastructureMapRender.ts` upgrades
+  `renderMapLinkRings` to draw curved quadratic Bezier arcs (`.pulse-map-link-arc`,
+  capped at 16 arcs while ringing all targets) plus optional `.pulse-map-link-flow`
+  overlays when `liveTraffic` is enabled, keeping static exports free of hover
+  arcs and motion.
+
+Verified by the 7-file Infrastructure Map Vitest suite, `tsc --noEmit`,
+`vite build`, and Playwright browser verification.

@@ -44,13 +44,24 @@
   animation: pulse-map-active-pulse 2.4s ease-in-out infinite;
 }
 
+.pulse-map-link-arc {
+  pointer-events: none;
+}
+
+.pulse-map-link-flow {
+  pointer-events: none;
+  animation: pulse-map-flow-dash 1.4s linear infinite;
+  opacity: 0.9;
+}
+
 @media (prefers-reduced-motion: reduce) {
   .pulse-map-flow,
   .pulse-map-flow-low,
   .pulse-map-flow-medium,
   .pulse-map-flow-high,
   .pulse-map-active,
-  .pulse-map-active-high {
+  .pulse-map-active-high,
+  .pulse-map-link-flow {
     animation: none !important;
   }
 }

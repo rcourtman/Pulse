@@ -1,6 +1,7 @@
 import { describe, expect, it } from 'vitest';
 import type { Resource } from '@/types/resource';
 import {
+  caddyRouteHosts,
   mapRouteLabel,
   resolveMapConnections,
   traefikRouteHosts,
@@ -301,6 +302,121 @@ describe('Traefik router labels', () => {
     ).toEqual([]);
     // A proxy on another Docker host does not see this host's labels.
     expect(resolveMapConnections([traefik('other'), app]).links).toEqual([]);
+  });
+});
+
+describe('Caddy Docker Proxy labels', () => {
+  it('parses hostnames across caddy and numbered labels while ignoring wildcards, catch-alls, paths and bare IPs', () => {
+    expect(
+      caddyRouteHosts({
+        caddy: 'App.Example.Com',
+        caddy_0: 'https://a.example.com, b.example.com:443 http://app.example.com:8080',
+        caddy_1:
+          '*.example.com, :80, https://:443, /health, app.example.com/api, 192.168.1.5, [::1]:443',
+        'caddy.reverse_proxy': '{{upstreams 8080}}',
+      }),
+    ).toEqual({
+      routed: true,
+      hosts: ['app.example.com', 'a.example.com', 'b.example.com'],
+    });
+
+    expect(
+      caddyRouteHosts({
+        caddy: ':80, *.example.com, /metrics, 10.0.0.1',
+        'caddy.reverse_proxy': '{{upstreams 80}}',
+      }),
+    ).toEqual({ routed: false, hosts: [] });
+    expect(caddyRouteHosts(undefined)).toEqual({ routed: false, hosts: [] });
+  });
+
+  const caddy = (
+    name = 'caddy',
+    docker: NonNullable<Resource['docker']> = {},
+    dockerHost = 'tower',
+  ) =>
+    container(
+      name,
+      {
+        image: 'lucaslorentz/caddy-docker-proxy:2.9-alpine',
+        networks: [{ name: 'proxy' }],
+        ...docker,
+      },
+      dockerHost,
+    );
+
+  it('links a unique reachable running Caddy or caddy-docker-proxy container to routed containers', () => {
+    const app = container('immich', {
+      networks: [{ name: 'proxy' }],
+      labels: {
+        caddy: 'photos.example.test',
+        'caddy.reverse_proxy': '{{upstreams 2283}}',
+      },
+    });
+    const isolated = container('isolated', {
+      networks: [{ name: 'backend' }],
+      labels: { caddy: 'secret.example.test' },
+    });
+    expect(resolveMapConnections([caddy(), app, isolated]).links).toEqual([
+      {
+        kind: 'route',
+        fromId: 'c-tower-caddy',
+        toId: 'c-tower-immich',
+        hosts: ['photos.example.test'],
+      },
+    ]);
+
+    // Standard `caddy` image on host network reaches every container on the host.
+    const hostCaddy = caddy('caddy-host', {
+      image: 'docker.io/library/caddy:2-alpine',
+      networkMode: 'host',
+      networks: [{ name: 'host' }],
+    });
+    expect(resolveMapConnections([hostCaddy, isolated]).links).toEqual([
+      {
+        kind: 'route',
+        fromId: 'c-tower-caddy-host',
+        toId: 'c-tower-isolated',
+        hosts: ['secret.example.test'],
+      },
+    ]);
+  });
+
+  it('does not link stopped, self, cross-host or ambiguous Caddy proxies', () => {
+    const app = container('immich', {
+      networks: [{ name: 'proxy' }],
+      labels: { caddy: 'photos.example.test' },
+    });
+    expect(
+      resolveMapConnections([caddy('caddy', { containerState: 'exited' }), app]).links,
+    ).toEqual([]);
+    expect(resolveMapConnections([caddy('caddy', {}, 'other-host'), app]).links).toEqual([]);
+    expect(resolveMapConnections([caddy('caddy-a'), caddy('caddy-b'), app]).links).toEqual([]);
+    expect(
+      resolveMapConnections([caddy('caddy', { labels: { caddy: 'proxy.example.test' } })]).links,
+    ).toEqual([]);
+  });
+
+  it('matches REST-normalized online proxy containers when containerState is absent', () => {
+    const onlineCaddy: Resource = {
+      ...caddy('caddy'),
+      status: 'online',
+      docker: {
+        ...caddy('caddy').docker,
+        containerState: undefined,
+      },
+    };
+    const app = container('outline', {
+      networks: [{ name: 'proxy' }],
+      labels: { caddy: 'notes.example.test' },
+    });
+    expect(resolveMapConnections([onlineCaddy, app]).links).toEqual([
+      {
+        kind: 'route',
+        fromId: 'c-tower-caddy',
+        toId: 'c-tower-outline',
+        hosts: ['notes.example.test'],
+      },
+    ]);
   });
 });
 

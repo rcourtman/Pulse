@@ -1,0 +1,55 @@
+{
+  "version": 1,
+  "base_sha": "39aba537966d945b37efc5d9ea1f164556fab067",
+  "verified_at": "2026-11-27T10:59:42Z",
+  "result": "passed",
+  "changed_paths": [
+    "frontend-modern/src/features/infrastructureMap/InfrastructureMapDrawer.tsx",
+    "frontend-modern/src/features/infrastructureMap/InfrastructureMapSurface.tsx",
+    "frontend-modern/src/features/infrastructureMap/infrastructureMap.css",
+    "frontend-modern/src/features/infrastructureMap/infrastructureMapConnections.ts",
+    "frontend-modern/src/features/infrastructureMap/infrastructureMapDiagram.ts",
+    "frontend-modern/src/features/infrastructureMap/infrastructureMapLayout.ts",
+    "frontend-modern/src/features/infrastructureMap/infrastructureMapModel.ts",
+    "frontend-modern/src/features/infrastructureMap/infrastructureMapRender.ts",
+    "frontend-modern/src/features/infrastructureMap/infrastructureMapServices.ts"
+  ],
+  "content_sha256": {
+    "frontend-modern/src/features/infrastructureMap/InfrastructureMapDrawer.tsx": "eec8cf287833fa3583692ff14af0153490edbcad31d7a509e39c0b935a8cd2cb",
+    "frontend-modern/src/features/infrastructureMap/InfrastructureMapSurface.tsx": "de0e5c70c4a3f0b430e7751fb346b898ae297aa6a416669a3ae490d434adef0c",
+    "frontend-modern/src/features/infrastructureMap/infrastructureMap.css": "4a3c70ae07c6ebb9aaaded522a84492dccbe835037d69fdfe32957e0d8cdb43f",
+    "frontend-modern/src/features/infrastructureMap/infrastructureMapConnections.ts": "75610de92117c2346652b6192c1ca81c497333dbb47eb84daf8d79440300a5a3",
+    "frontend-modern/src/features/infrastructureMap/infrastructureMapDiagram.ts": "8f1d42873752983f8b52e1e54e8376de6010c7c8c535352173cc617c8ef90833",
+    "frontend-modern/src/features/infrastructureMap/infrastructureMapLayout.ts": "73f7545753ee5672b7f381c0c326cd884652cbddff2ada1cc39e35dfb82d69b5",
+    "frontend-modern/src/features/infrastructureMap/infrastructureMapModel.ts": "81d58f8f530f0d1063758177d93a149c9654b1886b807fb38a413e5d6f551502",
+    "frontend-modern/src/features/infrastructureMap/infrastructureMapRender.ts": "0f3627f2d30211a874b2d7234cb569195aaec2026230ef4fd1270ff50b8dfa9b",
+    "frontend-modern/src/features/infrastructureMap/infrastructureMapServices.ts": "b0f46d116f129904d7df0dfd5e75e756d418615e3958b123003248d238fdf9d9"
+  },
+  "routes": [
+    "/map"
+  ],
+  "viewports": [
+    {
+      "width": 1440,
+      "height": 900
+    },
+    {
+      "width": 390,
+      "height": 844
+    }
+  ],
+  "states": [
+    "Chromium desktop 1440x900 dark and light themes with hover connection arcs (.pulse-map-link-arc and .pulse-map-link-flow) fanning cleanly from hovered plex-media to pve-01, nvme-pool, and linked Plex HTTPS check",
+    "Estate live traffic summary pill (50.9 MB/s) beside header title opening Live traffic Top Talkers drawer sorted highest throughput first across all 6 active resources with Docker network labels, NIC firewall, and Link down badges",
+    "Caddy Docker Proxy container (REST-normalized online status) routing outline at notes.home.arpa with preserved route caption, active halo, and Docker net: internal-db, proxy in tooltip and drawer",
+    "Linked availability check (Plex HTTPS) displaying HTTPS 200 · 14 ms, Cert expiring soon warning, and bidirectional connection arc to plex-media",
+    "Edge Router gateway hover displaying curved arcs to both hosts using it as default gateway",
+    "Live traffic toggled off retaining static hover arcs with zero flow overlays, and prefers-reduced-motion: reduce disabling .pulse-map-link-flow animation",
+    "Chromium mobile 390x844 light theme with zero horizontal overflow"
+  ],
+  "interactions": [
+    "Hover plex-media, outline, Plex HTTPS, and Edge Router to inspect curved arcs, Docker networks, Caddy routes, check probe/cert warnings, and gateway links",
+    "Click estate traffic summary pill (50.9 MB/s) to open Live traffic drawer, verify plex-media ranked first, and close with Escape",
+    "Toggle Live traffic off and back on and verify hover arcs switch cleanly between static and animated flow overlays"
+  ]
+}

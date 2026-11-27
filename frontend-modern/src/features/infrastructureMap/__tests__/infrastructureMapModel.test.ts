@@ -617,4 +617,181 @@ describe('live network telemetry extraction', () => {
     expect(checkItems.find((item) => item.id === 'check-up')?.latencyMs).toBe(2.4);
     expect(checkItems.find((item) => item.id === 'check-down')?.latencyMs).toBeUndefined();
   });
+
+  it('extracts user-defined Docker networks, check link targets, probe summaries, and certificate warnings', () => {
+    const soonIso = new Date(Date.now() + 5 * 86_400_000).toISOString();
+    const model = buildInfrastructureMapModel([
+      resource({ id: 'dock-1', type: 'docker-host', name: 'dock-1', platformType: 'docker' }),
+      resource({
+        id: 'c-user-nets',
+        type: 'app-container',
+        name: 'jellyfin',
+        platformType: 'docker',
+        parentId: 'dock-1',
+        status: 'running',
+        docker: {
+          networks: [
+            { name: 'bridge' },
+            { name: 'host' },
+            { name: 'none' },
+            { name: 'ingress' },
+            { name: 'docker_gwbridge' },
+            { name: 'media_net' },
+            { name: 'proxy_net' },
+            { name: 'media_net' },
+          ],
+        },
+      }),
+      resource({
+        id: 'c-default-only',
+        type: 'app-container',
+        name: 'redis',
+        platformType: 'docker',
+        parentId: 'dock-1',
+        status: 'running',
+        docker: { networks: [{ name: 'bridge' }] },
+      }),
+      resource({
+        id: 'chk-https',
+        type: 'network-endpoint',
+        name: 'App HTTPS',
+        availability: {
+          linkedResourceId: '  c-user-nets  ',
+          protocol: 'https',
+          applicationStatusCode: 200,
+          certificate: {
+            observedAt: '2026-11-27T00:00:00Z',
+            notBefore: '2026-01-01T00:00:00Z',
+            notAfter: '2027-01-01T00:00:00Z',
+            fingerprintSha256: 'abc',
+            trustStatus: 'expired',
+            chainValid: false,
+            hostnameValid: true,
+            selfSigned: false,
+          },
+        },
+      }),
+      resource({
+        id: 'chk-http-err',
+        type: 'network-endpoint',
+        name: 'API HTTP',
+        availability: {
+          protocol: 'http',
+          applicationStatusCode: 503,
+          certificate: {
+            observedAt: '2026-11-27T00:00:00Z',
+            notBefore: '2026-01-01T00:00:00Z',
+            notAfter: '2027-01-01T00:00:00Z',
+            fingerprintSha256: 'abc',
+            trustStatus: 'untrusted',
+            chainValid: false,
+            hostnameValid: true,
+            selfSigned: false,
+          },
+        },
+      }),
+      resource({
+        id: 'chk-hostname-bad',
+        type: 'network-endpoint',
+        name: 'Bad Hostname',
+        availability: {
+          protocol: 'https',
+          certificate: {
+            observedAt: '2026-11-27T00:00:00Z',
+            notBefore: '2026-01-01T00:00:00Z',
+            notAfter: '2027-01-01T00:00:00Z',
+            fingerprintSha256: 'abc',
+            trustStatus: 'trusted',
+            chainValid: true,
+            hostnameValid: false,
+            selfSigned: false,
+          },
+        },
+      }),
+      resource({
+        id: 'chk-expiring',
+        type: 'network-endpoint',
+        name: 'Expiring Cert',
+        availability: {
+          protocol: 'https',
+          certificateMonitoring: true,
+          certificateExpiryWarningDays: 30,
+          certificate: {
+            observedAt: '2026-11-27T00:00:00Z',
+            notBefore: '2026-01-01T00:00:00Z',
+            notAfter: soonIso,
+            fingerprintSha256: 'abc',
+            trustStatus: 'trusted',
+            chainValid: true,
+            hostnameValid: true,
+            selfSigned: false,
+          },
+        },
+      }),
+      resource({
+        id: 'chk-tcp',
+        type: 'network-endpoint',
+        name: 'DB Port',
+        availability: { protocol: 'tcp', port: 443 },
+      }),
+      resource({
+        id: 'chk-icmp',
+        type: 'network-endpoint',
+        name: 'Router Ping',
+        availability: { protocol: 'icmp' },
+      }),
+      resource({
+        id: 'chk-push',
+        type: 'network-endpoint',
+        name: 'Cron Heartbeat',
+        availability: { protocol: 'push' },
+      }),
+    ]);
+
+    const dock = hostNamed(model.blocks, 'dock-1');
+    const jf = dock.sections[0].items.find((item) => item.id === 'c-user-nets');
+    const redis = dock.sections[0].items.find((item) => item.id === 'c-default-only');
+    expect(jf?.dockerNetworks).toEqual(['media_net', 'proxy_net']);
+    expect(redis?.dockerNetworks).toBeUndefined();
+
+    const checks = hostNamed(model.blocks, 'Availability checks').sections[0].items;
+    const byId = (id: string) => checks.find((item) => item.id === id);
+    expect(byId('chk-https')).toMatchObject({
+      linkedResourceId: 'c-user-nets',
+      probeSummary: 'HTTPS 200',
+      certWarning: 'Cert expired',
+    });
+    expect(byId('chk-http-err')).toMatchObject({
+      probeSummary: 'HTTP 503',
+      certWarning: 'Cert untrusted',
+    });
+    expect(byId('chk-hostname-bad')).toMatchObject({
+      probeSummary: 'HTTPS',
+      certWarning: 'Cert invalid',
+    });
+    expect(byId('chk-expiring')).toMatchObject({
+      probeSummary: 'HTTPS',
+      certWarning: 'Cert expiring soon',
+    });
+    expect(byId('chk-tcp')?.probeSummary).toBe('TCP :443');
+    expect(byId('chk-icmp')?.probeSummary).toBe('ICMP');
+    expect(byId('chk-push')?.probeSummary).toBe('Push');
+
+    // Anonymization strips user-defined Docker networks while preserving opaque link IDs and factual probe/cert state.
+    const anonymous = anonymizeInfrastructureMapModel(model);
+    const anonDock = hostsOf(anonymous.blocks).find((host) => host.id === 'dock-1')!;
+    const anonJf = anonDock.sections[0].items.find((item) => item.id === 'c-user-nets');
+    expect(anonJf?.dockerNetworks).toBeUndefined();
+    expect(JSON.stringify(anonymous)).not.toContain('media_net');
+    expect(JSON.stringify(anonymous)).not.toContain('proxy_net');
+
+    const anonCheck = hostNamed(anonymous.blocks, 'Availability checks').sections[0].items.find(
+      (item) => item.id === 'chk-https',
+    );
+    expect(anonCheck).toMatchObject({
+      linkedResourceId: 'c-user-nets',
+      probeSummary: 'HTTPS 200',
+      certWarning: 'Cert expired',
+    });
+  });
 });
