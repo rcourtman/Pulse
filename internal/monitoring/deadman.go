@@ -33,6 +33,7 @@ const (
 	deadManStateMaxBytes          int64 = 64 << 10
 	deadManStateDirPerm                 = 0o700
 	deadManStateFilePerm                = 0o600
+	deadManMonitoringStalledError       = "Pulse monitoring loop has stopped making progress"
 )
 
 // DeadManInterruption is the durable, privacy-preserving record of the most
@@ -222,7 +223,7 @@ func (d *deadManRuntime) runCycle(
 		return
 	}
 	if endpoint == "" {
-		d.disable(now)
+		d.disable(ctx, now)
 		return
 	}
 
@@ -231,19 +232,26 @@ func (d *deadManRuntime) runCycle(
 		return
 	}
 	fingerprint := deadManEndpointFingerprint(endpoint)
-	d.ensureEndpoint(now, fingerprint)
+	if !d.ensureEndpoint(ctx, now, fingerprint) {
+		return
+	}
 
 	progress := time.Time{}
 	if monitorProgress != nil {
 		progress = monitorProgress().UTC()
 	}
 	fresh := !progress.IsZero() && !progress.After(now.Add(5*time.Second)) && now.Sub(progress) <= d.progressFreshness
-	d.setMonitoringProgress(progress)
+	if !d.setMonitoringProgress(ctx, progress) {
+		return
+	}
 	if fresh {
-		d.alertProjection.clear(alerts.DeadManMonitoringStalledAlertType)
-		d.recordHealthyProgress(progress)
+		if !d.recordHealthyProgress(ctx, progress) {
+			return
+		}
 	} else {
-		d.raiseMonitoringStalled(ctx, progress)
+		if !d.raiseMonitoringStalled(ctx, progress) {
+			return
+		}
 	}
 
 	message := ""
@@ -255,23 +263,26 @@ func (d *deadManRuntime) runCycle(
 		message = deadManInterruptionMessage(gap)
 	}
 
-	if ctx.Err() != nil {
+	if !d.setAttempt(ctx, d.now()) {
 		return
 	}
-	d.setAttempt(d.now())
 	err := d.sendWithRetry(ctx, signalURL, message)
 	if err != nil {
-		d.recordSignalFailure(ctx, err.Error())
+		d.recordSignalFailure(ctx, err.Error(), fresh)
 		return
 	}
 	d.recordSignalSuccess(ctx, d.now(), fresh)
 }
 
-func (d *deadManRuntime) ensureEndpoint(now time.Time, fingerprint string) {
+func (d *deadManRuntime) ensureEndpoint(ctx context.Context, now time.Time, fingerprint string) bool {
 	d.mu.Lock()
+	if d.stopping || ctx.Err() != nil {
+		d.mu.Unlock()
+		return false
+	}
 	if d.initialized && d.persisted.EndpointFingerprint == fingerprint && d.persisted.Enabled {
 		d.mu.Unlock()
-		return
+		return true
 	}
 
 	var gap *DeadManInterruption
@@ -312,6 +323,8 @@ func (d *deadManRuntime) ensureEndpoint(now time.Time, fingerprint string) {
 	d.consecutiveFail = 0
 	d.status.Configured = true
 	d.status.State = "starting"
+	d.status.LastAttemptAt = nil
+	d.status.LastSuccessAt = nil
 	d.status.LastError = ""
 	d.status.ConsecutiveFailures = 0
 	loadErr := d.loadError
@@ -349,10 +362,15 @@ func (d *deadManRuntime) ensureEndpoint(now time.Time, fingerprint string) {
 			},
 		})
 	}
+	return true
 }
 
-func (d *deadManRuntime) disable(now time.Time) {
+func (d *deadManRuntime) disable(ctx context.Context, now time.Time) {
 	d.mu.Lock()
+	if d.stopping || ctx.Err() != nil {
+		d.mu.Unlock()
+		return
+	}
 	wasEnabled := d.initialized && d.persisted.Enabled
 	if wasEnabled {
 		d.persisted.Enabled = false
@@ -364,21 +382,25 @@ func (d *deadManRuntime) disable(now time.Time) {
 	d.consecutiveFail = 0
 	d.status.Configured = false
 	d.status.State = "disabled"
+	d.status.LastAttemptAt = nil
+	d.status.LastSuccessAt = nil
 	d.status.ConsecutiveFailures = 0
 	d.status.LastError = ""
-	d.mu.Unlock()
-
-	if wasEnabled {
-		if err := d.persistCurrentState(); err != nil {
-			d.alertProjection.raise(deadManPersistenceAlert(err))
-		}
-	}
 	for _, alertType := range []string{
 		alerts.DeadManDeliveryAlertType,
 		alerts.DeadManMonitoringStalledAlertType,
 		alerts.DeadManInterruptionAlertType,
 	} {
 		d.alertProjection.clear(alertType)
+	}
+	d.mu.Unlock()
+
+	if wasEnabled {
+		if err := d.persistCurrentState(); err != nil {
+			d.alertProjection.raise(deadManPersistenceAlert(err))
+		} else {
+			d.alertProjection.clear(alerts.DeadManStateAlertType)
+		}
 	}
 }
 
@@ -425,37 +447,59 @@ func (d *deadManRuntime) statusSnapshot() DeadManStatus {
 	return status
 }
 
-func (d *deadManRuntime) setMonitoringProgress(progress time.Time) {
+func (d *deadManRuntime) setMonitoringProgress(ctx context.Context, progress time.Time) bool {
 	d.mu.Lock()
+	defer d.mu.Unlock()
+	if d.stopping || ctx.Err() != nil {
+		return false
+	}
 	if progress.IsZero() {
 		d.status.LastMonitoringProgress = nil
 	} else {
 		copyTime := progress
 		d.status.LastMonitoringProgress = &copyTime
 	}
-	d.mu.Unlock()
+	return true
 }
 
-func (d *deadManRuntime) recordHealthyProgress(progress time.Time) {
+func (d *deadManRuntime) recordHealthyProgress(ctx context.Context, progress time.Time) bool {
 	d.mu.Lock()
-	if d.stopping {
+	if d.stopping || ctx.Err() != nil {
 		d.mu.Unlock()
-		return
+		return false
 	}
 	d.persisted.LastHealthyAt = progress
 	d.persisted.StoppedAt = time.Time{}
+	if d.status.State == "monitor_stalled" {
+		if d.consecutiveFail > 0 {
+			d.status.State = "delivery_failed"
+			if d.status.LastError == deadManMonitoringStalledError {
+				d.status.LastError = ""
+			}
+		} else {
+			d.status.State = "starting"
+			d.status.LastError = ""
+		}
+	}
+	d.alertProjection.clear(alerts.DeadManMonitoringStalledAlertType)
 	d.mu.Unlock()
 	if err := d.persistCurrentState(); err != nil {
 		d.alertProjection.raise(deadManPersistenceAlert(err))
 	} else {
 		d.alertProjection.clear(alerts.DeadManStateAlertType)
 	}
+	return true
 }
 
-func (d *deadManRuntime) setAttempt(at time.Time) {
+func (d *deadManRuntime) setAttempt(ctx context.Context, at time.Time) bool {
 	d.mu.Lock()
-	d.status.LastAttemptAt = &at
-	d.mu.Unlock()
+	defer d.mu.Unlock()
+	if d.stopping || ctx.Err() != nil {
+		return false
+	}
+	copyTime := at
+	d.status.LastAttemptAt = &copyTime
+	return true
 }
 
 func (d *deadManRuntime) pendingInterruption() *DeadManInterruption {
@@ -470,10 +514,15 @@ func (d *deadManRuntime) setMisconfigured(ctx context.Context, message string) {
 	if d.stopping || ctx.Err() != nil {
 		return
 	}
+	d.initialized = false
+	d.consecutiveFail = 0
 	d.status.Configured = true
 	d.status.State = "misconfigured"
+	d.status.LastAttemptAt = nil
+	d.status.LastSuccessAt = nil
 	d.status.LastError = message
 	d.status.ConsecutiveFailures = 0
+	d.alertProjection.clear(alerts.DeadManMonitoringStalledAlertType)
 	d.alertProjection.raise(alerts.SystemAlertInput{
 		Type:        alerts.DeadManDeliveryAlertType,
 		Level:       alerts.AlertLevelWarning,
@@ -482,7 +531,7 @@ func (d *deadManRuntime) setMisconfigured(ctx context.Context, message string) {
 	})
 }
 
-func (d *deadManRuntime) recordSignalFailure(ctx context.Context, message string) {
+func (d *deadManRuntime) recordSignalFailure(ctx context.Context, message string, monitoringFresh bool) {
 	d.mu.Lock()
 	defer d.mu.Unlock()
 	if d.stopping || ctx.Err() != nil {
@@ -490,8 +539,10 @@ func (d *deadManRuntime) recordSignalFailure(ctx context.Context, message string
 	}
 	d.consecutiveFail++
 	d.status.ConsecutiveFailures = d.consecutiveFail
-	if d.status.State != "monitor_stalled" {
+	if monitoringFresh {
 		d.status.State = "delivery_failed"
+	} else {
+		d.status.State = "monitor_stalled"
 	}
 	d.status.LastError = message
 	failures := d.consecutiveFail
@@ -518,26 +569,37 @@ func (d *deadManRuntime) recordSignalSuccess(ctx context.Context, at time.Time, 
 	d.status.ConsecutiveFailures = 0
 	d.status.LastError = ""
 	if monitoringFresh {
-		d.status.LastSuccessAt = &at
+		copyTime := at
+		d.status.LastSuccessAt = &copyTime
 		d.status.State = "healthy"
 		d.pendingGap = nil
 		d.persisted.LastSuccessfulPing = at
 	} else {
 		d.status.State = "monitor_stalled"
-		d.status.LastError = "Pulse monitoring loop has stopped making progress"
-	}
-	d.mu.Unlock()
-
-	if err := d.persistCurrentState(); err != nil {
-		d.alertProjection.raise(deadManPersistenceAlert(err))
+		d.status.LastError = deadManMonitoringStalledError
 	}
 	d.alertProjection.clear(alerts.DeadManDeliveryAlertType)
 	if monitoringFresh {
 		d.alertProjection.clear(alerts.DeadManInterruptionAlertType)
 	}
+	d.mu.Unlock()
+
+	if err := d.persistCurrentState(); err != nil {
+		d.alertProjection.raise(deadManPersistenceAlert(err))
+	} else {
+		d.alertProjection.clear(alerts.DeadManStateAlertType)
+	}
 }
 
 func (d *deadManRuntime) notifyConfigChanged() {
+	d.notifyConfigChangedWithEndpoint("", false)
+}
+
+func (d *deadManRuntime) notifyConfigChangedFor(pingURL string) {
+	d.notifyConfigChangedWithEndpoint(pingURL, true)
+}
+
+func (d *deadManRuntime) notifyConfigChangedWithEndpoint(pingURL string, hasEndpoint bool) {
 	if d == nil {
 		return
 	}
@@ -550,6 +612,30 @@ func (d *deadManRuntime) notifyConfigChanged() {
 	// same lock before enqueueing. An old cycle cannot restore a raise we
 	// just revoked, even if it was computing progress when the save landed.
 	d.alertProjection.discardStandingRaises(alerts.DeadManMonitoringStalledAlertType, alerts.DeadManDeliveryAlertType)
+	if hasEndpoint && !d.stopping {
+		trimmed := strings.TrimSpace(pingURL)
+		if trimmed == "" {
+			d.consecutiveFail = 0
+			d.status.Configured = false
+			d.status.State = "disabled"
+			d.status.LastAttemptAt = nil
+			d.status.LastSuccessAt = nil
+			d.status.ConsecutiveFailures = 0
+			d.status.LastError = ""
+		} else {
+			fingerprint := deadManEndpointFingerprint(trimmed)
+			if !d.initialized || !d.persisted.Enabled || d.persisted.EndpointFingerprint != fingerprint {
+				d.consecutiveFail = 0
+				d.status.Configured = true
+				d.status.State = "starting"
+				d.status.LastAttemptAt = nil
+				d.status.LastSuccessAt = nil
+				d.status.ConsecutiveFailures = 0
+				d.status.LastError = ""
+				d.alertProjection.clear(alerts.DeadManDeliveryAlertType)
+			}
+		}
+	}
 	d.mu.Unlock()
 	select {
 	case d.wake <- struct{}{}:
@@ -597,14 +683,14 @@ func (d *deadManRuntime) persistCurrentState() error {
 	return persistDeadManState(d.statePath, state)
 }
 
-func (d *deadManRuntime) raiseMonitoringStalled(ctx context.Context, progress time.Time) {
+func (d *deadManRuntime) raiseMonitoringStalled(ctx context.Context, progress time.Time) bool {
 	d.mu.Lock()
 	defer d.mu.Unlock()
 	if d.stopping || ctx.Err() != nil {
-		return
+		return false
 	}
 	d.status.State = "monitor_stalled"
-	d.status.LastError = "Pulse monitoring loop has stopped making progress"
+	d.status.LastError = deadManMonitoringStalledError
 	message := "Pulse's external watchdog is running, but the monitoring loop has stopped making progress."
 	metadata := map[string]interface{}{}
 	if !progress.IsZero() {
@@ -617,6 +703,7 @@ func (d *deadManRuntime) raiseMonitoringStalled(ctx context.Context, progress ti
 		Fingerprint: "monitor-stalled",
 		Metadata:    metadata,
 	})
+	return true
 }
 
 func deadManPersistenceAlert(err error) alerts.SystemAlertInput {
