@@ -42,6 +42,29 @@ class CloudMigrationDocsTest(unittest.TestCase):
         self.assertIn("not a complete copy of the hosted installation",
                       section(guide(), "Data & Privacy", "##"))
 
+    def test_cloud_guide_aligns_mobile_retirement_and_restore_button_with_source(self):
+        text = guide()
+        self.assertNotIn("Mobile ready", text)
+        self.assertNotIn("Set Up Mobile Access", text)
+        self.assertNotIn("**Settings → Pulse Mobile**", text)
+        for phrase in (
+            "Pulse Mobile is being retired on 31 March 2027",
+            "Relay is no longer sold",
+            "**ntfy**, **Gotify**, or **Pushover**",
+            "**Settings → Security → Pulse Mobile** (`/settings/system-relay`)",
+            "Restore Backup",
+        ):
+            with self.subTest(phrase=phrase):
+                self.assertIn(phrase, text)
+
+        catalog = (ROOT / "frontend-modern/src/components/Settings/settingsNavCatalog.ts").read_text(encoding="utf-8")
+        security_group = catalog.split("id: 'security'", 1)[1]
+        self.assertIn("id: 'system-relay'", security_group)
+        self.assertIn("label: 'Pulse Mobile'", security_group)
+        recovery = (ROOT / "frontend-modern/src/components/Settings/RecoverySettingsPanel.tsx").read_text(encoding="utf-8")
+        self.assertIn("Restore Configuration", recovery)
+        self.assertIn("Restore Backup", recovery)
+
     def test_both_directions_preserve_access_source_and_destination(self):
         for heading in ("Self-Hosted → Cloud", "Cloud → Self-Hosted"):
             text = section(guide(), heading, "###")

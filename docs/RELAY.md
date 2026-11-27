@@ -4,7 +4,7 @@
 
 Pulse Relay is the end-to-end encrypted connection between a Pulse instance and paired Pulse Mobile devices. It lets the app reach your server without exposing it to the public internet. It does not provide remote access to the Pulse web UI.
 
-> Supported Pulse Mobile clients pair from **Settings → Pulse Mobile** using a QR code or deep link and connect through Pulse Relay over an end-to-end encrypted channel.
+> Supported Pulse Mobile clients pair from **Settings → Security → Pulse Mobile** (`/settings/system-relay`) using a QR code or deep link and connect through Pulse Relay over an end-to-end encrypted channel.
 
 ## How It Works
 
@@ -22,7 +22,7 @@ Pulse Relay is the end-to-end encrypted connection between a Pulse instance and 
 
 ## Quick Start
 
-1. Go to **Settings → Pulse Mobile**.
+1. Go to **Settings → Security → Pulse Mobile**.
 2. Toggle relay **On**.
 3. Use the **QR Code** or **Deep Link** to pair a supported Pulse Mobile client.
 4. Your paired mobile client connects through relay.
@@ -53,7 +53,7 @@ Relay operates on a zero-trust transport model:
 
 ### UI
 
-**Settings → Pulse Mobile** — toggle on/off, view QR code, and manage relay pairing sessions.
+**Settings → Security → Pulse Mobile**: toggle on/off, view QR code, and manage relay pairing sessions.
 
 ### Environment Variables
 
@@ -88,7 +88,7 @@ Relay configuration is stored encrypted in `relay.enc` in the Pulse data directo
 
 1. Pulse Mobile is in early access. Relay and Pro customers get install links from the authenticated [download page](https://pulserelay.pro/download.html).
 2. Open Pulse Mobile and tap **Connect to Server**.
-3. Scan the QR code from **Settings → Pulse Mobile** in your Pulse web UI.
+3. Scan the QR code from **Settings → Security → Pulse Mobile** in your Pulse web UI.
 4. The app connects via the relay for push notifications and secure Open Pulse handoff.
 
 ### Multiple Servers
@@ -99,7 +99,7 @@ Pulse Mobile can pair with multiple Pulse instances. Each pairing has its own en
 
 ### Relay showing "Disconnected"
 
-For an existing paired phone, inspect **Settings → Pulse Mobile** without
+For an existing paired phone, inspect **Settings → Security → Pulse Mobile** without
 changing it: distinguish whether relay is enabled, whether the server's relay
 connection is active, and whether the affected phone connects. An active server
 connection does not prove phone delivery. Relay is no longer sold; do not buy

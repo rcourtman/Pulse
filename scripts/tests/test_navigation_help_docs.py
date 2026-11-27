@@ -108,8 +108,75 @@ class NavigationHelpDocsTest(unittest.TestCase):
         self.assertIn("**Settings → Security → API Access** (`/settings/security/api`)", guide)
         self.assertIn("SETTINGS_API_ACCESS_PATH = '/settings/security/api'", source("routing/resourceLinks.ts"))
 
+    def test_unified_resources_matches_live_sources_navigation_and_query_params(self):
+        guide = doc_text("UNIFIED_RESOURCES.md")
+        types_go = (ROOT / "internal/unifiedresources/types.go").read_text(encoding="utf-8")
+        resources_go = (ROOT / "internal/api/resourceapi/resources.go").read_text(encoding="utf-8")
+        layout = source("AppLayout.tsx")
+
+        for source_name in (
+            "proxmox",
+            "agent",
+            "docker",
+            "pbs",
+            "pmg",
+            "kubernetes",
+            "truenas",
+            "vmware",
+            "availability",
+        ):
+            with self.subTest(data_source=source_name):
+                self.assertIn(f'DataSource = "{source_name}"', types_go)
+                self.assertIn(f"| `{source_name}` |", guide)
+
+        self.assertIn("label: 'Availability'", layout)
+        self.assertIn("| **Availability** | Website, service, device, and TLS certificate checks (`/availability`) |", guide)
+
+        for param in (
+            "type",
+            "source",
+            "excludeSource",
+            "status",
+            "parent",
+            "cluster",
+            "namespace",
+            "q",
+            "tags",
+            "page",
+            "limit",
+            "sort",
+            "order",
+        ):
+            with self.subTest(query_param=param):
+                self.assertIn(f'r.URL.Query().Get("{param}")', resources_go)
+                self.assertIn(f"| `{param}` |", guide)
+
+    def test_migration_unified_nav_includes_availability_actions_and_shortcut(self):
+        guide = doc_text("MIGRATION_UNIFIED_NAV.md")
+        shortcuts = source("hooks/useKeyboardShortcuts.ts")
+        self.assertIn("availability: { key: 'c', route: buildAvailabilityPath() }", shortcuts)
+        self.assertIn("`g c` Availability", guide)
+        self.assertIn("Availability, Alerts, Patrol, Actions, and Settings", guide)
+
+    def test_relay_guide_uses_security_sidebar_path_for_pulse_mobile(self):
+        guide = doc_text("RELAY.md")
+        catalog = source("components/Settings/settingsNavCatalog.ts")
+        security_group = catalog.split("id: 'security'", 1)[1]
+        self.assertIn("id: 'system-relay'", security_group)
+        self.assertIn("label: 'Pulse Mobile'", security_group)
+        self.assertIn("**Settings → Security → Pulse Mobile** (`/settings/system-relay`)", guide)
+        self.assertNotIn("**Settings → Pulse Mobile**", guide)
+
     def test_all_changed_guides_match_their_shipped_copies(self):
-        for name in ("TROUBLESHOOTING.md", "TRUENAS.md", "PBS.md", "KUBERNETES.md"):
+        for name in (
+            "TROUBLESHOOTING.md",
+            "TRUENAS.md",
+            "PBS.md",
+            "KUBERNETES.md",
+            "UNIFIED_RESOURCES.md",
+            "MIGRATION_UNIFIED_NAV.md",
+            "RELAY.md",
+        ):
             with self.subTest(guide=name):
                 self.assertEqual(doc_text(name),
                                  (ROOT / "frontend-modern/public/docs" / name).read_text(encoding="utf-8"))
