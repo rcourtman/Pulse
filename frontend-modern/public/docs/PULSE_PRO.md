@@ -214,9 +214,9 @@ Patrol mode decides how far Pulse can go after Patrol finds something that needs
 - Cloud Enterprise adds internal multi-organization mode and multi-user mode.
 
 ### MSP
-- Provider-hosted MSP is request-assisted and license-backed. The MSP runs a Stripe-free provider control plane that creates one isolated Pulse runtime per client workspace.
+- Provider-hosted MSP is backed by a signed MSP licence, with a self-serve 60-day, two-workspace evaluation and self-serve paid plans (Solo, Starter, Growth and Scale) from **Plan** in the provider portal (see [MSP.md](MSP.md)). The provider control plane runs one isolated Pulse runtime per client workspace.
 - Each client runtime keeps its own data, alerts, webhooks, users, audit history, report settings, and branded PDF reports when `white_label` is granted.
-- Pulse-hosted MSP is an optional request-assisted path where Pulse operates the provider stack.
+- Enterprise/custom terms and optional Pulse-hosted MSP (where Pulse operates the provider stack) remain request-assisted.
 
 ## License Activation and Introspection
 

@@ -10,11 +10,12 @@ Pulse supports multiple deployment models. This page clarifies what differs betw
 | systemd (bare metal / VM) | Traditional Linux hosts | `/etc/pulse` | In-app updates supported |
 | Docker | Quick evaluation and container stacks | `/data` (bind mount / volume) | [Pull + recreate](#docker) |
 | Kubernetes (Helm) | Cluster operators | `/data` (PVC) | Helm upgrade |
-| Provider-hosted MSP | Managed service providers, request-assisted | Provider control plane data plus one tenant data directory per client runtime | Provider control plane rollout plus per-client runtime rollout |
+| Provider-hosted MSP | Managed service providers (self-serve 60-day evaluation and paid plans) | Provider control plane data plus one tenant data directory per client runtime | Provider control plane rollout plus per-client runtime rollout |
 
 ## Common Ports
 
 - UI/API: `7655/tcp`
+- Optional split-port agent ingest: `PULSE_AGENT_INGEST_PORT` (for example `7656/tcp`, see [Split-Port Agent Ingest](CONFIGURATION.md#split-port-agent-ingest-network-isolation))
 - Prometheus metrics: `9091/tcp` (`/metrics` on a separate listener)
 
 Docker and Kubernetes do not publish `9091` unless you explicitly expose it.
@@ -28,7 +29,14 @@ Pulse uses a split config model:
 - **Audit signing key**: `audit/.audit-signing.key` (default store, encrypted; preserve with its matching encryption key and history)
 - **System settings**: `system.json` (editable in the UI unless locked by env)
 - **Nodes and credentials**: `nodes.enc` (encrypted)
+- **TrueNAS connections**: `truenas.enc` (encrypted)
+- **VMware vSphere connections**: `vmware.enc` (encrypted)
+- **Availability check targets**: `availability_targets.enc` (encrypted)
+- **Alert configuration and overrides**: `alerts.json`
+- **Alert intent policies**: `alert_intent_policies.json`
 - **Notification config**: `email.enc`, `webhooks.enc`, `apprise.enc` (encrypted)
+- **External watchdog (dead-man switch)**: `deadman.enc` (encrypted)
+- **Report schedules**: `report_schedules.json`
 - **OIDC config**: `oidc.enc` (encrypted)
 - **SSO config**: `sso.enc` (encrypted)
 - **API tokens**: `api_tokens.json`
@@ -55,8 +63,7 @@ Pulse uses a split config model:
 - **Update history**: `update-history.jsonl`
 - **Metrics history**: `metrics.db` (SQLite)
 - **Organization metadata**: `org.json` (Enterprise/internal multi-org)
-- **TrueNAS connections**: `truenas.enc` (encrypted)
-- **Relay config**: `relay.enc` (encrypted, Relay and above)
+- **Relay config**: `relay.enc` (encrypted, existing paired Pulse Mobile devices until retirement on 31 March 2027)
 - **RBAC roles**: `rbac_roles.json` (Pro/legacy Pro+/Cloud)
 
 Default path mapping:
@@ -160,4 +167,4 @@ does not guarantee restoration of Pulse data changed by a newer binary.
 
 Provider-hosted MSP is not the same as enabling shared-process organizations in a normal Pulse install. The provider-hosted path runs a control plane that creates an isolated Pulse runtime for each client workspace. Alerts, webhook destinations, branded report settings, users, audit history, and metrics stay inside the client runtime. Duplicate hostnames across clients do not collide because they never share the same runtime namespace.
 
-Access is request-assisted while MSP is staged for rollout. The deployable model is license-backed by a signed MSP license, not by Stripe checkout or environment-only plan selection.
+The deployable model is backed by a signed MSP licence (Solo, Starter, Growth or Scale by client workspace cap). The 60-day, two-workspace evaluation and paid provider-hosted plans are self-serve through the provider bundle and **Plan** in the provider portal, with Enterprise or custom terms available for larger deployments. See [MSP.md](MSP.md) for installation, portal sign-in and licensing.

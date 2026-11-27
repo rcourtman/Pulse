@@ -441,6 +441,25 @@ class ZFSMonitoringDocsTest(unittest.TestCase):
                          "private paths or serial numbers out of the public thread"):
             self.assertIn(boundary, text)
 
+    def test_zfs_truenas_link_drawer_label_and_alert_states_match_source(self):
+        text = self.text()
+        self.assertIn("[TrueNAS SCALE and CORE](TRUENAS.md)", text)
+        self.assertNotIn("CONFIGURATION.md#truenas", text)
+        self.assertIn("expand **Details** and check the **Storage** section", text)
+        for state in ("`DEGRADED`", "`FAULTED`", "`OFFLINE`", "`REMOVED`", "`UNAVAIL`", "`SUSPENDED`"):
+            with self.subTest(state=state):
+                self.assertIn(state, text)
+        self.assertIn("individual ZFS device `DEGRADED`", text)
+        self.assertIn("individual ZFS device in any non-healthy state other than `DEGRADED`", text)
+        drawer = (ROOT / "frontend-modern/src/components/Workloads/NodeDrawerOverview.tsx").read_text(encoding="utf-8")
+        self.assertIn('title="Details"', drawer)
+        self.assertIn("label: 'Storage'", drawer)
+        topology = (ROOT / "internal/storagehealth/topology.go").read_text(encoding="utf-8")
+        self.assertIn('case "FAULTED", "OFFLINE", "REMOVED", "UNAVAIL", "SUSPENDED":', topology)
+        health = (ROOT / "internal/alerts/health_assessment.go").read_text(encoding="utf-8")
+        self.assertIn('addReason("zfs_device_state", storagehealth.RiskWarning', health)
+        self.assertIn('addReason("zfs_device_state", storagehealth.RiskCritical', health)
+
 
 RECOVERY_DOC = ROOT / "docs/RECOVERY.md"
 
