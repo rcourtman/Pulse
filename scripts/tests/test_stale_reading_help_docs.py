@@ -1,7 +1,7 @@
 #!/usr/bin/env python3
-"""Bind Proxmox node, vSphere datastore, Availability nav, and agent opt-out Help to live source.
+"""Bind Proxmox, vSphere, Kubernetes stale-reading, Availability nav, and agent opt-out Help to live source.
 
-Documentation consistency checks only, not live Proxmox, vSphere, or agent runtime tests.
+Documentation consistency checks only, not live Proxmox, vSphere, Kubernetes, or agent runtime tests.
 """
 
 from pathlib import Path
@@ -101,6 +101,78 @@ class StaleReadingAndAgentHelpDocsTest(unittest.TestCase):
             history,
         )
 
+    def test_faq_documents_vsphere_host_and_network_stale_readings(self):
+        faq = doc_text("docs/FAQ.md")
+        section = norm(
+            faq.split("### No data showing?\n", 1)[1].split("\n### ", 1)[0]
+        )
+        for phrase in (
+            "**vSphere ESXi hosts and networks**",
+            "**Stale data** beneath stale names",
+            "**Last reported offline**",
+            "**Worth checking** (**Readings**)",
+            "`vCenter has not updated this host recently.`",
+        ):
+            with self.subTest(phrase=phrase):
+                self.assertIn(phrase, section)
+
+        hosts_table = doc_text("frontend-modern/src/features/vmware/VsphereHostsTable.tsx")
+        networks_table = doc_text("frontend-modern/src/features/vmware/VsphereNetworksTable.tsx")
+        model = doc_text("frontend-modern/src/features/vmware/vmwarePageModel.ts")
+        drawer_model = doc_text(
+            "frontend-modern/src/components/Infrastructure/resourceDetailDrawerVmwareModel.ts"
+        )
+        shared_notice = doc_text("frontend-modern/src/utils/truenasDatasetState.ts")
+        self.assertIn("getVmwareStaleNotice(host)", hosts_table)
+        self.assertIn("Stale data", networks_table)
+        self.assertIn("'Last reported offline'", model)
+        self.assertIn("wrapRow('Readings', staleNotice.detail, { tone: 'warning' })", drawer_model)
+        self.assertIn("badge: 'Stale data'", shared_notice)
+
+    def test_faq_and_kubernetes_guide_document_kubernetes_stale_readings(self):
+        faq = doc_text("docs/FAQ.md")
+        faq_section = norm(
+            faq.split("### No data showing?\n", 1)[1].split("\n### ", 1)[0]
+        )
+        for phrase in (
+            "**Kubernetes clusters, nodes, pods, Deployments and controllers**",
+            "**Stale data**",
+            "**Offline**, **NotReady**, **Unschedulable**, **Failed**, **CrashLoopBackOff**",
+            "**Healthy** into **Degraded** and **Nodes needing attention**",
+            "`Showing the last Kubernetes report — no fresh update received recently.`",
+            "[stale Kubernetes readings](KUBERNETES.md#stale-kubernetes-readings)",
+        ):
+            with self.subTest(doc="FAQ.md", phrase=phrase):
+                self.assertIn(phrase, faq_section)
+
+        k8s_doc = doc_text("docs/KUBERNETES.md")
+        k8s_section = norm(k8s_doc.split("### Stale Kubernetes readings\n", 1)[1])
+        for phrase in (
+            "**Stale data**",
+            "**Offline**, **NotReady**, **Unschedulable**, **Failed**, **CrashLoopBackOff**",
+            "**Healthy** and appear under **Degraded**",
+            "**Nodes needing attention** on **Kubernetes → Overview**",
+            "`Showing the last Kubernetes report — no fresh update received recently.`",
+            "`Last error:`",
+        ):
+            with self.subTest(doc="KUBERNETES.md", phrase=phrase):
+                self.assertIn(phrase, k8s_section)
+
+        k8s_model = doc_text("frontend-modern/src/features/kubernetes/kubernetesPageModel.ts")
+        k8s_detail = doc_text("frontend-modern/src/features/kubernetes/KubernetesRecordDetail.tsx")
+        k8s_surface = doc_text("frontend-modern/src/features/kubernetes/KubernetesPageSurface.tsx")
+        for marker in (
+            "export const KUBERNETES_STALE_READINGS_LABEL = 'Stale data';",
+            "'Showing the last Kubernetes report — no fresh update received recently.'",
+            "Last error: ${sourceError}",
+            "if (hasStaleKubernetesReadings(resource) || hasImpairedKubernetesSource(resource)) {",
+            "return 'degraded';",
+        ):
+            self.assertIn(marker, k8s_model)
+        self.assertIn("KubernetesStaleDataCue", k8s_detail)
+        self.assertIn('data-testid="kubernetes-stale-readings-notice"', k8s_detail)
+        self.assertIn('title="Nodes needing attention"', k8s_surface)
+
     def test_unified_agent_aligns_external_probes_nav_and_proxmox_opt_out_preservation(
         self,
     ):
@@ -137,7 +209,7 @@ class StaleReadingAndAgentHelpDocsTest(unittest.TestCase):
             self.assertIn(marker, installer)
 
     def test_shipped_public_docs_mirrors_match_byte_for_byte(self):
-        for name in ("FAQ.md", "UNIFIED_AGENT.md"):
+        for name in ("FAQ.md", "KUBERNETES.md", "UNIFIED_AGENT.md"):
             with self.subTest(doc=name):
                 self.assertEqual(
                     (ROOT / "docs" / name).read_bytes(),
