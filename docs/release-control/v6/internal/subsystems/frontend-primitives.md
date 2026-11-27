@@ -5643,6 +5643,14 @@ resolves late` in
 
 ## Current State
 
+### Infrastructure Map automatic cluster frames, host micro-meters, VLAN cables, and labelled hover arcs (27 November 2026)
+
+`layoutHostDiagram` (`infrastructureMapHostDiagram.ts`) now automatically wraps clusters of 2 or more hosts sharing a `clusterId` inside a dashed cluster container with shared storage pools in its footer, upgrades host headers to a 2-row architectural strip carrying live CPU/RAM micro-meters, inline amber `BUSY` link-saturation and `DOWN` link-down pills, and a non-overlapping clickable workload count pill (`host:<id>`) that opens the host drawer without leaving the map. Host drop connectors adopt the host's single-network colour (`net0` to `net5`) or amber (`attention`) when NIC utilization reaches 80% or higher, busy host frames with 5 or more loose workloads across multiple categories automatically group them under uppercase category sub-headers, and `renderMapLinkRings` draws midpoint relationship pills (`.pulse-map-link-label`) on hover arcs when 6 or fewer arcs are shown. `InfrastructureMapSurface` and `drawPosterFooter` render a conditional link-speed width key whenever any host or network reports link speed.
+
+### Infrastructure Map host-framed architectural view and Published & routed drawer (27 November 2026)
+
+`InfrastructureMapSurface` now provides a compact `By host` and `By role` layout toggle (`FilterButtonGroup`, `Hosts` and `Roles` short labels on mobile, defaulting to `By host`) and a clickable `N exposed` summary pill beside `need attention` and estate throughput whenever reverse-proxied hostnames or published ports exist. Clicking the pill opens `InfrastructureMapDrawer` in the `Published & routed` (`exposed`) view with search and `All`, `Proxied`, and `Published ports` filters. `layoutHostDiagram` (`infrastructureMapHostDiagram.ts`) renders each resource host as an architectural frame with hardware specs, platform version, single-network accent bar, dense horizontal service cards (VLAN accent stripe, VMID badge, last IPv4 octet, connection/route/live-rate caption), Compose stack sub-boxes, inline storage pool progress bars, and link-speed weighted connectors with inline speed labels. Both `fitServiceDiagram`, `flowServiceDiagram`, and `buildMapExportSvg` honour `layoutMode`, and `InfrastructureMapDrawer` resolves `host:<id>` overflow drawers through `findDiagramGroup`.
+
 ### The locked update badge reads the server's commands-off code
 
 `getUpdateUnavailableExplanation` names missing command access when the

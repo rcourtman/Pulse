@@ -1,4 +1,5 @@
 import { estimateTextWidth, formatCompactSpeed } from '@/utils/format';
+import { layoutHostDiagram, strokeWidthForLinkSpeed } from './infrastructureMapHostDiagram';
 import {
   drawPosterFooter,
   drawPosterHeader,
@@ -8,6 +9,7 @@ import {
   wrapMapText,
   type MapCursor,
   type MapInspectTarget,
+  type MapLayoutMode,
   type MapLayoutOptions,
   type MapNetworkTone,
   type MapScene,
@@ -358,6 +360,14 @@ const drawTile = (
       health: tile.health,
       cpu: tile.cpu,
       memory: tile.memory,
+      ...(tile.vmid !== undefined ? { vmid: tile.vmid } : {}),
+      ...(tile.composeProject ? { composeProject: tile.composeProject } : {}),
+      ...(tile.cpuCores !== undefined ? { cpuCores: tile.cpuCores } : {}),
+      ...(tile.memoryTotalBytes !== undefined ? { memoryTotalBytes: tile.memoryTotalBytes } : {}),
+      ...(tile.versionLabel ? { versionLabel: tile.versionLabel } : {}),
+      ...(tile.usedPercent !== undefined ? { usedPercent: tile.usedPercent } : {}),
+      ...(tile.sizeLabel ? { sizeLabel: tile.sizeLabel } : {}),
+      ...(tile.vdevLayout ? { vdevLayout: tile.vdevLayout } : {}),
       ...(tile.netRxBytes !== undefined ? { netRxBytes: tile.netRxBytes } : {}),
       ...(tile.netTxBytes !== undefined ? { netTxBytes: tile.netTxBytes } : {}),
       ...(tile.latencyMs !== undefined ? { latencyMs: tile.latencyMs } : {}),
@@ -518,16 +528,33 @@ const placeRow = (
 const line = (
   lines: SceneNode[],
   points: Array<[number, number]>,
-  options: { arrow?: boolean; dashed?: boolean; activity?: MapTrafficTier } = {},
+  options: {
+    arrow?: boolean;
+    dashed?: boolean;
+    activity?: MapTrafficTier;
+    strokeWidth?: number;
+  } = {},
 ) => {
   lines.push({
     kind: 'line',
     points,
     tone: 'accent',
+    ...(options.strokeWidth !== undefined ? { strokeWidth: options.strokeWidth } : {}),
     ...(options.arrow ? { arrow: true } : {}),
     ...(options.dashed ? { dashed: true } : {}),
     ...(options.activity && !options.dashed ? { activity: options.activity } : {}),
   });
+};
+
+const maxLinkSpeedMbps = (items: ReadonlyArray<{ linkSpeedMbps?: number }>): number | undefined => {
+  let maxSpeed: number | undefined;
+  for (const item of items) {
+    if (item.linkSpeedMbps !== undefined && item.linkSpeedMbps > 0) {
+      maxSpeed =
+        maxSpeed === undefined ? item.linkSpeedMbps : Math.max(maxSpeed, item.linkSpeedMbps);
+    }
+  }
+  return maxSpeed;
 };
 
 // Draws a horizontal bus segment, splitting out only the sub-range that feeds
@@ -743,6 +770,9 @@ const drawNetworks = (
 };
 
 export function layoutServiceDiagram(diagram: ServiceDiagram, options: MapLayoutOptions): MapScene {
+  if (options.layoutMode === 'hosts') {
+    return layoutHostDiagram(diagram, options);
+  }
   const named = options.wrapNames ? NAMED_WRAPPED : NAMED;
   const metrics =
     options.density === 'marks'
@@ -887,6 +917,10 @@ export function layoutServiceDiagram(diagram: ServiceDiagram, options: MapLayout
 
   const accessTier = activeTier(groupTrafficTier(diagram.access));
 
+  const networkMaxSpeed = maxLinkSpeedMbps(diagram.networks);
+  const networkStrokeWidth =
+    networkMaxSpeed !== undefined ? strokeWidthForLinkSpeed(networkMaxSpeed) : undefined;
+
   if (diagram.networks.length > 0) {
     const bandBottom = drawNetworks(
       out,
@@ -904,7 +938,11 @@ export function layoutServiceDiagram(diagram: ServiceDiagram, options: MapLayout
           [source.x, source.y],
           [mid, y],
         ],
-        { arrow: true, activity: accessTier },
+        {
+          arrow: true,
+          activity: accessTier,
+          ...(networkStrokeWidth !== undefined ? { strokeWidth: networkStrokeWidth } : {}),
+        },
       );
     }
     source = { x: mid, y: bandBottom };
@@ -1193,13 +1231,21 @@ export function layoutServiceDiagram(diagram: ServiceDiagram, options: MapLayout
       }
       targets.forEach((box, index) => {
         const group = lower[index];
+        const hwSpeed =
+          group.key === 'hardware'
+            ? maxLinkSpeedMbps([...group.allTiles, ...group.tiles])
+            : undefined;
         line(
           lines,
           [
             [centreX(box), collectY],
             [centreX(box), box.y],
           ],
-          { arrow: true, activity: targetTiers[index] },
+          {
+            arrow: true,
+            activity: targetTiers[index],
+            ...(hwSpeed !== undefined ? { strokeWidth: strokeWidthForLinkSpeed(hwSpeed) } : {}),
+          },
         );
         connectorLabel(labels, LOWER_LABEL[group.key], centreX(box), (collectY + box.y) / 2 + 3);
       });
@@ -1238,6 +1284,11 @@ export function layoutServiceDiagram(diagram: ServiceDiagram, options: MapLayout
         }
         wrapped.forEach((box, index) => {
           const busY = box.y - BUS_DROP;
+          const group = lower[targets.length + index];
+          const hwSpeed =
+            group.key === 'hardware'
+              ? maxLinkSpeedMbps([...group.allTiles, ...group.tiles])
+              : undefined;
           line(
             lines,
             [
@@ -1245,14 +1296,13 @@ export function layoutServiceDiagram(diagram: ServiceDiagram, options: MapLayout
               [centreX(box), busY],
               [centreX(box), box.y],
             ],
-            { arrow: true, activity: wrappedTiers[index] },
+            {
+              arrow: true,
+              activity: wrappedTiers[index],
+              ...(hwSpeed !== undefined ? { strokeWidth: strokeWidthForLinkSpeed(hwSpeed) } : {}),
+            },
           );
-          connectorLabel(
-            labels,
-            LOWER_LABEL[lower[targets.length + index].key],
-            centreX(box),
-            busY,
-          );
+          connectorLabel(labels, LOWER_LABEL[group.key], centreX(box), busY);
         });
       }
     }
@@ -1276,6 +1326,9 @@ export function layoutServiceDiagram(diagram: ServiceDiagram, options: MapLayout
       [to, from],
     ] as const) {
       if (!end.linked?.includes(other.id)) end.linked = [...(end.linked ?? []), other.id];
+      if (link.label && !end.linkLabels?.[other.id]) {
+        end.linkLabels = { ...(end.linkLabels ?? {}), [other.id]: link.label };
+      }
     }
   }
 
@@ -1315,9 +1368,10 @@ export function fitServiceDiagram(
   diagram: ServiceDiagram,
   space: { width: number; height: number },
   density: MapLayoutOptions['density'],
-  options?: { liveTraffic?: boolean },
+  options?: { liveTraffic?: boolean; layoutMode?: MapLayoutMode },
 ): FittedDiagram {
   const liveTraffic = options?.liveTraffic;
+  const layoutMode = options?.layoutMode;
   const widthAt = (step: number): number =>
     space.width * (1 + (step / FIT_STEPS) * (FIT_MAX_STRETCH - 1));
   const drawnAt = (step: number, names: NameRoom): FittedDiagram => {
@@ -1325,6 +1379,7 @@ export function fitServiceDiagram(
       width: widthAt(step),
       density,
       ...(liveTraffic ? { liveTraffic: true } : {}),
+      ...(layoutMode ? { layoutMode } : {}),
       ...names,
     });
     const scale =
@@ -1347,7 +1402,12 @@ export function fitServiceDiagram(
   // Only cut names start the search: a caption or a pill too long for any
   // tile would otherwise run it on every refresh for nothing. A map already
   // at the smallest it is drawn runs past the screen as it is.
-  if (density === 'names' && fewest.names > 0 && best.scale >= FIT_MIN_SCALE) {
+  if (
+    layoutMode !== 'hosts' &&
+    density === 'names' &&
+    fewest.names > 0 &&
+    best.scale >= FIT_MIN_SCALE
+  ) {
     // The smallest the drawing may get for its names: a tenth off, but not
     // across the line below which the page stops choosing names. A map
     // already below that line gives up nothing.
@@ -1424,13 +1484,14 @@ export function flowServiceDiagram(
   diagram: ServiceDiagram,
   width: number,
   density: MapLayoutOptions['density'],
-  options?: { liveTraffic?: boolean },
+  options?: { liveTraffic?: boolean; layoutMode?: MapLayoutMode },
 ): FittedDiagram {
   const scene = layoutServiceDiagram(diagram, {
     width,
     density,
     wrapNames: density === 'names',
     ...(options?.liveTraffic ? { liveTraffic: true } : {}),
+    ...(options?.layoutMode ? { layoutMode: options.layoutMode } : {}),
   });
   return { scene, scale: scene.width > 0 ? Math.min(1, width / scene.width) : 1 };
 }

@@ -4344,6 +4344,14 @@ application resource-provider or WebSocket lifecycle.
 
 ## Current State
 
+### Infrastructure Map automatic cluster metadata, category labels, link-speed flag, and factual arc labels (27 November 2026)
+
+`buildServiceDiagram` (`infrastructureMapServices.ts`) now attaches factual relationship labels onto `DiagramLink` (reverse-proxy route hostnames or `routes` when names are hidden, `via <container>`, `checks`, `gateway`, `DNS`, `mounts`, `storage`, `backups`, and `runs on` with higher-specificity precedence), projects `categoryLabel` and `isRouted` onto `DiagramTile`, projects `clusterId`, `clusterTypeLabel`, and non-backup `clusterPools` onto `DiagramHostFrame` without duplicating 2+ node cluster pools in `sharedStorage`, and computes `ServiceDiagram.hasLinkSpeeds` from collected NIC speeds. All projections remain 100% automatic from live unified resource telemetry.
+
+### Infrastructure Map host frames, hardware specs, Compose stacks, storage bars, and exposed endpoints (27 November 2026)
+
+`buildInfrastructureMapModel` now projects truthful host hardware specs (`cpuCores`, `memoryTotalBytes`, concise `versionLabel` across Proxmox, Docker/Podman, PBS, PMG, TrueNAS, Kubernetes, and agents), Proxmox guest `vmid`, Docker container `composeProject`, and storage pool `vdevLayout` and `storageType` onto the map model. `anonymizeInfrastructureMapModel` strips `vmid` and `composeProject` alongside hostnames, addresses, Docker network names, and Ingress hostnames while preserving versions, sizes, and hardware counts. `buildServiceDiagram` projects `hostFrames` (grouping 2 or more displayed Docker containers sharing a `composeProject` into Compose stack sub-boxes, attaching local non-backup pools, and deduplicating `Ways in` tiles), `sharedStorage`, standalone `checks`, and sorted `exposed` entries (reverse-proxy routes, Kubernetes Ingresses, and published ports across Docker, Swarm, TrueNAS, and Kubernetes) with `findDiagramGroup` supporting `host:<id>` overflow inspection without double-counting `collectDiagramGroups`.
+
 ### The saved map image stands on its own (18 November 2026)
 
 Saving the image from a real estate showed four faults in a picture meant to

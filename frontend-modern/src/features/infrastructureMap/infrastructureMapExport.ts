@@ -1,5 +1,5 @@
 import { layoutServiceDiagram } from './infrastructureMapDiagram';
-import type { MapDensity, MapScene } from './infrastructureMapLayout';
+import type { MapDensity, MapLayoutMode, MapScene } from './infrastructureMapLayout';
 import { formatMapTotalLabel, type InfrastructureMapModel } from './infrastructureMapModel';
 import { MAP_PALETTES, renderMapSceneToSvg, type MapPalette } from './infrastructureMapRender';
 import { buildServiceDiagram, DIAGRAM_MAX_TILES_PER_GROUP } from './infrastructureMapServices';
@@ -24,6 +24,7 @@ export interface MapExportOptions {
   title: string;
   density: MapDensity;
   palette: MapPalette;
+  layoutMode?: MapLayoutMode;
   now?: Date;
 }
 
@@ -63,6 +64,7 @@ export function buildMapExportSvg(
       (total) => `${total.count.toLocaleString()} ${formatMapTotalLabel(total)}`,
     ),
     footer: `Drawn by Pulse · ${date}`,
+    ...(diagram.hasLinkSpeeds ? { showLinkSpeedKey: true } : {}),
   };
   // Nobody can hover a saved image, so every name is written out, on two
   // lines when it needs them.
@@ -73,6 +75,7 @@ export function buildMapExportSvg(
       header,
       wrapNames: true,
       liveTraffic: false,
+      ...(options.layoutMode ? { layoutMode: options.layoutMode } : {}),
     });
   let scene = layoutAt(EXPORT_WIDTHS[0]);
   for (const width of EXPORT_WIDTHS.slice(1)) {

@@ -500,6 +500,7 @@ describe('InfrastructureMapSurface scale interactions', () => {
     ];
 
     const { container } = render(() => <InfrastructureMapSurface />);
+    fireEvent.click(screen.getByRole('button', { name: 'By role' }));
 
     // Open the Other group drawer via its header inspect target.
     const otherHeader = container.querySelector(
@@ -758,6 +759,7 @@ describe('InfrastructureMapSurface scale interactions', () => {
     ];
 
     const { container } = render(() => <InfrastructureMapSurface />);
+    fireEvent.click(screen.getByRole('button', { name: 'By role' }));
     const hardwareHeader = container.querySelector(
       `[${MAP_INSPECT_ATTRIBUTE}][aria-label^="Inspect Hardware"]`,
     );

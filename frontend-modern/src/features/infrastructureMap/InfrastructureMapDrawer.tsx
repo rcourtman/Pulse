@@ -1,6 +1,7 @@
-import { For, Show, createEffect, createMemo, createSignal } from 'solid-js';
+import { For, Match, Show, Switch, createEffect, createMemo, createSignal } from 'solid-js';
 import ArrowLeftIcon from 'lucide-solid/icons/arrow-left';
 import ChevronRightIcon from 'lucide-solid/icons/chevron-right';
+import GlobeIcon from 'lucide-solid/icons/globe';
 import NetworkIcon from 'lucide-solid/icons/network';
 import SearchIcon from 'lucide-solid/icons/search';
 import XIcon from 'lucide-solid/icons/x';
@@ -14,20 +15,23 @@ import type { MapInspectTarget } from './infrastructureMapLayout';
 import { MAP_LINK_SATURATED_PERCENT, type MapHealth } from './infrastructureMapModel';
 import {
   collectActiveTrafficTiles,
-  collectDiagramGroups,
+  collectExposedEntries,
   collectNetworkTiles,
   compareDiagramTilesByAttention,
   compareDiagramTilesByTraffic,
+  findDiagramGroup,
   formatMapLatency,
   formatMapLinkSpeed,
   isDiagramTileAttention,
   matchesDiagramTileQuery,
+  type DiagramExposedEntry,
   type DiagramNetwork,
   type DiagramTile,
   type ServiceDiagram,
 } from './infrastructureMapServices';
 
 type DrawerHealthFilter = 'all' | 'attention' | 'ok' | 'off';
+type DrawerExposedFilter = 'all' | 'proxied' | 'ports';
 type DrawerSortMode = 'attention' | 'traffic';
 
 interface DrawerEntry {
@@ -149,14 +153,25 @@ const tileMetrics = (tile: DiagramTile): string =>
     .filter(Boolean)
     .join(' · ');
 
+const exposedEntrySubtitle = (entry: DiagramExposedEntry): string =>
+  [
+    entry.groupLabel,
+    entry.tile.hostName && entry.tile.hostName !== entry.groupLabel ? entry.tile.hostName : '',
+    entry.tile.typeLabel,
+  ]
+    .filter(Boolean)
+    .join(' · ');
+
 export function InfrastructureMapDrawer(props: InfrastructureMapDrawerProps) {
   const [query, setQuery] = createSignal('');
   const [healthFilter, setHealthFilter] = createSignal<DrawerHealthFilter>('all');
+  const [exposedFilter, setExposedFilter] = createSignal<DrawerExposedFilter>('all');
   const [sortMode, setSortMode] = createSignal<DrawerSortMode>('attention');
 
   createEffect(() => {
     const current = props.target;
     setQuery('');
+    setExposedFilter('all');
     setSortMode(current?.kind === 'traffic' ? 'traffic' : 'attention');
     if (current?.kind === 'group' && current.initialFilter) {
       setHealthFilter(current.initialFilter);
@@ -169,7 +184,7 @@ export function InfrastructureMapDrawer(props: InfrastructureMapDrawerProps) {
     const current = props.target;
     const diagram = props.diagram;
     if (!current || current.kind !== 'group' || !diagram) return null;
-    return collectDiagramGroups(diagram).find((group) => group.key === current.groupKey) ?? null;
+    return findDiagramGroup(diagram, current.groupKey) ?? null;
   });
 
   const activeNetwork = createMemo(() => {
@@ -235,6 +250,62 @@ export function InfrastructureMapDrawer(props: InfrastructureMapDrawerProps) {
     return filtered;
   });
 
+  const exposedEntries = createMemo<DiagramExposedEntry[]>(() => {
+    const current = props.target;
+    const diagram = props.diagram;
+    if (!current || current.kind !== 'exposed' || !diagram) return [];
+    return collectExposedEntries(diagram);
+  });
+
+  const exposedCounts = createMemo(() => {
+    const entries = exposedEntries();
+    let proxied = 0;
+    let ports = 0;
+    let attention = 0;
+    for (const entry of entries) {
+      if (entry.hostnames.length > 0) proxied += 1;
+      if (entry.ports) ports += 1;
+      if (isDiagramTileAttention(entry.tile.health)) attention += 1;
+    }
+    return { all: entries.length, proxied, ports, attention };
+  });
+
+  const filteredExposedEntries = createMemo(() => {
+    const filter = exposedFilter();
+    const search = query().trim();
+    return exposedEntries().filter((entry) => {
+      if (filter === 'proxied' && entry.hostnames.length === 0) return false;
+      if (filter === 'ports' && !entry.ports) return false;
+      if (!search) return true;
+      const extra = [
+        entry.groupLabel ?? '',
+        entry.tile.hostName ?? '',
+        ...entry.hostnames,
+        entry.ports ?? '',
+        entry.proxyName ?? '',
+      ]
+        .filter(Boolean)
+        .join(' ');
+      return matchesDiagramTileQuery(entry.tile, search, extra);
+    });
+  });
+
+  const exposedFilterOptions = createMemo<
+    Array<{ value: DrawerExposedFilter; label: string; count: number }>
+  >(() => {
+    const c = exposedCounts();
+    if (c.proxied === 0 || c.ports === 0) return [];
+    return [
+      { value: 'all', label: 'All', count: c.all },
+      { value: 'proxied', label: 'Proxied', count: c.proxied },
+      { value: 'ports', label: 'Published ports', count: c.ports },
+    ];
+  });
+
+  const headerAttentionCount = createMemo(() =>
+    props.target?.kind === 'exposed' ? exposedCounts().attention : counts().attention,
+  );
+
   const filteredNetworks = createMemo(() => {
     const diagram = props.diagram;
     if (!diagram) return [];
@@ -255,6 +326,7 @@ export function InfrastructureMapDrawer(props: InfrastructureMapDrawerProps) {
     if (current.kind === 'group') return activeGroup()?.label ?? 'Group';
     if (current.kind === 'network') return activeNetwork()?.label ?? 'Network';
     if (current.kind === 'traffic') return 'Live traffic';
+    if (current.kind === 'exposed') return 'Published & routed';
     return 'Networks';
   });
 
@@ -276,6 +348,15 @@ export function InfrastructureMapDrawer(props: InfrastructureMapDrawerProps) {
       const totalRate =
         estateBytes && estateBytes > 0 ? ` · ${formatSpeed(estateBytes)} total` : '';
       return `${total.toLocaleString()} active ${total === 1 ? 'resource' : 'resources'}${totalRate}`;
+    }
+    if (current.kind === 'exposed') {
+      const c = exposedCounts();
+      if (c.all === 0) return 'No proxied hostnames or published ports reported';
+      const base = `${c.all.toLocaleString()} exposed ${c.all === 1 ? 'service' : 'services'}`;
+      if (c.proxied > 0 && c.ports > 0) {
+        return `${base} · ${c.proxied.toLocaleString()} proxied · ${c.ports.toLocaleString()} with published ports`;
+      }
+      return base;
     }
     const total = props.diagram?.networks.length ?? 0;
     return `${total.toLocaleString()} ${total === 1 ? 'network' : 'networks'} across the estate`;
@@ -338,9 +419,9 @@ export function InfrastructureMapDrawer(props: InfrastructureMapDrawerProps) {
               >
                 {title()}
               </h2>
-              <Show when={props.target?.kind !== 'all-networks' && counts().attention > 0}>
+              <Show when={props.target?.kind !== 'all-networks' && headerAttentionCount() > 0}>
                 <MetadataBadge tone="warning" size="xs" shape="pill">
-                  {counts().attention.toLocaleString()} need attention
+                  {headerAttentionCount().toLocaleString()} need attention
                 </MetadataBadge>
               </Show>
               <Show
@@ -413,12 +494,16 @@ export function InfrastructureMapDrawer(props: InfrastructureMapDrawerProps) {
               placeholder={
                 props.target?.kind === 'all-networks'
                   ? 'Search networks, VLANs, subnets...'
-                  : 'Search resources by name, type, host, IP...'
+                  : props.target?.kind === 'exposed'
+                    ? 'Search hostnames, ports, services...'
+                    : 'Search resources by name, type, host, IP...'
               }
               aria-label={
                 props.target?.kind === 'all-networks'
                   ? 'Search networks'
-                  : 'Search resources in drawer'
+                  : props.target?.kind === 'exposed'
+                    ? 'Search exposed services'
+                    : 'Search resources in drawer'
               }
               data-testid="infrastructure-map-drawer-search"
               class="h-9 w-full rounded-md border border-border bg-surface pr-8 pl-8 text-sm text-base-content placeholder:text-muted focus:border-blue-500 focus:ring-2 focus:ring-blue-500/30 focus:outline-none"
@@ -435,9 +520,37 @@ export function InfrastructureMapDrawer(props: InfrastructureMapDrawerProps) {
             </Show>
           </div>
 
+          <Show when={props.target?.kind === 'exposed' && exposedFilterOptions().length > 1}>
+            <div
+              class="flex flex-wrap items-center gap-1.5"
+              role="group"
+              aria-label="Exposure filter"
+              data-testid="infrastructure-map-exposed-filter"
+            >
+              <For each={exposedFilterOptions()}>
+                {(option) => (
+                  <button
+                    type="button"
+                    aria-pressed={exposedFilter() === option.value}
+                    class={`inline-flex items-center gap-1.5 rounded-full border px-2.5 py-1 text-xs font-medium transition-colors ${
+                      exposedFilter() === option.value
+                        ? 'border-blue-400 bg-blue-500/15 text-blue-700 dark:border-blue-500 dark:text-blue-300'
+                        : 'border-border bg-surface text-muted hover:bg-surface-hover hover:text-base-content'
+                    }`}
+                    onClick={() => setExposedFilter(option.value)}
+                  >
+                    <span>{option.label}</span>
+                    <span class="tabular-nums">{option.count.toLocaleString()}</span>
+                  </button>
+                )}
+              </For>
+            </div>
+          </Show>
+
           <Show
             when={
               props.target?.kind !== 'all-networks' &&
+              props.target?.kind !== 'exposed' &&
               (filterOptions().length > 1 || hasTrafficEntries())
             }
           >
@@ -505,8 +618,7 @@ export function InfrastructureMapDrawer(props: InfrastructureMapDrawerProps) {
         </div>
 
         <div class="min-h-0 flex-1 overflow-y-auto px-2 py-2 sm:px-3">
-          <Show
-            when={props.target?.kind === 'all-networks'}
+          <Switch
             fallback={
               <Show
                 when={filteredEntries().length > 0}
@@ -641,70 +753,200 @@ export function InfrastructureMapDrawer(props: InfrastructureMapDrawerProps) {
               </Show>
             }
           >
-            <Show
-              when={filteredNetworks().length > 0}
-              fallback={
-                <div class="flex flex-col items-center justify-center gap-2 px-4 py-12 text-center">
-                  <p class="text-sm text-muted">No networks match your search.</p>
-                  <Button variant="secondary" size="sm" onClick={() => setQuery('')}>
-                    Clear search
-                  </Button>
-                </div>
-              }
-            >
-              <ul class="divide-y divide-border/60" data-testid="infrastructure-map-network-list">
-                <For each={filteredNetworks()}>
-                  {(network) => {
-                    const isActive = () => props.activeNetworkId === network.id;
-                    return (
-                      <li class="flex items-center gap-2 px-2 py-2">
-                        <button
-                          type="button"
-                          class="flex min-w-0 flex-1 items-center gap-2.5 rounded-md px-2 py-1.5 text-left transition-colors hover:bg-surface-hover"
-                          onClick={() =>
-                            props.onSelectTarget({ kind: 'network', networkId: network.id })
-                          }
-                        >
-                          <NetworkIcon class="h-4 w-4 shrink-0 text-muted" aria-hidden="true" />
+            <Match when={props.target?.kind === 'exposed'}>
+              <Show
+                when={filteredExposedEntries().length > 0}
+                fallback={
+                  <div class="flex flex-col items-center justify-center gap-2 px-4 py-12 text-center">
+                    <p class="text-sm text-muted">No matching exposed services in this view.</p>
+                    <Show when={query().length > 0 || exposedFilter() !== 'all'}>
+                      <Button
+                        variant="secondary"
+                        size="sm"
+                        onClick={() => {
+                          setQuery('');
+                          setExposedFilter('all');
+                        }}
+                      >
+                        Reset drawer filters
+                      </Button>
+                    </Show>
+                  </div>
+                }
+              >
+                <ul class="divide-y divide-border/60" data-testid="infrastructure-map-exposed-list">
+                  <For each={filteredExposedEntries()}>
+                    {(entry) => {
+                      const href = () => props.hrefForResourceId(entry.tile.id);
+                      const badge = () => healthBadge(entry.tile.health);
+                      const meta = () => exposedEntrySubtitle(entry);
+                      const rowContent = () => (
+                        <>
+                          <span class="mt-1 shrink-0">
+                            <Show
+                              when={entry.tile.health !== 'off'}
+                              fallback={
+                                <span
+                                  class="inline-block h-2 w-2 rounded-full border-[1.5px] border-slate-400"
+                                  aria-hidden="true"
+                                />
+                              }
+                            >
+                              <StatusDot variant={healthVariant(entry.tile.health)} size="sm" />
+                            </Show>
+                          </span>
                           <div class="min-w-0 flex-1">
-                            <div class="flex flex-wrap items-center gap-1.5">
+                            <div class="flex flex-wrap items-center gap-2">
                               <span class="truncate text-sm font-medium text-base-content">
-                                {network.label}
+                                {entry.tile.name}
                               </span>
-                              <Show when={(network.linkDownCount ?? 0) > 0}>
-                                <MetadataBadge tone="warning" size="xs" shape="pill">
-                                  {network.linkDownCount === 1
-                                    ? 'Link down'
-                                    : `Link down (${network.linkDownCount})`}
-                                </MetadataBadge>
+                              <Show when={badge()}>
+                                {(item) => (
+                                  <MetadataBadge tone={item().tone} size="xs" shape="pill">
+                                    {item().label}
+                                  </MetadataBadge>
+                                )}
                               </Show>
                             </div>
-                            <div class="truncate text-xs text-muted">
-                              {networkSubtitle(network)}
+                            <Show when={meta()}>
+                              <p class="mt-0.5 truncate text-xs text-muted">{meta()}</p>
+                            </Show>
+                            <div class="mt-1.5 flex flex-wrap items-center gap-1.5">
+                              <For each={entry.hostnames}>
+                                {(hostname) => (
+                                  <MetadataBadge
+                                    tone="indigo"
+                                    appearance="outline"
+                                    size="xs"
+                                    shape="pill"
+                                    wrap
+                                  >
+                                    <GlobeIcon class="h-3 w-3 shrink-0" aria-hidden="true" />
+                                    <span>{hostname}</span>
+                                  </MetadataBadge>
+                                )}
+                              </For>
+                              <Show when={entry.proxyName}>
+                                {(proxy) => (
+                                  <span class="text-[11px] text-muted">via {proxy()}</span>
+                                )}
+                              </Show>
+                              <Show when={entry.ports}>
+                                {(ports) => (
+                                  <MetadataBadge
+                                    tone="neutral"
+                                    appearance="outline"
+                                    size="xs"
+                                    shape="rounded"
+                                    class="font-mono"
+                                  >
+                                    {ports()}
+                                  </MetadataBadge>
+                                )}
+                              </Show>
                             </div>
                           </div>
-                          <ChevronRightIcon
-                            class="h-4 w-4 shrink-0 text-muted"
-                            aria-hidden="true"
-                          />
-                        </button>
-                        <Button
-                          variant={isActive() ? 'primaryFlat' : 'secondary'}
-                          size="xs"
-                          onClick={() => {
-                            props.onFilterByNetwork(isActive() ? null : network.id);
-                            props.onClose();
-                          }}
-                        >
-                          {isActive() ? 'Filtered' : 'Filter'}
-                        </Button>
-                      </li>
-                    );
-                  }}
-                </For>
-              </ul>
-            </Show>
-          </Show>
+                          <Show when={href()}>
+                            <ChevronRightIcon
+                              class="mt-1 h-4 w-4 shrink-0 text-muted"
+                              aria-hidden="true"
+                            />
+                          </Show>
+                        </>
+                      );
+                      return (
+                        <li>
+                          <Show
+                            when={href()}
+                            fallback={
+                              <div class="flex items-start gap-2.5 rounded-md px-2.5 py-2.5">
+                                {rowContent()}
+                              </div>
+                            }
+                          >
+                            {(url) => (
+                              <a
+                                href={url()}
+                                class="flex items-start gap-2.5 rounded-md px-2.5 py-2.5 transition-colors hover:bg-surface-hover focus-visible:outline-solid focus-visible:outline-2 focus-visible:outline-blue-500"
+                                onClick={() => props.onClose()}
+                              >
+                                {rowContent()}
+                              </a>
+                            )}
+                          </Show>
+                        </li>
+                      );
+                    }}
+                  </For>
+                </ul>
+              </Show>
+            </Match>
+            <Match when={props.target?.kind === 'all-networks'}>
+              <Show
+                when={filteredNetworks().length > 0}
+                fallback={
+                  <div class="flex flex-col items-center justify-center gap-2 px-4 py-12 text-center">
+                    <p class="text-sm text-muted">No networks match your search.</p>
+                    <Button variant="secondary" size="sm" onClick={() => setQuery('')}>
+                      Clear search
+                    </Button>
+                  </div>
+                }
+              >
+                <ul class="divide-y divide-border/60" data-testid="infrastructure-map-network-list">
+                  <For each={filteredNetworks()}>
+                    {(network) => {
+                      const isActive = () => props.activeNetworkId === network.id;
+                      return (
+                        <li class="flex items-center gap-2 px-2 py-2">
+                          <button
+                            type="button"
+                            class="flex min-w-0 flex-1 items-center gap-2.5 rounded-md px-2 py-1.5 text-left transition-colors hover:bg-surface-hover"
+                            onClick={() =>
+                              props.onSelectTarget({ kind: 'network', networkId: network.id })
+                            }
+                          >
+                            <NetworkIcon class="h-4 w-4 shrink-0 text-muted" aria-hidden="true" />
+                            <div class="min-w-0 flex-1">
+                              <div class="flex flex-wrap items-center gap-1.5">
+                                <span class="truncate text-sm font-medium text-base-content">
+                                  {network.label}
+                                </span>
+                                <Show when={(network.linkDownCount ?? 0) > 0}>
+                                  <MetadataBadge tone="warning" size="xs" shape="pill">
+                                    {network.linkDownCount === 1
+                                      ? 'Link down'
+                                      : `Link down (${network.linkDownCount})`}
+                                  </MetadataBadge>
+                                </Show>
+                              </div>
+                              <div class="truncate text-xs text-muted">
+                                {networkSubtitle(network)}
+                              </div>
+                            </div>
+                            <ChevronRightIcon
+                              class="h-4 w-4 shrink-0 text-muted"
+                              aria-hidden="true"
+                            />
+                          </button>
+                          <Button
+                            variant={isActive() ? 'primaryFlat' : 'secondary'}
+                            size="xs"
+                            onClick={() => {
+                              props.onFilterByNetwork(isActive() ? null : network.id);
+                              props.onClose();
+                            }}
+                          >
+                            {isActive() ? 'Filtered' : 'Filter'}
+                          </Button>
+                        </li>
+                      );
+                    }}
+                  </For>
+                </ul>
+              </Show>
+            </Match>
+          </Switch>
         </div>
       </div>
     </Dialog>

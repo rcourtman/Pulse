@@ -66,6 +66,21 @@ export interface DiagramTile {
   segmentIds?: string[];
   /** True when the tile caption states a collected connection (`via` container or route). */
   hasConnectionCaption?: boolean;
+  /** Human-readable purpose category for workload tiles (e.g. `Media`, `Monitoring`, `Other`). */
+  categoryLabel?: string;
+  /** True when targeted by a reverse proxy route or Kubernetes Ingress. */
+  isRouted?: boolean;
+  vmid?: number;
+  composeProject?: string;
+  hostId?: string;
+  hostName?: string;
+  cpuCores?: number;
+  memoryTotalBytes?: number;
+  versionLabel?: string;
+  usedPercent?: number;
+  sizeLabel?: string;
+  vdevLayout?: string;
+  storageType?: string;
   cpu?: number;
   memory?: number;
   netRxBytes?: number;
@@ -97,6 +112,8 @@ export interface DiagramTile {
 export interface DiagramLink {
   fromId: string;
   toId: string;
+  /** Short factual relationship label shown on hover connection arcs when <= 6 arcs are drawn. */
+  label?: string;
 }
 
 export interface DiagramGroup {
@@ -126,6 +143,38 @@ export interface DiagramNetwork {
   linkDownCount?: number;
 }
 
+export interface DiagramHostStack {
+  key: string;
+  label: string;
+  tiles: DiagramTile[];
+}
+
+export interface DiagramHostFrame {
+  id: string;
+  host: DiagramTile;
+  clusterId?: string;
+  clusterName?: string;
+  clusterTypeLabel?: string;
+  clusterPools?: DiagramTile[];
+  stacks: DiagramHostStack[];
+  looseTiles: DiagramTile[];
+  pools: DiagramTile[];
+  allTiles: DiagramTile[];
+  attentionCount: number;
+  totalCount: number;
+  overflowCount: number;
+  trafficTier?: MapTrafficTier;
+  linkSpeedMbps?: number;
+}
+
+export interface DiagramExposedEntry {
+  tile: DiagramTile;
+  groupLabel?: string;
+  hostnames: string[];
+  ports?: string;
+  proxyName?: string;
+}
+
 /**
  * How many networks the diagram names. Each one has a colour of its own, and
  * a tile is marked only with the colour of a network that is named, so two
@@ -142,12 +191,18 @@ export interface ServiceDiagram {
   links: DiagramLink[];
   networks: DiagramNetwork[];
   groups: DiagramGroup[];
+  hostFrames: DiagramHostFrame[];
+  sharedStorage?: DiagramGroup;
+  checks?: DiagramGroup;
+  exposed: DiagramExposedEntry[];
   storage?: DiagramGroup;
   backups?: DiagramGroup;
   hardware?: DiagramGroup;
   serviceCount: number;
   /** Aggregate live estate network throughput in bytes per second, avoiding host/guest double-counting. */
   estateTrafficBytes?: number;
+  /** True when any drawn host frame, hardware tile, or network reports a positive physical link speed. */
+  hasLinkSpeeds?: boolean;
 }
 
 export interface ServiceDiagramFilter {
@@ -504,6 +559,10 @@ const serviceTile = (item: MapItem, host: MapHost, plan: NetworkPlan): DiagramTi
     ...(item.app?.icon ? { icon: item.app.icon } : {}),
     ...plannedTileNetworks(item.segmentIds, plan),
     ...(ingressHosts ? { hasConnectionCaption: true } : {}),
+    categoryLabel: MAP_CATEGORY_LABEL[item.category ?? 'other'],
+    ...(item.vmid !== undefined ? { vmid: item.vmid } : {}),
+    ...(item.composeProject ? { composeProject: item.composeProject } : {}),
+    ...(host.isResource ? { hostId: host.id, hostName: host.name } : {}),
     cpu: item.cpu,
     memory: item.memory,
     ...tileNetworkTelemetry(item),
@@ -581,6 +640,13 @@ export const matchesDiagramTileQuery = (
     tile.typeLabel,
     tile.status,
     tile.health,
+    tile.vmid !== undefined ? String(tile.vmid) : undefined,
+    tile.composeProject,
+    tile.hostName,
+    tile.versionLabel,
+    tile.sizeLabel,
+    tile.vdevLayout,
+    tile.storageType,
     tile.address,
     tile.detail,
     ...(tile.dockerNetworks ?? []),
@@ -599,6 +665,35 @@ export const collectDiagramGroups = (diagram: ServiceDiagram): DiagramGroup[] =>
   [diagram.access, ...diagram.groups, diagram.storage, diagram.backups, diagram.hardware].filter(
     (group): group is DiagramGroup => group !== undefined,
   );
+
+/** Find a group by key, including shared storage, checks, and `host:<id>` host frames. */
+export const findDiagramGroup = (
+  diagram: ServiceDiagram,
+  groupKey: string,
+): DiagramGroup | undefined => {
+  const direct = collectDiagramGroups(diagram).find((group) => group.key === groupKey);
+  if (direct) return direct;
+  if (diagram.sharedStorage?.key === groupKey) return diagram.sharedStorage;
+  if (diagram.checks?.key === groupKey) return diagram.checks;
+  if (groupKey.startsWith('host:')) {
+    const frame = diagram.hostFrames.find((candidate) => `host:${candidate.id}` === groupKey);
+    if (frame) {
+      return {
+        key: `host:${frame.id}`,
+        label: frame.host.name,
+        count: frame.allTiles.length,
+        tiles: [...frame.stacks.flatMap((stack) => stack.tiles), ...frame.looseTiles],
+        allTiles: frame.allTiles,
+        attentionCount: frame.attentionCount,
+      };
+    }
+  }
+  return undefined;
+};
+
+/** Return every exposed service (reverse-proxied hostnames or published ports) in the diagram. */
+export const collectExposedEntries = (diagram: ServiceDiagram): DiagramExposedEntry[] =>
+  diagram.exposed;
 
 /** Count all individual resources represented across every group in a service diagram. */
 export const countDiagramResources = (diagram: ServiceDiagram): number =>
@@ -727,17 +822,33 @@ const poolTiles = (
     .map(({ pool, pools: members, owners, hostIds, health }): PoolTile => {
       const caption =
         owners.size > 1 ? plural(owners.size, 'host', 'hosts') : ([...owners][0] ?? 'Shared');
+      const usedPercent = members.reduce<number | undefined>(
+        (acc, member) =>
+          member.usedPercent === undefined
+            ? acc
+            : acc === undefined
+              ? member.usedPercent
+              : Math.max(acc, member.usedPercent),
+        undefined,
+      );
+      const sizeLabel = members.find((member) => member.sizeLabel)?.sizeLabel;
+      const vdevLayout = members.find((member) => member.vdevLayout)?.vdevLayout;
+      const storageType = members.find((member) => member.storageType)?.storageType;
       return {
         tile: {
           id: pool.id,
           name: pool.name,
           caption,
-          typeLabel: [pool.backup ? 'Backup target' : 'Storage', pool.sizeLabel]
+          typeLabel: [pool.backup ? 'Backup target' : 'Storage', sizeLabel]
             .filter(Boolean)
             .join(' · '),
-          status: pool.usedPercent === undefined ? '' : `${Math.round(pool.usedPercent)}% used`,
+          status: usedPercent === undefined ? '' : `${Math.round(usedPercent)}% used`,
           health,
           platform,
+          ...(usedPercent !== undefined ? { usedPercent } : {}),
+          ...(sizeLabel ? { sizeLabel } : {}),
+          ...(vdevLayout ? { vdevLayout } : {}),
+          ...(storageType ? { storageType } : {}),
           navigable: true,
         },
         pools: members,
@@ -745,6 +856,43 @@ const poolTiles = (
       };
     })
     .sort((a, b) => collator.compare(a.tile.name, b.tile.name));
+};
+
+const localPoolTile = (
+  pool: MapPool,
+  host: MapHost,
+  drawn: ReadonlyMap<string, DiagramTile>,
+  allTilesById: ReadonlyMap<string, DiagramTile>,
+): DiagramTile => {
+  const existing = drawn.get(pool.id);
+  let links = existing?.links;
+  if (!links && pool.consumerIds?.length) {
+    const consumerNames = [
+      ...new Set(
+        pool.consumerIds
+          .map((id) => allTilesById.get(id)?.name)
+          .filter((name): name is string => Boolean(name)),
+      ),
+    ];
+    if (consumerNames.length > 0) links = [`Used by ${nameList(consumerNames)}`];
+  }
+  return {
+    id: pool.id,
+    name: pool.name,
+    caption: host.name,
+    typeLabel: ['Storage', pool.sizeLabel].filter(Boolean).join(' · '),
+    status: pool.usedPercent === undefined ? '' : `${Math.round(pool.usedPercent)}% used`,
+    health: pool.health,
+    platform: 'storage',
+    hostId: host.id,
+    hostName: host.name,
+    ...(pool.usedPercent !== undefined ? { usedPercent: pool.usedPercent } : {}),
+    ...(pool.sizeLabel ? { sizeLabel: pool.sizeLabel } : {}),
+    ...(pool.vdevLayout ? { vdevLayout: pool.vdevLayout } : {}),
+    ...(pool.storageType ? { storageType: pool.storageType } : {}),
+    ...(links?.length ? { links: [...links] } : {}),
+    navigable: true,
+  };
 };
 
 /**
@@ -832,10 +980,24 @@ export function buildServiceDiagram(
   const byCategory = new Map<MapCategoryId, DiagramTile[]>();
   const roles = new Set<MapAppRole>();
   const pools: PoolEntry[] = [];
+  interface ClusterMeta {
+    id: string;
+    name: string;
+    typeLabel: string;
+    poolEntries: PoolEntry[];
+  }
+  const clusterMetaById = new Map<string, ClusterMeta>();
+  const hostClusterById = new Map<string, ClusterMeta>();
+  const standaloneSharedPoolEntries: PoolEntry[] = [];
   const hardware: DiagramTile[] = [];
   const backupServers: DiagramTile[] = [];
   const checks: DiagramTile[] = [];
   const hostIds = new Set<string>();
+  const hostResources: MapHost[] = [];
+  const hostTilesById = new Map<string, DiagramTile>();
+  const hostWorkloads = new Map<string, Array<{ tile: DiagramTile; category: MapCategoryId }>>();
+  const ingressHostsById = new Map<string, string[]>();
+  const allTilesById = new Map<string, DiagramTile>();
   const checkTargets = new Map<string, string>();
   // What each machine runs, by tile id and by how many of each kind.
   const runsOn = new Map<string, Array<{ id: string; category: MapCategoryId }>>();
@@ -881,14 +1043,28 @@ export function buildServiceDiagram(
 
   for (const block of model.blocks) {
     if (block.kind === 'group') {
+      const nonBackupEntries: PoolEntry[] = [];
       for (const pool of block.group.pools) {
-        pools.push({ pool, owner: block.group.name, hostIds: pool.hostIds ?? [] });
+        const entry: PoolEntry = { pool, owner: block.group.name, hostIds: pool.hostIds ?? [] };
+        pools.push(entry);
+        if (!pool.backup) nonBackupEntries.push(entry);
+      }
+      const meta: ClusterMeta = {
+        id: block.group.id,
+        name: block.group.name,
+        typeLabel: block.group.typeLabel,
+        poolEntries: nonBackupEntries,
+      };
+      clusterMetaById.set(meta.id, meta);
+      for (const host of block.group.hosts) {
+        if (host.isResource) hostClusterById.set(host.id, meta);
       }
     }
   }
   for (const host of hostsOf(model)) {
     let services = 0;
     const runs: Array<{ id: string; category: MapCategoryId }> = [];
+    const workloadsForHost: Array<{ tile: DiagramTile; category: MapCategoryId }> = [];
     for (const section of host.sections) {
       if (!SERVICE_SECTION.test(section.key)) continue;
       for (const item of section.items) {
@@ -896,6 +1072,9 @@ export function buildServiceDiagram(
         const category = item.category ?? 'other';
         runs.push({ id: item.id, category });
         const tile = serviceTile(item, host, plan);
+        allTilesById.set(tile.id, tile);
+        if (item.ingressHosts?.length) ingressHostsById.set(tile.id, item.ingressHosts);
+        workloadsForHost.push({ tile, category });
         recordTileNetworks(tile.id, item.segmentIds);
         // Something switched off that the catalogue cannot name says nothing
         // on an unfiltered diagram of what the estate does, so those fold into
@@ -911,7 +1090,11 @@ export function buildServiceDiagram(
         if (item.mounts?.length) mountsOf.set(item.id, item.mounts);
       }
     }
-    if (host.isResource && services > 0) runsOn.set(host.id, runs);
+    if (host.isResource) {
+      hostResources.push(host);
+      if (services > 0) runsOn.set(host.id, runs);
+      hostWorkloads.set(host.id, workloadsForHost);
+    }
     serviceCount += services;
     // What Pulse probes from outside (a site, a printer) is not a service on
     // any host here, so each check is a tile in a box of its own. Network
@@ -926,13 +1109,14 @@ export function buildServiceDiagram(
           if (isNetworkGearKind(item.checkKind)) {
             const list = byCategory.get('access') ?? [];
             const gear = gearTile(item, item.checkKind, plan);
+            allTilesById.set(gear.id, gear);
             recordTileNetworks(gear.id, item.segmentIds);
             list.push(gear);
             byCategory.set('access', list);
             continue;
           }
           recordTileNetworks(item.id, item.segmentIds);
-          checks.push({
+          const checkTile: DiagramTile = {
             id: item.id,
             name: item.name,
             caption: item.address ?? 'check',
@@ -946,16 +1130,22 @@ export function buildServiceDiagram(
             ...(item.probeSummary ? { probeSummary: item.probeSummary } : {}),
             ...(item.certWarning ? { certWarning: item.certWarning } : {}),
             navigable: true,
-          });
+          };
+          allTilesById.set(checkTile.id, checkTile);
+          checks.push(checkTile);
         }
       }
     }
     for (const pool of host.pools) {
-      pools.push({
+      const entry: PoolEntry = {
         pool,
         owner: host.isResource ? host.name : '',
         hostIds: host.isResource ? [host.id] : (pool.hostIds ?? []),
-      });
+      };
+      pools.push(entry);
+      if (!host.isResource && host.platform === 'storage' && !pool.backup) {
+        standaloneSharedPoolEntries.push(entry);
+      }
     }
     if (!host.isResource) continue;
     hostIds.add(host.id);
@@ -969,12 +1159,17 @@ export function buildServiceDiagram(
       health: host.health,
       platform: host.platform,
       ...plannedTileNetworks(host.ownSegmentIds, plan),
+      ...(host.cpuCores !== undefined ? { cpuCores: host.cpuCores } : {}),
+      ...(host.memoryTotalBytes !== undefined ? { memoryTotalBytes: host.memoryTotalBytes } : {}),
+      ...(host.versionLabel ? { versionLabel: host.versionLabel } : {}),
       cpu: host.cpu,
       memory: host.memory,
       ...tileNetworkTelemetry(host),
       address: plan.where(host.address, host.ownSegmentIds),
       navigable: true,
     };
+    hostTilesById.set(host.id, tile);
+    allTilesById.set(tile.id, tile);
     (host.platform === 'backup' ? backupServers : hardware).push(tile);
   }
 
@@ -1046,7 +1241,9 @@ export function buildServiceDiagram(
     if (built) groups.push(built);
   }
   const visibleChecks = filterTiles(checks, 'Checks');
-  if (visibleChecks.length > 0) groups.push(box('checks', 'Checks', visibleChecks, max));
+  const checksBox =
+    visibleChecks.length > 0 ? box('checks', 'Checks', visibleChecks, max) : undefined;
+  if (checksBox) groups.push(checksBox);
 
   const storagePools = poolTiles(
     pools.filter(({ pool }) => !pool.backup),
@@ -1092,14 +1289,34 @@ export function buildServiceDiagram(
     tile.links = [...(tile.links ?? []), sentence];
   };
 
+  const linkLabelRank = (label: string | undefined): number => {
+    if (!label) return 0;
+    if (label === 'runs on') return 1;
+    if (label === 'storage') return 2;
+    if (label === 'mounts' || label === 'backups') return 3;
+    if (label === 'DNS') return 4;
+    if (label === 'gateway') return 5;
+    if (label === 'checks') return 6;
+    if (label === 'routes') return 7;
+    if (label.startsWith('via ')) return 8;
+    return 9;
+  };
   const links: DiagramLink[] = [];
-  const linkPairs = new Set<string>();
-  const tie = (fromId: string, toId: string) => {
+  const linkByPair = new Map<string, DiagramLink>();
+  const tie = (fromId: string, toId: string, label?: string) => {
     if (fromId === toId || !drawn.has(fromId) || !drawn.has(toId)) return;
+    const trimmed = label?.trim() || undefined;
     const key = fromId < toId ? `${fromId}>${toId}` : `${toId}>${fromId}`;
-    if (linkPairs.has(key)) return;
-    linkPairs.add(key);
-    links.push({ fromId, toId });
+    const existing = linkByPair.get(key);
+    if (existing) {
+      if (trimmed && linkLabelRank(trimmed) > linkLabelRank(existing.label)) {
+        existing.label = trimmed;
+      }
+      return;
+    }
+    const entry: DiagramLink = trimmed ? { fromId, toId, label: trimmed } : { fromId, toId };
+    linkByPair.set(key, entry);
+    links.push(entry);
   };
 
   // A machine is linked to what runs on it and the storage it has, and
@@ -1123,11 +1340,14 @@ export function buildServiceDiagram(
         .map(([category, count]) => `${MAP_CATEGORY_LABEL[category]} ${count.toLocaleString()}`)
         .join(' · '),
     );
-    for (const { id } of runs) tie(hostId, id);
+    for (const { id } of runs) tie(hostId, id, 'runs on');
   }
   const drawnPools = (list: PoolTile[]) => list.filter(({ tile }) => drawn.has(tile.id));
-  for (const { tile, hostIds } of [...drawnPools(storagePools), ...drawnPools(backupPools)]) {
-    for (const hostId of hostIds) tie(hostId, tile.id);
+  for (const { tile, hostIds } of drawnPools(storagePools)) {
+    for (const hostId of hostIds) tie(hostId, tile.id, 'storage');
+  }
+  for (const { tile, hostIds } of drawnPools(backupPools)) {
+    for (const hostId of hostIds) tie(hostId, tile.id, 'backups');
   }
   // Backup storage on a host that runs things is where that host writes
   // its backups. A backup server's own datastores are where others write,
@@ -1150,9 +1370,9 @@ export function buildServiceDiagram(
   // Where a guest keeps its data: a disk the platform reports on a pool, or
   // a filesystem it mounts that is the same size and as full as one drawn.
   const usedBy = new Map<string, string[]>();
-  const uses = (guest: DiagramTile, pool: DiagramTile, sentence: string) => {
+  const uses = (guest: DiagramTile, pool: DiagramTile, sentence: string, label: string) => {
     say(guest, sentence);
-    tie(guest.id, pool.id);
+    tie(guest.id, pool.id, label);
     usedBy.set(pool.id, [...(usedBy.get(pool.id) ?? []), guest.name]);
   };
   // A backup target's consumers are the guests it holds backups of, which
@@ -1164,7 +1384,7 @@ export function buildServiceDiagram(
       const guest = drawn.get(id);
       if (!guest || placedOn.has(`${id}>${pool.id}`)) continue;
       placedOn.add(`${id}>${pool.id}`);
-      uses(guest, pool, `Data on ${pool.name}`);
+      uses(guest, pool, `Data on ${pool.name}`, 'storage');
     }
   }
   // Each mount is matched on its own: two folders from two pools are two
@@ -1182,7 +1402,7 @@ export function buildServiceDiagram(
       }
       if (placedOn.has(`${id}>${holder.tile.id}`)) continue;
       placedOn.add(`${id}>${holder.tile.id}`);
-      uses(guest, holder.tile, `Mounts ${holder.tile.name}`);
+      uses(guest, holder.tile, `Mounts ${holder.tile.name}`, 'mounts');
     }
     if (loose.length > 0) unplaced.push([guest, loose]);
   }
@@ -1210,7 +1430,7 @@ export function buildServiceDiagram(
       const others = members.filter(([other]) => other.id !== guest.id).map(([other]) => other);
       say(guest, `Shares a filesystem with ${nameList(others.map((other) => other.name))}`);
       if (members.length > SHARED_MOUNT_MAX_JOINED) continue;
-      for (const other of others) if (guest.id < other.id) tie(guest.id, other.id);
+      for (const other of others) if (guest.id < other.id) tie(guest.id, other.id, 'mounts');
     }
   }
   // A backup target that is the same size and as full as a drawn pool is
@@ -1221,7 +1441,7 @@ export function buildServiceDiagram(
     const holder = bytes.length > 0 ? poolHolding(bytes, drawnPools(storagePools)) : undefined;
     if (!holder) continue;
     say(tile, `Stored on ${holder.tile.name}`);
-    tie(tile.id, holder.tile.id);
+    tie(tile.id, holder.tile.id, 'backups');
     keptOn.set(holder.tile.id, [...(keptOn.get(holder.tile.id) ?? []), tile.name]);
   }
   for (const [poolId, names] of keptOn) {
@@ -1242,6 +1462,7 @@ export function buildServiceDiagram(
       from.caption = `via ${to.name}`;
       from.hasConnectionCaption = true;
       carried.set(to.id, (carried.get(to.id) ?? 0) + 1);
+      tie(link.fromId, link.toId, `via ${to.name}`);
     } else {
       say(
         to,
@@ -1255,8 +1476,8 @@ export function buildServiceDiagram(
         to.hasConnectionCaption = true;
       }
       routedBy.set(from.id, (routedBy.get(from.id) ?? 0) + 1);
+      tie(link.fromId, link.toId, link.hosts.length > 0 ? mapRouteLabel(link.hosts) : 'routes');
     }
-    tie(link.fromId, link.toId);
   }
   for (const [id, count] of carried) {
     const tile = drawn.get(id);
@@ -1272,7 +1493,7 @@ export function buildServiceDiagram(
     const check = drawn.get(checkId);
     const target = drawn.get(targetId);
     if (!check || !target) continue;
-    tie(check.id, target.id);
+    tie(check.id, target.id, 'checks');
     say(check, `Checks ${target.name}`);
     say(
       target,
@@ -1286,7 +1507,7 @@ export function buildServiceDiagram(
     ids.map((id) => drawn.get(id)?.name).filter((name): name is string => Boolean(name));
   const gateways: DiagramTile[] = [];
   const gatewayTiles = new Map<number, DiagramTile>();
-  const gatewayMachineIds = new Map<string, string[]>();
+  const gatewayLinks = new Map<string, Array<{ machineId: string; label: string }>>();
   model.connections.gateways.forEach((gateway, index) => {
     const names = machineNames(gateway.machineIds);
     // A gateway only machines that are not drawn point at says nothing here.
@@ -1295,7 +1516,7 @@ export function buildServiceDiagram(
     if (owner) {
       say(owner, `Default gateway of ${nameList(names)}`);
       for (const machineId of gateway.machineIds) {
-        if (machineId !== owner.id) tie(owner.id, machineId);
+        if (machineId !== owner.id) tie(owner.id, machineId, 'gateway');
       }
       return;
     }
@@ -1315,7 +1536,10 @@ export function buildServiceDiagram(
     };
     gateways.push(tile);
     gatewayTiles.set(index, tile);
-    gatewayMachineIds.set(tile.id, [...gateway.machineIds]);
+    gatewayLinks.set(
+      tile.id,
+      gateway.machineIds.map((machineId) => ({ machineId, label: 'gateway' })),
+    );
   });
   // A resolver is only said where it is already on the map: a monitored
   // thing, or a gateway with the same address. An address nothing else
@@ -1330,11 +1554,14 @@ export function buildServiceDiagram(
       say(owner, `Resolves names for ${nameList(names)}`);
       if (resolver.resourceId && drawn.has(owner.id)) {
         for (const machineId of machineIds) {
-          if (machineId !== owner.id) tie(owner.id, machineId);
+          if (machineId !== owner.id) tie(owner.id, machineId, 'DNS');
         }
       } else if (resolver.gateway !== undefined) {
-        const existing = gatewayMachineIds.get(owner.id) ?? [];
-        gatewayMachineIds.set(owner.id, [...new Set([...existing, ...machineIds])]);
+        const existing = gatewayLinks.get(owner.id) ?? [];
+        gatewayLinks.set(owner.id, [
+          ...existing,
+          ...machineIds.map((machineId) => ({ machineId, label: 'DNS' })),
+        ]);
       }
     }
   }
@@ -1344,8 +1571,8 @@ export function buildServiceDiagram(
   ).slice(0, DIAGRAM_MAX_GATEWAYS);
   for (const gatewayTile of visibleGateways) {
     drawn.set(gatewayTile.id, gatewayTile);
-    for (const machineId of gatewayMachineIds.get(gatewayTile.id) ?? []) {
-      tie(gatewayTile.id, machineId);
+    for (const { machineId, label } of gatewayLinks.get(gatewayTile.id) ?? []) {
+      tie(gatewayTile.id, machineId, label);
     }
   }
 
@@ -1390,6 +1617,224 @@ export function buildServiceDiagram(
     }
   }
 
+  const routeInfoByTarget = new Map<string, { hosts: Set<string>; proxyNames: Set<string> }>();
+  for (const link of model.connections.links) {
+    if (link.kind !== 'route') continue;
+    const entry = routeInfoByTarget.get(link.toId) ?? {
+      hosts: new Set<string>(),
+      proxyNames: new Set<string>(),
+    };
+    for (const host of link.hosts) {
+      const normalized = host.trim().toLowerCase();
+      if (normalized) entry.hosts.add(normalized);
+    }
+    const proxyTile = allTilesById.get(link.fromId);
+    if (proxyTile?.name) entry.proxyNames.add(proxyTile.name);
+    routeInfoByTarget.set(link.toId, entry);
+  }
+  for (const targetId of routeInfoByTarget.keys()) {
+    const tile = allTilesById.get(targetId);
+    if (tile) tile.isRouted = true;
+  }
+  for (const [tileId, hosts] of ingressHostsById) {
+    if (hosts.length === 0) continue;
+    const tile = allTilesById.get(tileId);
+    if (tile) tile.isRouted = true;
+  }
+
+  const hostFrames: DiagramHostFrame[] = [];
+  for (const host of hostResources) {
+    const hostTile = hostTilesById.get(host.id);
+    if (!hostTile) continue;
+    const clusterMeta = hostClusterById.get(host.id);
+    const clusterName = clusterMeta?.name;
+    const rawWorkloads = (hostWorkloads.get(host.id) ?? []).filter(
+      ({ category }) => category !== 'access',
+    );
+    const rawPools = host.pools
+      .filter((pool) => !pool.backup)
+      .map((pool) => localPoolTile(pool, host, drawn, allTilesById));
+
+    let visibleWorkloads: DiagramTile[];
+    let visiblePools: DiagramTile[];
+    if (hasFilter) {
+      const hostContext = clusterName ? `${clusterName} Hardware` : 'Hardware';
+      const hostMatches = matchesFilter(hostTile, hostContext);
+      visibleWorkloads = rawWorkloads
+        .filter(({ tile, category }) =>
+          matchesFilter(tile, `${host.name} ${clusterName ?? ''} ${MAP_CATEGORY_LABEL[category]}`),
+        )
+        .map(({ tile }) => tile);
+      visiblePools = rawPools.filter((poolTile) =>
+        matchesFilter(poolTile, `${host.name} ${clusterName ?? ''} Storage`),
+      );
+      if (!hostMatches && visibleWorkloads.length === 0 && visiblePools.length === 0) continue;
+    } else {
+      visibleWorkloads = rawWorkloads.map(({ tile }) => tile);
+      visiblePools = rawPools;
+    }
+
+    const frameAllTiles = [...visibleWorkloads].sort(compareDiagramTilesByAttention);
+    const displayed = frameAllTiles.slice(0, max);
+    const overflowCount = Math.max(0, frameAllTiles.length - displayed.length);
+
+    const byProject = new Map<string, DiagramTile[]>();
+    for (const tile of displayed) {
+      if (!tile.composeProject) continue;
+      const list = byProject.get(tile.composeProject) ?? [];
+      list.push(tile);
+      byProject.set(tile.composeProject, list);
+    }
+    const stacks: DiagramHostStack[] = [];
+    const stackedIds = new Set<string>();
+    for (const [project, members] of byProject) {
+      if (members.length < 2) continue;
+      for (const member of members) stackedIds.add(member.id);
+      stacks.push({
+        key: `${host.id}:stack:${project}`,
+        label: project,
+        tiles: [...members].sort(compareDiagramTilesByAttention),
+      });
+    }
+    stacks.sort((a, b) => collator.compare(a.label, b.label));
+    const looseTiles = displayed
+      .filter((tile) => !stackedIds.has(tile.id))
+      .sort(compareDiagramTilesByAttention);
+
+    let childTrafficSum = 0;
+    for (const { tile } of hostWorkloads.get(host.id) ?? []) {
+      if (tile.netTotalBytes !== undefined && tile.netTotalBytes > 0) {
+        childTrafficSum += tile.netTotalBytes;
+      }
+    }
+    const frameTrafficBytes = Math.max(hostTile.netTotalBytes ?? 0, childTrafficSum);
+    const trafficTier = resolveMapTrafficTier(
+      frameTrafficBytes > 0 ? frameTrafficBytes : undefined,
+    );
+
+    hostFrames.push({
+      id: host.id,
+      host: hostTile,
+      ...(clusterMeta
+        ? {
+            clusterId: clusterMeta.id,
+            clusterName: clusterMeta.name,
+            clusterTypeLabel: clusterMeta.typeLabel,
+          }
+        : {}),
+      stacks,
+      looseTiles,
+      pools: visiblePools,
+      allTiles: frameAllTiles,
+      attentionCount: frameAllTiles.filter((tile) => isDiagramTileAttention(tile.health)).length,
+      totalCount: frameAllTiles.length,
+      overflowCount,
+      ...(trafficTier !== undefined ? { trafficTier } : {}),
+      ...(hostTile.linkSpeedMbps !== undefined ? { linkSpeedMbps: hostTile.linkSpeedMbps } : {}),
+    });
+  }
+
+  const buildSharedPoolTiles = (entries: PoolEntry[]): DiagramTile[] =>
+    poolTiles(entries, 'storage', hostName).map(({ tile, pools: members }) => {
+      const drawnTile = drawn.get(tile.id);
+      if (drawnTile?.links?.length) {
+        return { ...tile, links: [...drawnTile.links] };
+      }
+      const consumerNames = [
+        ...new Set(
+          members.flatMap((member) =>
+            (member.consumerIds ?? [])
+              .map((id) => allTilesById.get(id)?.name)
+              .filter((name): name is string => Boolean(name)),
+          ),
+        ),
+      ];
+      return consumerNames.length > 0
+        ? { ...tile, links: [`Used by ${nameList(consumerNames)}`] }
+        : tile;
+    });
+
+  const visibleFramesByCluster = new Map<string, DiagramHostFrame[]>();
+  for (const frame of hostFrames) {
+    if (!frame.clusterId) continue;
+    const list = visibleFramesByCluster.get(frame.clusterId) ?? [];
+    list.push(frame);
+    visibleFramesByCluster.set(frame.clusterId, list);
+  }
+
+  const sharedPoolEntriesForBand: PoolEntry[] = [...standaloneSharedPoolEntries];
+  for (const meta of clusterMetaById.values()) {
+    const clusterFrames = visibleFramesByCluster.get(meta.id) ?? [];
+    if (meta.poolEntries.length > 0 && clusterFrames.length > 0) {
+      const rawClusterPools = buildSharedPoolTiles(meta.poolEntries);
+      const visibleClusterPools = hasFilter
+        ? rawClusterPools.filter((poolTile) => matchesFilter(poolTile, `${meta.name} Storage`))
+        : rawClusterPools;
+      if (visibleClusterPools.length > 0) {
+        for (const frame of clusterFrames) {
+          frame.clusterPools = visibleClusterPools;
+        }
+      }
+    }
+    if (clusterFrames.length < 2) {
+      sharedPoolEntriesForBand.push(...meta.poolEntries);
+    }
+  }
+
+  const sharedStorageTilesAll = buildSharedPoolTiles(sharedPoolEntriesForBand);
+  const sharedStorageTiles = filterTiles(sharedStorageTilesAll, 'Storage');
+  const sharedStorageBox =
+    sharedStorageTiles.length > 0
+      ? box('shared-storage', 'Shared storage', sharedStorageTiles, max)
+      : undefined;
+
+  const seenExposed = new Set<string>();
+  const exposed: DiagramExposedEntry[] = [];
+  for (const entry of [access, ...groups, backupBox]) {
+    if (!entry) continue;
+    for (const tile of entry.allTiles) {
+      if (!tile.navigable || seenExposed.has(tile.id)) continue;
+      const routeInfo = routeInfoByTarget.get(tile.id);
+      const ingress = ingressHostsById.get(tile.id);
+      const ports = tile.detail;
+      if (!routeInfo && !ingress?.length && !ports) continue;
+      const hostSet = new Set<string>();
+      for (const host of routeInfo?.hosts ?? []) hostSet.add(host);
+      for (const host of ingress ?? []) {
+        const normalized = host.trim().toLowerCase();
+        if (normalized) hostSet.add(normalized);
+      }
+      const hostnames = [...hostSet].sort(collator.compare);
+      const proxyName =
+        routeInfo && routeInfo.proxyNames.size > 0
+          ? [...routeInfo.proxyNames].sort(collator.compare).join(', ')
+          : undefined;
+      seenExposed.add(tile.id);
+      exposed.push({
+        tile,
+        groupLabel: entry.label,
+        hostnames,
+        ...(ports ? { ports } : {}),
+        ...(proxyName ? { proxyName } : {}),
+      });
+    }
+  }
+  exposed.sort(
+    (a, b) =>
+      Number(b.hostnames.length > 0 || Boolean(b.proxyName)) -
+        Number(a.hostnames.length > 0 || Boolean(a.proxyName)) ||
+      collator.compare(a.tile.name, b.tile.name),
+  );
+
+  const hasLinkSpeeds =
+    hostFrames.some((frame) => frame.linkSpeedMbps !== undefined && frame.linkSpeedMbps > 0) ||
+    (hardwareBox?.tiles ?? []).some(
+      (tile) => tile.linkSpeedMbps !== undefined && tile.linkSpeedMbps > 0,
+    ) ||
+    plan.networks.some(
+      (network) => network.linkSpeedMbps !== undefined && network.linkSpeedMbps > 0,
+    );
+
   return {
     ...(internetRoles.length > 0 && (!hasFilter || access !== undefined)
       ? { internet: { label: internetRoles.join(' · ') } }
@@ -1399,10 +1844,15 @@ export function buildServiceDiagram(
     links,
     networks: plan.networks,
     groups,
+    hostFrames,
+    ...(sharedStorageBox ? { sharedStorage: sharedStorageBox } : {}),
+    ...(checksBox ? { checks: checksBox } : {}),
+    exposed,
     ...(storageBox ? { storage: storageBox } : {}),
     ...(backupBox ? { backups: backupBox } : {}),
     ...(hardwareBox ? { hardware: hardwareBox } : {}),
     serviceCount,
     ...(estateTrafficSum > 0 ? { estateTrafficBytes: estateTrafficSum } : {}),
+    ...(hasLinkSpeeds ? { hasLinkSpeeds: true } : {}),
   };
 }

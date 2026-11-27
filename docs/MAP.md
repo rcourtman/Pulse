@@ -11,10 +11,12 @@ Open it with the map button at the top left of the header.
 | Part | What it shows |
 | --- | --- |
 | **Ways in** | Reverse proxies, VPNs, DNS, and your router, switches and access points |
-| Network pills | Each network, with how many things are on it and live throughput when active |
-| Boxes such as **Media**, **Monitoring**, **Databases** | Guests and containers, grouped by what they are for |
+| Network pills | Each network, with how many things are on it, link speed and live throughput when active |
+| **By host** frames (default) | Each host with its CPU, RAM, live CPU/memory meters, link speed and version, automatically grouped inside cluster containers and containing its guests, Compose stacks, category sub-groups and inline storage pool usage bars |
+| **By role** boxes | Guests and containers grouped by purpose (**Media**, **Monitoring**, **Security**, and so on), with **Storage**, **Backups** and **Hardware** underneath |
 | **Checks** | Availability checks on websites, services, machines without an agent and other devices |
-| **Storage**, **Backups**, **Hardware** | Pools, backup targets and the machines everything runs on |
+
+Switch between **By host** and **By role** in the toolbar at any time. In **By host** view, horizontal cards show each guest's VLAN accent stripe, VM or CT ID, last IPv4 octet, published ports and live rate or route, while host headers surface **BUSY** NIC saturation, **DOWN** link warnings and a clickable item count to open that host's inspector drawer. Connectors scale with reported NIC speed (`10G`, `2.5G`, `1G`, `100M`), take a single-network host's network colour or turn amber when saturated, and hover arcs label up to six connections directly on the line. **Save image** exports whichever layout you are viewing, including the link-speed key when speeds are collected.
 
 Each tile has a status dot: healthy, needs attention, critical, not reporting
 or off. When there is more than one network, a coloured mark beside a tile
@@ -65,6 +67,12 @@ toolbar and drawers let you find any resource without leaving the map:
   Click **Filter map** inside that drawer to narrow the whole map to active
   talkers (showing a removable **Active traffic** chip in the filter bar), and
   click **Show all** or clear the chip to return to the full estate.
+- **Published & routed (`N exposed`) pill** appears beside the title whenever
+  reverse-proxied hostnames (Traefik, Caddy or Kubernetes Ingress) or published
+  ports (Docker, Swarm, TrueNAS apps or Kubernetes Services) exist on the map.
+  Click it to open the **Published & routed** drawer, filter between **Proxied**
+  and **Published ports**, search hostnames or ports, and jump straight to any
+  service.
 - **Group and network drawers** open when you click a **+N** overflow tile,
   a box header, or any network pill (including the **+N more** networks
   pill). Each drawer sorts items needing attention first, lets you switch

@@ -1,0 +1,57 @@
+{
+  "version": 1,
+  "base_sha": "7c186f10d4fad4f51b46e0a7c57f3471c5e1093e",
+  "verified_at": "2026-11-27T13:16:15Z",
+  "result": "passed",
+  "changed_paths": [
+    "frontend-modern/src/features/infrastructureMap/InfrastructureMapDrawer.tsx",
+    "frontend-modern/src/features/infrastructureMap/InfrastructureMapSurface.tsx",
+    "frontend-modern/src/features/infrastructureMap/infrastructureMapDiagram.ts",
+    "frontend-modern/src/features/infrastructureMap/infrastructureMapExport.ts",
+    "frontend-modern/src/features/infrastructureMap/infrastructureMapHostDiagram.ts",
+    "frontend-modern/src/features/infrastructureMap/infrastructureMapLayout.ts",
+    "frontend-modern/src/features/infrastructureMap/infrastructureMapModel.ts",
+    "frontend-modern/src/features/infrastructureMap/infrastructureMapRender.ts",
+    "frontend-modern/src/features/infrastructureMap/infrastructureMapServices.ts"
+  ],
+  "content_sha256": {
+    "frontend-modern/src/features/infrastructureMap/InfrastructureMapDrawer.tsx": "6a3a23c326dbe44d23ef4c27e36c1011204720f5c27ca369588b7008e59a3722",
+    "frontend-modern/src/features/infrastructureMap/InfrastructureMapSurface.tsx": "de2087b054841fa1b2b0624fe3012241bb47ce763e750fa2cddf1d767a1426c1",
+    "frontend-modern/src/features/infrastructureMap/infrastructureMapDiagram.ts": "fffa380d69f5552755e6d51a7877d0fa0d7ee6f86652aa3f646ebe6dee073b5d",
+    "frontend-modern/src/features/infrastructureMap/infrastructureMapExport.ts": "098aef64058cde6cd23f3e054b52b330475add73acfdeeb7f832718c87e10ffb",
+    "frontend-modern/src/features/infrastructureMap/infrastructureMapHostDiagram.ts": "d466ba2d9095846048ca55b1fc12a4d64bf9fdd4c5dc3e740c69f7a9e46c5248",
+    "frontend-modern/src/features/infrastructureMap/infrastructureMapLayout.ts": "46cfb9246f731593c8d6f65bd9abd68a646fe8eb5ea8c183685ddd073e70bc39",
+    "frontend-modern/src/features/infrastructureMap/infrastructureMapModel.ts": "cfb121f948c26610f21d72181166f818d92fcc1730ada2d9c091b2ac79100f06",
+    "frontend-modern/src/features/infrastructureMap/infrastructureMapRender.ts": "4b01a19ebd953c52e3ea5f12f1e47514d4371a4048da8ba5175df365f2603c78",
+    "frontend-modern/src/features/infrastructureMap/infrastructureMapServices.ts": "de65f69210138827948999239963a6a0852cb6d1727e6ac2fc6d23371fa438d8"
+  },
+  "routes": [
+    "/map"
+  ],
+  "viewports": [
+    {
+      "width": 1440,
+      "height": 900
+    },
+    {
+      "width": 390,
+      "height": 844
+    }
+  ],
+  "states": [
+    "By host default view in dark and light themes with automatic cluster containers, 2-row host headers (CPU and MEM micro-meters, BUSY saturation badge, DOWN link badge, clickable host item count), VLAN-coloured and amber-saturated link-speed drop connectors, Compose stack sub-boxes, inline storage pool bars, exposed port badges, and link-speed legend key",
+    "By role view toggled cleanly from toolbar",
+    "Published and routed (exposed) drawer with All, Proxied, and Published ports filters",
+    "Hover curved connection arcs with midpoint relationship labels (notes.home.arpa, runs on), flow overlay, and network pill hover rings",
+    "Hide names redaction stripping hostnames, IPs, VMIDs, and Compose stack names",
+    "Mobile 390x844 dark view with Hosts and Roles compact toggle labels and cluster framing"
+  ],
+  "interactions": [
+    "Hovered reverse proxy tile to verify curved hover arcs, midpoint relationship pills, flow overlay, and enriched tooltip",
+    "Hovered network pill to verify network-coloured member highlight rings",
+    "Clicked N exposed summary pill to open Published and routed drawer and closed with Escape",
+    "Toggled By host and By role layout modes",
+    "Toggled Hide names on and off to verify zero leaked hostnames, IPs, VMIDs, or stack names",
+    "Inspected full desktop dark, desktop light, hover, drawer, By role, and mobile dark Playwright screenshots"
+  ]
+}
