@@ -237,3 +237,22 @@ func TestAvailabilityPlanningReadsSavedCatalogOnce(t *testing.T) {
 		})
 	}
 }
+
+func TestAvailabilityPlanningPreservesDuplicateIDTieOrder(t *testing.T) {
+	late := probeAgentTarget("duplicate", "")
+	late.Name, late.PollIntervalSecs = "Zulu", 180
+	early := late
+	early.Name, early.PollIntervalSecs = "alpha", 120
+	later := late
+	later.Name, later.PollIntervalSecs = "Beta", 60
+	monitor, _, counter := newAvailabilityPlanningFixture(t, []config.AvailabilityTarget{late, early, later})
+	provider := availabilityPollProvider{}
+	want := []pollPlanInstance{
+		{name: "duplicate", fixedInterval: 120 * time.Second},
+		{name: "duplicate", fixedInterval: 60 * time.Second},
+		{name: "duplicate", fixedInterval: 180 * time.Second},
+	}
+	if got := provider.pollPlanningRoster(monitor); !slices.Equal(got, want) || counter.reads != 1 {
+		t.Errorf("roster = %+v with %d reads; want %+v with one read", got, counter.reads, want)
+	}
+}
