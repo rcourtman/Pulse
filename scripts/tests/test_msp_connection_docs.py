@@ -113,6 +113,34 @@ class MSPConnectionDocsTest(unittest.TestCase):
         nav = (ROOT / "frontend-modern/src/components/Settings/settingsNavigationModel.ts").read_text(encoding="utf-8")
         self.assertIn("const SUPPORT_REPORTING_PREFIX = `${SUPPORT_PREFIX}/reporting`;", nav)
 
+    def test_msp_help_tracks_v690_eval_bundle_and_workspace_membership_sync(self):
+        doc = (ROOT / "docs/MSP.md").read_text(encoding="utf-8")
+        self.assertEqual(
+            (ROOT / "docs/MSP.md").read_bytes(),
+            (ROOT / "frontend-modern/public/docs/MSP.md").read_bytes(),
+        )
+        text = " ".join(doc.split())
+        for phrase in (
+            "published with Pulse v6.9.0",
+            "export PULSE_VERSION=v6.9.0",
+            "Membership changes in the portal propagate into every client workspace organization record first.",
+            "Removing a teammate or lowering their role revokes or reduces their workspace authority immediately",
+            "stored checkout contact email cannot re-seed a removed member through a tenant-bound sign-in link",
+            "without an AI-generated narrative",
+        ):
+            with self.subTest(phrase=phrase):
+                self.assertIn(phrase, text)
+        self.assertNotIn("export PULSE_VERSION=v6.8.0", doc)
+        self.assertNotIn("Pulse Assistant narrative", text)
+
+        handlers = (ROOT / "internal/cloudcp/account/handlers.go").read_text(encoding="utf-8")
+        for marker in (
+            "RevokeWorkspaceAccess(ctx context.Context, accountID, userID string) error",
+            "LowerWorkspaceAccess(ctx context.Context, accountID, userID string, role registry.MemberRole) error",
+            "SyncWorkspaceAccess(ctx context.Context, accountID, userID string, role registry.MemberRole) error",
+        ):
+            self.assertIn(marker, handlers)
+
 
 if __name__ == "__main__":
     unittest.main()

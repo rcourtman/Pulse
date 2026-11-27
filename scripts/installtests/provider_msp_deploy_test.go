@@ -574,9 +574,9 @@ func TestProviderMSPEvaluationDocsUsePublishedSignedBundle(t *testing.T) {
 	doc := string(repoDocBytes)
 	assertContainsAll(t, doc,
 		"signed provider bundle published",
-		"with Pulse v6.8.0",
+		"with Pulse v6.9.0",
 		"**not** download the moving `main` branch archive",
-		`export PULSE_VERSION=v6.8.0`,
+		`export PULSE_VERSION=v6.9.0`,
 		`PULSE_MSP_BUNDLE="pulse-provider-msp-${PULSE_VERSION}.tar.gz"`,
 		`releases/download/${PULSE_VERSION}`,
 		"ssh-keygen -Y verify",

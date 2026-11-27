@@ -465,6 +465,58 @@ class StaleReadingAndAgentHelpDocsTest(unittest.TestCase):
         ):
             self.assertIn(marker, updater)
 
+    def test_agent_help_documents_monitoring_only_ceilings_signed_config_and_docker_report_shedding(
+        self,
+    ):
+        security = norm(doc_text("docs/AGENT_SECURITY.md"))
+        for phrase in (
+            "That ceiling also governs the Docker agent module in both foreground and Windows service runtimes, rejecting legacy `update_container` and `update_all` commands in server report responses regardless of server settings.",
+            "On Windows services, the local `CommandAuthorityProfile`, `DisableUpdateChecks`, and `DisableRegistryCredentials` settings are forwarded to match foreground behavior.",
+            "When signed remote configuration is required (`PULSE_AGENT_CONFIG_SIGNATURE_REQUIRED=true`), an unsigned `commandsEnabled` flag in a host report acknowledgement can still turn command execution off, but cannot enable it.",
+        ):
+            with self.subTest(doc="AGENT_SECURITY.md", phrase=phrase):
+                self.assertIn(phrase, security)
+
+        unified = norm(doc_text("docs/UNIFIED_AGENT.md"))
+        for phrase in (
+            "a `monitoring-only` install cannot be promoted remotely, including in the Docker module and Windows service runtimes",
+            "With signature verification required, unsigned `commandsEnabled` overrides carried in report acknowledgements can disable command execution, but cannot enable it.",
+            "shared report size limit of **2 MiB** encoded HTTP body or **10 MiB** decoded JSON on Docker and Podman reports",
+            "objects over **32 KiB**, then **4 KiB**, then all free-form metadata",
+            "containers with more than **64** attachments, then all ports and mounts",
+            "HTTP **413** (`report exceeds the size the destination accepts`)",
+            "drops that report without buffering or replaying it",
+        ):
+            with self.subTest(doc="UNIFIED_AGENT.md", phrase=phrase):
+                self.assertIn(phrase, unified)
+
+        win_svc = doc_text("cmd/pulse-agent/service_windows.go")
+        for marker in (
+            "CommandAuthorityProfile: ws.cfg.CommandAuthorityProfile,",
+            "MonitoringOnly:     ws.cfg.CommandAuthorityProfile == hostagent.CommandAuthorityMonitoringOnly,",
+            "DisableUpdateChecks:        ws.cfg.DisableDockerUpdateChecks,",
+            "DisableRegistryCredentials: ws.cfg.DisableRegistryCredentials,",
+        ):
+            self.assertIn(marker, win_svc)
+
+        host_agent = doc_text("internal/hostagent/agent.go")
+        self.assertIn("if commandsEnabled && remoteconfig.SignatureRequired() {", host_agent)
+        remote_cfg = doc_text("internal/remoteconfig/client.go")
+        self.assertIn('utils.GetenvTrim("PULSE_AGENT_CONFIG_SIGNATURE_REQUIRED")', remote_cfg)
+
+        docker_agent = doc_text("internal/dockeragent/agent.go")
+        for marker in (
+            'var errReportTooLarge = errors.New("report exceeds the size the destination accepts")',
+            "var reportMetadataShedSteps = []int{32 * 1024, 4 * 1024, 0}",
+            "for _, limit := range []int{64, 0} {",
+            "if errors.Is(err, errReportTooLarge) {",
+        ):
+            self.assertIn(marker, docker_agent)
+
+        report_limits = doc_text("pkg/agents/docker/report_limits.go")
+        self.assertIn("ReportEncodedBodyLimitBytes int64 = 2 * 1024 * 1024", report_limits)
+        self.assertIn("ReportDecodedBodyLimitBytes int64 = 10 * 1024 * 1024", report_limits)
+
     def test_shipped_public_docs_mirrors_match_byte_for_byte(self):
         for name in (
             "AGENT_SECURITY.md",

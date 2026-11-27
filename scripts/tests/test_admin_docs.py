@@ -502,6 +502,23 @@ class AdminDocsTest(unittest.TestCase):
             with self.subTest(resource=resource):
                 self.assertIn(f"`{resource}`", rbac)
 
+    def test_multi_tenant_help_documents_org_deletion_token_revocation_and_cold_monitor_isolation(self):
+        org_doc = " ".join((DOCS / "MULTI_TENANT.md").read_text(encoding="utf-8").split())
+        for phrase in (
+            "Deleting an organization revokes API tokens bound to that organization ID before removing its data.",
+            "Creating an organization also clears any stale credentials left bound to that ID, so old tokens cannot carry over if an ID is reused.",
+            "A request without an explicit API token does not resolve or start a cold non-default organization monitor merely by sending `X-Pulse-Org-ID` or a session cookie.",
+        ):
+            with self.subTest(phrase=phrase):
+                self.assertIn(phrase, org_doc)
+
+        org_handlers = (ROOT / "internal/api/org_handlers.go").read_text(encoding="utf-8")
+        self.assertIn("func (h *OrgHandlers) SetCredentialRevoker(callback func(orgID string) error)", org_handlers)
+        self.assertIn("if err := h.revokeCredentials(req.ID); err != nil {", org_handlers)
+        self.assertIn("if err := h.revokeCredentials(orgID); err != nil {", org_handlers)
+        auth_go = (ROOT / "internal/api/auth.go").read_text(encoding="utf-8")
+        self.assertIn("if mtm != nil && explicitTokenProvided {", auth_go)
+
 
 if __name__ == "__main__":
     unittest.main()
