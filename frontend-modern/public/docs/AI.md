@@ -78,10 +78,10 @@ LLM analysis (with tools) ← pulse_storage, pulse_metrics, pulse_alerts, etc.
 patrol_report_finding() / patrol_assess_finding() / patrol_resolve_finding()
         │                                      └── explicit verdict for every known finding
         │
-        ├── DetectSignals() ── deterministic evidence extraction from tool outputs
-        │       │
+        ├── DetectSignals() + runtime verifiers ── deterministic fix verification
+        │       │                                  and stale-finding reconciliation
         │       ▼
-        │   Evaluation pass ── focused LLM review of unmatched evidence
+        │   Post-run reconciliation (missing-assessment flags, alert folding, stale cleanup)
         │
         ▼
 model-reported findings ── validated, deduplicated, stored
@@ -170,7 +170,7 @@ Beyond raw metrics, Patrol prepares structured evidence for the model:
 
 ### Deterministic Evidence Extraction
 
-Patrol parses tool outputs for concrete evidence such as backup failures, storage pressure, and disk health failures. These signals are not final findings by themselves: unmatched signals are sent to a focused LLM evaluation pass, and if the model still declines to report them, Pulse does not convert them into Pulse-authored findings.
+Patrol parses tool outputs and pre-patrol guest reachability checks for concrete evidence such as backup failures, storage pressure, and disk health failures. These signals are not final findings by themselves. Patrol does not launch a separate follow-up LLM evaluation pass for unmatched signals, and Pulse does not convert them into Pulse-authored findings. In the live Patrol runtime, `DetectSignals` and runtime-state verifiers drive deterministic fix verification and stale-finding reconciliation. See [Patrol architecture](PATROL_ARCHITECTURE.md#deterministic-signal-detection-and-verification).
 
 | Signal Type | Trigger | Default Threshold |
 |------------|---------|-------------------|
@@ -180,6 +180,7 @@ Patrol parses tool outputs for concrete evidence such as backup failures, storag
 | `high_disk` | Storage pool usage | 75% (warning), 95% (critical) |
 | `backup_failed` | Recent backup task with error status | Within 48h |
 | `backup_stale` | No backup completed for VM/CT | 48+ hours |
+| `guest_unreachable` | Running guest failed pre-patrol reachability probing | N/A |
 
 Thresholds can be configured via alert settings to match user-defined values.
 
@@ -362,7 +363,7 @@ Patrol supports four modes that decide how far Pulse can go after it finds an is
 | **Safe auto-fix** | Runs warning-level governed fixes automatically and verifies results. Critical findings still require approval by default. | Pro / hosted Cloud |
 | **Autopilot** | Runs eligible governed fixes automatically and verifies results. Use only in environments where this is acceptable. | Pro / hosted Cloud |
 
-Community and Relay installs can still run scheduled Patrol findings with BYOK. Watch only remains the free-first baseline; investigation, proposed fixes, and fix execution are paid AI-operations capabilities rather than a core monitoring limit.
+Community and Relay installs can still run scheduled Patrol findings with BYOK. Watch only remains the free-first baseline, while investigation, proposed fixes, and fix execution are paid AI-operations capabilities rather than a core monitoring limit. Relay is no longer sold, and continuing Relay subscribers receive Pro capabilities, including investigation and governed fixes, at their current price.
 
 ### Investigation Flow
 
@@ -701,10 +702,7 @@ means Pulse omits the field so the Ollama server's own policy applies; explicit
 duration, seconds, `-1`, and `0` values persist across restart and apply to both
 streaming and non-streaming requests.
 
-You can set separate models for:
-- Chat (`chat_model`)
-- Patrol (`patrol_model`)
-- Patrol fix model (`auto_fix_model`, retained as the compatibility settings key)
+In **Settings → Pulse Intelligence → Provider & Models**, you configure the **Shared Default Model** (`model`). To override the model Patrol uses, set **Patrol model** (`patrol_model`) under **Settings → Pulse Intelligence → Patrol → Model readiness**. Web settings no longer expose a `chat_model` override because the in-app Assistant chat window is retired. A previously saved `chat_model` is still read as a compatibility fallback for legacy Pulse Mobile chat (until 31 March 2027) and for server-side narration or analysis when `patrol_model` is unset, and `auto_fix_model` is retained as a compatibility settings key.
 
 ### Patrol model readiness advisor
 
@@ -734,7 +732,7 @@ timeout settings invalidates the cached result. Slow evaluations can be
 cancelled from the UI without replacing the last completed evidence.
 
 Provider transport health is reported independently from Patrol capability. A
-local endpoint can remain healthy and usable for ordinary Assistant chat while
+local endpoint can remain healthy and reachable for basic provider calls while
 the selected model receives an amber Patrol warning because it did not
 demonstrate typed tool calls, context selection, continuation, or the required
 latency envelope. That warning does not mislabel the provider as disconnected,
@@ -946,11 +944,11 @@ Pulse tracks token usage and costs:
 
 ### Deep Dives (Recommended for Technical Audiences)
 
-- **[Pulse Assistant Deep Dive](ASSISTANT_ARCHITECTURE.md)** — Complete technical breakdown of the model-owned tool surface: explicit context, session fact caching, FSM enforcement, parallel execution, grounded execution guardrails, structured errors
-- **[Pulse Patrol Deep Dive](PATROL_ARCHITECTURE.md)** — Patrol runtime documentation: evidence assembly, deterministic signal extraction, model evaluation, investigation context, investigation orchestration
+- **[Pulse Assistant Deep Dive](ASSISTANT_ARCHITECTURE.md):** Three-phase tool execution pipeline, bounded parallelism, structured error codes, and grounded action execution for Patrol investigations and legacy Pulse Mobile chat.
+- **[Pulse Patrol Deep Dive](PATROL_ARCHITECTURE.md):** Patrol runtime documentation covering deterministic triage, seed context assembly, agentic tool loop, deterministic verification, and investigation orchestration.
 
 ### Reference Documentation
 
-- [Architecture: Pulse Assistant (Safety Gates)](ASSISTANT_SAFETY.md) — Detailed FSM states, tool protocol, and invariants
-- [API Reference](API.md) — Complete API endpoint documentation
-- [Plans and entitlements](PULSE_PRO.md) — Community/Relay/Pro/Cloud features and licensing
+- [Architecture: Pulse Assistant (Safety Gates)](ASSISTANT_SAFETY.md): Shared tool kinds, enforced action authority, and `ActionResultV2` evidence and verification boundaries.
+- [API Reference](API.md): Complete API endpoint documentation.
+- [Plans and entitlements](PULSE_PRO.md): Community, Pro, continuing Relay, and Cloud features and licensing.

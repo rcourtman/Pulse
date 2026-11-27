@@ -207,8 +207,47 @@ class NavigationHelpDocsTest(unittest.TestCase):
                 self.assertIn(f'= "{resource}"', perms_go)
                 self.assertIn(f"`{resource}`", arch)
 
+    def test_help_index_and_storage_proposal_status_match_shipped_docs(self):
+        readme = doc_text("README.md")
+        self.assertEqual(
+            readme,
+            (ROOT / "frontend-modern/public/docs/README.md").read_text(encoding="utf-8"),
+        )
+        for target in (
+            "(UNIFIED_RESOURCES.md)",
+            "(PATROL_ARCHITECTURE.md)",
+            "(ASSISTANT_ARCHITECTURE.md)",
+            "(CLOUD.md)",
+        ):
+            with self.subTest(index_link=target):
+                self.assertIn(target, readme)
+        self.assertIn("[Relay and Pulse Mobile retirement](RELAY.md)", readme)
+        self.assertIn("31 March 2027", readme)
+        self.assertNotIn("Relay and Pulse Mobile handoff", readme)
+        self.assertNotIn("Community, Relay, and Pro capabilities", readme)
+
+        storage_proposal = doc_text("STORAGE_ARCHITECTURE.md")
+        self.assertEqual(
+            storage_proposal,
+            (ROOT / "frontend-modern/public/docs/STORAGE_ARCHITECTURE.md").read_text(
+                encoding="utf-8"
+            ),
+        )
+        self.assertIn("historical pre-v6 design proposal", storage_proposal)
+        for live_guide in (
+            "(RECOVERY.md)",
+            "(TRUENAS.md)",
+            "(ZFS_MONITORING.md)",
+            "(VM_DISK_MONITORING.md)",
+            "(UNIFIED_RESOURCES.md)",
+        ):
+            with self.subTest(live_guide=live_guide):
+                self.assertIn(live_guide, storage_proposal)
+
     def test_all_changed_guides_match_their_shipped_copies(self):
         for name in (
+            "README.md",
+            "STORAGE_ARCHITECTURE.md",
             "TROUBLESHOOTING.md",
             "TRUENAS.md",
             "PBS.md",
