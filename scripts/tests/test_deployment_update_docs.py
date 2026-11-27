@@ -170,6 +170,38 @@ class DeploymentUpdateDocsTest(unittest.TestCase):
         self.assertEqual(guide("INSTALL"),
                          (ROOT / "frontend-modern/public/docs/INSTALL.md").read_text())
 
+    def test_config_inventory_ports_and_msp_self_serve_match_runtime(self):
+        text = " ".join(overview().split())
+        persistence = (ROOT / "internal/config/persistence.go").read_text(encoding="utf-8")
+        for filename in (
+            "alerts.json",
+            "alert_intent_policies.json",
+            "deadman.enc",
+            "vmware.enc",
+            "availability_targets.enc",
+            "report_schedules.json",
+            "truenas.enc",
+        ):
+            with self.subTest(filename=filename):
+                self.assertIn(f'resolveLeaf("{filename}")', persistence)
+                self.assertIn(f"`{filename}`", text)
+        self.assertIn("PULSE_AGENT_INGEST_PORT", text)
+        self.assertIn("31 March 2027", text)
+        for doc_name in ("DEPLOYMENT_MODELS", "PULSE_PRO"):
+            with self.subTest(doc=doc_name):
+                doc_text = " ".join(guide(doc_name).split())
+                self.assertEqual(
+                    guide(doc_name),
+                    (ROOT / "frontend-modern/public/docs" / f"{doc_name}.md").read_text(encoding="utf-8"),
+                )
+                self.assertIn("60-day, two-workspace evaluation", doc_text)
+                self.assertIn("self-serve", doc_text)
+                self.assertIn("MSP.md", doc_text)
+                self.assertNotIn("Provider-hosted MSP is request-assisted", doc_text)
+                self.assertNotIn("Access is request-assisted while MSP is staged for rollout", doc_text)
+        msp = " ".join(guide("MSP").split())
+        self.assertIn("60-day, two-workspace evaluation and every paid plan are self-service", msp)
+
 
 if __name__ == "__main__":
     unittest.main()

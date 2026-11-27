@@ -88,6 +88,22 @@ precedence over a browser session: signing in as an administrator does not
 enlarge that token's scopes or organisation binding. See the [transfer API
 requirements](API.md#export-configuration).
 
+**Import authority limits.** Restoring the archive's API-token records and SSO
+configuration requires an instance administrator sign-in or a full-access (`*`)
+API token that is not bound to a non-default organisation. When a non-instance
+organisation owner or admin, or any narrower `settings:write` token, imports a
+backup, Pulse restores the other included sections, keeps the destination's own
+API tokens and SSO configuration unchanged, and returns
+`"accessCredentialsRestored": false`.
+
+**Organisation outbound and Apprise limits.** An organisation administrator or
+organisation-bound token cannot import a backup whose Proxmox or SMTP
+connections point at addresses excluded by the tenant outbound policy (the
+Pulse server's loopback, link-local or cloud metadata addresses) or that adds
+Apprise command-line targets. Pulse refuses the whole backup with HTTP 403
+(`Backup not imported.`) and changes nothing. An instance administrator can
+import it instead.
+
 **The archive passphrase is not a sign-in credential.** It decrypts the file;
 it does not grant permission to export or replace settings. Export can contain
 provider and SSO secrets, even though its API scope is `settings:read`. Keep it
@@ -123,8 +139,10 @@ configuration import as proof of a complete multi-organisation migration.
    **Settings → System → Recovery → Restore Backup**, select the file
    and enter the original passphrase used for that file. Older backups still
    accept the password or passphrase you chose when exporting, even if your
-   login password has since changed. Import replaces the included configuration and
-   API-token records; it does not merge them with the destination's records.
+   login password has since changed. Import replaces the included configuration,
+   and it does not merge them with the destination's records. API-token records
+   and SSO configuration are replaced only when the caller holds instance-wide
+   authority as described above.
 4. Check the result before changing DNS or agent addresses. A success message
    establishes neither full recovery nor fresh monitoring. For a
    reload/apply failure, timeout or duplicate-request warning, follow [the failure checks
@@ -234,8 +252,10 @@ turning off backup polling does not stop guest-agent collection.
   settings does not migrate pending notifications or incident history.
 - **Licence and remaining settings:** re-activate Pro if required and verify
   any excluded settings you rely on. Existing paired phones need their retained
-  configuration; configuration export alone is not a Mobile/Relay migration.
-  Relay is no longer sold; do not enable it as a new migration route.
+  configuration under **Settings → Security → Pulse Mobile** (`/settings/system-relay`,
+  see [RELAY.md](RELAY.md)). Configuration export alone is not a Mobile/Relay
+  migration. Pulse Mobile and Relay retire on **31 March 2027**, and Relay is no
+  longer sold, so do not plan a new migration route around it.
 
 Retire the old installation only after these checks succeed. Keep the private,
 consistent pre-move backup for recovery. If validation fails, keep the source
@@ -252,6 +272,9 @@ There is no guaranteed five-minute recovery time.
 
 - **401 or 403 when exporting or importing:** check sign-in, the selected
   organisation, management role and any API token's binding and required scope.
+  If import returns HTTP 403 with `Backup not imported.`, the archive exceeded
+  organisation-administrator outbound address or Apprise CLI limits and nothing
+  was saved. An instance administrator can import that archive instead.
   This is an access failure, not evidence of a wrong archive passphrase.
   Do not disable authentication, change organisation headers to bypass a
   denial, or repeat an import just to test permissions. If the target changed

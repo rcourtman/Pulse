@@ -96,6 +96,29 @@ class BootstrapImportDocsTest(unittest.TestCase):
         with self.assertRaises(AssertionError):
             self.assert_transfer_scope(text.replace("replaced, not merged", "merged"))
 
+    def test_migration_documents_import_authority_and_tenant_limits(self):
+        migration = " ".join((ROOT / "docs/MIGRATION.md").read_text(encoding="utf-8").split())
+        for phrase in (
+            "Import authority limits.",
+            "instance administrator sign-in or a full-access (`*`) API token",
+            '"accessCredentialsRestored": false',
+            "keeps the destination's own API tokens and SSO configuration unchanged",
+            "Organisation outbound and Apprise limits.",
+            "loopback, link-local or cloud metadata addresses",
+            "Apprise command-line targets",
+            "HTTP 403 (`Backup not imported.`)",
+            "Settings → Security → Pulse Mobile",
+            "/settings/system-relay",
+            "31 March 2027",
+        ):
+            with self.subTest(phrase=phrase):
+                self.assertIn(phrase, migration)
+        handler = (ROOT / "internal/api/configapi/config_export_import_handlers.go").read_text(encoding="utf-8")
+        self.assertIn('"accessCredentialsRestored": !keepAccessCredentials', handler)
+        limits = (ROOT / "internal/api/configapi/config_import_tenant_limits.go").read_text(encoding="utf-8")
+        self.assertIn("Backup not imported. Its Apprise command-line targets", limits)
+        self.assertIn('message: "Backup not imported. "', limits)
+
 
 if __name__ == "__main__":
     unittest.main()

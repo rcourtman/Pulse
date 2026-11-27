@@ -23,16 +23,16 @@ type StalenessTracker struct {
 	entries  map[string]FreshnessSnapshot
 	baseTTL  time.Duration
 	maxStale time.Duration
-	metrics  *PollMetrics
 }
 
-// NewStalenessTracker builds a tracker wired to poll metrics for last-success signal and using default parameters.
-func NewStalenessTracker(metrics *PollMetrics) *StalenessTracker {
+// NewStalenessTracker builds a monitor-local tracker with default bounds.
+// The legacy metrics argument is ignored: process-wide labels do not identify
+// a monitor's connection, and exporter samples must not feed back into polling.
+func NewStalenessTracker(_ *PollMetrics) *StalenessTracker {
 	return &StalenessTracker{
 		entries:  make(map[string]FreshnessSnapshot),
 		baseTTL:  10 * time.Second,
 		maxStale: 5 * time.Minute,
-		metrics:  metrics,
 	}
 }
 
@@ -125,36 +125,31 @@ func (t *StalenessTracker) StalenessScore(instanceType InstanceType, instance st
 		return 0, false
 	}
 
-	snap, ok := t.snapshot(instanceType, instance)
+	t.mu.RLock()
+	snap, ok := t.entries[trackerKey(instanceType, instance)]
+	maxStale := t.maxStale
+	t.mu.RUnlock()
 	if !ok {
 		return 0, false
 	}
 
-	if !snap.LastSuccess.IsZero() && t.metrics != nil {
-		if ts, ok := t.metrics.lastSuccessFor(string(instanceType), instance); ok {
-			snap.LastSuccess = ts
-		}
+	return stalenessAt(time.Now(), snap.LastSuccess, maxStale), true
+}
+
+func stalenessAt(now, lastSuccess time.Time, maxStale time.Duration) float64 {
+	if lastSuccess.IsZero() {
+		return 1
 	}
 
-	if snap.LastSuccess.IsZero() {
-		return 1, true
-	}
-
-	now := time.Now()
-	age := now.Sub(snap.LastSuccess)
+	age := now.Sub(lastSuccess)
 	if age <= 0 {
-		return 0, true
+		return 0
 	}
 
-	max := t.maxStale
-	if max <= 0 {
-		max = 5 * time.Minute
+	if maxStale <= 0 {
+		maxStale = 5 * time.Minute
 	}
-	score := age.Seconds() / max.Seconds()
-	if score > 1 {
-		score = 1
-	}
-	return score, true
+	return min(age.Seconds()/maxStale.Seconds(), 1)
 }
 
 func (t *StalenessTracker) setSnapshot(snapshot FreshnessSnapshot) {
@@ -218,6 +213,8 @@ func (t *StalenessTracker) Snapshot() []StalenessSnapshot {
 
 	t.mu.RLock()
 	entries := make([]FreshnessSnapshot, 0, len(t.entries))
+	maxStale := t.maxStale
+	now := time.Now()
 	for _, entry := range t.entries {
 		entries = append(entries, entry)
 	}
@@ -225,11 +222,10 @@ func (t *StalenessTracker) Snapshot() []StalenessSnapshot {
 
 	result := make([]StalenessSnapshot, 0, len(entries))
 	for _, entry := range entries {
-		score, _ := t.StalenessScore(entry.InstanceType, entry.Instance)
 		result = append(result, StalenessSnapshot{
 			Instance:    entry.Instance,
 			Type:        string(entry.InstanceType),
-			Score:       score,
+			Score:       stalenessAt(now, entry.LastSuccess, maxStale),
 			LastSuccess: entry.LastSuccess,
 			LastError:   entry.LastError,
 		})

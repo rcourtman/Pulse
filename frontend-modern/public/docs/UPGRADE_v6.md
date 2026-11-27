@@ -314,8 +314,10 @@ on the host with the existing agent service. A v5 agent can be missing from v6
 Reporting until it has upgraded, authenticated, and sent its first v6 report.
 
 For agents already visible to v6, open an outdated-agent notice or **Agent
-Doctor** at `/settings/infrastructure?agentDoctor=1`. It shows per-host commands
-for the operator to copy and run; it does not remotely execute fleet updates. Agent
+Doctor** at `/settings/infrastructure/agent-doctor` (legacy
+`/settings/infrastructure?agentDoctor=1` links still open the same page). It
+shows per-host commands for the operator to copy and run. It does not remotely
+execute fleet updates. Agent
 self-update and manual update both still depend on valid authentication, a
 reachable trusted update channel, and accepted release signing keys.
 
@@ -397,7 +399,7 @@ Do not blindly run another updater or downgrade just because the target changed.
 
 Pulse v6.0.0-rc.6 and later prereleases ship with the platform-shaped top-level
 navigation existing v5 operators already know: Proxmox, Docker, Kubernetes,
-TrueNAS, vSphere, Machines, Alerts, Patrol, and Settings.
+TrueNAS, vSphere, Machines, Availability, Alerts, Patrol, Actions, and Settings.
 
 The backend unified resource model and `/api/resources` contract remain
 canonical, but the retired rc.1 through rc.5 `/infrastructure`, `/workloads`,

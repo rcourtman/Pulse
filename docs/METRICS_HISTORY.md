@@ -22,9 +22,9 @@ This button changes only the layout, preserving **History range**; it does not
 refresh history or collect new measurements. A collapsed panel is not missing
 data or measured zero. After revealing it, **No stored history in this range**
 means that panel has no plotted stored samples for the selected range, not zero
-usage or proof that collection stopped. Loading, an access error, **History
-unavailable** and (on older pre-v6.9.0 builds) a locked range are different
-states: retain the existing message and range. Do not refresh, run Diagnostics
+usage or proof that collection stopped. Loading, an access error, a locked range
+and **History unavailable** are different states (locked ranges apply only to
+older pre-v6.9.0 builds): retain the existing message and range. Do not refresh, run Diagnostics
 or restart just to reveal a chart.
 
 These charts are separate from **Alerts → History**, table sparklines and

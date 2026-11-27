@@ -3,7 +3,7 @@
 Pulse adds ZFS pool health to **configured Proxmox storage** on your nodes.
 The Proxmox → Storage list is not an inventory of every local ZFS pool.
 
-> **TrueNAS users:** TrueNAS ZFS pool monitoring is handled separately via the TrueNAS integration. See [CONFIGURATION.md](CONFIGURATION.md#truenas) for setup. This page covers Proxmox-native ZFS pools.
+> **TrueNAS users:** TrueNAS ZFS pool monitoring is handled separately via the TrueNAS integration. See [TrueNAS SCALE and CORE](TRUENAS.md) for setup, pool health, and disk details. This page covers Proxmox-native ZFS pools.
 
 ## 🚀 Features
 
@@ -27,7 +27,7 @@ it appear in Pulse. For a pool you intentionally keep unregistered:
 
 * A **Unified Agent on the Proxmox host**, with a locally mounted ZFS dataset
   and access to `zpool`, can report capacity and usage in the node's
-  **Overview** tab, in the **Storage** section of the technical details, which
+  **Overview** tab: expand **Details** and check the **Storage** section, which
   lists each mount point once the agent reports two or more. Without
   usable `zpool` output, the agent falls back to mounted-dataset counters;
   those are not necessarily whole-pool capacity.
@@ -81,8 +81,8 @@ PULSE_DISABLE_ZFS_MONITORING=true
 
 | Severity | Condition |
 | :--- | :--- |
-| **Warning** | Pool `DEGRADED` or any read/write/checksum errors. |
-| **Critical** | Pool `FAULTED` or `UNAVAIL`. |
+| **Warning** | Pool `DEGRADED`, pool read/write/checksum errors, individual ZFS device `DEGRADED`, or individual device read/write/checksum errors. |
+| **Critical** | Pool `FAULTED`, `OFFLINE`, `REMOVED`, `UNAVAIL`, or `SUSPENDED`, or an individual ZFS device in any non-healthy state other than `DEGRADED` (for example `FAULTED`, `OFFLINE`, `REMOVED`, or `UNAVAIL`). |
 
 ## 🔍 Troubleshooting
 
