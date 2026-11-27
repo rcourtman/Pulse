@@ -121,9 +121,20 @@ export const buildHostDetailCards = (options: {
   return cards;
 };
 
+const HOST_DETAIL_LABELS: Record<string, string> = {
+  system: 'System',
+  hardware: 'Hardware',
+  storage: 'Storage',
+  network: 'Network',
+  disks: 'Disks',
+  raid: 'RAID',
+  temperatures: 'Temperatures',
+};
+
 export const buildHostDetailSummary = (hostDetailCards: string[]): string | null => {
-  const labels = Array.from(new Set(hostDetailCards), (label) =>
-    label === 'raid' ? 'RAID' : label.charAt(0).toUpperCase() + label.slice(1),
+  const labels = Array.from(
+    new Set(hostDetailCards),
+    (label) => HOST_DETAIL_LABELS[label] ?? label,
   );
   if (labels.length === 0) return null;
   return labels.length <= 2
