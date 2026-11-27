@@ -101,15 +101,21 @@ The existing connection and node `pulse_monitor_*poll_staleness_seconds`
 gauges report elapsed seconds since the last recorded success at scrape time.
 They no longer stop aging with the last poll result. No observed result leaves
 the series absent. A failure before the first success reports `-1`; later
-failures do not advance the success time. A future success timestamp is clamped
-to age zero until time catches up. Poll results, last-success timestamp
-metrics, label sets, scheduler decisions and access are unchanged. This is
+failures do not advance the success time. Age and timestamp in the same scrape
+come from the same recorded completion per label set. If an older success
+reaches the recorder after a newer one, the poll counter still advances, but
+its completion cannot replace the newer freshness evidence. The timestamp is
+absent before a successful completion, and a future success timestamp yields
+age zero until time catches up. Metric names, labels, result counters,
+scheduler decisions and access are unchanged. This is
 not proof that a connection is down, nor do the metrics remove historical
 series for paused or removed connections. The collector copies only the
 existing timestamps and first-failure markers and releases the metrics lock
 before emitting series. It does not take a provider or monitor lock.
 `TestPollStalenessGaugesAgeWithoutNewResults` checks the exported connection
 and node gauges against quiet, failure and recovery scrapes.
+`TestPollFreshnessScrapeKeepsLatestCompletion` checks both freshness views
+and result counters through out-of-order observation and subsequent recovery.
 
 ### Overdue claimed polls are visible while the work is still pending
 
