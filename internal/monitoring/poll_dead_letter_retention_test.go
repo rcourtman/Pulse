@@ -1,6 +1,7 @@
 package monitoring
 
 import (
+	"context"
 	"fmt"
 	"testing"
 	"testing/synctest"
@@ -9,6 +10,44 @@ import (
 	"github.com/prometheus/client_golang/prometheus"
 	"github.com/prometheus/client_golang/prometheus/promhttp"
 )
+
+func TestDeadLetterLabelSnapshotTracksMembershipWithReusedBuffer(t *testing.T) {
+	first, peer := NewTaskQueue(), NewTaskQueue()
+	first.Upsert(ScheduledTask{InstanceType: InstanceTypePVE, InstanceName: "claimed"})
+	first.Upsert(ScheduledTask{InstanceType: InstanceTypePBS, InstanceName: "parked", NextRun: time.Now().Add(time.Hour)})
+	all := first.snapshotLabels(nil)
+	if len(all) != 2 {
+		t.Fatalf("initial snapshot = %v, want two entries", all)
+	}
+
+	ctx, cancel := context.WithTimeout(t.Context(), time.Second)
+	defer cancel()
+	task, ok := first.WaitNext(ctx)
+	if !ok || task.InstanceName != "claimed" {
+		t.Fatalf("claimed = %v, %t, want the immediately due target", task, ok)
+	}
+	defer first.completeClaim(task, ScheduledTask{}, noPollReschedule)
+	// A caller's earlier snapshot owns its labels even after the queue changes.
+	if all[0] != (queuedTaskLabel{InstanceTypePVE, "claimed"}) {
+		t.Fatalf("earlier snapshot was mutated: %v", all)
+	}
+	remaining := first.snapshotLabels(all)
+	if len(remaining) != 1 || remaining[0] != (queuedTaskLabel{InstanceTypePBS, "parked"}) {
+		t.Fatalf("after claim = %v, want only the queued PBS target", remaining)
+	}
+	if &remaining[0] != &all[0] {
+		t.Fatal("small snapshot replaced reusable storage")
+	}
+	empty := peer.snapshotLabels(remaining)
+	if len(empty) != 0 {
+		t.Fatalf("empty peer inherited a previous queue's labels: %v", empty)
+	}
+	peer.Upsert(ScheduledTask{InstanceType: InstanceTypePMG, InstanceName: "peer"})
+	other := peer.snapshotLabels(empty)
+	if len(other) != 1 || other[0] != (queuedTaskLabel{InstanceTypePMG, "peer"}) {
+		t.Fatalf("peer snapshot = %v, want only its own queued target", other)
+	}
+}
 
 func TestSchedulerDeadLetterScrapeExpiresHistoricalLabels(t *testing.T) {
 	synctest.Test(t, func(t *testing.T) {

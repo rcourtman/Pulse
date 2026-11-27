@@ -408,6 +408,29 @@ type DeadLetterTask struct {
 	Failures  int       `json:"failures"`
 }
 
+type queuedTaskLabel struct {
+	kind InstanceType
+	name string
+}
+
+// snapshotLabels copies only heap membership for collectors that do not need
+// full task records. The caller can reuse its scratch space across queues.
+func (q *TaskQueue) snapshotLabels(dst []queuedTaskLabel) []queuedTaskLabel {
+	q.mu.Lock()
+	defer q.mu.Unlock()
+
+	n := len(q.heap)
+	if cap(dst) < n {
+		dst = make([]queuedTaskLabel, n)
+	} else {
+		dst = dst[:n]
+	}
+	for i, entry := range q.heap {
+		dst[i] = queuedTaskLabel{kind: entry.task.InstanceType, name: entry.task.InstanceName}
+	}
+	return dst
+}
+
 // PeekAll returns up to 'limit' dead-letter tasks for inspection.
 func (q *TaskQueue) PeekAll(limit int) []DeadLetterTask {
 	q.mu.Lock()

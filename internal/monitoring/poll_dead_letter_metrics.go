@@ -95,16 +95,17 @@ func (c *pollDeadLetterCollector) Collect(ch chan<- prometheus.Metric) {
 
 	observedAt := time.Now()
 	counts := make(map[metricKey]int)
+	var labels []queuedTaskLabel
 	for _, source := range sources {
 		if !source.active() {
 			continue
 		}
-		tasks := source.queue.PeekAll(0)
+		labels = source.queue.snapshotLabels(labels)
 		if !source.active() {
 			continue // The runtime retired while we waited for the queue.
 		}
-		for _, task := range tasks {
-			counts[makeMetricKey(task.Type, task.Instance)]++
+		for _, label := range labels {
+			counts[makeMetricKey(string(label.kind), label.name)]++
 		}
 	}
 
