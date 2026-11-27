@@ -2427,6 +2427,108 @@ func TestSchedulerQueuedPollOverdueFollowsActiveQueues(t *testing.T) {
 	})
 }
 
+func TestSchedulerQueueScrapeRetiresCanceledSchedulerWithBlockedWorker(t *testing.T) {
+	synctest.Test(t, func(t *testing.T) {
+		reg := prometheus.NewPedanticRegistry()
+		pm := newPollMetrics(reg)
+		ctx, cancel := context.WithCancel(t.Context())
+		defer cancel()
+		peerCtx, cancelPeer := context.WithCancel(t.Context())
+		defer cancelPeer()
+
+		entered := make(chan struct{})
+		release := make(chan struct{})
+		defer func() {
+			if release != nil {
+				close(release)
+			}
+		}()
+		gate := release
+		runtime := &Monitor{
+			pollMetrics: pm, taskQueue: NewTaskQueue(), pollTimeout: 5 * time.Second,
+			pollProviders: map[InstanceType]PollProvider{
+				InstanceTypePVE: testPollProvider{
+					providerType: InstanceTypePVE,
+					buildPollTask: func(string) (PollTask, error) {
+						return PollTask{Run: func(context.Context) {
+							close(entered)
+							<-gate // The read ignores cancellation until it returns.
+						}}, nil
+					},
+				},
+			},
+		}
+		runtime.executor = newRealExecutor(runtime)
+		peer := &Monitor{pollMetrics: pm, taskQueue: NewTaskQueue()}
+		now := time.Now()
+		runtime.taskQueue.Upsert(ScheduledTask{InstanceType: InstanceTypePVE, InstanceName: "running", NextRun: now})
+		runtime.taskQueue.Upsert(ScheduledTask{InstanceType: InstanceTypePBS, InstanceName: "behind-running", NextRun: now.Add(time.Second)})
+		peer.taskQueue.Upsert(ScheduledTask{InstanceType: InstanceTypePMG, InstanceName: "peer", NextRun: now.Add(time.Minute)})
+
+		stopped := make(chan struct{})
+		go func() {
+			defer close(stopped)
+			runtime.taskWorker(ctx, 0)
+		}()
+		go peer.taskWorker(peerCtx, 0)
+		<-entered
+		synctest.Wait()
+
+		handler := promhttp.HandlerFor(reg, promhttp.HandlerOpts{})
+		scrape := func(phase string, want ...string) {
+			t.Helper()
+			rec := httptest.NewRecorder()
+			handler.ServeHTTP(rec, httptest.NewRequest(http.MethodGet, "/metrics", nil))
+			if rec.Code != http.StatusOK {
+				t.Fatalf("%s: scrape returned HTTP %d", phase, rec.Code)
+			}
+			for _, line := range want {
+				if !strings.Contains(rec.Body.String(), "\n"+line+"\n") {
+					t.Errorf("%s: missing exact sample %q", phase, line)
+				} else {
+					t.Logf("%s: %s", phase, line)
+				}
+			}
+		}
+		time.Sleep(8 * time.Second)
+		scrape("before cancellation",
+			"pulse_monitor_poll_queue_depth 2", "pulse_scheduler_queue_due_soon 1",
+			"pulse_scheduler_queued_poll_overdue_seconds 7",
+			`pulse_scheduler_queue_depth{instance_type="pbs"} 1`,
+			`pulse_scheduler_queue_depth{instance_type="pmg"} 1`,
+			`pulse_scheduler_claimed_poll_overdue_seconds{stage="running"} 3`)
+
+		cancel()
+		synctest.Wait()
+		select {
+		case <-stopped:
+			t.Fatal("fixture worker returned before the provider was released")
+		default:
+		}
+		if got := runtime.taskQueue.Size(); got != 1 {
+			t.Fatalf("fixture must still hold the abandoned queued poll; depth = %d", got)
+		}
+		scrape("cancelled, worker still blocked",
+			"pulse_monitor_poll_queue_depth 1", "pulse_scheduler_queue_due_soon 0",
+			"pulse_scheduler_queued_poll_overdue_seconds 0",
+			`pulse_scheduler_queue_depth{instance_type="pbs"} 0`,
+			`pulse_scheduler_queue_depth{instance_type="pmg"} 1`,
+			`pulse_scheduler_claimed_poll_overdue_seconds{stage="running"} 3`)
+
+		close(release)
+		release = nil
+		<-stopped
+		scrape("cancelled worker returned",
+			"pulse_monitor_poll_queue_depth 1",
+			`pulse_scheduler_claimed_poll_overdue_seconds{stage="running"} 0`)
+		cancelPeer()
+		synctest.Wait()
+		scrape("all stopped",
+			"pulse_monitor_poll_queue_depth 0",
+			`pulse_scheduler_queue_depth{instance_type="pmg"} 0`)
+	})
+}
+
 func TestScheduledPollWorkProgressInExporter(t *testing.T) {
 	synctest.Test(t, func(t *testing.T) {
 		const (

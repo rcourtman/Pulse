@@ -175,7 +175,9 @@ in the same window without changing a rule or sending a test notification.
 | `pulse_scheduler_breaker_retry_seconds` | Gauge | Seconds left until the last recorded breaker retry deadline, measured at scrape time. Zero if that deadline has passed or none was recorded for this breaker. |
 
 The queue gauges count waiting tasks across the running schedulers, not work
-already claimed by a worker or parked in the dead-letter queue. Older builds
+already claimed by a worker or parked in the dead-letter queue. A stopped
+scheduler drops out of these queue gauges even if a blocked worker has not
+returned yet; check the claimed-poll gauges for that worker. Older builds
 publish the last recorded queue sample: a flat due-soon gauge on those builds
 does not show that nothing has become due.
 

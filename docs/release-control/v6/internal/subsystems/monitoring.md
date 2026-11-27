@@ -246,10 +246,12 @@ an independent peer can still wake the other worker.
 
 The existing total depth, depth by provider type, and number due now or within
 12 seconds are read from active scheduler queues during a scrape. Planning and
-worker completion no longer scan the queue to write these gauges. Queues are
-counted once per scheduler, not once per worker; stopping its last worker
-removes its backlog from later scrapes. A known provider type with no queued
-work reads zero. Claimed polls (including those waiting for a process slot)
+worker completion no longer scan the queue to write these gauges. A queue
+counts once while it has any live worker registration. A cancelled scheduler
+stops contributing its queued backlog even when a worker has not returned.
+Its claimed work remains visible separately until it actually returns.
+A known provider type with no queued work reads zero. Claimed polls
+(including those waiting for a process slot)
 and dead letters never count in these gauges. An unrelated provider's poll
 result and a single-monitor Scheduler Health read do not overwrite them.
 The existing count metrics, listener access and poll admission are unchanged.
@@ -270,6 +272,9 @@ handler without any completed scheduled poll: a PBS poll enters the exact
 dispatcher. `TestSchedulerQueueScrapeCountsEachActiveQueueOnce` checks two
 schedulers, partial and final worker teardown, and per-type zeroes. These
 gauges do not measure provider success, applied reports or alert evaluation.
+`TestSchedulerQueueScrapeRetiresCanceledSchedulerWithBlockedWorker` checks
+that cancellation retires the stopped scheduler's queued depth and age
+without clearing the overdue claim or hiding a live peer.
 
 ### Notification delivery health does not hold the monitoring tick
 
