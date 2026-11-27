@@ -2,7 +2,9 @@ package server
 
 import (
 	"bytes"
+	"context"
 	"fmt"
+	"io"
 	"net"
 	"net/http"
 	"os"
@@ -11,6 +13,7 @@ import (
 	"strings"
 	"sync"
 	"testing"
+	"testing/iotest"
 	"time"
 
 	"github.com/rcourtman/pulse-go-rewrite/internal/config"
@@ -18,6 +21,54 @@ import (
 	"github.com/rcourtman/pulse-go-rewrite/pkg/auth"
 	"github.com/rs/zerolog"
 )
+
+type serviceHealthAssetBody struct {
+	io.Reader
+	closed bool
+}
+
+func (b *serviceHealthAssetBody) Close() error {
+	b.closed = true
+	return nil
+}
+
+func TestServiceHealthAssetReadsToEOFWithinBound(t *testing.T) {
+	for _, tc := range []struct {
+		name     string
+		size     int
+		tailErr  error
+		category string
+	}{
+		{name: "exact limit", size: serviceHealthBodyLimit},
+		{name: "larger than limit", size: serviceHealthBodyLimit + 32, category: telemetry.ServiceHealthFailureFrontendAssets},
+		{name: "truncated after content", size: 32, tailErr: io.ErrUnexpectedEOF, category: telemetry.ServiceHealthFailureFrontendAssets},
+		{name: "timeout after content", size: 32, tailErr: context.DeadlineExceeded, category: telemetry.ServiceHealthFailureTimeout},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			payload := strings.NewReader(strings.Repeat("x", tc.size))
+			body := &serviceHealthAssetBody{Reader: payload}
+			if tc.tailErr != nil {
+				body.Reader = io.MultiReader(payload, iotest.ErrReader(tc.tailErr))
+			}
+			client := &http.Client{Transport: serviceHealthRoundTripper(func(r *http.Request) (*http.Response, error) {
+				if r.URL.Path == "/assets/app.js" {
+					return &http.Response{StatusCode: http.StatusOK, Body: body, ContentLength: -1}, nil
+				}
+				return healthyServiceHealthResponse(r)
+			})}
+			ctx, cancel := context.WithTimeout(t.Context(), time.Second)
+			defer cancel()
+			got := observeServiceHealth(ctx, client, []string{"http://127.0.0.1:7655"})
+			if !got.Observed || got.Healthy != (tc.category == "") || got.FailureCategory != tc.category {
+				t.Fatalf("observation = %#v, want category %q", got, tc.category)
+			}
+			wantRead := min(tc.size, serviceHealthBodyLimit+1)
+			if n := tc.size - payload.Len(); n != wantRead || !body.closed {
+				t.Fatalf("read %d bytes and closed=%v, want %d bytes and closed", n, body.closed, wantRead)
+			}
+		})
+	}
+}
 
 // Ordinary agent-only configuration has no nodes.enc. A later startup must not
 // mistake that installation for first provisioning and replace its access.

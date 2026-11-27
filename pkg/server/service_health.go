@@ -109,11 +109,11 @@ func observeServiceHealth(ctx context.Context, client *http.Client, baseURLs []s
 		return unhealthyServiceObservation(telemetry.ServiceHealthFailureFrontendAssets)
 	}
 	for _, assetPath := range assetPaths {
-		body, assetStatus, assetErr := serviceHealthGET(ctx, client, baseURL+assetPath)
+		size, assetStatus, assetErr := serviceHealthAssetSize(ctx, client, baseURL+assetPath)
 		if assetErr != nil {
 			return unhealthyServiceObservation(serviceHealthErrorCategory(assetErr, telemetry.ServiceHealthFailureFrontendAssets))
 		}
-		if assetStatus < http.StatusOK || assetStatus >= http.StatusMultipleChoices || len(body) == 0 {
+		if assetStatus < http.StatusOK || assetStatus >= http.StatusMultipleChoices || size == 0 {
 			return unhealthyServiceObservation(telemetry.ServiceHealthFailureFrontendAssets)
 		}
 	}
@@ -240,11 +240,7 @@ func frontendAssetPaths(index []byte) []string {
 }
 
 func serviceHealthGET(ctx context.Context, client *http.Client, target string) ([]byte, int, error) {
-	req, err := http.NewRequestWithContext(ctx, http.MethodGet, target, nil)
-	if err != nil {
-		return nil, 0, err
-	}
-	resp, err := client.Do(req)
+	resp, err := serviceHealthResponse(ctx, client, target)
 	if err != nil {
 		return nil, 0, err
 	}
@@ -257,6 +253,34 @@ func serviceHealthGET(ctx context.Context, client *http.Client, target string) (
 		return nil, resp.StatusCode, fmt.Errorf("service-health response exceeded bounded size")
 	}
 	return body, resp.StatusCode, nil
+}
+
+func serviceHealthAssetSize(ctx context.Context, client *http.Client, target string) (int64, int, error) {
+	resp, err := serviceHealthResponse(ctx, client, target)
+	if err != nil {
+		return 0, 0, err
+	}
+	defer resp.Body.Close()
+
+	// Check the transferred bytes rather than trusting response headers or
+	// stopping at the first byte. Keep the same limit and read-error checks
+	// as the parsed responses without buffering an entire unused asset.
+	size, err := io.Copy(io.Discard, io.LimitReader(resp.Body, serviceHealthBodyLimit+1))
+	if err != nil {
+		return 0, resp.StatusCode, err
+	}
+	if size > serviceHealthBodyLimit {
+		return 0, resp.StatusCode, fmt.Errorf("service-health response exceeded bounded size")
+	}
+	return size, resp.StatusCode, nil
+}
+
+func serviceHealthResponse(ctx context.Context, client *http.Client, target string) (*http.Response, error) {
+	req, err := http.NewRequestWithContext(ctx, http.MethodGet, target, nil)
+	if err != nil {
+		return nil, err
+	}
+	return client.Do(req)
 }
 
 func unhealthyServiceObservation(category string) telemetry.ServiceHealthObservation {
