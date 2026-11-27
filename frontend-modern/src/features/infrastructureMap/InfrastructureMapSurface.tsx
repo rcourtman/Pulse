@@ -13,6 +13,7 @@ import DownloadIcon from 'lucide-solid/icons/download';
 import EyeOffIcon from 'lucide-solid/icons/eye-off';
 import GlobeIcon from 'lucide-solid/icons/globe';
 import MapIcon from 'lucide-solid/icons/map';
+import NetworkIcon from 'lucide-solid/icons/network';
 import RotateCcwIcon from 'lucide-solid/icons/rotate-ccw';
 import SearchIcon from 'lucide-solid/icons/search';
 import TriangleAlertIcon from 'lucide-solid/icons/triangle-alert';
@@ -47,7 +48,11 @@ import { formatBytes, formatSpeed } from '@/utils/format';
 import type { StatusIndicatorVariant } from '@/utils/status';
 import { showError, showSuccess } from '@/utils/toast';
 import './infrastructureMap.css';
-import { InfrastructureMapDrawer } from './InfrastructureMapDrawer';
+import {
+  formatBackupAge,
+  formatCompactUptime,
+  InfrastructureMapDrawer,
+} from './InfrastructureMapDrawer';
 import {
   fitServiceDiagram,
   flowServiceDiagram,
@@ -153,6 +158,48 @@ const DRAG_THRESHOLD_PX = 4;
 
 // The name a new check for the gateway starts with. The owner can change it.
 const UNMONITORED_CHECK_NAME = 'Gateway';
+
+export const INFRASTRUCTURE_MAP_PREFS_KEY = 'pulse.infrastructureMap.prefs';
+
+interface InfrastructureMapPrefs {
+  layoutMode?: MapLayoutMode;
+  density?: MapDensity;
+  liveTraffic?: boolean;
+}
+
+const readInitialMapPrefs = (): {
+  layoutMode: MapLayoutMode;
+  densityChoice: MapDensity | null;
+  liveTraffic: boolean;
+} => {
+  const defaults = {
+    layoutMode: 'hosts' as MapLayoutMode,
+    densityChoice: null as MapDensity | null,
+    liveTraffic: true,
+  };
+  if (typeof localStorage === 'undefined') return defaults;
+  try {
+    const raw = localStorage.getItem(INFRASTRUCTURE_MAP_PREFS_KEY);
+    if (!raw) return defaults;
+    const parsed: unknown = JSON.parse(raw);
+    if (!parsed || typeof parsed !== 'object') return defaults;
+    const record = parsed as Record<string, unknown>;
+    return {
+      layoutMode:
+        record.layoutMode === 'hosts' || record.layoutMode === 'roles'
+          ? record.layoutMode
+          : defaults.layoutMode,
+      densityChoice:
+        record.density === 'names' || record.density === 'marks'
+          ? record.density
+          : defaults.densityChoice,
+      liveTraffic:
+        typeof record.liveTraffic === 'boolean' ? record.liveTraffic : defaults.liveTraffic,
+    };
+  } catch {
+    return defaults;
+  }
+};
 
 const formatNetTelemetry = (rxBytes?: number, txBytes?: number): string => {
   if (rxBytes === undefined && txBytes === undefined) return '';
@@ -260,6 +307,19 @@ const formatHitStoragePool = (hit: MapHit): string => {
   return hit.meta.includes(summary) ? '' : summary;
 };
 
+const formatHitPoolAnomalies = (hit: MapHit): string =>
+  [
+    hit.zfsState && !(hit.rebuildInProgress && /^(rebuild|resilver)/i.test(hit.zfsState))
+      ? hit.zfsState
+      : '',
+    hit.rebuildInProgress ? 'Rebuilding' : '',
+    hit.zfsErrorCount && hit.zfsErrorCount > 0
+      ? `${hit.zfsErrorCount.toLocaleString()} ${hit.zfsErrorCount === 1 ? 'ZFS error' : 'ZFS errors'}`
+      : '',
+  ]
+    .filter(Boolean)
+    .join(' · ');
+
 /** What a tile's card says under its name: what it is, where, what it is connected to, how busy. */
 const hitLines = (hit: MapHit, density?: MapDensity): string[] =>
   [
@@ -272,6 +332,7 @@ const hitLines = (hit: MapHit, density?: MapDensity): string[] =>
     formatHostSpecs(hit),
     formatHitDiskSummary(hit),
     formatHitStoragePool(hit),
+    formatHitPoolAnomalies(hit),
     [
       formatHitVmid(hit),
       hit.composeProject ? `Stack ${hit.composeProject}` : '',
@@ -296,6 +357,15 @@ const hitLines = (hit: MapHit, density?: MapDensity): string[] =>
     ]
       .filter(Boolean)
       .join(' · '),
+    [
+      formatCompactUptime(hit.uptimeSeconds),
+      formatBackupAge(hit.lastBackupAt),
+      hit.pendingUpdates && hit.pendingUpdates > 0
+        ? `${hit.pendingUpdates.toLocaleString()} ${hit.pendingUpdates === 1 ? 'update' : 'updates'}`
+        : '',
+    ]
+      .filter(Boolean)
+      .join(' · '),
   ].filter(Boolean);
 
 export function InfrastructureMapSurface() {
@@ -309,9 +379,12 @@ export function InfrastructureMapSurface() {
   const canAddCheck = () => !kioskMode() && sessionCanReadAvailabilitySettings();
   const canAddSystem = () => !kioskMode() && sessionCanReadInfrastructureSettings();
 
-  const [densityChoice, setDensityChoice] = createSignal<MapDensity | null>(null);
-  const [layoutMode, setLayoutMode] = createSignal<MapLayoutMode>('hosts');
-  const [liveTraffic, setLiveTraffic] = createSignal(true);
+  const initialPrefs = readInitialMapPrefs();
+  const [densityChoice, setDensityChoice] = createSignal<MapDensity | null>(
+    initialPrefs.densityChoice,
+  );
+  const [layoutMode, setLayoutMode] = createSignal<MapLayoutMode>(initialPrefs.layoutMode);
+  const [liveTraffic, setLiveTraffic] = createSignal(initialPrefs.liveTraffic);
   const [namesHidden, setNamesHidden] = createSignal(false);
   const [exporting, setExporting] = createSignal(false);
   const [attentionOnly, setAttentionOnly] = createSignal(false);
@@ -341,6 +414,26 @@ export function InfrastructureMapSurface() {
   // the arrow keys do, because Tab no longer walks the tiles.
   const [byKeys, setByKeys] = createSignal(false);
   const [arrowsUsed, setArrowsUsed] = createSignal(false);
+
+  createEffect(
+    on(
+      [layoutMode, densityChoice, liveTraffic],
+      ([mode, chosenDensity, traffic]) => {
+        if (typeof localStorage === 'undefined') return;
+        try {
+          const payload: InfrastructureMapPrefs = {
+            layoutMode: mode,
+            ...(chosenDensity ? { density: chosenDensity } : {}),
+            liveTraffic: traffic,
+          };
+          localStorage.setItem(INFRASTRUCTURE_MAP_PREFS_KEY, JSON.stringify(payload));
+        } catch {
+          // Ignore unavailable storage or quota errors.
+        }
+      },
+      { defer: true },
+    ),
+  );
 
   // Counted once per browser session. Nothing on the map is sent.
   onMount(recordInfrastructureMapOpen);
@@ -378,6 +471,7 @@ export function InfrastructureMapSurface() {
   // all of it is on screen at once and nothing is read by scrolling.
   let frameRef: HTMLDivElement | undefined;
   let legendRef: HTMLUListElement | undefined;
+  let searchInputRef: HTMLInputElement | undefined;
   const [space, setSpace] = createSignal<{
     width: number;
     height: number;
@@ -501,6 +595,7 @@ export function InfrastructureMapSurface() {
   });
   const estateTrafficBytes = createMemo(() => fullDiagram()?.estateTrafficBytes ?? 0);
   const exposedCount = createMemo(() => fullDiagram()?.exposed.length ?? 0);
+  const networkCount = createMemo(() => fullDiagram()?.networks.length ?? 0);
   const matchedResourceCount = createMemo(() => {
     const diagram = activeDiagram();
     return diagram ? countDiagramResources(diagram) : 0;
@@ -946,6 +1041,48 @@ export function InfrastructureMapSurface() {
         setHover(null);
         setHoveredNetwork(null);
         disarm();
+        return;
+      }
+      if (
+        liveModel().isEmpty ||
+        event.ctrlKey ||
+        event.metaKey ||
+        event.altKey ||
+        drawerTarget() !== null
+      ) {
+        return;
+      }
+      const target = event.target as HTMLElement | null;
+      const tagName = target?.tagName?.toUpperCase();
+      if (
+        tagName === 'INPUT' ||
+        tagName === 'TEXTAREA' ||
+        tagName === 'SELECT' ||
+        Boolean(target?.isContentEditable)
+      ) {
+        return;
+      }
+      if (event.key === '/') {
+        if (searchInputRef) {
+          event.preventDefault();
+          searchInputRef.focus();
+          searchInputRef.select();
+        }
+        return;
+      }
+      if (event.key === '+' || event.key === '=') {
+        event.preventDefault();
+        setZoomClamped(zoom() + ZOOM_STEP);
+        return;
+      }
+      if (event.key === '-') {
+        event.preventDefault();
+        setZoomClamped(zoom() - ZOOM_STEP);
+        return;
+      }
+      if (event.key === '0' && zoom() > MIN_ZOOM) {
+        event.preventDefault();
+        resetZoom();
       }
     };
     // A card is placed where its tile was. On a page that scrolls, the tile
@@ -1104,6 +1241,18 @@ export function InfrastructureMapSurface() {
             <span>{exposedCount().toLocaleString()} exposed</span>
           </button>
         </Show>
+        <Show when={networkCount() >= 2}>
+          <button
+            type="button"
+            title="Inspect all networks, VLANs, link speeds, and throughput"
+            data-testid="infrastructure-map-networks-summary"
+            class="inline-flex items-center gap-1.5 rounded-full border border-teal-300 bg-teal-50 px-2.5 py-0.5 text-xs font-medium whitespace-nowrap text-teal-700 tabular-nums transition-colors hover:bg-teal-100 focus-visible:outline-solid focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-teal-500 dark:border-teal-700/80 dark:bg-teal-950/50 dark:text-teal-300 dark:hover:bg-teal-900/50"
+            onClick={() => openDrawer({ kind: 'all-networks' })}
+          >
+            <NetworkIcon class="h-3.5 w-3.5 shrink-0" aria-hidden="true" />
+            <span>{networkCount().toLocaleString()} networks</span>
+          </button>
+        </Show>
         <Show when={!liveModel().isEmpty}>
           <div class="flex w-full flex-wrap items-center gap-1.5 sm:ml-auto sm:w-auto">
             <div class="relative w-full sm:w-40 sm:flex-none md:w-44 lg:w-52">
@@ -1112,13 +1261,16 @@ export function InfrastructureMapSurface() {
                 aria-hidden="true"
               />
               <input
+                ref={(element) => {
+                  searchInputRef = element;
+                }}
                 type="text"
                 inputMode="search"
                 value={searchQuery()}
                 onInput={(event) => setSearchQuery(event.currentTarget.value)}
                 placeholder="Search map..."
                 aria-label="Search map resources"
-                title="Search across all resources on the map, including grouped overflow items"
+                title="Search across all resources on the map, including grouped overflow items. Press / to focus."
                 data-testid="infrastructure-map-search"
                 class="h-8 w-full rounded-md border border-border bg-surface pr-7 pl-8 text-xs text-base-content placeholder:text-muted focus:border-blue-500 focus:ring-2 focus:ring-blue-500/30 focus:outline-none"
               />

@@ -4344,6 +4344,10 @@ application resource-provider or WebSocket lifecycle.
 
 ## Current State
 
+### Infrastructure Map operational telemetry: uptime, backup recency, pending updates, and ZFS pool health (27 November 2026)
+
+`buildInfrastructureMapModel` (`infrastructureMapModel.ts`) now extracts truthful operational telemetry already present on unified resources without altering `model.totals` or `attentionCount`: `uptimeSeconds` on hosts and workloads, `pendingUpdates` on hosts and guests, `lastBackupAt` on guests, and non-healthy ZFS/storage pool cues (`zfsState` excluding healthy states like `ONLINE`/`OK`/`HEALTHY`, `rebuildInProgress`, and positive `zfsErrorCount`). All six fields survive `anonymizeInfrastructureMapModel` because they contain no hostnames, addresses, or identifiers, and `buildServiceDiagram` propagates them onto `DiagramTile` (aggregating across merged pools) and `matchesDiagramTileQuery`.
+
 ### Infrastructure Map host temperature and physical disk telemetry summaries (27 November 2026)
 
 `buildInfrastructureMapModel` (`infrastructureMapModel.ts`) now extracts truthful host temperature (`temperatureC`, finite `1..150` °C across Proxmox, Docker, universal resource temperature, and agent sensor maxima) and aggregates child `physical_disk` resources per host (direct `parentId` or 1 hop through a host-owned storage pool) into `diskSummary` (`NVMe`, `SSD`, `HDD`, `Disk` counts), `diskMaxTempC` (finite `1..120` °C), and `unhealthyDiskCount` without altering `model.totals` or `attentionCount`. All four fields survive `anonymizeInfrastructureMapModel` because they carry no names, models, or serial numbers, and `buildServiceDiagram` propagates them onto host tiles and `matchesDiagramTileQuery`.

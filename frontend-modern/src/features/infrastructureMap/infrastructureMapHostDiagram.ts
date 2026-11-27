@@ -7,6 +7,7 @@ import {
   mapHitMeta,
   tagMapNodesSince,
   type MapCursor,
+  type MapGlyphKey,
   type MapHit,
   type MapInspectTarget,
   type MapLayoutOptions,
@@ -73,7 +74,7 @@ const OVERFLOW_BAR_H = 26;
 const HOST_METER_BAR_W = 24;
 const HOST_METER_INNER_GAP = 4;
 const HOST_METER_PAIR_GAP = 8;
-const HOST_ONE_COL_MAX_W = 336;
+const HOST_ONE_COL_MAX_W = 360;
 
 const COMPACT_SIZE = 40;
 const COMPACT_ICON = 29;
@@ -102,6 +103,23 @@ export const strokeWidthForLinkSpeed = (speedMbps?: number): number => {
   if (speedMbps >= 2500) return 2.25;
   if (speedMbps >= 1000) return 1.75;
   return 1.25;
+};
+
+/** Platform-aware host workload count label for host frame headers. */
+export const hostCountLabel = (platform: MapGlyphKey | undefined, count: number): string => {
+  switch (platform) {
+    case 'proxmox':
+    case 'vmware':
+      return `${count} ${count === 1 ? 'guest' : 'guests'}`;
+    case 'docker':
+      return `${count} ${count === 1 ? 'container' : 'containers'}`;
+    case 'kubernetes':
+      return `${count} ${count === 1 ? 'pod' : 'pods'}`;
+    case 'truenas':
+      return `${count} ${count === 1 ? 'app' : 'apps'}`;
+    default:
+      return `${count} ${count === 1 ? 'item' : 'items'}`;
+  }
 };
 
 const textWidth = (text: string, size: number, weight: 400 | 500 | 600 = 600): number =>
@@ -255,6 +273,12 @@ const buildHit = (
     ...(tile.unhealthyDiskCount !== undefined
       ? { unhealthyDiskCount: tile.unhealthyDiskCount }
       : {}),
+    ...(tile.uptimeSeconds !== undefined ? { uptimeSeconds: tile.uptimeSeconds } : {}),
+    ...(tile.pendingUpdates !== undefined ? { pendingUpdates: tile.pendingUpdates } : {}),
+    ...(tile.lastBackupAt ? { lastBackupAt: tile.lastBackupAt } : {}),
+    ...(tile.zfsState ? { zfsState: tile.zfsState } : {}),
+    ...(tile.rebuildInProgress ? { rebuildInProgress: true } : {}),
+    ...(tile.zfsErrorCount !== undefined ? { zfsErrorCount: tile.zfsErrorCount } : {}),
     ...(segmentIds ? { segmentIds } : {}),
     address: tile.address,
     detail: tile.detail,
@@ -667,6 +691,17 @@ const drawStorageBar = (
     platform: tile.platform ?? 'storage',
   });
 
+  const zfsStateText = tile.zfsState?.trim();
+  const anomalyPill: { text: string; tone: 'attention' | 'critical' } | undefined =
+    tile.rebuildInProgress
+      ? { text: 'REBUILD', tone: 'attention' }
+      : zfsStateText
+        ? {
+            text: zfsStateText,
+            tone: /FAULT|OFFLINE|UNAVAIL|FAIL/i.test(zfsStateText) ? 'critical' : 'attention',
+          }
+        : undefined;
+
   const hasPercent = tile.usedPercent !== undefined && Number.isFinite(tile.usedPercent);
   let rightReserved = 10;
 
@@ -674,7 +709,13 @@ const drawStorageBar = (
     const pct = Math.max(0, Math.min(100, tile.usedPercent!));
     const pctText = `${Math.round(pct)}%`;
     const pctW = Math.max(24, textWidth(pctText, 10, 500));
-    const trackW = w >= 208 ? 68 : Math.max(36, Math.min(68, w - 132));
+    const trackW = anomalyPill
+      ? w >= 260
+        ? 68
+        : Math.max(36, Math.min(48, w - 132))
+      : w >= 208
+        ? 68
+        : Math.max(36, Math.min(68, w - 132));
     const trackX = x + w - 8 - pctW - 6 - trackW;
     const trackY = y + 12;
 
@@ -691,9 +732,9 @@ const drawStorageBar = (
     if (pct > 0) {
       const fillW = Math.min(trackW, Math.max(3, (trackW * pct) / 100));
       const barTone: MapHealth =
-        pct >= 90 || tile.health === 'critical'
+        pct >= 90 || tile.health === 'critical' || anomalyPill?.tone === 'critical'
           ? 'critical'
-          : pct >= 75 || tile.health === 'attention'
+          : pct >= 75 || tile.health === 'attention' || anomalyPill?.tone === 'attention'
             ? 'attention'
             : 'ok';
       out.nodes.push({
@@ -720,19 +761,29 @@ const drawStorageBar = (
 
     rightReserved = x + w - trackX + 8;
   } else {
+    const dotHealth: MapHealth =
+      anomalyPill?.tone === 'critical'
+        ? 'critical'
+        : anomalyPill?.tone === 'attention' && tile.health === 'ok'
+          ? 'attention'
+          : tile.health;
     out.nodes.push({
       kind: 'dot',
       x: x + w - 12,
       y: y + 15,
       r: 3.5,
-      health: tile.health,
+      health: dotHealth,
     });
     rightReserved = 24;
   }
 
   const textStart = x + 28;
   const textBudget = Math.max(40, w - 28 - rightReserved);
-  const nameText = fitMapName(tile.name, textBudget, 11, 600);
+  const pillGap = 6;
+  const pillW = anomalyPill ? textWidth(anomalyPill.text, 9, 600) + 8 : 0;
+  const canShowPill = anomalyPill !== undefined && textBudget >= pillW + pillGap + 24;
+  const nameBudget = canShowPill ? textBudget - pillW - pillGap : textBudget;
+  const nameText = fitMapName(tile.name, nameBudget, 11, 600);
   out.nodes.push({
     kind: 'text',
     x: textStart,
@@ -744,21 +795,72 @@ const drawStorageBar = (
     ...(tile.health === 'off' ? { dim: true } : {}),
   });
 
-  const metaParts = [tile.vdevLayout, tile.sizeLabel].filter(Boolean).join(' · ');
-  if (metaParts) {
-    const nameUsedW = textWidth(nameText, 11, 600);
-    const remW = textBudget - nameUsedW - 6;
-    if (remW >= 28) {
+  let cursorX = textStart + textWidth(nameText, 11, 600);
+  if (canShowPill && anomalyPill) {
+    const pillX = cursorX + pillGap;
+    if (pillX + pillW <= textStart + textBudget) {
+      const pillH = 15;
+      const pillY = y + (POOL_BAR_H - pillH) / 2;
+      out.nodes.push({
+        kind: 'rect',
+        x: pillX,
+        y: pillY,
+        w: pillW,
+        h: pillH,
+        r: 3.5,
+        fill: anomalyPill.tone,
+        opacity: 0.18,
+        stroke: anomalyPill.tone,
+      });
       out.nodes.push({
         kind: 'text',
-        x: textStart + nameUsedW + 6,
-        y: y + 19,
-        text: fitMapText(metaParts, remW, 10, 400),
-        size: 10,
-        weight: 400,
-        fill: 'muted',
+        x: pillX + pillW / 2,
+        y: pillY + 10.5,
+        text: anomalyPill.text,
+        size: 9,
+        weight: 600,
+        fill: anomalyPill.tone,
+        anchor: 'middle',
       });
+      cursorX = pillX + pillW;
     }
+  }
+
+  const metaParts = [tile.vdevLayout, tile.sizeLabel].filter(Boolean).join(' · ');
+  const errText = (tile.zfsErrorCount ?? 0) > 0 ? `${tile.zfsErrorCount} ERR` : '';
+  const errW = errText ? textWidth(errText, 9.5, 600) : 0;
+  let remW = textStart + textBudget - cursorX - 6;
+
+  if (metaParts) {
+    const metaBudget = errText ? (remW >= errW + 6 + 28 ? remW - errW - 6 : 0) : remW;
+    if (metaBudget >= 28) {
+      const fittedMeta = fitMapText(metaParts, metaBudget, 10, 400);
+      if (fittedMeta) {
+        out.nodes.push({
+          kind: 'text',
+          x: cursorX + 6,
+          y: y + 19,
+          text: fittedMeta,
+          size: 10,
+          weight: 400,
+          fill: 'muted',
+        });
+        cursorX += 6 + textWidth(fittedMeta, 10, 400);
+        remW = textStart + textBudget - cursorX - 6;
+      }
+    }
+  }
+
+  if (errText && remW >= errW) {
+    out.nodes.push({
+      kind: 'text',
+      x: cursorX + 6,
+      y: y + 19,
+      text: errText,
+      size: 9.5,
+      weight: 600,
+      fill: 'critical',
+    });
   }
 
   tagMapNodesSince(out.nodes, startIndex, tile.id);
@@ -947,7 +1049,11 @@ const sizeHostFrame = (
       ? `${frame.host.linkDownCount} DOWN`
       : '';
   const countLabel =
-    frame.totalCount > 0 ? `${frame.totalCount} ${frame.totalCount === 1 ? 'item' : 'items'}` : '';
+    frame.totalCount > 0
+      ? density === 'marks'
+        ? String(frame.totalCount)
+        : hostCountLabel(frame.host.platform, frame.totalCount)
+      : '';
   const tempC =
     frame.host.temperatureC !== undefined && Number.isFinite(frame.host.temperatureC)
       ? Math.round(frame.host.temperatureC)
@@ -995,7 +1101,26 @@ const sizeHostFrame = (
           ? 8 + textWidth(`${frame.host.unhealthyDiskCount} WARN`, 10, 600)
           : 0)
       : 0;
-  const headerDesiredW = Math.max(row1DesiredW, row2DesiredW, diskStripDesiredW);
+  const poolStripDesiredW =
+    density === 'names' && frame.pools.length > 0
+      ? Math.max(
+          0,
+          ...frame.pools.map((pool) => {
+            const pillText = pool.rebuildInProgress ? 'REBUILD' : pool.zfsState?.trim() || '';
+            const hasErr = (pool.zfsErrorCount ?? 0) > 0;
+            if (!pillText && !hasErr) return 0;
+            return (
+              CARD_PAD * 2 +
+              28 +
+              textWidth(pool.name, 11, 600) +
+              (pillText ? 6 + textWidth(pillText, 9, 600) + 8 : 0) +
+              (hasErr ? 6 + textWidth(`${pool.zfsErrorCount} ERR`, 9.5, 600) : 0) +
+              114
+            );
+          }),
+        )
+      : 0;
+  const headerDesiredW = Math.max(row1DesiredW, row2DesiredW, diskStripDesiredW, poolStripDesiredW);
 
   if (density === 'marks') {
     const pitch = COMPACT_SIZE + COMPACT_GAP;
@@ -1270,13 +1395,34 @@ const drawHostFrame = (
   const minNameReserve = Math.min(textWidth(frame.host.name, 13, 600), 56) + 16;
 
   // 1. Clickable workload count pill (always placed at far right; excluded from host header hit)
+  const liveRate =
+    painter.liveTraffic && frame.host.trafficTier && frame.host.netTotalBytes !== undefined
+      ? `${formatCompactSpeed(frame.host.netTotalBytes)}/s`
+      : undefined;
+  const busyText =
+    frame.host.linkUtilizationPercent !== undefined &&
+    frame.host.linkUtilizationPercent >= MAP_LINK_SATURATED_PERCENT
+      ? `BUSY ${Math.round(frame.host.linkUtilizationPercent)}%`
+      : undefined;
+  const downText =
+    frame.host.linkDownCount !== undefined && frame.host.linkDownCount > 0
+      ? `${frame.host.linkDownCount} DOWN`
+      : undefined;
+  const priorityRightW =
+    (liveRate ? textWidth(liveRate, 11, 600) + 6 : 0) +
+    (busyText ? textWidth(busyText, 9.5, 600) + 16 : 0) +
+    (downText ? textWidth(downText, 9.5, 600) + 16 : 0);
+
   let hitW = w;
   if (frame.totalCount > 0) {
-    const countLabel =
-      w >= 290
-        ? `${frame.totalCount} ${frame.totalCount === 1 ? 'item' : 'items'}`
-        : String(frame.totalCount);
-    const pillW = Math.max(22, textWidth(countLabel, 10, 500) + 12);
+    const fullLabel = hostCountLabel(frame.host.platform, frame.totalCount);
+    const fullPillW = Math.max(22, textWidth(fullLabel, 10, 500) + 12);
+    const compactLabel = String(frame.totalCount);
+    const compactPillW = Math.max(22, textWidth(compactLabel, 10, 500) + 12);
+    const useFull =
+      isNamed && w >= 230 && rightCursor - fullPillW - priorityRightW > leftStart + minNameReserve;
+    const countLabel = useFull ? fullLabel : compactLabel;
+    const pillW = useFull ? fullPillW : compactPillW;
     const pillH = 17;
     const pillX = rightCursor - pillW;
     if (pillX > leftStart + 44) {
@@ -1316,10 +1462,6 @@ const drawHostFrame = (
   }
 
   // 2. Live throughput readout
-  const liveRate =
-    painter.liveTraffic && frame.host.trafficTier && frame.host.netTotalBytes !== undefined
-      ? `${formatCompactSpeed(frame.host.netTotalBytes)}/s`
-      : undefined;
   if (liveRate) {
     const rateW = textWidth(liveRate, 11, 600);
     if (rightCursor - rateW > leftStart + minNameReserve) {
@@ -1338,11 +1480,7 @@ const drawHostFrame = (
   }
 
   // 3. Inline amber BUSY pill when link utilization >= MAP_LINK_SATURATED_PERCENT
-  if (
-    frame.host.linkUtilizationPercent !== undefined &&
-    frame.host.linkUtilizationPercent >= MAP_LINK_SATURATED_PERCENT
-  ) {
-    const busyText = `BUSY ${Math.round(frame.host.linkUtilizationPercent)}%`;
+  if (busyText) {
     const busyW = textWidth(busyText, 9.5, 600) + 10;
     const busyH = 16;
     if (rightCursor - busyW > leftStart + minNameReserve) {
@@ -1373,8 +1511,7 @@ const drawHostFrame = (
   }
 
   // 4. Inline amber link-down pill when any physical interface is down
-  if (frame.host.linkDownCount !== undefined && frame.host.linkDownCount > 0) {
-    const downText = `${frame.host.linkDownCount} DOWN`;
+  if (downText) {
     const downW = textWidth(downText, 9.5, 600) + 10;
     const downH = 16;
     if (rightCursor - downW > leftStart + minNameReserve) {

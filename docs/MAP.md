@@ -16,7 +16,7 @@ Open it with the map button at the top left of the header.
 | **By role** boxes | Guests and containers grouped by purpose (**Media**, **Monitoring**, **Security**, and so on), with **Storage**, **Backups** and **Hardware** underneath |
 | **Checks** | Availability checks on websites, services, machines without an agent and other devices |
 
-Switch between **By host** and **By role** in the toolbar at any time. In **By host** view, horizontal cards show each guest's VLAN accent stripe, VM or CT ID, last IPv4 octet, published ports and live rate or route, while host headers surface **BUSY** NIC saturation, **DOWN** link warnings and a clickable item count to open that host's inspector drawer. Connectors scale with reported NIC speed (`10G`, `2.5G`, `1G`, `100M`), take a single-network host's network colour or turn amber when saturated, and hover arcs label up to six connections directly on the line. **Save image** exports whichever layout you are viewing, including the link-speed key when speeds are collected.
+Switch between **By host** and **By role** in the toolbar at any time. Your layout (**By host** or **By role**), density (**Names** or **Compact**) and **Live traffic** preference are saved automatically in your browser (while **Hide names** and temporary filters always reset on reload). In **By host** view, horizontal cards show each guest's VLAN accent stripe, VM or CT ID, last IPv4 octet, published ports and live rate or route, while host headers surface **BUSY** NIC saturation, **DOWN** link warnings and a clickable platform-aware count (`guests`, `containers`, `pods` or `apps`) to open that host's inspector drawer. Inline storage pool bars surface **REBUILD**, **DEGRADED**, **FAULTED** and error-count badges directly on affected pools. Connectors scale with reported NIC speed (`10G`, `2.5G`, `1G`, `100M`), take a single-network host's network colour or turn amber when saturated, and hover arcs label up to six connections directly on the line. **Save image** exports whichever layout you are viewing, including the link-speed key when speeds are collected.
 
 Each tile has a status dot: healthy, needs attention, critical, not reporting
 or off. When there is more than one network, a coloured mark beside a tile
@@ -25,18 +25,22 @@ matches the dot on its network's pill.
 - **Hover** a tile to spotlight it and its connected peers (softly dimming
   unrelated tiles), read what it is, its address, published ports (Docker,
   Docker Swarm, TrueNAS apps and Kubernetes Services), Docker user-defined
-  networks, what it is connected to, and collected metrics (CPU, memory, host
-  temperature, physical disk summary and health, live network throughput, check
-  protocol and HTTP status with latency, TLS certificate warnings, NIC link
-  speed with full-duplex utilization and **Link busy** warnings, link-down
-  count and Proxmox firewall status). Tiles it is connected to are ringed and
-  joined by curved connection arcs with relationship labels and a subtle halo
-  (plus gentle animated flow when **Live traffic** is on).
+  networks, what it is connected to, and collected metrics (CPU, memory,
+  uptime, pending updates, last backup age, host temperature, physical disk
+  summary and health, ZFS pool state and rebuild or error warnings, live
+  network throughput, check protocol and HTTP status with latency, TLS
+  certificate warnings, NIC link speed with full-duplex utilization and
+  **Link busy** warnings, link-down count and Proxmox firewall status). Tiles
+  it is connected to are ringed and joined by curved connection arcs with
+  relationship labels and a subtle halo (plus gentle animated flow when
+  **Live traffic** is on).
 - **Hover a network pill** to spotlight every tile on that network in the
   network's colour and read its subnet or VLAN detail, connected count, live
   aggregate throughput, max link speed and any link-down warnings.
 - **Click** a tile to open it.
-- **With a keyboard**, Tab reaches the map and the arrow keys move between
+- **With a keyboard**, press `/` to jump straight to **Search map**, `+` or
+  `=` to zoom in, `-` to zoom out and `0` to reset zoom (when no drawer or
+  input is focused). Tab reaches the map and the arrow keys move between
   tiles. Enter opens a tile or a **+N** overflow drawer, Escape closes a
   tooltip or drawer and returns focus, and Tab again leaves the map.
 - **On a touch screen**, the first tap reads the tile and the second opens it.
@@ -75,6 +79,10 @@ toolbar and drawers let you find any resource without leaving the map:
   Click it to open the **Published & routed** drawer, filter between **Proxied**
   and **Published ports**, search hostnames or ports, and jump straight to any
   service.
+- **Networks summary (`N networks`) pill** appears beside the title whenever
+  two or more networks are detected. Click it to open the **All networks**
+  drawer with proportional throughput bars and one-click **Filter** buttons to
+  isolate any network directly on the map.
 - **Group and network drawers** open when you click a **+N** overflow tile,
   a box header, or any network pill (including the **+N more** networks
   pill). Each drawer sorts items needing attention first, lets you switch

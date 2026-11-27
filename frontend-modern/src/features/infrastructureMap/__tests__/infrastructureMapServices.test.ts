@@ -2714,5 +2714,175 @@ describe('buildServiceDiagram', () => {
       );
       expect(hidden.hardware?.tiles.find((tile) => tile.id === 'pve-1')).toMatchObject(expectedPve);
     });
+
+    it('propagates uptime, pending updates, backup recency, and ZFS pool anomalies onto host, guest, and pool tiles', () => {
+      const backupIso = '2026-11-26T04:00:00Z';
+      const resources: Resource[] = [
+        resource({
+          id: 'pve-1',
+          type: 'agent',
+          name: 'pve-01',
+          platformType: 'proxmox-pve',
+          clusterId: 'lab',
+          proxmox: {
+            isClusterMember: true,
+            nodeName: 'pve-01',
+            uptime: 864_000,
+            pendingUpdates: 5,
+          },
+        }),
+        resource({
+          id: 'pve-2',
+          type: 'agent',
+          name: 'pve-02',
+          platformType: 'proxmox-pve',
+          clusterId: 'lab',
+          proxmox: { isClusterMember: true, nodeName: 'pve-02', uptime: 432_000 },
+        }),
+        resource({
+          id: 'vm-app',
+          type: 'vm',
+          name: 'nextcloud',
+          platformType: 'proxmox-pve',
+          parentId: 'pve-1',
+          status: 'running',
+          proxmox: { uptime: 172_800, pendingUpdates: 2, lastBackup: backupIso },
+        }),
+        resource({
+          id: 'local-tank-1',
+          type: 'storage',
+          name: 'local-zfs',
+          platformType: 'proxmox-pve',
+          parentId: 'pve-1',
+          storage: {
+            type: 'zfspool',
+            zfsPoolState: 'DEGRADED',
+            rebuildInProgress: true,
+            zfsReadErrors: 1,
+            zfsChecksumErrors: 2,
+          },
+        }),
+        resource({
+          id: 'local-tank-2',
+          type: 'storage',
+          name: 'local-zfs',
+          platformType: 'proxmox-pve',
+          parentId: 'pve-2',
+          storage: {
+            type: 'zfspool',
+            zfsPoolState: 'ONLINE',
+            zfsWriteErrors: 1,
+          },
+        }),
+        resource({
+          id: 'cluster-pool',
+          type: 'storage',
+          name: 'ceph-pool',
+          platformType: 'proxmox-pve',
+          proxmox: { instance: 'lab' },
+          storage: {
+            type: 'rbd',
+            shared: true,
+            nodes: ['pve-01', 'pve-02'],
+            zfsPoolState: 'FAULTED',
+            zfsChecksumErrors: 4,
+          },
+        }),
+        resource({
+          id: 'shared-nfs',
+          type: 'storage',
+          name: 'nas-share',
+          platformType: 'proxmox-pve',
+          storage: {
+            type: 'nfs',
+            shared: true,
+            arrayState: 'DEGRADED',
+            syncAction: 'rebuild',
+            zfsReadErrors: 2,
+          },
+        }),
+        resource({
+          id: 'pbs-backup',
+          type: 'storage',
+          name: 'pbs-store',
+          platformType: 'proxmox-pve',
+          parentId: 'pve-1',
+          storage: {
+            type: 'pbs',
+            content: 'backup',
+            zfsPoolState: 'DEGRADED',
+            zfsChecksumErrors: 5,
+          },
+        }),
+      ];
+
+      const model = buildInfrastructureMapModel(resources);
+      const diagram = buildServiceDiagram(model);
+
+      const pve1Frame = diagram.hostFrames.find((frame) => frame.id === 'pve-1')!;
+      expect(pve1Frame.host).toMatchObject({ uptimeSeconds: 864_000, pendingUpdates: 5 });
+      expect(diagram.hardware?.tiles.find((tile) => tile.id === 'pve-1')).toMatchObject({
+        uptimeSeconds: 864_000,
+        pendingUpdates: 5,
+      });
+
+      const vmTile = pve1Frame.allTiles.find((tile) => tile.id === 'vm-app')!;
+      expect(vmTile).toMatchObject({
+        uptimeSeconds: 172_800,
+        pendingUpdates: 2,
+        lastBackupAt: backupIso,
+      });
+
+      // Local pool on hostFrames carries its own ZFS anomaly fields.
+      expect(pve1Frame.pools.find((tile) => tile.id === 'local-tank-1')).toMatchObject({
+        zfsState: 'DEGRADED',
+        rebuildInProgress: true,
+        zfsErrorCount: 3,
+      });
+      const pve2Frame = diagram.hostFrames.find((frame) => frame.id === 'pve-2')!;
+      expect(pve2Frame.pools.find((tile) => tile.id === 'local-tank-2')?.zfsState).toBeUndefined();
+      expect(pve2Frame.pools.find((tile) => tile.id === 'local-tank-2')?.zfsErrorCount).toBe(1);
+
+      // Merged storage pool aggregates worst zfsState, rebuildInProgress, and summed zfsErrorCount.
+      expect(diagram.storage?.tiles.find((tile) => tile.name === 'local-zfs')).toMatchObject({
+        zfsState: 'DEGRADED',
+        rebuildInProgress: true,
+        zfsErrorCount: 4,
+      });
+
+      // Cluster pool, standalone shared storage, and backup pool propagate ZFS anomalies.
+      expect(pve1Frame.clusterPools?.find((tile) => tile.id === 'cluster-pool')).toMatchObject({
+        zfsState: 'FAULTED',
+        zfsErrorCount: 4,
+      });
+      expect(diagram.sharedStorage?.tiles.find((tile) => tile.id === 'shared-nfs')).toMatchObject({
+        zfsState: 'DEGRADED',
+        rebuildInProgress: true,
+        zfsErrorCount: 2,
+      });
+      expect(diagram.backups?.tiles.find((tile) => tile.id === 'pbs-backup')).toMatchObject({
+        zfsState: 'DEGRADED',
+        zfsErrorCount: 5,
+      });
+
+      // Hide names preserves all propagated telemetry fields on host, guest, and pool tiles.
+      const hidden = buildServiceDiagram(anonymizeInfrastructureMapModel(model));
+      const hiddenFrame = hidden.hostFrames.find((frame) => frame.id === 'pve-1')!;
+      expect(hiddenFrame.host).toMatchObject({ uptimeSeconds: 864_000, pendingUpdates: 5 });
+      expect(hiddenFrame.allTiles.find((tile) => tile.id === 'vm-app')).toMatchObject({
+        uptimeSeconds: 172_800,
+        pendingUpdates: 2,
+        lastBackupAt: backupIso,
+      });
+      expect(hiddenFrame.pools.find((tile) => tile.id === 'local-tank-1')).toMatchObject({
+        zfsState: 'DEGRADED',
+        rebuildInProgress: true,
+        zfsErrorCount: 3,
+      });
+      expect(hiddenFrame.clusterPools?.find((tile) => tile.id === 'cluster-pool')).toMatchObject({
+        zfsState: 'FAULTED',
+        zfsErrorCount: 4,
+      });
+    });
   });
 });

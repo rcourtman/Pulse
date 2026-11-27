@@ -94,6 +94,12 @@ export interface MapItem {
   netRxBytes?: number;
   /** Live outbound network rate in bytes per second, when collected. */
   netTxBytes?: number;
+  /** Live uptime in whole seconds when the resource is running or online. */
+  uptimeSeconds?: number;
+  /** Count of pending package or image updates reported for the resource, when positive. */
+  pendingUpdates?: number;
+  /** Valid ISO timestamp of the latest completed backup, when reported. */
+  lastBackupAt?: string;
   /** Availability probe latency in milliseconds, when the check is reachable. */
   latencyMs?: number;
   /** Fastest reported physical link speed in Mbps across non-host-local interfaces. */
@@ -159,6 +165,12 @@ export interface MapPool {
   vdevLayout?: string;
   /** Storage driver or backend type (e.g. `zfspool`, `nfs`, `pbs`). */
   storageType?: string;
+  /** Uppercase degraded or faulted ZFS/array state, omitted when healthy. */
+  zfsState?: string;
+  /** True when the pool or array is actively resilvering, rebuilding, reconstructing, or recovering. */
+  rebuildInProgress?: boolean;
+  /** Sum of positive ZFS read, write, and checksum error counts when greater than zero. */
+  zfsErrorCount?: number;
   /** A place backups are written to, as opposed to one guests run from. */
   backup?: boolean;
   totalBytes?: number;
@@ -192,6 +204,10 @@ export interface MapHost {
   diskMaxTempC?: number;
   /** Count of child physical disks reporting unhealthy, degraded, or failing health. */
   unhealthyDiskCount?: number;
+  /** Live uptime in whole seconds when the host is online. */
+  uptimeSeconds?: number;
+  /** Count of pending package or image updates reported for the host, when positive. */
+  pendingUpdates?: number;
   cpu?: number;
   memory?: number;
   /** Live inbound network rate in bytes per second, when collected. */
@@ -334,6 +350,82 @@ const positiveInt = (value: number | undefined): number | undefined =>
 
 const positiveFinite = (value: number | undefined): number | undefined =>
   typeof value === 'number' && Number.isFinite(value) && value > 0 ? value : undefined;
+
+const uptimeSecondsOf = (resource: Resource, health: MapHealth): number | undefined => {
+  if (
+    health === 'off' ||
+    health === 'critical' ||
+    resource.status === 'stopped' ||
+    resource.status === 'offline'
+  ) {
+    return undefined;
+  }
+  const raw =
+    positiveFinite(resource.proxmox?.uptime) ??
+    positiveFinite(resource.agent?.uptimeSeconds) ??
+    positiveFinite(resource.docker?.uptimeSeconds) ??
+    positiveFinite(resource.pbs?.uptimeSeconds) ??
+    positiveFinite(resource.truenas?.uptimeSeconds) ??
+    positiveFinite(resource.pmg?.uptimeSeconds) ??
+    positiveFinite(resource.kubernetes?.uptimeSeconds) ??
+    positiveFinite(resource.uptime);
+  if (raw === undefined) return undefined;
+  const rounded = Math.round(raw);
+  return rounded > 0 ? rounded : undefined;
+};
+
+const pendingUpdatesOf = (resource: Resource): number | undefined => {
+  const agentPending =
+    resource.agent?.packageUpdates?.supported !== false
+      ? positiveInt(resource.agent?.packageUpdates?.pendingCount)
+      : undefined;
+  return (
+    positiveInt(resource.proxmox?.pendingUpdates) ??
+    agentPending ??
+    positiveInt(resource.docker?.updatesAvailableCount) ??
+    (resource.docker?.updateStatus?.updateAvailable === true ? 1 : undefined)
+  );
+};
+
+const lastBackupAtOf = (resource: Resource): string | undefined => {
+  const value = clean(resource.proxmox?.lastBackup);
+  if (!value) return undefined;
+  return Number.isFinite(Date.parse(value)) ? value : undefined;
+};
+
+const HEALTHY_POOL_STATES = new Set([
+  'ONLINE',
+  'STARTED',
+  'OPTIMAL',
+  'HEALTHY',
+  'ACTIVE',
+  'NORMAL',
+  'OK',
+]);
+
+const REBUILD_SYNC_ACTION = /^(resilver|rebuild|reconstruct|recover)/i;
+
+const poolZfsStateOf = (resource: Resource): string | undefined => {
+  const raw = clean(resource.storage?.zfsPoolState) || clean(resource.storage?.arrayState);
+  if (!raw) return undefined;
+  const normalized = raw.toUpperCase();
+  return HEALTHY_POOL_STATES.has(normalized) ? undefined : normalized;
+};
+
+const poolRebuildInProgressOf = (resource: Resource): boolean =>
+  resource.storage?.rebuildInProgress === true ||
+  REBUILD_SYNC_ACTION.test(clean(resource.storage?.syncAction));
+
+const zfsErrorCountOf = (resource: Resource): number | undefined => {
+  const storage = resource.storage;
+  if (!storage) return undefined;
+  let total = 0;
+  for (const count of [storage.zfsReadErrors, storage.zfsWriteErrors, storage.zfsChecksumErrors]) {
+    const valid = positiveFinite(count);
+    if (valid !== undefined) total += Math.round(valid);
+  }
+  return total > 0 ? total : undefined;
+};
 
 const validTemperature = (value: unknown, min: number, max: number): number | undefined =>
   typeof value === 'number' && Number.isFinite(value) && value >= min && value <= max
@@ -808,6 +900,9 @@ const toItem = (
   const health = resolveMapHealth(resource);
   const rates = networkRatesOf(resource);
   const nic = interfaceTelemetryOf(resource, health);
+  const uptimeSeconds = uptimeSecondsOf(resource, health);
+  const pendingUpdates = pendingUpdatesOf(resource);
+  const lastBackupAt = lastBackupAtOf(resource);
   const linkUtilizationPercent = computeMapLinkUtilizationPercent(
     rates.netRxBytes,
     rates.netTxBytes,
@@ -847,6 +942,9 @@ const toItem = (
     cpu: finitePercent(resource.cpu?.current),
     memory: finitePercent(getMemoryPercent(resource)),
     ...rates,
+    ...(uptimeSeconds !== undefined ? { uptimeSeconds } : {}),
+    ...(pendingUpdates !== undefined ? { pendingUpdates } : {}),
+    ...(lastBackupAt ? { lastBackupAt } : {}),
     ...nic,
     ...(linkUtilizationPercent !== undefined ? { linkUtilizationPercent } : {}),
     ...(latencyMs !== undefined ? { latencyMs } : {}),
@@ -925,6 +1023,9 @@ const toPool = (resource: Resource): MapPool => {
   const used = resource.disk?.used;
   const vdevLayout = clean(resource.storage?.vdevLayout) || undefined;
   const storageType = clean(resource.storage?.type) || undefined;
+  const zfsState = poolZfsStateOf(resource);
+  const rebuildInProgress = poolRebuildInProgressOf(resource);
+  const zfsErrorCount = zfsErrorCountOf(resource);
   const consumerIds = (resource.storage?.topConsumers ?? [])
     .map((consumer) => clean(consumer.resourceId))
     .filter(Boolean);
@@ -936,6 +1037,9 @@ const toPool = (resource: Resource): MapPool => {
     sizeLabel: typeof total === 'number' && total > 0 ? formatBytes(total, 0) : undefined,
     ...(vdevLayout ? { vdevLayout } : {}),
     ...(storageType ? { storageType } : {}),
+    ...(zfsState ? { zfsState } : {}),
+    ...(rebuildInProgress ? { rebuildInProgress: true } : {}),
+    ...(zfsErrorCount !== undefined ? { zfsErrorCount } : {}),
     ...(isBackupTarget(resource) ? { backup: true } : {}),
     ...(typeof total === 'number' && total > 0 && typeof used === 'number' && used >= 0
       ? { totalBytes: total, usedBytes: used }
@@ -1050,6 +1154,8 @@ export function buildInfrastructureMapModel(
     const memoryTotalBytes = hostMemoryTotalBytesOf(resource);
     const versionLabel = hostVersionLabelOf(resource);
     const temperatureC = hostTemperatureOf(resource);
+    const uptimeSeconds = uptimeSecondsOf(resource, health);
+    const pendingUpdates = pendingUpdatesOf(resource);
     drafts.set(resource.id, {
       resource,
       sections: new Map(),
@@ -1066,6 +1172,8 @@ export function buildInfrastructureMapModel(
         ...(memoryTotalBytes !== undefined ? { memoryTotalBytes } : {}),
         ...(versionLabel ? { versionLabel } : {}),
         ...(temperatureC !== undefined ? { temperatureC } : {}),
+        ...(uptimeSeconds !== undefined ? { uptimeSeconds } : {}),
+        ...(pendingUpdates !== undefined ? { pendingUpdates } : {}),
         cpu: finitePercent(resource.cpu?.current),
         memory: finitePercent(getMemoryPercent(resource)),
         ...rates,

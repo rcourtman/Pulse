@@ -1459,4 +1459,251 @@ describe('live network telemetry extraction', () => {
     expect(serialized).not.toContain('Samsung-990-PRO-Secret');
     expect(serialized).not.toContain('SN-SECRET-001');
   });
+
+  it('extracts uptime, pending updates, backup recency, and ZFS pool anomalies while preserving them under Hide names', () => {
+    const backupIso = '2026-11-26T03:30:00Z';
+    const model = buildInfrastructureMapModel([
+      resource({
+        id: 'pve-up',
+        type: 'agent',
+        name: 'secret-pve-1',
+        platformType: 'proxmox-pve',
+        status: 'online',
+        proxmox: { uptime: 1_209_600.6, pendingUpdates: 7 },
+      }),
+      resource({
+        id: 'pve-down',
+        type: 'agent',
+        name: 'pve-offline',
+        platformType: 'proxmox-pve',
+        status: 'offline',
+        proxmox: { uptime: 86_400, pendingUpdates: 0 },
+      }),
+      resource({
+        id: 'dock-up',
+        type: 'docker-host',
+        name: 'secret-docker',
+        platformType: 'docker',
+        status: 'online',
+        docker: { uptimeSeconds: 7_200.4, updatesAvailableCount: 4 },
+      }),
+      resource({
+        id: 'agent-up',
+        type: 'agent',
+        name: 'linux-agent',
+        platformType: 'agent',
+        status: 'online',
+        agent: {
+          uptimeSeconds: 172_800.2,
+          packageUpdates: { supported: true, pendingCount: 12 },
+        },
+      }),
+      resource({
+        id: 'agent-unsupported',
+        type: 'agent',
+        name: 'unsupported-agent',
+        platformType: 'agent',
+        status: 'online',
+        agent: {
+          uptimeSeconds: -10,
+          packageUpdates: { supported: false, pendingCount: 9 },
+        },
+      }),
+      resource({
+        id: 'pbs-up',
+        type: 'pbs',
+        name: 'pbs-vault',
+        platformType: 'proxmox-pbs',
+        status: 'online',
+        pbs: { uptimeSeconds: 43_200 },
+      }),
+      resource({
+        id: 'vm-running',
+        type: 'vm',
+        name: 'secret-db',
+        platformType: 'proxmox-pve',
+        parentId: 'pve-up',
+        status: 'running',
+        proxmox: {
+          uptime: 345_600.4,
+          pendingUpdates: 3,
+          lastBackup: `  ${backupIso}  `,
+        },
+      }),
+      resource({
+        id: 'vm-stopped',
+        type: 'vm',
+        name: 'stopped-vm',
+        platformType: 'proxmox-pve',
+        parentId: 'pve-up',
+        status: 'stopped',
+        proxmox: {
+          uptime: 9_999,
+          pendingUpdates: 1.5,
+          lastBackup: 'not-a-valid-date',
+        },
+      }),
+      resource({
+        id: 'vm-critical',
+        type: 'vm',
+        name: 'critical-vm',
+        platformType: 'proxmox-pve',
+        parentId: 'pve-up',
+        status: 'running',
+        health: { verdict: 'critical', reasons: [{ code: 'unreachable' }] },
+        proxmox: { uptime: 12_345, lastBackup: '   ' },
+      }),
+      resource({
+        id: 'c-update',
+        type: 'app-container',
+        name: 'grafana',
+        platformType: 'docker',
+        parentId: 'dock-up',
+        status: 'running',
+        docker: {
+          uptimeSeconds: 14_400.7,
+          updateStatus: { updateAvailable: true },
+        },
+      }),
+      resource({
+        id: 'pool-healthy',
+        type: 'storage',
+        name: 'tank-ok',
+        platformType: 'proxmox-pve',
+        parentId: 'pve-up',
+        storage: {
+          type: 'zfspool',
+          zfsPoolState: 'online',
+          syncAction: 'scrub',
+          zfsReadErrors: 0,
+          zfsWriteErrors: 0,
+          zfsChecksumErrors: 0,
+        },
+      }),
+      resource({
+        id: 'pool-degraded',
+        type: 'storage',
+        name: 'secret-tank-deg',
+        platformType: 'proxmox-pve',
+        parentId: 'pve-up',
+        storage: {
+          type: 'zfspool',
+          zfsPoolState: ' degraded ',
+          rebuildInProgress: true,
+          zfsReadErrors: 1,
+          zfsWriteErrors: 2,
+          zfsChecksumErrors: 4,
+        },
+      }),
+      resource({
+        id: 'pool-array-recover',
+        type: 'storage',
+        name: 'array-rebuild',
+        platformType: 'proxmox-pve',
+        parentId: 'pve-up',
+        storage: {
+          arrayState: 'faulted',
+          syncAction: 'Resilvering',
+          zfsReadErrors: -5,
+          zfsWriteErrors: Number.NaN,
+          zfsChecksumErrors: 3,
+        },
+      }),
+      resource({
+        id: 'pool-array-healthy',
+        type: 'storage',
+        name: 'array-started',
+        platformType: 'proxmox-pve',
+        parentId: 'pve-up',
+        storage: {
+          arrayState: 'Started',
+          syncAction: 'idle',
+        },
+      }),
+    ]);
+
+    const pveUp = hostNamed(model.blocks, 'secret-pve-1');
+    expect(pveUp.uptimeSeconds).toBe(1_209_601);
+    expect(pveUp.pendingUpdates).toBe(7);
+
+    const pveDown = hostNamed(model.blocks, 'pve-offline');
+    expect(pveDown.uptimeSeconds).toBeUndefined();
+    expect(pveDown.pendingUpdates).toBeUndefined();
+
+    const dockUp = hostNamed(model.blocks, 'secret-docker');
+    expect(dockUp.uptimeSeconds).toBe(7_200);
+    expect(dockUp.pendingUpdates).toBe(4);
+
+    const agentUp = hostNamed(model.blocks, 'linux-agent');
+    expect(agentUp.uptimeSeconds).toBe(172_800);
+    expect(agentUp.pendingUpdates).toBe(12);
+
+    const agentUnsupported = hostNamed(model.blocks, 'unsupported-agent');
+    expect(agentUnsupported.uptimeSeconds).toBeUndefined();
+    expect(agentUnsupported.pendingUpdates).toBeUndefined();
+
+    expect(hostNamed(model.blocks, 'pbs-vault').uptimeSeconds).toBe(43_200);
+
+    const vmRunning = pveUp.sections[0].items.find((item) => item.id === 'vm-running')!;
+    expect(vmRunning).toMatchObject({
+      uptimeSeconds: 345_600,
+      pendingUpdates: 3,
+      lastBackupAt: backupIso,
+    });
+
+    const vmStopped = pveUp.sections[0].items.find((item) => item.id === 'vm-stopped')!;
+    expect(vmStopped.uptimeSeconds).toBeUndefined();
+    expect(vmStopped.pendingUpdates).toBeUndefined();
+    expect(vmStopped.lastBackupAt).toBeUndefined();
+
+    const vmCritical = pveUp.sections[0].items.find((item) => item.id === 'vm-critical')!;
+    expect(vmCritical.uptimeSeconds).toBeUndefined();
+    expect(vmCritical.lastBackupAt).toBeUndefined();
+
+    const container = dockUp.sections[0].items.find((item) => item.id === 'c-update')!;
+    expect(container.uptimeSeconds).toBe(14_401);
+    expect(container.pendingUpdates).toBe(1);
+
+    const poolById = (id: string) => pveUp.pools.find((pool) => pool.id === id)!;
+    expect(poolById('pool-healthy').zfsState).toBeUndefined();
+    expect(poolById('pool-healthy').rebuildInProgress).toBeUndefined();
+    expect(poolById('pool-healthy').zfsErrorCount).toBeUndefined();
+
+    expect(poolById('pool-array-healthy').zfsState).toBeUndefined();
+    expect(poolById('pool-array-healthy').rebuildInProgress).toBeUndefined();
+
+    expect(poolById('pool-degraded')).toMatchObject({
+      zfsState: 'DEGRADED',
+      rebuildInProgress: true,
+      zfsErrorCount: 7,
+    });
+
+    expect(poolById('pool-array-recover')).toMatchObject({
+      zfsState: 'FAULTED',
+      rebuildInProgress: true,
+      zfsErrorCount: 3,
+    });
+
+    // Anonymization preserves all operational telemetry while stripping names.
+    const anonymous = anonymizeInfrastructureMapModel(model);
+    const anonPve = hostsOf(anonymous.blocks).find((host) => host.id === 'pve-up')!;
+    expect(anonPve).toMatchObject({
+      uptimeSeconds: 1_209_601,
+      pendingUpdates: 7,
+    });
+    expect(anonPve.sections[0].items.find((item) => item.id === 'vm-running')).toMatchObject({
+      uptimeSeconds: 345_600,
+      pendingUpdates: 3,
+      lastBackupAt: backupIso,
+    });
+    expect(anonPve.pools.find((pool) => pool.id === 'pool-degraded')).toMatchObject({
+      zfsState: 'DEGRADED',
+      rebuildInProgress: true,
+      zfsErrorCount: 7,
+    });
+    const serialized = JSON.stringify(anonymous);
+    expect(serialized).not.toContain('secret-pve-1');
+    expect(serialized).not.toContain('secret-db');
+    expect(serialized).not.toContain('secret-tank-deg');
+  });
 });

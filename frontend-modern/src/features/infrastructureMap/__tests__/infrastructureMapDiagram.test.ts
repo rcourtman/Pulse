@@ -6,7 +6,11 @@ import {
   layoutServiceDiagram,
 } from '../infrastructureMapDiagram';
 import { buildMapExportSvg } from '../infrastructureMapExport';
-import { layoutHostDiagram, strokeWidthForLinkSpeed } from '../infrastructureMapHostDiagram';
+import {
+  hostCountLabel,
+  layoutHostDiagram,
+  strokeWidthForLinkSpeed,
+} from '../infrastructureMapHostDiagram';
 import {
   fitMapName,
   nextMapHitIndex,
@@ -2920,6 +2924,330 @@ describe('layoutServiceDiagram', () => {
       expect(pveARect).toBeDefined();
       expect(pveBRect).toBeDefined();
       expect(pveARect.h).toBe(pveBRect.h);
+    });
+
+    it('formats platform-aware host workload count labels and falls back to compact counts when narrow or in marks mode', () => {
+      expect(hostCountLabel('proxmox', 1)).toBe('1 guest');
+      expect(hostCountLabel('proxmox', 3)).toBe('3 guests');
+      expect(hostCountLabel('vmware', 1)).toBe('1 guest');
+      expect(hostCountLabel('vmware', 4)).toBe('4 guests');
+      expect(hostCountLabel('docker', 1)).toBe('1 container');
+      expect(hostCountLabel('docker', 5)).toBe('5 containers');
+      expect(hostCountLabel('kubernetes', 1)).toBe('1 pod');
+      expect(hostCountLabel('kubernetes', 7)).toBe('7 pods');
+      expect(hostCountLabel('truenas', 1)).toBe('1 app');
+      expect(hostCountLabel('truenas', 2)).toBe('2 apps');
+      expect(hostCountLabel('machine', 1)).toBe('1 item');
+      expect(hostCountLabel(undefined, 3)).toBe('3 items');
+
+      const multiPlatformResources: Resource[] = [
+        resource({
+          id: 'pve-host',
+          type: 'agent',
+          name: 'pve-01',
+          platformType: 'proxmox-pve',
+        }),
+        guest('jellyfin', { id: 'g-pve-1', parentId: 'pve-host' }),
+        guest('grafana', { id: 'g-pve-2', parentId: 'pve-host' }),
+        resource({
+          id: 'esx-host',
+          type: 'agent',
+          name: 'esxi-01',
+          platformType: 'vmware-vsphere',
+        }),
+        resource({
+          id: 'vm-esx-1',
+          type: 'vm',
+          name: 'app-vm',
+          platformType: 'vmware-vsphere',
+          parentId: 'esx-host',
+          status: 'running',
+        }),
+        resource({
+          id: 'dock-host',
+          type: 'docker-host',
+          name: 'dock-01',
+          platformType: 'docker',
+        }),
+        resource({
+          id: 'c-dock-1',
+          type: 'app-container',
+          name: 'sonarr',
+          platformType: 'docker',
+          parentId: 'dock-host',
+          status: 'running',
+        }),
+        resource({
+          id: 'c-dock-2',
+          type: 'app-container',
+          name: 'radarr',
+          platformType: 'docker',
+          parentId: 'dock-host',
+          status: 'running',
+        }),
+        resource({
+          id: 'k8s-host',
+          type: 'k8s-cluster',
+          name: 'prod-k8s',
+          platformType: 'kubernetes',
+        }),
+        resource({
+          id: 'pod-1',
+          type: 'pod',
+          name: 'api-0',
+          platformType: 'kubernetes',
+          parentId: 'k8s-host',
+          status: 'running',
+        }),
+        resource({
+          id: 'pod-2',
+          type: 'pod',
+          name: 'web-0',
+          platformType: 'kubernetes',
+          parentId: 'k8s-host',
+          status: 'running',
+        }),
+        resource({
+          id: 'nas-host',
+          type: 'agent',
+          name: 'truenas-01',
+          platformType: 'truenas',
+        }),
+        resource({
+          id: 'app-nas-1',
+          type: 'app-container',
+          name: 'immich',
+          platformType: 'truenas',
+          parentId: 'nas-host',
+          status: 'running',
+        }),
+        resource({
+          id: 'app-nas-2',
+          type: 'app-container',
+          name: 'syncthing',
+          platformType: 'truenas',
+          parentId: 'nas-host',
+          status: 'running',
+        }),
+      ];
+
+      const diagram = buildServiceDiagram(buildInfrastructureMapModel(multiPlatformResources));
+      const namedScene = layoutHostDiagram(diagram, { width: 1600, density: 'names' });
+      const namedTexts = texts(namedScene);
+
+      expect(namedTexts).toContain('2 guests');
+      expect(namedTexts).toContain('1 guest');
+      expect(namedTexts).toContain('2 containers');
+      expect(namedTexts).toContain('2 pods');
+      expect(namedTexts).toContain('2 apps');
+      expect(namedTexts.some((text) => /\bitems?\b/.test(text))).toBe(false);
+
+      // Inspect aria-label format stays Inspect <host> (<count>)
+      const inspects = ofKind(namedScene, 'inspect');
+      expect(inspects.some((node) => node.label === 'Inspect pve-01 (2)')).toBe(true);
+      expect(inspects.some((node) => node.label === 'Inspect dock-01 (2)')).toBe(true);
+      expect(inspects.some((node) => node.label === 'Inspect prod-k8s (2)')).toBe(true);
+      expect(inspects.some((node) => node.label === 'Inspect truenas-01 (2)')).toBe(true);
+
+      // Compact marks density falls back to numeric counts
+      const marksScene = layoutHostDiagram(diagram, { width: 1600, density: 'marks' });
+      const marksTexts = texts(marksScene);
+      expect(marksTexts).not.toContain('2 guests');
+      expect(marksTexts).not.toContain('2 containers');
+      expect(marksTexts).not.toContain('2 pods');
+      expect(marksTexts).not.toContain('2 apps');
+      expect(marksTexts).toContain('2');
+    });
+
+    it('renders inline REBUILD, DEGRADED, FAULTED, and ERR storage bar badges with matching bar tones and bounds', () => {
+      const baseResources: Resource[] = [
+        resource({
+          id: 'nas-1',
+          type: 'agent',
+          name: 'nas-core',
+          platformType: 'truenas',
+          status: 'online',
+        }),
+        resource({
+          id: 'app-1',
+          type: 'app-container',
+          name: 'immich',
+          platformType: 'truenas',
+          parentId: 'nas-1',
+          status: 'running',
+        }),
+        resource({
+          id: 'pool-rebuild',
+          type: 'storage',
+          name: 'fast',
+          platformType: 'truenas',
+          parentId: 'nas-1',
+          status: 'online',
+          disk: { current: 42, total: 4 * 1024 ** 4, used: Math.round(1.68 * 1024 ** 4) },
+          storage: { type: 'zfspool', vdevLayout: 'mirror' },
+        }),
+        resource({
+          id: 'pool-degraded',
+          type: 'storage',
+          name: 'tank',
+          platformType: 'truenas',
+          parentId: 'nas-1',
+          status: 'online',
+          disk: { current: 55, total: 16 * 1024 ** 4, used: Math.round(8.8 * 1024 ** 4) },
+          storage: { type: 'zfspool', vdevLayout: 'raidz2' },
+        }),
+        resource({
+          id: 'pool-faulted',
+          type: 'storage',
+          name: 'cold',
+          platformType: 'truenas',
+          parentId: 'nas-1',
+          status: 'online',
+          disk: { current: 30, total: 8 * 1024 ** 4, used: Math.round(2.4 * 1024 ** 4) },
+          storage: { type: 'zfspool', vdevLayout: 'raidz1' },
+        }),
+      ];
+
+      const diagram = buildServiceDiagram(buildInfrastructureMapModel(baseResources));
+      const frame = diagram.hostFrames.find((entry) => entry.id === 'nas-1')!;
+      const rebuildPool = frame.pools.find((pool) => pool.id === 'pool-rebuild')!;
+      const degradedPool = frame.pools.find((pool) => pool.id === 'pool-degraded')!;
+      const faultedPool = frame.pools.find((pool) => pool.id === 'pool-faulted')!;
+
+      rebuildPool.rebuildInProgress = true;
+      rebuildPool.zfsState = 'DEGRADED';
+
+      degradedPool.zfsState = 'DEGRADED';
+      degradedPool.zfsErrorCount = 3;
+
+      faultedPool.zfsState = 'FAULTED';
+      faultedPool.zfsErrorCount = 12;
+
+      const scene = layoutHostDiagram(diagram, { width: 1400, density: 'names' });
+      const drawn = texts(scene);
+
+      // REBUILD wins over zfsState when rebuildInProgress is true
+      expect(drawn).toContain('REBUILD');
+      expect(drawn).toContain('DEGRADED');
+      expect(drawn).toContain('FAULTED');
+      expect(drawn).toContain('3 ERR');
+      expect(drawn).toContain('12 ERR');
+
+      // Pill rect and text tones: amber (attention) for REBUILD and DEGRADED, critical for FAULTED
+      const rebuildPill = ofKind(scene, 'rect').find(
+        (node) =>
+          node.tileId === 'pool-rebuild' &&
+          node.fill === 'attention' &&
+          node.opacity === 0.18 &&
+          node.stroke === 'attention',
+      );
+      expect(rebuildPill).toBeDefined();
+      const rebuildText = ofKind(scene, 'text').find(
+        (node) => node.tileId === 'pool-rebuild' && node.text === 'REBUILD',
+      );
+      expect(rebuildText).toMatchObject({ size: 9, weight: 600, fill: 'attention' });
+
+      const degradedPill = ofKind(scene, 'rect').find(
+        (node) =>
+          node.tileId === 'pool-degraded' &&
+          node.fill === 'attention' &&
+          node.opacity === 0.18 &&
+          node.stroke === 'attention',
+      );
+      expect(degradedPill).toBeDefined();
+
+      const faultedPill = ofKind(scene, 'rect').find(
+        (node) =>
+          node.tileId === 'pool-faulted' &&
+          node.fill === 'critical' &&
+          node.opacity === 0.18 &&
+          node.stroke === 'critical',
+      );
+      expect(faultedPill).toBeDefined();
+
+      // Bar fill tones are elevated to match anomaly severity even when usage is below 75%
+      const rebuildBar = ofKind(scene, 'rect').find(
+        (node) => node.tileId === 'pool-rebuild' && node.h === 6 && node.fill !== 'border',
+      );
+      const degradedBar = ofKind(scene, 'rect').find(
+        (node) => node.tileId === 'pool-degraded' && node.h === 6 && node.fill !== 'border',
+      );
+      const faultedBar = ofKind(scene, 'rect').find(
+        (node) => node.tileId === 'pool-faulted' && node.h === 6 && node.fill !== 'border',
+      );
+      expect(rebuildBar?.fill).toBe('attention');
+      expect(degradedBar?.fill).toBe('attention');
+      expect(faultedBar?.fill).toBe('critical');
+
+      // Narrow mobile width stays strictly within scene bounds
+      const narrowScene = layoutHostDiagram(diagram, { width: 320, density: 'names' });
+      for (const node of ofKind(narrowScene, 'rect')) {
+        expect(node.x).toBeGreaterThanOrEqual(0);
+        expect(node.x + node.w).toBeLessThanOrEqual(narrowScene.width + 0.5);
+      }
+    });
+
+    it('forwards uptimeSeconds, pendingUpdates, lastBackupAt, zfsState, rebuildInProgress, and zfsErrorCount onto MapHit in host and roles layouts', () => {
+      const diagram = buildServiceDiagram(buildInfrastructureMapModel(richEstate()));
+      const hostFrame = diagram.hostFrames.find((entry) => entry.id === 'pve-1')!;
+      hostFrame.host.uptimeSeconds = 1_209_600;
+      hostFrame.host.pendingUpdates = 4;
+
+      const ctTile = hostFrame.allTiles.find((tile) => tile.id === 'ct-102')!;
+      ctTile.uptimeSeconds = 86_400;
+      ctTile.pendingUpdates = 2;
+      ctTile.lastBackupAt = '2026-11-27T04:00:00Z';
+
+      const poolTile = hostFrame.pools.find((pool) => pool.id === 'pool-nvme')!;
+      poolTile.zfsState = 'DEGRADED';
+      poolTile.rebuildInProgress = true;
+      poolTile.zfsErrorCount = 5;
+
+      // Also mirror onto role-diagram groups so drawTile forwarding is verified
+      const hwTile = diagram.hardware?.tiles.find((tile) => tile.id === 'pve-1');
+      if (hwTile) {
+        hwTile.uptimeSeconds = 1_209_600;
+        hwTile.pendingUpdates = 4;
+      }
+      const mediaTile = diagram.groups
+        .flatMap((group) => group.tiles)
+        .find((tile) => tile.id === 'ct-102');
+      if (mediaTile) {
+        mediaTile.uptimeSeconds = 86_400;
+        mediaTile.pendingUpdates = 2;
+        mediaTile.lastBackupAt = '2026-11-27T04:00:00Z';
+      }
+      const storageTile = diagram.storage?.tiles.find((tile) => tile.id === 'pool-nvme');
+      if (storageTile) {
+        storageTile.zfsState = 'DEGRADED';
+        storageTile.rebuildInProgress = true;
+        storageTile.zfsErrorCount = 5;
+      }
+
+      for (const scene of [
+        layoutHostDiagram(diagram, { width: 1400, density: 'names' }),
+        layoutServiceDiagram(diagram, { width: 1400, density: 'names', layoutMode: 'roles' }),
+      ]) {
+        const hostHit = ofKind(scene, 'hit').find((node) => node.hit.id === 'pve-1')?.hit;
+        expect(hostHit).toMatchObject({
+          uptimeSeconds: 1_209_600,
+          pendingUpdates: 4,
+        });
+
+        const ctHit = ofKind(scene, 'hit').find((node) => node.hit.id === 'ct-102')?.hit;
+        expect(ctHit).toMatchObject({
+          uptimeSeconds: 86_400,
+          pendingUpdates: 2,
+          lastBackupAt: '2026-11-27T04:00:00Z',
+        });
+
+        const poolHit = ofKind(scene, 'hit').find((node) => node.hit.id === 'pool-nvme')?.hit;
+        expect(poolHit).toMatchObject({
+          zfsState: 'DEGRADED',
+          rebuildInProgress: true,
+          zfsErrorCount: 5,
+        });
+      }
     });
   });
 });

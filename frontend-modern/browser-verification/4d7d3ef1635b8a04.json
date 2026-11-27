@@ -1,0 +1,52 @@
+{
+  "version": 1,
+  "base_sha": "15625d21dccdfdbfbbed61d3297d45e9f3e60db0",
+  "verified_at": "2026-11-27T15:32:30Z",
+  "result": "passed",
+  "changed_paths": [
+    "frontend-modern/src/features/infrastructureMap/InfrastructureMapDrawer.tsx",
+    "frontend-modern/src/features/infrastructureMap/InfrastructureMapSurface.tsx",
+    "frontend-modern/src/features/infrastructureMap/infrastructureMapDiagram.ts",
+    "frontend-modern/src/features/infrastructureMap/infrastructureMapHostDiagram.ts",
+    "frontend-modern/src/features/infrastructureMap/infrastructureMapLayout.ts",
+    "frontend-modern/src/features/infrastructureMap/infrastructureMapModel.ts",
+    "frontend-modern/src/features/infrastructureMap/infrastructureMapServices.ts"
+  ],
+  "content_sha256": {
+    "frontend-modern/src/features/infrastructureMap/InfrastructureMapDrawer.tsx": "4850d325e2a2fefa306b8ec83cf4b3185a96f5e8f45f205c7ba5a44e4c99ce6b",
+    "frontend-modern/src/features/infrastructureMap/InfrastructureMapSurface.tsx": "f0db7a12b01bc7e2ca856794567335e72457cb920b2ece65e6c3d48a2329e35e",
+    "frontend-modern/src/features/infrastructureMap/infrastructureMapDiagram.ts": "8c0f2e26271d83775f28ef0b273870405d5726fd6fc4bb19f875c6c001a17506",
+    "frontend-modern/src/features/infrastructureMap/infrastructureMapHostDiagram.ts": "7b107ce0a7c0b84c469e1e0ae744b732f67b9ae6755f6a81e3a96b2ae43b3366",
+    "frontend-modern/src/features/infrastructureMap/infrastructureMapLayout.ts": "4bac35798fc7729c02bc9e8b59ce0262a1f354491c41ccb1d847780fb40662c1",
+    "frontend-modern/src/features/infrastructureMap/infrastructureMapModel.ts": "f55b9107c4b3ced9e05f6e99fad05d131bd7c1a17dbeb98ab64db30910fd7448",
+    "frontend-modern/src/features/infrastructureMap/infrastructureMapServices.ts": "86215d1fdb9973c6e0d9df87a13b63874df595f0a73821b2212c602f105c648b"
+  },
+  "routes": [
+    "/map"
+  ],
+  "viewports": [
+    {
+      "width": 1440,
+      "height": 900
+    },
+    {
+      "width": 390,
+      "height": 844
+    }
+  ],
+  "states": [
+    "desktop dark mode By host default with platform-aware host counts (guests, containers, pod), inline REBUILD ZFS pool badge, and 2 networks summary pill",
+    "desktop light mode By host default verifying contrast on header pills, host frames, storage bars, and REBUILD pill",
+    "hover spotlight on pve-01 showing uptime (Up 42d) and pending updates (3 updates) in tooltip alongside labelled arcs",
+    "All networks drawer opened from 2 networks pill showing proportional 4px throughput bar and one-click Filter buttons",
+    "Hide names anonymized mode keeping REBUILD and counts while redacting hostnames, subnets, stacks, and VMIDs",
+    "mobile dark mode 390x844 verifying responsive pill wrapping and compact numeric host count fallback alongside 1 DOWN and 48C"
+  ],
+  "interactions": [
+    "hovered pve-01 host frame to verify spotlight dimming and operational telemetry tooltip lines",
+    "clicked 2 networks summary pill to open All networks drawer and clicked Filter on vmbr0 to filter the map and dismiss the drawer",
+    "pressed / keyboard shortcut to focus Search map input and + / 0 shortcuts for zoom",
+    "switched to By role and reloaded page to verify localStorage preference persistence under pulse.infrastructureMap.prefs",
+    "toggled Hide names on and off to confirm zero hostname, stack, route, or VMID leaks"
+  ]
+}
