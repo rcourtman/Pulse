@@ -51,7 +51,7 @@ All backend code lives under `cmd/`, `internal/`, and `pkg/`. The binary is asse
    - Loads unified configuration via `internal/config.Load()`.
    - Initialises the RBAC manager (`pkg/auth`), audit logger (`pkg/audit`), and crypto layer (`internal/crypto`).
    - Creates a `ReloadableMonitor` that manages the lifecycle of all monitoring goroutines.
-   - Starts the HTTP/HTTPS server, WebSocket hub, AI services (Patrol + Chat), and the Relay client.
+   - Starts the HTTP/HTTPS server, WebSocket hub, Patrol and AI services, and the Relay client for existing paired Pulse Mobile users (until 31 March 2027).
    - Supports graceful hot-reload via `SIGHUP` and `.env` file watching.
 
 2. **Unified Resource Registry (`internal/unifiedresources`)**
@@ -65,7 +65,7 @@ All backend code lives under `cmd/`, `internal/`, and `pkg/`. The binary is asse
 
 3. **Monitoring Engine (`internal/monitoring`)**
    - **Polymorphic monitors**: Each Proxmox VE/PBS/PMG node runs in its own goroutine, polling via the platform REST API.
-   - **Agent receivers** (`internal/api`): Docker, Host, and Kubernetes agents push metrics via HTTP POST to `/api/agents/{type}/report`.
+   - **Agent receivers** (`internal/api`): Unified host, Docker, and Kubernetes agents push metrics via HTTP POST to `/api/agents/agent/report` (with `/api/agents/host/report` as a legacy alias), `/api/agents/docker/report`, and `/api/agents/kubernetes/report`.
    - **TrueNAS provider** (`internal/truenas`): Uses the versioned JSON-RPC 2.0
      WebSocket API on supported SCALE releases for system info, pools,
      datasets, disks, alerts, ZFS snapshots, and replication tasks. A
@@ -79,20 +79,21 @@ All backend code lives under `cmd/`, `internal/`, and `pkg/`. The binary is asse
 
 5. **Decomposed API Router (`internal/api`)**
    - The router is split into focused registration files for maintainability:
-     - `router_routes_auth_security.go` — Auth, OIDC, SAML, SSO, security tokens, recovery, agent install scripts.
-     - `router_routes_monitoring.go` — Unified resources, metrics history, charts, recovery points, alerts, notifications, discovery.
-     - `router_routes_ai_relay.go` — AI settings, Patrol, Intelligence, Chat sessions, Relay config, and the approval workflow.
-     - `router_routes_org_license.go` — Organisations, RBAC, audit logs, license/entitlements, billing.
-     - `router_routes_registration.go` — Config CRUD, TrueNAS connections, update management, agent profiles, system settings.
-     - `router_routes_hosted.go` — Hosted/SaaS-specific signup and org admin routes.
+     - `router_routes_auth_security.go`: Auth, OIDC, SAML, SSO, security tokens, recovery, agent install scripts.
+     - `router_routes_monitoring.go`: Unified resources, metrics history, charts, recovery points, alerts, notifications, discovery.
+     - `router_routes_ai_relay.go`: AI settings, Patrol, Intelligence, mobile chat sessions, Relay config, and the approval workflow.
+     - `router_routes_licensing.go`: Organisations, RBAC, audit logs, license/entitlements, reporting, and billing.
+     - `router_routes_registration.go`: Config CRUD, agent reporting and registration, TrueNAS connections, update management, agent profiles, system settings.
+     - `router_routes_cloud.go`: Hosted signup, magic links, and Stripe billing webhooks.
+     - `router_routes_debug.go`: Admin-gated `/debug/pprof` routes when profiling is enabled.
    - Every endpoint enforces **scoped access control** (e.g., `monitoring:read`, `settings:write`, `ai:execute`, `ai:chat`).
 
 6. **Relay Client (`internal/relay`)**
-   - Maintains a persistent WebSocket tunnel to a managed relay server for **mobile remote access**.
+   - Maintains a persistent WebSocket tunnel to a managed relay server for **Pulse Mobile** remote access (not the web UI).
    - Uses an ECDH key-exchange for per-channel **end-to-end encryption**.
    - Multiplexes multiple mobile sessions over a single connection with back-pressure (data limiter) and per-channel authentication.
    - Supports push notifications through the relay.
-   - Gated by the `relay` license feature.
+   - Gated by the `relay` license feature. Relay is no longer sold, and Pulse Mobile and Relay retire on **31 March 2027**. Existing paired phones keep working until then, and continuing Relay subscribers receive Pro entitlements at their current price.
 
 7. **AI Subsystem (`internal/ai`)**
    - **AI runtime (`internal/ai/chat`)**: The governed tool loop behind Patrol investigations and Pulse Mobile chat (the in-app chat window has been retired). Supports bring-your-own-key (BYOK) providers (OpenAI, Anthropic, Ollama, etc.) plus Claude OAuth. External agents reach the same tools through `pulse-mcp`.
@@ -102,10 +103,7 @@ All backend code lives under `cmd/`, `internal/`, and `pkg/`. The binary is asse
 
 8. **Entitlements & Licensing (`pkg/licensing`)**
    - Capability-key based gating: `ai_autofix`, `rbac`, `multi_tenant`, `relay`, `agent_profiles`, `kubernetes_ai`, `ai_alerts`, etc.
-   - Core tiers include **Community** (free), **Relay**, **Pro**, a reserved
-     hosted **Cloud** capability tier, request-assisted **MSP**, and
-     Enterprise/custom entitlements. The Cloud service is not generally
-     available.
+   - Core tiers include **Community** (free), **Pro**, a retiring legacy **Relay** tier (no longer sold, receiving Pro entitlements while active), a reserved hosted **Cloud** capability tier, request-assisted **MSP**, and Enterprise/custom entitlements. The Cloud service is not generally available.
    - Activation, grant refresh, renewal, expiry, and legacy-license migration.
      Active state is exposed through `/api/license/*`.
 
@@ -118,7 +116,7 @@ All backend code lives under `cmd/`, `internal/`, and `pkg/`. The binary is asse
 10. **Recovery Engine (`internal/recovery`)**
    - Aggregates backup data (PBS snapshots, ZFS snapshots, replication tasks) into a unified recovery point timeline.
    - Provides faceted queries: filter by type, source, status, and source health.
-   - API: `/api/recovery/points`, `/api/recovery/series`, `/api/recovery/facets`, `/api/recovery/rollups`.
+   - API: `/api/recovery/points`, `/api/recovery/series`, `/api/recovery/facets`, `/api/recovery/rollups`, `/api/recovery/postures`.
 
 11. **Audit Logging (`pkg/audit`)**
     - Defence-in-depth: every mutation is logged to SQLite, optionally signed with per-tenant encryption keys.
@@ -128,7 +126,7 @@ All backend code lives under `cmd/`, `internal/`, and `pkg/`. The binary is asse
 ### Data Flow
 
 1. **Collection**:
-   - **Proxmox VE / PBS / PMG**: Monitoring engine polls platform REST APIs (configurable interval, default 2 s for PVE).
+   - **Proxmox VE / PBS / PMG**: Monitoring engine polls platform REST APIs (configurable intervals, defaulting to `10 s` for PVE and `60 s` for PBS and PMG).
    - **Docker / Host / Kubernetes**: Lightweight agents push metrics via HTTP POST on their configured interval.
    - **TrueNAS**: Provider polls the versioned JSON-RPC WebSocket API on
      supported SCALE releases, with REST compatibility limited to recognized
@@ -161,7 +159,8 @@ operational surfaces:
 | `/kubernetes/*` | Kubernetes | Clusters, workloads, networking, storage, and events |
 | `/truenas/*` | TrueNAS | Systems, pools, datasets, disks, apps, VMs, and recovery |
 | `/vmware/*` | vSphere | Early-access vCenter, host, cluster, VM, datastore, and network views |
-| `/standalone/*` | Machines | Agent-backed machines and availability checks |
+| `/standalone/*` | Machines | Agent-backed machines and host telemetry |
+| `/availability/*` | Availability | Website, service, device, and TLS certificate checks |
 | `/alerts/*` | Alerts | Alert rules, active alerts, history |
 | `/actions/*` | Actions | Governed action proposals, approvals, delivery, and audit state |
 | `/patrol/*` | Patrol | Attention queue, findings, investigations, and run history |
@@ -173,8 +172,8 @@ contracts remain backend building blocks consumed inside platform pages.
 
 ### State Management
 - **WebSocket store** (`stores/websocket.ts`): Manages the live connection, reactive `State` object, reconnection logic, and per-org switching.
-- **Metrics collector** (`stores/metricsCollector.ts`): Buffers time-series data for sparklines and historical charts.
-- **AI stores** (`stores/aiAvailability.ts`, `stores/aiIntelligence.ts`): Hold whether AI is enabled for the session and the Patrol findings.
+- **Session and capability stores** (`stores/sessionCapabilities.ts`, `stores/actionInbox.ts`): Track signed-in capabilities and pending action inbox state.
+- **AI stores** (`stores/aiAvailability.ts`, `stores/aiIntelligence.ts`, `stores/patrolAttention.ts`): Hold whether AI is enabled for the session, Patrol findings, and the Patrol attention queue.
 - **License store** (`stores/license.ts`): Tracks plan tier, feature flags, and multi-tenant state.
 - **System settings store** (`stores/systemSettings.ts`): Caches server-side preferences (for example theme and feature toggles).
 
@@ -183,19 +182,20 @@ contracts remain backend building blocks consumed inside platform pages.
 - **Lazy-loaded pages**: All top-level pages are loaded via `lazy()` with optional preloading after initial render.
 - **Virtual table windowing**: Large resource lists use virtualised rendering for smooth scrolling at scale.
 - **Command Palette** (`Cmd/Ctrl+K`): Quick-access command launcher.
-- **Keyboard shortcuts**: `g p` → Proxmox, `g d` → Docker, `g k` →
-  Kubernetes, `g n` → TrueNAS, `g v` → vSphere, `g s` → Machines, `g a` →
-  Alerts, `g r` → Patrol, `g t` → Settings, `/` → Search.
+- **Keyboard shortcuts**: `g s` → Machines, `g c` → Availability, `g p` →
+  Proxmox, `g d` → Docker, `g k` → Kubernetes, `g n` → TrueNAS, `g v` →
+  vSphere, `g a` → Alerts, `g r` → Patrol, `g t` → Settings, `/` → Search,
+  `?` → Keyboard shortcuts.
 
 ### Mobile Experience
-- **MobileNavBar** component: Bottom tab bar for touch navigation.
-- **Relay integration**: The mobile app connects through the relay protocol for encrypted remote access.
+- **MobileNavBar** component: Bottom tab bar for touch navigation in the mobile web UI.
+- **Relay integration**: Connects existing paired Pulse Mobile apps through the encrypted relay protocol until Pulse Mobile and Relay retire on 31 March 2027. For mobile access afterwards, use Pulse in your phone's browser and configure ntfy, Gotify, or Pushover alerts.
 
 ## 🔒 Security
 
 - **Encryption at Rest**: Sensitive config (passwords, API keys) encrypted with AES-GCM via `internal/crypto`. Each tenant can have its own encryption key.
 - **Scoped API Tokens**: Tokens carry explicit scopes (`monitoring:read`, `settings:write`, `ai:chat`, `ai:execute`, `docker:report`, etc.). Endpoints enforce scope checks before processing.
-- **RBAC**: Role-based access control via `pkg/auth` with file-backed persistence. Resources: `users`, `settings`, `monitoring`.
+- **RBAC**: Role-based access control via `pkg/auth` with SQLite-backed persistence. Standard resources: `settings`, `audit_logs`, `nodes`, `users`, `license`, `ai`, `discovery`, `actions`, and `alerts`.
 - **SSO**: OIDC and SAML providers with per-provider configuration and multi-provider support.
 - **Agent Commands**: Disabled by default for security. Operators must opt in with `--enable-commands`.
 - **Audit Trail**: Every mutation logged to per-tenant SQLite databases with optional cryptographic signatures.

@@ -3,24 +3,33 @@
 How a Patrol run actually works, for readers who want more than the overview
 in [AI features](AI.md).
 
-The short version is that Patrol does not trust the model to notice
-everything. A run pairs model judgement with deterministic detection, and the
-deterministic half acts as a safety net over the model's output rather than as
-an input to it.
+The short version is that Patrol pairs deterministic triage and verification
+with a single model-owned agentic analysis loop. The model owns diagnosis and
+finding decisions during the run, while deterministic checks bound triage,
+stale-finding reconciliation, and fix verification.
 
 ## A run, end to end
 
-A run moves through the following stages. Each is described in more detail
-below.
+A Patrol analysis cycle moves through the following stages. Each is described
+in more detail below.
 
-1. A pre-flight budget check, which fails fast before any context is built.
-2. Guest intelligence gathering, covering discovery and reachability probing.
-3. Deterministic triage, which narrows the surface the model will look at.
-4. Seed context construction from the triage result.
-5. The agentic loop, where the model calls tools and files findings.
-6. Deterministic signal detection over the tool calls the model actually made.
-7. An evaluation pass for signals the model saw but did not file.
-8. An assessment sweep for findings the model left unassessed.
+1. A pre-flight budget check (`CheckBudget("patrol")`), which fails fast before
+   any context is built.
+2. Guest intelligence gathering (`gatherGuestIntelligence`, bounded to five
+   seconds), covering discovery and reachability probing.
+3. Deterministic triage (`runDeterministicTriageState`), which computes flags,
+   capacity forecasts, and quiet-state context for the run.
+4. Focused seed context assembly (`buildTriageSeedSectionsState` and
+   `assembleSeedWithinBudget`), with automatic tighter-budget retries if the
+   provider reports a context-window error.
+5. Core active-finding snapshotting (`establishCoreFindingSnapshot`) and the
+   agentic tool loop (`ExecutePatrolStream`), where the model calls tools,
+   files findings, and records explicit assessments.
+6. Post-run reconciliation in `internal/ai/patrol_run.go`: flagging omitted
+   active-finding assessments, stamping deterministic capacity forecasts,
+   folding alert mirrors, auto-reconciling stale findings, cleaning up old
+   resolved findings, recovering stuck or timed-out investigations, and
+   reviewing active alerts.
 
 ## Budget check first
 
@@ -30,10 +39,9 @@ possible point rather than after the expensive work.
 
 ## Guest intelligence
 
-Discovery and reachability probing run before the seed context is built, so
-the context the model receives already reflects which guests are reachable.
-Reachability results are kept, because they feed the deterministic detection
-stage later in the run.
+Discovery and reachability probing run before the seed context is built, with a
+five-second timeout, so the context the model receives already reflects which
+guests are reachable.
 
 ## Deterministic triage and seed context
 
@@ -45,22 +53,29 @@ Quiet infrastructure still goes through the configured model. Patrol does not
 skip the model when nothing looks wrong, because "nothing is wrong" is itself
 a judgement worth making explicitly.
 
-The turn budget for the loop is computed from the size of the surface. See
-`computePatrolMaxTurns` and `computeTriageMaxTurns` in
-`internal/ai/patrol_ai.go`.
+The turn budget for the agentic loop is a fixed execution limit, independent of
+heuristic flags or inventory size: `patrolDetectionMaxTurns` in
+`internal/ai/patrol_ai.go` grants `4` turns for an explicit quick run
+(`PatrolDepthQuick`) and `40` turns otherwise.
 
-## The agentic loop
+## The agentic loop and explicit assessments
 
-The model runs an agentic loop with tool access. Findings are created through
-tool calls during the loop rather than parsed out of prose afterwards, so a
-finding exists because the model deliberately filed it.
+The model runs an agentic loop with tool access. Findings and assessments are
+recorded through tool calls during the loop rather than parsed out of prose
+afterwards, so a finding exists because the model deliberately filed it.
 
-## Deterministic signal detection
+The original conversation owns diagnosis and finding decisions. Patrol does not
+launch a separate follow-up model session to infer missing verdicts from old
+finding excerpts or signal counts. When an active seeded finding finishes a run
+without an accepted verdict, `patrolMissingAssessmentIDs` leaves that omission
+explicit and records an incomplete-assessment error on the run.
 
-After the loop completes, Patrol collects the tool calls that ran and scans
-their results for known problem signals. This scan is deterministic and does
-not depend on model judgement at all. The entry point is `DetectSignals` in
-`internal/ai/patrol_signals.go`.
+## Deterministic signal detection and verification
+
+Deterministic signal detection lives in `DetectSignals` and
+`SignalThresholdsFromPatrol` in `internal/ai/patrol_signals.go`. It scans
+completed tool call output for known problem signals without depending on model
+judgement.
 
 The signal types are:
 
@@ -90,25 +105,14 @@ not configured.
 
 Backup staleness has no user-facing setting and always uses the default.
 
-Reachability signals detected during the guest intelligence stage are merged
-into the same set at this point.
-
-## The evaluation pass
-
-Detected signals are compared against the findings the model actually filed.
-Any signal with no corresponding finding is an unmatched signal, meaning the
-data showed a problem and the model did not report it.
-
-Unmatched signals go to a bounded evaluation pass scoped to exactly those
-signals. This is the safety net. It is why a run can still surface a failing
-disk when the model overlooked one in a large sweep.
-
-## The assessment sweep
-
-Smaller models sometimes finish the main pass without recording an assessment
-for every finding they filed. Patrol detects the missing assessments and runs
-one bounded follow-up pass scoped to exactly those findings, rather than
-rerunning the whole analysis or leaving the findings unassessed.
+In the live Patrol runtime, `DetectSignals` powers deterministic fix
+verification (`verifyBySignals` in `internal/ai/patrol_findings.go` for
+`smart-failure` and `backup-failed`), alongside direct runtime-state verifiers
+declared in `hasDeterministicVerifierForKey` (`backup-stale`, `cpu-high`,
+`memory-high`, `disk-high`, and `guest-unreachable`). Both the resolve gate and
+stale-finding reconciliation consult `hasDeterministicVerifierForKey` before
+accepting a finding as resolved. Offline Patrol quality evaluations in
+`internal/ai/eval/patrol_quality.go` also use `DetectSignals`.
 
 ## Investigation
 
@@ -129,9 +133,15 @@ cases.
 - A fix is already queued for approval, so the next move belongs to you.
 - The finding reached a terminal outcome, such as fix verified, resolved, fix
   rejected, cannot fix, or needs attention.
-- The finding has already been investigated three times.
-- The last investigation was inside the cooldown, which is one hour by
-  default and shorter for timeout failures, since those are transient.
+- An investigation is already running, or the finding has already been
+  investigated three times (`maxInvestigationAttempts`).
+- The last investigation is still inside its cooldown (`investigationCooldown`
+  is one hour by default, `investigationFixRetryCooldown` is twenty minutes
+  after a failed fix or failed verification, and `investigationTimeoutCooldown`
+  is ten minutes for timeout outcomes). Failed runs that produced no conclusion
+  (empty outcome, timed out, or interrupted) and `fix_verification_unknown`
+  carry no additional cooldown so the scheduled Patrol cadence owns the next
+  assessment while keeping the three-attempt cap.
 
 Patrol also recovers investigations that were left running and retries ones
 that timed out. See `recoverStuckInvestigations` and
@@ -139,10 +149,12 @@ that timed out. See `recoverStuckInvestigations` and
 
 ## Why it is built this way
 
-Model judgement is good at explaining and correlating, and unreliable at
-exhaustive enumeration. Deterministic detection is the reverse. Patrol uses
-each for what it is good at, and the unmatched-signal check is the seam where
-the deterministic half can correct the model.
+Model judgement is good at explaining and correlating across mixed
+infrastructure, while deterministic checks are reliable for triage context,
+stale-finding cleanup, and post-fix verification. Keeping diagnosis inside the
+original conversation avoids hidden second-pass guesses when a model omits an
+assessment, while deterministic verifiers keep resolution claims grounded in
+actual runtime state.
 
 ## Related reading
 
