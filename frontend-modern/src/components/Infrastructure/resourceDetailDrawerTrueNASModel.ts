@@ -25,7 +25,8 @@ import {
   isPhysicalDiskRunningHot,
 } from '@/features/storageBackups/diskTemperaturePresentation';
 import type { TrueNASDiskTemperatureThresholdResolver } from '@/features/truenas/truenasPageModel';
-import { hasImpairedResourceSource } from '@/utils/resourceSourceHealth';
+import { asTrimmedString } from '@/utils/stringUtils';
+import { getTrueNASStaleNotice, isTrueNASSourceImpaired } from '@/utils/truenasDatasetState';
 import { drawerContentCardTestId } from './resourceDetailDrawerOverviewModel';
 
 export type ResourceDetailDrawerTrueNASRowTone = DetailValueTone;
@@ -34,10 +35,12 @@ export type ResourceDetailDrawerTrueNASRow = DetailRow;
 
 export type ResourceDetailDrawerTrueNASSection = DetailSection;
 
-const asString = (value?: string | null): string | null => {
-  const trimmed = value?.trim();
-  return trimmed ? trimmed : null;
-};
+const asString = (value?: string | null): string | null => asTrimmedString(value) ?? null;
+
+const warnTone = (
+  flag: unknown,
+  fallback: ResourceDetailDrawerTrueNASRowTone = 'default',
+): ResourceDetailDrawerTrueNASRowTone => (flag ? 'warning' : fallback);
 
 const asPositiveNumber = (value?: number): number | null =>
   typeof value === 'number' && Number.isFinite(value) && value > 0 ? value : null;
@@ -168,6 +171,11 @@ const serviceNameLabel = (service: ResourceTrueNASServiceMeta): string | null =>
   return normalizeDelimitedLabel(value);
 };
 
+const staleReadingsRow = (resource: Resource): ResourceDetailDrawerTrueNASRow | null => {
+  const notice = getTrueNASStaleNotice(resource);
+  return notice ? wrapRow('Readings', notice.detail, { tone: 'warning' }) : null;
+};
+
 const buildTrueNASSystemSections = (
   resource: Resource,
   truenas: ResourceTrueNASMeta,
@@ -185,6 +193,7 @@ const buildTrueNASSystemSections = (
     .filter((value): value is string => Boolean(value));
   const pids = services.flatMap((service) => service.pids ?? []).filter((pid) => pid > 0);
   const systemRows = compactRows([
+    staleReadingsRow(resource),
     wrapRow('Hostname', asString(truenas.hostname) ?? asString(resource.name)),
     row('Version', asString(truenas.version)),
     row('Uptime', formatDurationSeconds(truenas.uptimeSeconds ?? resource.uptime)),
@@ -193,20 +202,20 @@ const buildTrueNASSystemSections = (
 
   const healthRows = withoutRepeatedValues([
     row('Storage risk', normalizeDelimitedLabel(truenas.storageRisk?.level), {
-      tone: truenas.storageRisk?.level?.toLowerCase() === 'warning' ? 'warning' : 'default',
+      tone: warnTone(truenas.storageRisk?.level?.toLowerCase() === 'warning'),
     }),
     wrapRow('Storage summary', asString(truenas.storageRiskSummary), { tone: 'warning' }),
     wrapRow('Storage posture', asString(truenas.storagePostureSummary), {
-      tone: truenas.storagePostureSummary ? 'warning' : 'default',
+      tone: warnTone(truenas.storagePostureSummary),
     }),
     row('Protection reduced', yesNoValue(truenas.protectionReduced), {
-      tone: truenas.protectionReduced ? 'warning' : 'success',
+      tone: warnTone(truenas.protectionReduced, 'success'),
     }),
     wrapRow('Protection summary', asString(truenas.protectionSummary), {
-      tone: truenas.protectionSummary ? 'warning' : 'default',
+      tone: warnTone(truenas.protectionSummary),
     }),
     row('Rebuild active', yesNoValue(truenas.rebuildInProgress), {
-      tone: truenas.rebuildInProgress ? 'warning' : 'success',
+      tone: warnTone(truenas.rebuildInProgress, 'success'),
     }),
     wrapRow('Rebuild', asString(truenas.rebuildSummary)),
   ]);
@@ -344,15 +353,14 @@ const buildTrueNASStorageSections = (
   resource: Resource,
   storage: ResourceStorageMeta,
 ): ResourceDetailDrawerTrueNASSection[] => {
-  const riskReasons = (storage.risk?.reasons ?? [])
-    .map((reason) => asString(reason.summary))
-    .filter((value): value is string => Boolean(value));
+  const riskReasons = (storage.risk?.reasons ?? []).map((reason) => reason.summary ?? '');
   const zfsDeviceEvidence = zfsDeviceEvidenceLabels(storage);
   const stateLabel = storageStateLabel(resource, storage);
   const stateRow = row('State', stateLabel, { tone: storageStateTone(resource, storage) });
   const canonicalState = asString(storage.poolHealth?.canonicalState);
   const pool = isTrueNASPool(storage);
   const storageRows = compactRows([
+    staleReadingsRow(resource),
     row('Kind', storageKindLabel(storage)),
     // A pool states its state in its health card; a dataset here.
     pool ? null : stateRow,
@@ -383,21 +391,21 @@ const buildTrueNASStorageSections = (
       { tone: canonicalPoolStateTone(canonicalState ?? undefined) },
     ),
     row('Risk', normalizeDelimitedLabel(storage.risk?.level), {
-      tone: storage.risk?.level?.toLowerCase() === 'warning' ? 'warning' : 'default',
+      tone: warnTone(storage.risk?.level?.toLowerCase() === 'warning'),
     }),
     wrapRow('Risk summary', asString(storage.riskSummary), { tone: 'warning' }),
     wrapRow('Posture', asString(storage.postureSummary), {
-      tone: storage.postureSummary ? 'warning' : 'default',
+      tone: warnTone(storage.postureSummary),
     }),
     row('Protection reduced', yesNoValue(storage.protectionReduced), {
-      tone: storage.protectionReduced ? 'warning' : 'success',
+      tone: warnTone(storage.protectionReduced, 'success'),
     }),
     wrapRow('Protection summary', asString(storage.protectionSummary), {
-      tone: storage.protectionSummary ? 'warning' : 'default',
+      tone: warnTone(storage.protectionSummary),
     }),
     wrapRow('Rebuild', asString(storage.rebuildSummary)),
     wrapRow('Scan / resilver', zfsScanLabel(storage), {
-      tone: storage.zfsPool?.scanDetails?.errors ? 'warning' : 'default',
+      tone: warnTone(storage.zfsPool?.scanDetails?.errors),
     }),
     row('ZFS errors', zfsErrorLabel(storage), { tone: 'warning' }),
     wrapRow('Affected vdevs', joinList(zfsDeviceEvidence), { tone: 'warning' }),
@@ -491,10 +499,9 @@ const buildTrueNASDiskSections = (
   disk: ResourcePhysicalDiskMeta,
   resolveDiskTemperatureThresholds?: TrueNASDiskTemperatureThresholdResolver,
 ): ResourceDetailDrawerTrueNASSection[] => {
-  const riskReasons = (disk.risk?.reasons ?? [])
-    .map((reason) => asString(reason.summary))
-    .filter((value): value is string => Boolean(value));
+  const riskReasons = (disk.risk?.reasons ?? []).map((reason) => reason.summary ?? '');
   const identityRows = compactRows([
+    staleReadingsRow(resource),
     wrapRow('Device', asString(disk.devPath) ?? asString(resource.name)),
     wrapRow('Model', asString(disk.model)),
     wrapRow('Serial', asString(disk.serial)),
@@ -517,24 +524,16 @@ const buildTrueNASDiskSections = (
     row('Spun down', yesNoValue(disk.spunDown)),
   ]);
 
+  const warnSmartRow = (label: string, value?: number) =>
+    row(label, formatDetailIntegerValue(value), { tone: value ? 'warning' : 'default' });
   const smartRows = compactRows([
     row('Power on', formatDiskHours(disk.smart?.powerOnHours)),
     row('Power cycles', formatDetailIntegerValue(disk.smart?.powerCycles)),
-    row('Reallocated', formatDetailIntegerValue(disk.smart?.reallocatedSectors), {
-      tone: disk.smart?.reallocatedSectors ? 'warning' : 'default',
-    }),
-    row('Pending sectors', formatDetailIntegerValue(disk.smart?.pendingSectors), {
-      tone: disk.smart?.pendingSectors ? 'warning' : 'default',
-    }),
-    row('Offline uncorrectable', formatDetailIntegerValue(disk.smart?.offlineUncorrectable), {
-      tone: disk.smart?.offlineUncorrectable ? 'warning' : 'default',
-    }),
-    row('CRC errors', formatDetailIntegerValue(disk.smart?.udmaCrcErrors), {
-      tone: disk.smart?.udmaCrcErrors ? 'warning' : 'default',
-    }),
-    row('Media errors', formatDetailIntegerValue(disk.smart?.mediaErrors), {
-      tone: disk.smart?.mediaErrors ? 'warning' : 'default',
-    }),
+    warnSmartRow('Reallocated', disk.smart?.reallocatedSectors),
+    warnSmartRow('Pending sectors', disk.smart?.pendingSectors),
+    warnSmartRow('Offline uncorrectable', disk.smart?.offlineUncorrectable),
+    warnSmartRow('CRC errors', disk.smart?.udmaCrcErrors),
+    warnSmartRow('Media errors', disk.smart?.mediaErrors),
     row('Unsafe shutdowns', formatDetailIntegerValue(disk.smart?.unsafeShutdowns)),
     row('Available spare', formatPercent(disk.smart?.availableSpare)),
     row('Percentage used', formatPercent(disk.smart?.percentageUsed)),
@@ -542,7 +541,7 @@ const buildTrueNASDiskSections = (
 
   const riskRows = compactRows([
     row('Risk', normalizeDelimitedLabel(disk.risk?.level), {
-      tone: disk.risk?.level?.toLowerCase() === 'warning' ? 'warning' : 'default',
+      tone: warnTone(disk.risk?.level?.toLowerCase() === 'warning'),
     }),
     wrapRow('Reasons', joinList(riskReasons), { tone: 'warning' }),
   ]);
@@ -596,15 +595,21 @@ const appNetworkLabels = (app: ResourceTrueNASAppMeta): string[] =>
     .filter((value): value is string => Boolean(value));
 
 const buildTrueNASAppSections = (
+  resource: Resource,
   app: ResourceTrueNASAppMeta,
 ): ResourceDetailDrawerTrueNASSection[] => {
   const containerCount = app.containerCount ?? app.containers?.length;
   const portLabels = appPortLabels(app);
   const volumeLabels = appVolumeLabels(app);
-  const imageLabels = (app.images ?? []).map((image) => image.trim()).filter(Boolean);
   const networkLabels = appNetworkLabels(app);
   const appState = asString(app.state)?.toLowerCase();
+  const updateRow = (label: string, available?: boolean) =>
+    row(label, available === undefined ? null : available ? 'Available' : 'Current', {
+      tone: available ? 'accent' : 'success',
+      lift: available === true,
+    });
   const appRows = compactRows([
+    staleReadingsRow(resource),
     // A stopped app is a choice the row already shows; a crashed one is not.
     row('State', normalizeDelimitedLabel(app.state), {
       tone:
@@ -619,26 +624,8 @@ const buildTrueNASAppSections = (
     row('Custom app', yesNoValue(app.customApp)),
     // An available update is something to act on, as for a Docker container:
     // the Overview lifts it in front.
-    row(
-      'App updates',
-      app.upgradeAvailable === undefined ? null : app.upgradeAvailable ? 'Available' : 'Current',
-      {
-        tone: app.upgradeAvailable ? 'accent' : 'success',
-        lift: app.upgradeAvailable === true,
-      },
-    ),
-    row(
-      'Image updates',
-      app.imageUpdatesAvailable === undefined
-        ? null
-        : app.imageUpdatesAvailable
-          ? 'Available'
-          : 'Current',
-      {
-        tone: app.imageUpdatesAvailable ? 'accent' : 'success',
-        lift: app.imageUpdatesAvailable === true,
-      },
-    ),
+    updateRow('App updates', app.upgradeAvailable),
+    updateRow('Image updates', app.imageUpdatesAvailable),
     row('Notes', asString(app.notes)),
   ]);
 
@@ -650,7 +637,7 @@ const buildTrueNASAppSections = (
 
   const storageRows = compactRows([
     wrapRow('Volumes', joinList(volumeLabels)),
-    wrapRow('Images', joinList(imageLabels)),
+    wrapRow('Images', joinList(app.images ?? [])),
   ]);
 
   return compactSections([
@@ -662,13 +649,7 @@ const buildTrueNASAppSections = (
 
 const formatVMCpu = (vm: ResourceTrueNASVMMeta): string | null => {
   const vcpus = asPositiveNumber(vm.vcpus);
-  if (vcpus) return formatDetailCountValue(vcpus, 'vCPU', 'vCPU');
-  const cores = asPositiveNumber(vm.cores);
-  const threads = asPositiveNumber(vm.threads);
-  if (cores && threads) return `${cores} cores x ${threads} threads`;
-  if (cores) return formatDetailCountValue(cores, 'core');
-  if (threads) return formatDetailCountValue(threads, 'thread');
-  return null;
+  return vcpus ? formatDetailCountValue(vcpus, 'vCPU', 'vCPU') : formatVMTopology(vm);
 };
 
 const formatVMTopology = (vm: ResourceTrueNASVMMeta): string | null => {
@@ -687,7 +668,7 @@ const TRUENAS_VM_STOPPED_STATES = new Set(['stopped', 'shutoff', 'shutdown', 'po
 
 // Stale TrueNAS data may hold an old state, so the note waits for a current one.
 const vmConditionLabel = (resource: Resource, vm: ResourceTrueNASVMMeta): string | null => {
-  if (hasImpairedResourceSource(resource, 'truenas')) return null;
+  if (isTrueNASSourceImpaired(resource)) return null;
   if (!vm.autostart) return null;
   const state = (asString(vm.state) ?? asString(vm.domainState))?.toLowerCase();
   // Without a native state, the table falls back to the resource status.
@@ -706,6 +687,7 @@ const buildTrueNASVMSections = (
   const sameState = state?.toLowerCase() === domainState?.toLowerCase();
   const machine = [asString(vm.machineType), asString(vm.archType)].filter(Boolean).join(' / ');
   const computeRows = compactRows([
+    staleReadingsRow(resource),
     // A stopped VM is a choice the row already shows. Condition below says
     // when it should be running.
     row('State', state ?? domainState, {
@@ -728,23 +710,31 @@ const buildTrueNASVMSections = (
     wrapRow('UUID', asString(vm.uuid)),
   ]);
 
-  const deviceRows = compactRows([
-    row('Total', formatDetailIntegerValue(vm.deviceCount)),
-    row('Disks', formatDetailIntegerValue(vm.diskCount)),
-    row('NICs', formatDetailIntegerValue(vm.nicCount)),
-    row('Displays', formatDetailIntegerValue(vm.displayCount)),
-    row('CD-ROMs', formatDetailIntegerValue(vm.cdromCount)),
-    row('USB', formatDetailIntegerValue(vm.usbCount)),
-    row('PCI', formatDetailIntegerValue(vm.pciCount)),
-  ]);
+  const deviceRows = compactRows(
+    (
+      [
+        ['Total', vm.deviceCount],
+        ['Disks', vm.diskCount],
+        ['NICs', vm.nicCount],
+        ['Displays', vm.displayCount],
+        ['CD-ROMs', vm.cdromCount],
+        ['USB', vm.usbCount],
+        ['PCI', vm.pciCount],
+      ] as const
+    ).map(([label, value]) => row(label, formatDetailIntegerValue(value))),
+  );
 
-  const flagRows = compactRows([
-    row('Autostart', booleanValue(vm.autostart)),
-    row('Secure boot', booleanValue(vm.secureBoot)),
-    row('TPM', booleanValue(vm.trustedPlatformModule)),
-    row('Suspend on snapshot', booleanValue(vm.suspendOnSnapshot)),
-    row('Display available', booleanValue(vm.displayAvailable)),
-  ]);
+  const flagRows = compactRows(
+    (
+      [
+        ['Autostart', vm.autostart],
+        ['Secure boot', vm.secureBoot],
+        ['TPM', vm.trustedPlatformModule],
+        ['Suspend on snapshot', vm.suspendOnSnapshot],
+        ['Display available', vm.displayAvailable],
+      ] as const
+    ).map(([label, value]) => row(label, booleanValue(value))),
+  );
 
   return compactSections([
     { label: 'Compute', rows: computeRows },
@@ -784,14 +774,18 @@ const shareUserGroupLabel = (user?: string, group?: string): string | null => {
   return userLabel ?? groupLabel;
 };
 
+const joinSummary = (values: Array<string | null | undefined>): string | null => {
+  const parts = values.filter((value): value is string => Boolean(value));
+  return parts.length > 0 ? parts.join(', ') : null;
+};
+
 const buildTrueNASShareSections = (
+  resource: Resource,
   share: ResourceTrueNASShareMeta,
 ): ResourceDetailDrawerTrueNASSection[] => {
-  const aliases = (share.aliases ?? []).map((value) => value.trim()).filter(Boolean);
-  const hosts = (share.hosts ?? []).map((value) => value.trim()).filter(Boolean);
-  const networks = (share.networks ?? []).map((value) => value.trim()).filter(Boolean);
   const security = (share.security ?? []).map((value) => value.trim()).filter(Boolean);
   const shareRows = compactRows([
+    staleReadingsRow(resource),
     row('State', shareStateLabel(share), { tone: shareStateTone(share) }),
     row('Protocol', shareProtocolLabel(share)),
     wrapRow('Dataset', asString(share.dataset)),
@@ -810,9 +804,9 @@ const buildTrueNASShareSections = (
   ]);
 
   const clientRows = compactRows([
-    wrapRow('Aliases', joinList(aliases)),
-    wrapRow('Hosts', joinList(hosts)),
-    wrapRow('Networks', joinList(networks)),
+    wrapRow('Aliases', joinList(share.aliases ?? [])),
+    wrapRow('Hosts', joinList(share.hosts ?? [])),
+    wrapRow('Networks', joinList(share.networks ?? [])),
     row('Security', summarizeList(security), { title: security.join(', ') }),
     row('Map root', shareUserGroupLabel(share.mapRootUser, share.mapRootGroup)),
     row('Map all', shareUserGroupLabel(share.mapAllUser, share.mapAllGroup)),
@@ -829,9 +823,9 @@ export const buildTrueNASDetailSections = (
   resource: Resource,
   resolveDiskTemperatureThresholds?: TrueNASDiskTemperatureThresholdResolver,
 ): ResourceDetailDrawerTrueNASSection[] => {
-  if (resource.truenas?.share) return buildTrueNASShareSections(resource.truenas.share);
+  if (resource.truenas?.share) return buildTrueNASShareSections(resource, resource.truenas.share);
   if (resource.truenas?.vm) return buildTrueNASVMSections(resource, resource.truenas.vm);
-  if (resource.truenas?.app) return buildTrueNASAppSections(resource.truenas.app);
+  if (resource.truenas?.app) return buildTrueNASAppSections(resource, resource.truenas.app);
   if (isTrueNASScopedResource(resource) && resource.storage) {
     return buildTrueNASStorageSections(resource, resource.storage);
   }
@@ -851,75 +845,67 @@ export const buildTrueNASDetailSections = (
 export const buildTrueNASDetailsSummary = (resource: Resource): string | null => {
   const share = resource.truenas?.share;
   if (share) {
-    const summary = [
+    return joinSummary([
       shareProtocolLabel(share),
       shareStateLabel(share),
       asString(share.dataset) ?? asString(share.path),
       shareModeLabel(share),
-    ].filter((value): value is string => Boolean(value));
-    return summary.length > 0 ? summary.join(', ') : null;
+    ]);
   }
 
   const vm = resource.truenas?.vm;
   if (vm) {
     const deviceCount = asPositiveNumber(vm.deviceCount);
-    const condition = vmConditionLabel(resource, vm);
-    const summary = [
+    return joinSummary([
       normalizeDelimitedLabel(vm.state ?? vm.domainState),
-      condition?.toLowerCase(),
+      vmConditionLabel(resource, vm)?.toLowerCase(),
       formatVMCpu(vm),
       formatDetailBytesValue(vm.memoryBytes),
       deviceCount ? formatDetailCountValue(deviceCount, 'device') : null,
-    ].filter((value): value is string => Boolean(value));
-    return summary.length > 0 ? summary.join(', ') : null;
+    ]);
   }
 
   const app = resource.truenas?.app;
   if (app) {
-    const portCount = appPortLabels(app).length;
     const updateCount = [app.upgradeAvailable, app.imageUpdatesAvailable].filter(Boolean).length;
-    const summary = [
+    return joinSummary([
       normalizeDelimitedLabel(app.state),
       formatDetailCountValue(app.containerCount ?? app.containers?.length ?? 0, 'container'),
-      formatDetailCountValue(portCount, 'port'),
+      formatDetailCountValue(appPortLabels(app).length, 'port'),
       updateCount > 0 ? formatDetailCountValue(updateCount, 'update') : null,
-    ].filter((value): value is string => Boolean(value));
-    return summary.length > 0 ? summary.join(', ') : null;
+    ]);
   }
 
   if (isTrueNASScopedResource(resource) && resource.storage) {
     const storage = resource.storage;
-    const summary = [
+    return joinSummary([
       storageKindLabel(storage),
       storageStateLabel(resource, storage),
       storageUsageLabel(resource),
       asString(storage.riskSummary),
-    ].filter((value): value is string => Boolean(value));
-    return summary.length > 0 ? summary.join(', ') : null;
+    ]);
   }
 
   if (isTrueNASScopedResource(resource) && resource.physicalDisk) {
     const disk = resource.physicalDisk;
-    const summary = [
+    return joinSummary([
       diskTypeLabel(disk.diskType),
       normalizeDelimitedLabel(disk.health),
       formatDetailBytesValue(disk.sizeBytes),
       // The summary has no room to say a retained reading is not current.
       currentDiskTemperatureLabel(disk),
-    ].filter((value): value is string => Boolean(value));
-    return summary.length > 0 ? summary.join(', ') : null;
+    ]);
   }
 
   if (isTrueNASScopedResource(resource) && resource.truenas) {
     const truenas = resource.truenas;
     const serviceCount = truenas.services?.length;
-    const summary = [
+    return joinSummary([
       asString(truenas.version),
       formatDurationSeconds(truenas.uptimeSeconds ?? resource.uptime),
       serviceCount !== undefined ? formatDetailCountValue(serviceCount, 'service') : null,
       asString(truenas.storageRiskSummary) ?? asString(truenas.protectionSummary),
-    ].filter((value): value is string => Boolean(value));
-    return summary.length > 0 ? summary.join(', ') : null;
+    ]);
   }
 
   return null;

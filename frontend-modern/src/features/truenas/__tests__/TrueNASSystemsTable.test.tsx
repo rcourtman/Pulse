@@ -161,6 +161,14 @@ describe('TrueNASSystemsTable', () => {
     const impairedRow = container.querySelector('[data-truenas-system-row="truenas-impaired"]');
     expect(impairedRow).not.toBeNull();
     expect(impairedRow?.querySelector('[title="degraded"]')).not.toBeNull();
+    expect(impairedRow?.querySelector('[data-truenas-system-stale="true"]')).toHaveTextContent(
+      'Stale data',
+    );
+    expect(
+      container.querySelector(
+        '[data-truenas-system-row="truenas-healthy"] [data-truenas-system-stale="true"]',
+      ),
+    ).toBeNull();
     expect(container.querySelector('[data-truenas-system-row="truenas-healthy"]')).not.toBeNull();
 
     await fireEvent.click(
@@ -210,5 +218,42 @@ describe('TrueNASSystemsTable', () => {
     const row = (id: string) => container.querySelector(`[data-truenas-system-row="${id}"]`);
     expect(row('truenas-main')).toHaveClass('bg-yellow-50');
     expect(row('truenas-backup')).not.toHaveClass('bg-yellow-50');
+  });
+
+  it('prefers top-level sourceStatus over stale platformData and preserves offline status while stale', () => {
+    const staleOffline = makeSystem({
+      id: 'truenas-offline-stale',
+      name: 'truenas-offline-stale',
+      status: 'offline',
+      sourceStatus: { truenas: { status: 'error', error: 'dial tcp timeout' } },
+    });
+    const recovered = makeSystem({
+      id: 'truenas-recovered',
+      name: 'truenas-recovered',
+      status: 'online',
+      sourceStatus: { truenas: { status: 'online' } },
+      platformData: { sourceStatus: { truenas: { status: 'stale' } } },
+    });
+
+    const { container } = render(() => (
+      <TrueNASSystemsTable
+        systems={[staleOffline, recovered]}
+        scope={[staleOffline, recovered]}
+        emptyIcon={<span />}
+        emptyTitle="No systems"
+        emptyDescription="No systems"
+        showToolbar={false}
+      />
+    ));
+
+    const offlineRow = container.querySelector('[data-truenas-system-row="truenas-offline-stale"]');
+    expect(offlineRow?.querySelector('[title="offline"]')).not.toBeNull();
+    const staleCue = offlineRow?.querySelector('[data-truenas-system-stale="true"]');
+    expect(staleCue).toHaveTextContent('Stale data');
+    expect(staleCue).toHaveAttribute('title', 'TrueNAS collection error: dial tcp timeout');
+
+    const recoveredRow = container.querySelector('[data-truenas-system-row="truenas-recovered"]');
+    expect(recoveredRow?.querySelector('[title="online"]')).not.toBeNull();
+    expect(recoveredRow?.querySelector('[data-truenas-system-stale="true"]')).toBeNull();
   });
 });

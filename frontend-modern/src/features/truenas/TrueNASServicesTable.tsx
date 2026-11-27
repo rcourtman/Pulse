@@ -1,32 +1,27 @@
 import { Show, createMemo, type Component, type JSX } from 'solid-js';
 import { InlineDetailTableRow } from '@/components/shared/InlineDetailTableRow';
-import { StatusDot } from '@/components/shared/StatusDot';
 import { TableCell, TableRow } from '@/components/shared/Table';
 import { asTrimmedString } from '@/utils/stringUtils';
-import { hasImpairedResourceSource } from '@/utils/resourceSourceHealth';
 import {
   PlatformWindowedRows,
   PlatformSortableTableHead,
-  PlatformTableEmptyState,
-  PlatformTableToolbar,
   createPlatformTableFilterState,
   createPlatformTableSortState,
   formatPlatformTableTitleCaseValue,
   getPlatformTableCellClassForKind,
   type PlatformTableFilterOption,
   type PlatformTableSortValue,
-  PlatformTableShell,
-  withPlatformStatusCounts,
 } from '@/features/platformPage/sharedPlatformPage';
 import {
-  getPlatformInlineStateClass,
-  getPlatformStatusTextToneClass,
-} from '@/features/platformPage/platformStatusTone';
-import {
-  PlatformResourceDetailToggleButton,
-  createPlatformResourceDetailState,
-  getPlatformResourceDetailRowClass,
-} from '@/features/platformPage/PlatformResourceDetailTableRow';
+  TrueNASPhoneStateNote,
+  TrueNASRowLead,
+  TrueNASStateNoteDetails,
+  TrueNASTableFrame,
+  createTrueNASDetailState,
+  resolveTrueNASAttentionNote,
+  type TrueNASStateNote,
+} from './TrueNASTableFrame';
+import { getPlatformResourceDetailRowClass } from '@/features/platformPage/PlatformResourceDetailTableRow';
 import {
   filterTrueNASServices,
   mapTrueNASServiceStatus,
@@ -73,12 +68,10 @@ const formatServiceName = (value: string | undefined): string => {
 // Rows stay single-line (the shared platform-table rhythm), so the full
 // sentence rides on the title and in the drawer. PIDs are process detail
 // nobody acts on from the list, so they live in the drawer too.
-type ServiceStateNote = { short: string | null; full: string; tone: 'danger' | 'warning' };
-
 const serviceStateNote = (
   row: TrueNASServiceRow,
   status: Exclude<TrueNASServiceStatusFilter, 'all'>,
-): ServiceStateNote | null => {
+): TrueNASStateNote | null => {
   if (status === 'stopped') {
     return {
       short: 'should be running',
@@ -86,18 +79,7 @@ const serviceStateNote = (
       tone: 'danger',
     };
   }
-  if (status !== 'attention') return null;
-  if (hasImpairedResourceSource(row.system, 'truenas')) {
-    return { short: 'not updated', full: 'TrueNAS has not updated this recently', tone: 'warning' };
-  }
-  const state = asTrimmedString(row.service.state);
-  return {
-    short: state ? null : 'not reported',
-    full: state
-      ? `TrueNAS reports ${formatPlatformTableTitleCaseValue(state)}`
-      : 'TrueNAS has not reported a state',
-    tone: 'warning',
-  };
+  return status === 'attention' ? resolveTrueNASAttentionNote(row.system, row.service.state) : null;
 };
 
 // The drawer value cell is one line on a phone, so it carries the short form
@@ -109,32 +91,23 @@ const serviceConditionLabel = (row: TrueNASServiceRow): string | null => {
   return note.short.charAt(0).toUpperCase() + note.short.slice(1);
 };
 
-const serviceStatusVariant = (
-  status: Exclude<TrueNASServiceStatusFilter, 'all'>,
-): 'success' | 'warning' | 'danger' | 'muted' => {
-  if (status === 'running') return 'success';
-  if (status === 'attention') return 'warning';
-  if (status === 'stopped') return 'danger';
-  return 'muted';
+const SERVICE_STATUS_VARIANTS: Record<
+  Exclude<TrueNASServiceStatusFilter, 'all'>,
+  'success' | 'warning' | 'danger' | 'muted'
+> = { running: 'success', attention: 'warning', stopped: 'danger', disabled: 'muted' };
+
+const serviceStatusVariant = (status: Exclude<TrueNASServiceStatusFilter, 'all'>) =>
+  SERVICE_STATUS_VARIANTS[status];
+
+const serviceTone = (row: TrueNASServiceRow): DetailValueTone => {
+  const status = mapTrueNASServiceStatus(row);
+  return status === 'running' ? 'success' : status === 'disabled' ? 'muted' : 'warning';
 };
 
-type ServiceDetailTone = DetailValueTone;
-type ServiceDetailSection = DetailSection;
-
-const detailBool = (value?: boolean): string | null => {
-  if (value === undefined) return null;
-  return value ? 'Enabled' : 'Disabled';
-};
+const detailBool = (value?: boolean): string | null =>
+  value === undefined ? null : value ? 'Enabled' : 'Disabled';
 
 const detailRow = makeDetailRow;
-
-const serviceTone = (row: TrueNASServiceRow): ServiceDetailTone => {
-  const status = mapTrueNASServiceStatus(row);
-  if (status === 'running') return 'success';
-  if (status === 'attention' || status === 'stopped') return 'warning';
-  if (status === 'disabled') return 'muted';
-  return 'default';
-};
 
 const formatAllPIDs = (pids: number[] | undefined): { label: string | null; title?: string } => {
   const values = (pids ?? []).filter((pid) => Number.isFinite(pid) && pid > 0);
@@ -143,7 +116,7 @@ const formatAllPIDs = (pids: number[] | undefined): { label: string | null; titl
   return { label, title: label };
 };
 
-const buildServiceDetailSections = (row: TrueNASServiceRow): ServiceDetailSection[] => {
+const buildServiceDetailSections = (row: TrueNASServiceRow): DetailSection[] => {
   const pids = formatAllPIDs(row.service.pids);
   const hostName = asTrimmedString(row.system.truenas?.hostname) || row.systemName;
   return compactDetailSections([
@@ -181,21 +154,6 @@ const buildServiceDetailSections = (row: TrueNASServiceRow): ServiceDetailSectio
     },
   ]);
 };
-
-const ServiceDetailTable: Component<{ row: TrueNASServiceRow; onClose: () => void }> = (props) => (
-  <InlineDetailPanel
-    testId="truenas-service-detail"
-    detailFor={props.row.id}
-    title={formatServiceName(props.row.service.service)}
-    status={{
-      variant: serviceStatusVariant(mapTrueNASServiceStatus(props.row)),
-      label: formatPlatformTableTitleCaseValue(mapTrueNASServiceStatus(props.row)),
-    }}
-    sections={buildServiceDetailSections(props.row)}
-    detailAttributes={{ 'data-truenas-service-detail-for': props.row.id }}
-    onClose={props.onClose}
-  />
-);
 
 // Columns a user can sort by.
 const TRUENAS_SERVICE_SORT_KEYS = ['service', 'state', 'boot', 'system'] as const;
@@ -238,7 +196,7 @@ export const TrueNASServicesTable: Component<{
     externalSearch: props.search,
     onExternalSearchChange: props.onSearchChange,
   });
-  const detail = createPlatformResourceDetailState({ idPrefix: 'truenas-service-detail' });
+  const detail = createTrueNASDetailState('truenas-service-detail');
   const sort = createPlatformTableSortState({
     storageKey: 'truenasServices',
     sortKeys: TRUENAS_SERVICE_SORT_KEYS,
@@ -248,194 +206,144 @@ export const TrueNASServicesTable: Component<{
   );
 
   return (
-    <Show
-      when={props.services.length > 0}
-      fallback={
-        <PlatformTableEmptyState
-          icon={props.emptyIcon}
-          title={props.emptyTitle}
-          description={props.emptyDescription}
-        />
+    <TrueNASTableFrame
+      hasItems={props.services.length > 0}
+      tableState={tableState}
+      common={props}
+      searchPlaceholder="Search TrueNAS services"
+      statusOptions={TRUENAS_SERVICE_STATUS_OPTIONS}
+      rowNoun="services"
+      title="Services"
+      tableClass="min-w-full table-fixed text-xs md:min-w-[900px]"
+      header={
+        <>
+          <PlatformSortableTableHead
+            kind="name"
+            sort={sort}
+            sortKey="service"
+            class="platform-table-mobile-w-30 md:w-[34%]"
+          >
+            Service
+          </PlatformSortableTableHead>
+          <PlatformSortableTableHead
+            kind="badge"
+            sort={sort}
+            sortKey="state"
+            class="platform-table-phone-hidden md:w-[16%]"
+          >
+            State
+          </PlatformSortableTableHead>
+          <PlatformSortableTableHead
+            kind="badge"
+            sort={sort}
+            sortKey="boot"
+            class="platform-table-mobile-w-15 md:w-[16%]"
+          >
+            Boot
+          </PlatformSortableTableHead>
+          <PlatformSortableTableHead
+            kind="text"
+            sort={sort}
+            sortKey="system"
+            class="platform-table-phone-hidden md:w-[34%]"
+          >
+            System
+          </PlatformSortableTableHead>
+        </>
       }
-    >
-      <div class="space-y-3">
-        <Show when={props.showToolbar !== false}>
-          <PlatformTableToolbar
-            search={tableState.search}
-            onSearchChange={tableState.setSearch}
-            searchPlaceholder="Search TrueNAS services"
-            searchSuggestions={tableState.searchSuggestions}
-            status={tableState.status()}
-            onStatusChange={tableState.setStatus}
-            statusOptions={withPlatformStatusCounts(
-              TRUENAS_SERVICE_STATUS_OPTIONS,
-              tableState.countForStatus,
-            )}
-            visible={tableState.visible()}
-            total={tableState.total()}
-            rowNoun="services"
-          />
-        </Show>
-
-        <Show
-          when={tableState.filtered().length > 0}
-          fallback={
-            <PlatformTableEmptyState
-              icon={props.emptyIcon}
-              title="No services match current filters"
-              description="Adjust the search or status filter to see more TrueNAS services."
-            />
-          }
-        >
-          <PlatformTableShell
-            title="Services"
-            tableClass="min-w-full table-fixed text-xs md:min-w-[900px]"
-            header={
-              <>
-                <PlatformSortableTableHead
-                  kind="name"
-                  sort={sort}
-                  sortKey="service"
-                  class="platform-table-mobile-w-30 md:w-[34%]"
-                >
-                  Service
-                </PlatformSortableTableHead>
-                <PlatformSortableTableHead
-                  kind="badge"
-                  sort={sort}
-                  sortKey="state"
-                  class="platform-table-phone-hidden md:w-[16%]"
-                >
-                  State
-                </PlatformSortableTableHead>
-                <PlatformSortableTableHead
-                  kind="badge"
-                  sort={sort}
-                  sortKey="boot"
-                  class="platform-table-mobile-w-15 md:w-[16%]"
-                >
-                  Boot
-                </PlatformSortableTableHead>
-                <PlatformSortableTableHead
-                  kind="text"
-                  sort={sort}
-                  sortKey="system"
-                  class="platform-table-phone-hidden md:w-[34%]"
-                >
-                  System
-                </PlatformSortableTableHead>
-              </>
-            }
-            body={
-              <>
-                <PlatformWindowedRows items={sortedRows} estimatedRowHeight={32}>
-                  {(row) => {
-                    const status = () => mapTrueNASServiceStatus(row);
-                    const note = () => serviceStateNote(row, status());
-                    const rawState = () => asTrimmedString(row.service.state) || '-';
-                    const detailRowId = () => detail.detailRowId(row);
-                    const isExpanded = () => detail.isExpanded(row);
-                    return (
-                      <>
-                        <TableRow
-                          class={`${getPlatformResourceDetailRowClass(isExpanded())} text-[11px] sm:text-xs`}
-                          data-truenas-service-row={row.id}
-                          onClick={() => detail.toggle(row)}
-                        >
-                          <TableCell class={getPlatformTableCellClassForKind('name')}>
-                            <div class="flex min-w-0 items-center gap-2">
-                              <PlatformResourceDetailToggleButton
-                                expanded={isExpanded()}
-                                resourceLabel={formatServiceName(row.service.service)}
-                                controlsId={detailRowId()}
-                                onToggle={() => detail.toggle(row)}
-                              />
-                              <StatusDot
-                                size="sm"
-                                variant={serviceStatusVariant(status())}
-                                title={formatPlatformTableTitleCaseValue(status())}
-                              />
-                              <div class="flex min-w-0 flex-1 items-center gap-1.5">
-                                <div class="min-w-0 truncate font-medium text-base-content">
-                                  {formatServiceName(row.service.service)}
-                                </div>
-                                {/* A phone hides State; a state that needs attention joins the
+      body={
+        <>
+          <PlatformWindowedRows items={sortedRows} estimatedRowHeight={32}>
+            {(row) => {
+              const status = () => mapTrueNASServiceStatus(row);
+              const note = () => serviceStateNote(row, status());
+              const rawState = () => asTrimmedString(row.service.state) || '-';
+              const detailRowId = () => detail.detailRowId(row);
+              const isExpanded = () => detail.isExpanded(row);
+              return (
+                <>
+                  <TableRow
+                    class={`${getPlatformResourceDetailRowClass(isExpanded())} text-[11px] sm:text-xs`}
+                    data-truenas-service-row={row.id}
+                    onClick={() => detail.toggle(row)}
+                  >
+                    <TableCell class={getPlatformTableCellClassForKind('name')}>
+                      <TrueNASRowLead
+                        item={row}
+                        drawer={detail}
+                        label={formatServiceName(row.service.service)}
+                        variant={serviceStatusVariant(status())}
+                        dotTitle={formatPlatformTableTitleCaseValue(status())}
+                      >
+                        <div class="flex min-w-0 flex-1 items-center gap-1.5">
+                          <div class="min-w-0 truncate font-medium text-base-content">
+                            {formatServiceName(row.service.service)}
+                          </div>
+                          {/* A phone hides State; a state that needs attention joins the
                                     name on its line. */}
-                                <span
-                                  class={`platform-table-phone-only-inline text-[11px] ${getPlatformInlineStateClass(Boolean(note()))} ${note() ? getPlatformStatusTextToneClass(note()!.tone) : ''}`}
-                                  data-truenas-service-state-phone={note() ? note()!.tone : 'none'}
-                                >
-                                  <span class="min-w-0 truncate">
-                                    {[formatPlatformTableTitleCaseValue(rawState()), note()?.short]
-                                      .filter(Boolean)
-                                      .join(' · ')}
-                                  </span>
-                                </span>
-                              </div>
-                            </div>
-                          </TableCell>
-                          <TableCell
-                            class={`${getPlatformTableCellClassForKind('badge')} platform-table-phone-hidden`}
-                          >
-                            <div
-                              class="inline-flex max-w-full min-w-0 items-center gap-1.5"
-                              title={note()?.full}
-                              data-truenas-service-state-note={note() ? note()!.tone : undefined}
-                            >
-                              <span class="inline-flex shrink-0 rounded-full border border-border px-2 py-0.5 text-[11px] font-medium text-base-content">
-                                {formatPlatformTableTitleCaseValue(rawState())}
-                              </span>
-                              <Show when={note()?.short}>
-                                {(short) => (
-                                  <span
-                                    class={`min-w-0 truncate text-[11px] font-medium ${getPlatformStatusTextToneClass(note()!.tone)}`}
-                                  >
-                                    {short()}
-                                  </span>
-                                )}
-                              </Show>
-                              <Show when={note()}>
-                                {(current) => <span class="sr-only">{current().full}</span>}
-                              </Show>
-                            </div>
-                          </TableCell>
-                          <TableCell class={getPlatformTableCellClassForKind('badge')}>
-                            <span
-                              class={`inline-flex rounded-full border px-2 py-0.5 text-[11px] font-medium ${
-                                row.service.enabled
-                                  ? 'border-emerald-200 bg-emerald-50 text-emerald-700 dark:border-emerald-800 dark:bg-emerald-950/25 dark:text-emerald-300'
-                                  : 'border-border bg-surface-alt text-muted'
-                              }`}
-                            >
-                              {row.service.enabled ? 'Enabled' : 'Disabled'}
-                            </span>
-                          </TableCell>
-                          <TableCell
-                            class={`${getPlatformTableCellClassForKind('text')} platform-table-phone-hidden`}
-                          >
-                            <div class="truncate text-base-content">{row.systemName}</div>
-                          </TableCell>
-                        </TableRow>
-                        <Show when={isExpanded()}>
-                          <InlineDetailTableRow
-                            cellId={detailRowId()}
-                            colspan={4}
-                            data-inline-detail-for={row.id}
-                            data-truenas-service-detail-row={row.id}
-                          >
-                            <ServiceDetailTable row={row} onClose={() => detail.close(row)} />
-                          </InlineDetailTableRow>
-                        </Show>
-                      </>
-                    );
-                  }}
-                </PlatformWindowedRows>
-              </>
-            }
-          />
-        </Show>
-      </div>
-    </Show>
+                          <TrueNASPhoneStateNote
+                            note={note()}
+                            stateLabel={formatPlatformTableTitleCaseValue(rawState())}
+                            dataAttr="service"
+                          />
+                        </div>
+                      </TrueNASRowLead>
+                    </TableCell>
+                    <TableCell
+                      class={`${getPlatformTableCellClassForKind('badge')} platform-table-phone-hidden`}
+                    >
+                      <TrueNASStateNoteDetails
+                        note={note()}
+                        labelClass="inline-flex shrink-0 rounded-full border border-border px-2 py-0.5 text-[11px] font-medium text-base-content"
+                        label={formatPlatformTableTitleCaseValue(rawState())}
+                        dataAttr="service"
+                      />
+                    </TableCell>
+                    <TableCell class={getPlatformTableCellClassForKind('badge')}>
+                      <span
+                        class={`inline-flex rounded-full border px-2 py-0.5 text-[11px] font-medium ${
+                          row.service.enabled
+                            ? 'border-emerald-200 bg-emerald-50 text-emerald-700 dark:border-emerald-800 dark:bg-emerald-950/25 dark:text-emerald-300'
+                            : 'border-border bg-surface-alt text-muted'
+                        }`}
+                      >
+                        {row.service.enabled ? 'Enabled' : 'Disabled'}
+                      </span>
+                    </TableCell>
+                    <TableCell
+                      class={`${getPlatformTableCellClassForKind('text')} platform-table-phone-hidden`}
+                    >
+                      <div class="truncate text-base-content">{row.systemName}</div>
+                    </TableCell>
+                  </TableRow>
+                  <Show when={isExpanded()}>
+                    <InlineDetailTableRow
+                      cellId={detailRowId()}
+                      colspan={4}
+                      data-inline-detail-for={row.id}
+                      data-truenas-service-detail-row={row.id}
+                    >
+                      <InlineDetailPanel
+                        testId="truenas-service-detail"
+                        detailFor={row.id}
+                        title={formatServiceName(row.service.service)}
+                        status={{
+                          variant: serviceStatusVariant(status()),
+                          label: formatPlatformTableTitleCaseValue(status()),
+                        }}
+                        sections={buildServiceDetailSections(row)}
+                        detailAttributes={{ 'data-truenas-service-detail-for': row.id }}
+                        onClose={() => detail.close(row)}
+                      />
+                    </InlineDetailTableRow>
+                  </Show>
+                </>
+              );
+            }}
+          </PlatformWindowedRows>
+        </>
+      }
+    />
   );
 };
 
