@@ -112,6 +112,10 @@ The scheduler's record of each connection's recent poll results.
 ### Optional Summaries
 *   **`breakers`**: Only breakers that are not in default `closed`/zero-failure state.
 *   **`staleness`**: Snapshot of staleness scores (if the tracker is enabled).
+    Each score ages from the row's own `lastSuccess` in this monitor, from
+    zero just after success to one at the tracker's maximum staleness window.
+    A recorded error with no successful poll also scores one. A success from
+    a same-named connection monitored elsewhere does not change this row.
 
 ## 🛠️ Common Queries (jq)
 
