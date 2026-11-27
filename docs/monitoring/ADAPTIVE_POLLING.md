@@ -40,12 +40,12 @@ intervals just to identify the held stage.
 ## 🔬 Implementation Details (Developer Info)
 
 ### Staleness Scoring
-The `AdaptiveScheduler` (`internal/monitoring/scheduler.go`) relies on the `StalenessTracker` to compute a `StalenessScore` (0.0 to 1.0) based on **how long it has been since the last successful poll**.
+The `AdaptiveScheduler` (`internal/monitoring/scheduler.go`) relies on the `StalenessTracker` to compute a `StalenessScore` (0.0 to 1.0) from **how long it has been since the last successful poll recorded by that monitor**.
 
 - `0.0` = fresh (recent success)
-- `1.0` = very stale or never succeeded
+- `1.0` = very stale or never succeeded (including a recorded error before any success)
 
-The staleness score is normalized against `AdaptivePollingMaxInterval` (default 5 minutes).
+The staleness score is normalized against `AdaptivePollingMaxInterval` (default 5 minutes). Each monitor computes priority and Scheduler Health scores from its own local timestamp rather than the process-wide Prometheus series, so a same-named connection on another monitor cannot mask a stale poll.
 
 The scheduler applies **Exponential Smoothing** (alpha 0.6) and a small jitter (5%) to avoid oscillation.
 
@@ -98,18 +98,22 @@ lighter but predictable load, raise the polling intervals instead: freshness and
 offline detection then scale with the interval you choose.
 
 ## 📊 Metrics
-The separate metrics listener defaults to port 9091; `METRICS_PORT` can override
-it. Use an existing authorised scrape if available, not a newly exposed port for
-diagnostics. A missing scrape is not evidence of zero errors.
+The separate Prometheus metrics listener binds to `127.0.0.1:9091` by default. `PULSE_METRICS_PORT` overrides the port (with legacy `METRICS_PORT` accepted as a fallback when `PULSE_METRICS_PORT` is unset), `PULSE_METRICS_BIND_ADDRESS` overrides the bind address, and `PULSE_METRICS_TOKEN` enables bearer-token protection. See [Prometheus Metrics](PROMETHEUS_METRICS.md) for the full configuration and remote-scrape rules. Use an existing authorised scrape if available, not a newly exposed port for diagnostics. A missing scrape is not evidence of zero errors.
 
 | Metric | Type | Description |
 | :--- | :--- | :--- |
 | `pulse_monitor_poll_total` | Counter | Recorded poll outcomes, split by result. |
 | `pulse_monitor_poll_duration_seconds` | Histogram | Poll latency. |
-| `pulse_monitor_poll_staleness_seconds` | Gauge | Age since the last success. Older builds update it only when a result is recorded. |
-| `pulse_monitor_poll_queue_depth` | Gauge | Total number of tasks still queued at scrape time. |
+| `pulse_monitor_poll_last_success_timestamp` | Gauge | Unix timestamp of the latest successful completion, paired with staleness on the same scrape snapshot. |
+| `pulse_monitor_poll_staleness_seconds` | Gauge | Age since the latest successful completion at scrape time (`-1` after a failure before the first success). Older builds update it only when a result is recorded. |
+| `pulse_monitor_poll_queue_depth` | Gauge | Total number of tasks still queued across running schedulers at scrape time. |
 | `pulse_monitor_poll_errors_total` | Counter | Error counts by category. |
-| `pulse_scheduler_queue_due_soon` | Gauge | Tasks still queued that are due now or within 12 seconds at scrape time. Older builds report the last recorded queue sample. |
+| `pulse_scheduler_queue_due_soon` | Gauge | Tasks still queued across running schedulers that are due now or within 12 seconds at scrape time. Older builds report the last recorded queue sample. |
+| `pulse_scheduler_queued_poll_overdue_seconds` | Gauge | Seconds past scheduled time for the most overdue timestamped poll still queued across running schedulers. |
+| `pulse_scheduler_claimed_poll_overdue_seconds` | Gauge | Seconds past one poll task timeout for the most overdue claimed poll, split by `waiting_for_slot` and `running` stages. |
+| `pulse_scheduler_dead_letter_depth` | Gauge | Terminal poll entries parked in running schedulers at scrape time. Cleared or retired label sets report zero for up to five minutes, then expire from the scrape. |
+
+Stopped or replaced schedulers drop out of the live queue and dead-letter gauges, while any worker still holding a claimed poll remains visible in `pulse_scheduler_claimed_poll_overdue_seconds` until it returns. Delayed older poll results still increment `pulse_monitor_poll_total` without moving the latest completion timestamp or staleness age backwards.
 
 If a scrape still works but polling stops producing results, use the
 [last-success timestamp](PROMETHEUS_METRICS.md#check-whether-polling-is-still-running)

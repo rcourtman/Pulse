@@ -339,5 +339,60 @@ class PublicDocsProsePunctuationTest(unittest.TestCase):
             )
 
 
+class AIAutonomyHelpDocsTest(unittest.TestCase):
+    def test_prometheus_section_matches_exported_metrics_and_endpoints(self) -> None:
+        doc = (ROOT / "docs/AI_AUTONOMY.md").read_text(encoding="utf-8")
+        mirror = (ROOT / "frontend-modern/public/docs/AI_AUTONOMY.md").read_text(
+            encoding="utf-8"
+        )
+        self.assertEqual(doc, mirror)
+        self.assertNotIn("Prometheus counters (prefix `pulse_patrol_*`) track:", doc)
+        self.assertIn(
+            "Pulse does not export a `pulse_patrol_*` Prometheus metric family.",
+            doc,
+        )
+        for metric in (
+            "`pulse_ai_agentic_iterations_total`",
+            "`pulse_ai_strict_resolution_block_total`",
+            "`pulse_ai_routing_mismatch_block_total`",
+            "`pulse_ai_phantom_detected_total`",
+            "`pulse_operational_trust_action_offers_total`",
+            "`pulse_operational_trust_action_verification_total`",
+        ):
+            self.assertIn(metric, doc)
+        for endpoint in (
+            "`GET /api/ai/patrol/status`",
+            "`GET /api/ai/patrol/runs`",
+            "`GET /api/ai/patrol/findings`",
+            "`GET /api/ai/circuit/status`",
+        ):
+            self.assertIn(endpoint, doc)
+
+    def test_relay_entitlements_and_investigation_runtime_limits_match_code(self) -> None:
+        normalized = " ".join(
+            (ROOT / "docs/AI_AUTONOMY.md").read_text(encoding="utf-8").split()
+        )
+        self.assertNotIn("Community and Relay baseline", normalized)
+        self.assertNotIn("Community and Relay can run Patrol with BYOK", normalized)
+        self.assertIn(
+            "Continuing Relay subscribers receive Pro entitlements",
+            normalized,
+        )
+        self.assertIn("retire on 31 March 2027", normalized)
+        self.assertIn(
+            "Pro, continuing Relay, legacy Pro+, or Cloud license",
+            normalized,
+        )
+        self.assertIn("`investigation_budget`", normalized)
+        self.assertIn("`investigation_timeout_sec`", normalized)
+        self.assertIn("up to 64 additional findings can wait in memory", normalized)
+        self.assertIn(
+            "20 minute cooldown after a failed fix or failed fix verification",
+            normalized,
+        )
+        self.assertIn("10 minute cooldown after a timed-out outcome", normalized)
+        self.assertIn("30-day budget (USD)", normalized)
+
+
 if __name__ == "__main__":
     unittest.main()
