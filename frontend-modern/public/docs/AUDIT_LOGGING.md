@@ -25,17 +25,48 @@ Pulse automatically captures the following events:
 | `csrf_failure` | Blocked cross-site request forgery attempts | Invalid CSRF token |
 | `lockout_reset` | Account lockout resets | Admin reset lockout for user `bob` |
 | `sso_oidc_login` | OIDC SSO login attempts (success/failure at each stage) | OIDC login success |
+| `sso_oidc_login_initiated` | OIDC SSO sign-in redirects started | OIDC login initiated |
 | `oidc_token_refresh` | OIDC token refresh success/failure (global, not tenant-scoped) | Token refreshed successfully |
 | `sso_oidc_role_assignment` | Automatic role assignment from OIDC groups | Auto-assigned roles: operator, viewer |
 | `saml_login` | SAML SSO login attempts | SAML login success via provider-id |
+| `saml_login_initiated` | SAML SSO sign-in requests started | SAML login initiated |
+| `saml_logout` | SAML logout and SLO initiation | Initiating SAML SLO |
+| `saml_slo_callback` | SAML single-logout callback validation and completion | SAML SLO complete |
 | `saml_role_assignment` | Automatic role assignment from SAML groups | Auto-assigned roles: admin |
 | `sso_provider_created` | SSO provider configuration created | Created provider: Authentik |
 | `sso_provider_updated` | SSO provider configuration modified | Updated provider: Authentik |
 | `sso_provider_deleted` | SSO provider configuration removed | Deleted provider: Authentik |
+| `sso_provider_test` | SSO provider connectivity and metadata tests | Tested provider configuration |
+| `token_created` | API and relay token creation attempts, including scope-escalation denials | Created API token `id=...` |
+| `token_updated` | API token scope updates and boundary denials | Updated API token `id=...` |
+| `token_renamed` | API token renames and blank-name rejections | Renamed API token `id=...` |
+| `token_rotated` | API token rotations | Rotated API token `old_id=... new_id=...` |
+| `token_deleted` | API token revocations and denials | Deleted API token `id=...` |
+| `collector_authority_reduced` | Collector token narrowed to its monitoring scope allowlist | Reduced collector credential to its exact monitoring scope allowlist |
+| `action_runner_credential_issued` | Host-bound typed action-runner credential issued | Issued host-bound typed action runner credential |
+| `action_runner_credential_activated` | Host-bound typed action-runner credential activated | Activated host-bound typed action runner credential |
+| `action_runner_credential_activation_cancelled` | Pending host-bound typed action-runner credential cancelled | Cancelled pending host-bound typed action runner credential |
+| `action_runner_credential_revoked` | Host-bound typed action-runner credential revoked | Revoked host-bound typed action runner credential |
 | `ai_settings_updated` | AI configuration changes | AI settings updated |
+| `ai_command_approved` | Manual approval of a gated AI command | Approved AI command |
+| `ai_command_denied` | Denial of a gated AI command | Denied AI command |
+| `patrol_objective_created` | Patrol objective created | Created Patrol objective |
+| `patrol_objective_updated` | Patrol objective modified | Updated Patrol objective |
+| `patrol_objective_deleted` | Patrol objective removed | Deleted Patrol objective |
 | `agent_profile_assigned` | Agent profile assignments | Profile `production` assigned to agent |
 | `agent_profile_unassigned` | Agent profile removals | Profile removed from agent |
+| `role_created` | Custom RBAC role created | Created role `ops-viewer` |
+| `role_create_failed` | Custom RBAC role creation failed | Failed to create role `ops-viewer` |
+| `role_updated` | Custom RBAC role updated | Updated role `ops-viewer` |
+| `role_update_failed` | Custom RBAC role update failed | Failed to update role `ops-viewer` |
+| `role_deleted` | Custom RBAC role deleted | Deleted role `ops-viewer` |
+| `role_delete_failed` | Custom RBAC role deletion failed | Failed to delete role `ops-viewer` |
 | `user_roles_updated` | RBAC role assignments changed | Updated roles for user jane: [operator] |
+| `user_roles_update_failed` | RBAC role assignment update failed | Failed to update roles for user jane |
+| `user_roles_self_modify_denied` | Blocked attempt to modify own RBAC roles | Attempted to modify own role assignments |
+| `user_deprovisioned` | User removed and active sessions revoked | Removed user jane and revoked active sessions |
+| `user_deprovision_failed` | Sessions revoked but user removal failed | Revoked sessions but failed to remove user jane |
+| `user_deprovision_self_denied` | Blocked attempt to deprovision own identity | Attempted to deprovision own identity |
 | `agent_config_fetch` | Every failed agent configuration fetch. A successful fetch is normally recorded on the agent's first delivery after Pulse starts, when its token or delivered configuration changes, and otherwise once a day; unchanged minute polls are suppressed while the agent is remembered (see below) | `agent_id=… token_id=… config=sha256:… reason=config_changed` |
 
 Config-fetch suppression remembers up to 4,096 organisation/agent pairs per

@@ -134,6 +134,29 @@ class UpgradeV5DocsTest(unittest.TestCase):
                        "TROUBLESHOOTING.md#-getting-help"):
             self.assertIn(target, backup)
 
+    def test_post_upgrade_checklist_uses_authenticated_and_passive_checks(self):
+        checklist = " ".join(
+            upgrade_guide().split("## Post-Upgrade Checklist", 1)[1].split("\n## ", 1)[0].split()
+        )
+        monitoring_routes = (ROOT / "internal/api/router_routes_monitoring.go").read_text(encoding="utf-8")
+        self.assertIn('"/api/monitoring/scheduler/health", RequireAuth(', monitoring_routes)
+        self.assertNotIn("(send a test)", checklist.lower())
+        for phrase in (
+            "GET /api/version",
+            "GET /api/monitoring/scheduler/health",
+            "monitoring:read",
+            "API.md#-authentication",
+            "does not confirm that collection or alert evaluation progressed",
+            "Alerts → Notifications",
+            "Recent delivery activity",
+            "Alerts → History",
+            "rather than sending a Test notification merely to validate an upgrade",
+            "OPERATIONAL_TRUST.md#read-only-checks-after-upgrading",
+            "without reinstalling them or running manual guest-agent probes",
+        ):
+            with self.subTest(phrase=phrase):
+                self.assertIn(phrase, checklist)
+
 
 if __name__ == "__main__":
     unittest.main()

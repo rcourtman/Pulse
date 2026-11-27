@@ -110,6 +110,23 @@ class AuditRecoveryDocsTest(unittest.TestCase):
         self.assertIn("organisation's data directory", guide)
         self.assertIn("runtime may supply a different audit directory or managed signing key", guide)
 
+    def test_what_gets_logged_covers_live_api_audit_event_types(self):
+        guide = (ROOT / "docs/AUDIT_LOGGING.md").read_text(encoding="utf-8")
+        logged = set()
+        for path in sorted((ROOT / "internal/api").glob("*.go")):
+            if path.name.endswith("_test.go"):
+                continue
+            source = path.read_text(encoding="utf-8")
+            for pattern in (
+                r'LogAuditEventForTenant\s*\([^,\n]+,\s*"([a-z0-9_]+)"',
+                r'LogAuditEvent\s*\(\s*"([a-z0-9_]+)"',
+                r'auditTokenEvent\s*\([^,\n]+,\s*"([a-z0-9_]+)"',
+            ):
+                logged.update(re.findall(pattern, source))
+        self.assertGreaterEqual(len(logged), 40, "expected to discover live API audit event literals")
+        missing = sorted(event for event in logged if f"`{event}`" not in guide)
+        self.assertEqual(missing, [], f"AUDIT_LOGGING.md is missing live API audit events: {missing}")
+
 
 class AuditWebhookDocsTest(unittest.TestCase):
     """Static guidance/source binding, not delivery or signature execution.
