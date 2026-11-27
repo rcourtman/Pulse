@@ -1,0 +1,56 @@
+{
+  "version": 1,
+  "base_sha": "f207df500e196a473b18132e69627ecab25836c0",
+  "verified_at": "2026-11-27T11:59:19Z",
+  "result": "passed",
+  "changed_paths": [
+    "frontend-modern/src/features/docker/DockerApplications.tsx",
+    "frontend-modern/src/features/docker/DockerConfigsTable.tsx",
+    "frontend-modern/src/features/docker/DockerNativeTableShared.tsx",
+    "frontend-modern/src/features/docker/DockerSecretsTable.tsx",
+    "frontend-modern/src/features/docker/DockerServicesTable.tsx",
+    "frontend-modern/src/features/docker/DockerSwarmNodesTable.tsx",
+    "frontend-modern/src/features/docker/DockerTasksTable.tsx",
+    "frontend-modern/src/features/docker/dockerComposeApplication.ts",
+    "frontend-modern/src/features/docker/dockerPageModel.ts"
+  ],
+  "content_sha256": {
+    "frontend-modern/src/features/docker/DockerApplications.tsx": "44a9f0445a1e1165b123282e93c33ce5b68cb24ab81844498d74ebbc069c6fdf",
+    "frontend-modern/src/features/docker/DockerConfigsTable.tsx": "72f92143bcde7cd952dee226e6f895e3259890fbbb69d9911b5205b1ba438d69",
+    "frontend-modern/src/features/docker/DockerNativeTableShared.tsx": "dd7aa0fedcdffc090463fdc147b1f6e2ea7137c2ea031aca726d346c85803733",
+    "frontend-modern/src/features/docker/DockerSecretsTable.tsx": "c33fed3b52bc14a91d9ab10c7b05990c6dfc5c1950408e8e402517a9d87e5517",
+    "frontend-modern/src/features/docker/DockerServicesTable.tsx": "6e7d10fabe07fb9259a5329baef40f8ea32bea9c2b0c4d102ac6fa93ac94eb6d",
+    "frontend-modern/src/features/docker/DockerSwarmNodesTable.tsx": "1d998b1900ea5dc81a0aeb935b99103661c1c5755a7f5f248e39ac79cedc1c98",
+    "frontend-modern/src/features/docker/DockerTasksTable.tsx": "3c1fb689717bb55a9500b3f4df5968da88ad10769a42671c4ed4bac9fc7137d3",
+    "frontend-modern/src/features/docker/dockerComposeApplication.ts": "ae53a4761e0da5b48db126fd7b32b75cb33d5d4498158b167517911512f255af",
+    "frontend-modern/src/features/docker/dockerPageModel.ts": "3f115ecb3ee0bc8e3de311085d721d6998ac50d7799cc2401e35d045fca17cf1"
+  },
+  "routes": [
+    "/docker/applications",
+    "/docker/applications?runtime=host-stale&project=billing-stack",
+    "/docker/swarm"
+  ],
+  "viewports": [
+    {
+      "width": 1440,
+      "height": 940
+    },
+    {
+      "width": 360,
+      "height": 820
+    }
+  ],
+  "states": [
+    "Playwright 1.56.1 paired production builds (before b0064bb25a22 vs after f207df500e19) on desktop Chromium 141.0.7390.37 (1440x940 light) and touch WebKit 26.0 (360x820 dark); all 12 paired screenshots visually inspected with 0 console errors, 0 page errors, 0 failed requests, 0 off-origin requests, and 0px horizontal overflow.",
+    "/docker/applications stale host ops-stale-01 (18m telemetry_stale) with running billing-stack, restarting jobs-stack, and fresh edge-proxy on ops-fresh-01: billing-stack moves from false green Healthy (Attention 1 / Healthy 2) to amber Stale data (Attention 2 / Healthy 1); jobs-stack retains 1 needs attention while gaining inline Stale data cue; edge-proxy stays green Healthy.",
+    "/docker/applications?runtime=host-stale&project=billing-stack detail view: displays amber Stale data warning banner (No Docker report for 18m — showing the last values received.) above Runtime host and moves stale containers from Healthy 2 to Degraded 2.",
+    "/docker/swarm stale manager ops-stale-01 (18m telemetry_stale) across Services, Tasks, Swarm Nodes, Secrets, and Configs: orders-api moves from green Healthy 2 to amber Stale data (Healthy 1 / Degraded 1 / Offline 1), preserves 3/3 replicas and Stable update state, keeps single-line 32px phone row height, and displays amber header dot plus Stale data warning notice in expanded detail panel; checkout-worker keeps red 0/2 dot and red 0 running count plus inline Stale data cue; orders-api.1 task preserves Running in Current column alongside amber Stale data cue.",
+    "/docker/swarm live WebSocket rawData recovery frame (top-level sourceStatus.docker online and health.verdict ok while platformData.sourceStatus remains stale) without page reload: clears all Stale data cues and drawer warning banner, restores green dots on row and open drawer header, and restores Healthy 2 / Degraded 0 / Offline 1."
+  ],
+  "interactions": [
+    "Loaded /docker/applications on desktop light (1440x940) and phone dark (360x820), verifying Attention/Healthy chip counts, status pills, inline stale cues, and 0px horizontal overflow.",
+    "Loaded /docker/applications?runtime=host-stale&project=billing-stack on desktop light and verified the stale warning banner and container filter counts.",
+    "Loaded /docker/swarm on desktop light and phone dark, expanded orders-api inline detail panel, verified stale cues across Services/Tasks/Nodes/Secrets/Configs, preserved last-reported values, and 32px single-line phone rows.",
+    "Delivered live WebSocket rawData recovery frame on /docker/swarm while orders-api drawer remained open and verified immediate clearance of all stale cues and warning banners without reload."
+  ]
+}
