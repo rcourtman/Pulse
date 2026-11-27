@@ -69,6 +69,8 @@ describe('resourceStoragePresentation', () => {
     expect(getResourceStorageTopologyLabel(makeResource(), 'nfs')).toBe('NFS');
     expect(getResourceStorageTopologyLabel(makeResource(), 'cifs')).toBe('SMB/CIFS');
     expect(getResourceStorageTopologyLabel(makeResource(), 'iscsi')).toBe('iSCSI');
+    expect(getResourceStorageTopologyLabel(makeResource(), 'nvmeof')).toBe('NVMe-oF');
+    expect(getResourceStorageTopologyLabel(makeResource(), 'nvme-of')).toBe('NVMe-oF');
     expect(getResourceStorageTopologyLabel(makeResource(), 'btrfs')).toBe('BTRFS');
     expect(getResourceStorageTopologyLabel(makeResource(), 'ignored', 'rebuild target')).toBe(
       'Rebuild Target',

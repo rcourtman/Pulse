@@ -94,6 +94,26 @@ func TestStorageSupportsContainerVolumes(t *testing.T) {
 			expected: true,
 		},
 		{
+			name:     "ct-vol only (PVE 9.3)",
+			content:  "ct-vol",
+			expected: true,
+		},
+		{
+			name:     "mixed with ct-vol (PVE 9.3)",
+			content:  "backup,ct-vol",
+			expected: true,
+		},
+		{
+			name:     "uppercase CT-VOL (PVE 9.3)",
+			content:  "CT-VOL",
+			expected: true,
+		},
+		{
+			name:     "vm-vol only does not hold container volumes",
+			content:  "vm-vol",
+			expected: false,
+		},
+		{
 			name:     "mixed with rootdir",
 			content:  "backup,rootdir,vztmpl",
 			expected: true,
@@ -608,6 +628,24 @@ func TestCollectContainerRootUsage(t *testing.T) {
 		}
 		if result[100].Used != 7777 {
 			t.Errorf("Used = %d, want 7777", result[100].Used)
+		}
+	})
+
+	t.Run("ct-vol content type works (PVE 9.3)", func(t *testing.T) {
+		client := &stubContainerDiskClient{
+			storages: []proxmox.Storage{
+				{Storage: "ct-pool", Content: "ct-vol", Enabled: 1, Active: 1},
+			},
+			contentByStore: map[string][]proxmox.StorageContent{
+				"ct-pool": {{Volid: "ct-pool:subvol-100-disk-0", VMID: 100, Used: 4321, Size: 8765}},
+			},
+		}
+		result := mon.collectContainerRootUsage(context.Background(), client, "node1", []int{100})
+		if len(result) != 1 {
+			t.Fatalf("expected 1 entry (ct-vol content type), got %d", len(result))
+		}
+		if result[100].Used != 4321 {
+			t.Errorf("Used = %d, want 4321", result[100].Used)
 		}
 	})
 

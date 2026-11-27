@@ -576,7 +576,7 @@ export const NodeModalSetupGuideSection: Component<NodeModalSetupGuideSectionPro
                           type="button"
                           onClick={async () => {
                             const command =
-                              'pveum user token add pulse-monitor@pve pulse-token --privsep 0';
+                              'pveum user token add pulse-monitor@pve pulse-token --privsep 1';
                             await state.copyCommand(command);
                           }}
                           disabled={setupHandoffDisabled()}
@@ -598,11 +598,15 @@ export const NodeModalSetupGuideSection: Component<NodeModalSetupGuideSectionPro
                           </svg>
                         </button>
                         <code class="text-base-content">
-                          pveum user token add pulse-monitor@pve pulse-token --privsep 0
+                          pveum user token add pulse-monitor@pve pulse-token --privsep 1
                         </code>
                       </div>
                       <p class="text-amber-600 dark:text-amber-400 text-xs mt-1">
                         Important: Copy the token value immediately - it won't be shown again!
+                      </p>
+                      <p class="text-muted text-xs mt-1">
+                        If your Proxmox cluster enforces an API Token Policy expiration date, add{' '}
+                        <code>--expire &lt;unix-timestamp&gt;</code> to this command.
                       </p>
                     </div>
 
@@ -643,7 +647,7 @@ export const NodeModalSetupGuideSection: Component<NodeModalSetupGuideSectionPro
                           type="button"
                           onClick={async () => {
                             const command =
-                              'pveum aclmod /storage -user pulse-monitor@pve -role PVEDatastoreAdmin';
+                              "pveum aclmod /storage -user pulse-monitor@pve -role PVEDatastoreAdmin\npveum aclmod /storage -token 'pulse-monitor@pve!pulse-token' -role PVEDatastoreAdmin";
                             await state.copyCommand(command);
                           }}
                           disabled={setupHandoffDisabled()}
@@ -664,8 +668,8 @@ export const NodeModalSetupGuideSection: Component<NodeModalSetupGuideSectionPro
                             <path d="M5 15H4a2 2 0 01-2-2V4a2 2 0 012-2h9a2 2 0 012 2v1"></path>
                           </svg>
                         </button>
-                        <code class="text-base-content">
-                          pveum aclmod /storage -user pulse-monitor@pve -role PVEDatastoreAdmin
+                        <code class="text-base-content whitespace-pre-line">
+                          {`pveum aclmod /storage -user pulse-monitor@pve -role PVEDatastoreAdmin\npveum aclmod /storage -token 'pulse-monitor@pve!pulse-token' -role PVEDatastoreAdmin`}
                         </code>
                       </div>
                       <p class="text-muted text-xs mt-1">

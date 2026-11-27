@@ -120,8 +120,11 @@ describe('storageSources', () => {
       ['zfspool'],
       ['zfs'],
       ['iscsi'],
+      ['iscsidirect'],
+      ['nvmeof'],
       ['glusterfs'],
       ['btrfs'],
+      ['esxi'],
     ])('resolves proxmox storage type %s to proxmox-pve', (type) => {
       expect(resolveStorageSourceKey(makeStorage({ platform: '', type }))).toBe('proxmox-pve');
     });
@@ -158,15 +161,31 @@ describe('storageSources', () => {
       expect(resolveStorageSourceKey(makeStorage({ platform: '', type: '' }))).toBe('proxmox-pve');
     });
 
-    it('ignores a proxmox-pve platform tag and resolves by type instead (current behavior)', () => {
-      // proxmox-pve is intentionally NOT in the platform-wins list, so the
-      // on-disk type still drives the result.
+    it('does not misclassify custom iSCSI plugin types containing "csi" as kubernetes', () => {
+      expect(
+        resolveStorageSourceKey(makeStorage({ platform: '', type: 'custom-iscsi-plugin' })),
+      ).toBe('custom-iscsi-plugin');
+    });
+
+    it('keeps Ceph and PBS types distinct while resolving PVE 9.3 native and custom plugins to proxmox-pve', () => {
       expect(resolveStorageSourceKey(makeStorage({ platform: 'proxmox-pve', type: 'ceph' }))).toBe(
+        'ceph',
+      );
+      expect(resolveStorageSourceKey(makeStorage({ platform: 'proxmox-pve', type: 'rbd' }))).toBe(
         'ceph',
       );
       expect(resolveStorageSourceKey(makeStorage({ platform: 'proxmox-pve', type: 'dir' }))).toBe(
         'proxmox-pve',
       );
+      expect(
+        resolveStorageSourceKey(makeStorage({ platform: 'proxmox-pve', type: 'nvmeof' })),
+      ).toBe('proxmox-pve');
+      expect(
+        resolveStorageSourceKey(makeStorage({ platform: 'proxmox-pve', type: 'linstor-custom' })),
+      ).toBe('proxmox-pve');
+      expect(
+        resolveStorageSourceKey(makeStorage({ platform: 'proxmox-pve', type: 'netapp-iscsi' })),
+      ).toBe('proxmox-pve');
     });
 
     it('ignores an agent platform tag and resolves by type instead (current behavior)', () => {

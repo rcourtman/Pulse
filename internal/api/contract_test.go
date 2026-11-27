@@ -1459,7 +1459,8 @@ fi`
 	})
 
 	for _, required := range []string{
-		`TOKEN_OUTPUT=$(pveum user token add pulse-monitor@pve "$TOKEN_NAME" --privsep 1 2>&1)`,
+		`TOKEN_OUTPUT=$(pveum user token add pulse-monitor@pve "$TOKEN_NAME" --privsep 1 "${expire_args[@]}" 2>&1)`,
+		`PULSE_PVE_TOKEN_EXPIRE`,
 		`pveum aclmod / -user pulse-monitor@pve -role PVEAuditor`,
 		`pveum aclmod / -token "$PULSE_TOKEN_ID" -role PVEAuditor`,
 		`pveum aclmod / -user pulse-monitor@pve -role PulseMonitor`,

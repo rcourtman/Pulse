@@ -312,8 +312,8 @@ func TestPVESetupScript_ConfiguresPulseMonitorRoleSafely(t *testing.T) {
 	wantSnippets := []string{
 		`extract_pve_token_value()`,
 		`create_pve_token()`,
-		`pveum user token add pulse-monitor@pve "$TOKEN_NAME" --privsep 1 --output-format json`,
-		`pveum user token add pulse-monitor@pve "$TOKEN_NAME" --privsep 1 2>&1`,
+		`pveum user token add pulse-monitor@pve "$TOKEN_NAME" --privsep 1 "${expire_args[@]}" --output-format json`,
+		`pveum user token add pulse-monitor@pve "$TOKEN_NAME" --privsep 1 "${expire_args[@]}" 2>&1`,
 		`TOKEN_VALUE=$(extract_pve_token_value "$TOKEN_OUTPUT")`,
 		`pveum aclmod / -user pulse-monitor@pve -role PVEAuditor`,
 		`pveum aclmod / -token "$PULSE_TOKEN_ID" -role PVEAuditor`,
@@ -364,8 +364,8 @@ func TestPVESetupScript_HardensTokenValueExtraction(t *testing.T) {
 		}
 	}
 
-	jsonCreate := strings.Index(script, `pveum user token add pulse-monitor@pve "$TOKEN_NAME" --privsep 1 --output-format json`)
-	legacyCreate := strings.Index(script, `pveum user token add pulse-monitor@pve "$TOKEN_NAME" --privsep 1 2>&1`)
+	jsonCreate := strings.Index(script, `pveum user token add pulse-monitor@pve "$TOKEN_NAME" --privsep 1 "${expire_args[@]}" --output-format json`)
+	legacyCreate := strings.Index(script, `pveum user token add pulse-monitor@pve "$TOKEN_NAME" --privsep 1 "${expire_args[@]}" 2>&1`)
 	if jsonCreate < 0 || legacyCreate < 0 || jsonCreate > legacyCreate {
 		t.Fatalf("generated script must try JSON token output before legacy output fallback")
 	}
@@ -1567,6 +1567,42 @@ func TestPBSSetupScript_OnlyShowsAttemptBannerOnRealRequestPath(t *testing.T) {
 	}
 	if attemptBannerIndex < tokenSkipIndex {
 		t.Fatalf("expected PBS auto-registration banner to stay after token-unavailable skip handling, got: %s", truncate(script, 900))
+	}
+	if strings.Contains(script, "PULSE_PVE_TOKEN_EXPIRE") {
+		t.Fatalf("PBS setup script should not contain PVE-only API Token Policy hint")
+	}
+}
+
+func TestPVESetupScript_SupportsTokenPolicyExpiryAndGuidance(t *testing.T) {
+	tempDir := t.TempDir()
+	cfg := &config.Config{
+		DataPath:   tempDir,
+		ConfigPath: tempDir,
+	}
+
+	handlers := newTestConfigHandlers(t, cfg)
+
+	req := httptest.NewRequest(http.MethodGet,
+		"/api/setup-script?type=pve&host=https://pve-node.example.internal:8006&pulse_url=https://pulse.example.com:7655",
+		nil)
+	rr := httptest.NewRecorder()
+
+	handlers.HandleSetupScript(rr, req)
+
+	if rr.Code != http.StatusOK {
+		t.Fatalf("expected 200 OK, got %d (%s)", rr.Code, rr.Body.String())
+	}
+
+	script := rr.Body.String()
+	for _, needle := range []string{
+		`PULSE_PVE_TOKEN_EXPIRE`,
+		`expire_args=(--expire "$PULSE_PVE_TOKEN_EXPIRE")`,
+		`--privsep 1 "${expire_args[@]}"`,
+		`API Token Policy`,
+	} {
+		if !strings.Contains(script, needle) {
+			t.Errorf("expected PVE setup script to contain %q", needle)
+		}
 	}
 }
 

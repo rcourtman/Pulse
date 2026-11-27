@@ -690,7 +690,12 @@ extract_pve_token_value() {
 }
 
 create_pve_token() {
-    if TOKEN_OUTPUT=$(pveum user token add pulse-monitor@pve "$TOKEN_NAME" --privsep 1 --output-format json 2>&1); then
+    local expire_args=()
+    if [ -n "${PULSE_PVE_TOKEN_EXPIRE:-}" ]; then
+        expire_args=(--expire "$PULSE_PVE_TOKEN_EXPIRE")
+    fi
+
+    if TOKEN_OUTPUT=$(pveum user token add pulse-monitor@pve "$TOKEN_NAME" --privsep 1 "${expire_args[@]}" --output-format json 2>&1); then
         TOKEN_CREATE_RC=0
     else
         TOKEN_CREATE_RC=$?
@@ -702,7 +707,7 @@ create_pve_token() {
     fi
 
     if echo "$TOKEN_OUTPUT" | grep -Eqi 'unknown option|unknown command|no such option|unable to parse option|output-format'; then
-        if TOKEN_OUTPUT=$(pveum user token add pulse-monitor@pve "$TOKEN_NAME" --privsep 1 2>&1); then
+        if TOKEN_OUTPUT=$(pveum user token add pulse-monitor@pve "$TOKEN_NAME" --privsep 1 "${expire_args[@]}" 2>&1); then
             TOKEN_CREATE_RC=0
         else
             TOKEN_CREATE_RC=$?
@@ -830,6 +835,11 @@ if [ "$TOKEN_CREATE_RC" -ne 0 ]; then
     echo "❌ Failed to create token '$TOKEN_NAME'"
     echo "$TOKEN_OUTPUT"
     echo ""
+    if echo "$TOKEN_OUTPUT" | grep -Eqi 'expir|lifetime|token-policy|token policy'; then
+        echo "Hint: This Proxmox cluster appears to enforce an API Token Policy requiring an expiration date."
+        echo "Rerun with PULSE_PVE_TOKEN_EXPIRE=<unix-timestamp> (or enable the policy default expiry in Datacenter > Options > API Token Policy)."
+        echo ""
+    fi
     echo "Fix the token creation error above and rerun this script on the node."
     echo ""
 else

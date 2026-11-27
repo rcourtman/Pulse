@@ -206,6 +206,18 @@ describe('NodeModalSetupGuideSection', () => {
         /Pulse does not grant VM\.GuestAgent\.FileRead by default because Proxmox cannot restrict it to a single path/i,
       ),
     ).toBeInTheDocument();
+    expect(
+      screen.getByText('pveum user token add pulse-monitor@pve pulse-token --privsep 1'),
+    ).toBeInTheDocument();
+    expect(screen.getByText(/enforces an API Token Policy expiration date/i)).toBeInTheDocument();
+    expect(
+      screen.getByText(/pveum aclmod \/ -token 'pulse-monitor@pve!pulse-token' -role PVEAuditor/),
+    ).toBeInTheDocument();
+    expect(
+      screen.getByText(
+        /pveum aclmod \/storage -token 'pulse-monitor@pve!pulse-token' -role PVEDatastoreAdmin/,
+      ),
+    ).toBeInTheDocument();
   });
 
   it('surfaces non-destructive repair guidance for existing Proxmox API sources', () => {

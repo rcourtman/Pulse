@@ -22,18 +22,7 @@ func clampToInt64(value uint64) int64 {
 }
 
 func storageSupportsContainerVolumes(content string) bool {
-	if content == "" {
-		return false
-	}
-
-	for _, part := range strings.Split(content, ",") {
-		switch strings.TrimSpace(strings.ToLower(part)) {
-		case "rootdir", "images", "subvol":
-			return true
-		}
-	}
-
-	return false
+	return storageContentIncludesAny(content, "rootdir", "images", "subvol", "ct-vol")
 }
 
 func isRootVolumeForContainer(volid string, vmid int) bool {

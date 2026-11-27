@@ -26,6 +26,9 @@ func TestPreferredNodeDiskFallbackRank(t *testing.T) {
 		{name: "default dir path", storage: proxmox.Storage{Storage: "vmdata", Type: "dir", Path: "/var/lib/vz", Content: "rootdir"}, want: 5, wantOK: true},
 		{name: "local-prefixed dir", storage: proxmox.Storage{Storage: "local-ssd", Type: "dir", Path: "/mnt/ssd", Content: "images"}, want: 6, wantOK: true},
 		{name: "other guest storage", storage: proxmox.Storage{Storage: "fast", Type: "dir", Path: "/mnt/fast", Content: "rootdir"}, want: 7, wantOK: true},
+		{name: "zfs pool with PVE 9.3 vm-vol", storage: proxmox.Storage{Storage: "tank-vm", Type: "zfspool", Content: "vm-vol"}, want: 3, wantOK: true},
+		{name: "lvm with PVE 9.3 ct-vol", storage: proxmox.Storage{Storage: "vg-ct", Type: "lvmthin", Content: "ct-vol"}, want: 4, wantOK: true},
+		{name: "vm-state only storage", storage: proxmox.Storage{Storage: "state-only", Type: "dir", Path: "/mnt/state", Content: "vm-state"}, wantOK: false},
 		{name: "shared storage with guest images", storage: proxmox.Storage{Storage: "nfs-vms", Type: "nfs", Content: "images,rootdir", Shared: 1}, wantOK: false},
 		{name: "backup-only storage", storage: proxmox.Storage{Storage: "backups", Type: "dir", Path: "/mnt/backups", Content: "backup"}, wantOK: false},
 	}

@@ -152,6 +152,39 @@ func TestCollectSnapshotSizes(t *testing.T) {
 	}
 }
 
+func TestCollectSnapshotSizesSupportsPVE93GranularContentTypes(t *testing.T) {
+	m := &Monitor{}
+	snapshots := []models.GuestSnapshot{
+		{ID: "inst-node1-101-snap1", Name: "snap1", Node: "node1", Instance: "inst", Type: "qemu", VMID: 101},
+		{ID: "inst-node1-102-snap2", Name: "snap2", Node: "node1", Instance: "inst", Type: "lxc", VMID: 102},
+	}
+
+	client := fakeSnapshotClient{
+		storages: map[string][]proxmox.Storage{
+			"node1": {
+				{Storage: "vm-disks", Content: "vm-vol", Active: 1, Enabled: 1},
+				{Storage: "vm-ram", Content: "vm-state", Active: 1, Enabled: 1},
+				{Storage: "ct-disks", Content: "ct-vol", Active: 1, Enabled: 1},
+			},
+		},
+		contents: map[string]map[string][]proxmox.StorageContent{
+			"node1": {
+				"vm-disks": {{Volid: "vm-disks:vm-101-disk-0@snap1", VMID: 101, Size: 10 << 30}},
+				"vm-ram":   {{Volid: "vm-ram:vm-101-state-snap1@snap1", VMID: 101, Size: 2 << 30}},
+				"ct-disks": {{Volid: "ct-disks:subvol-102-disk-0@snap2", VMID: 102, Size: 5 << 30}},
+			},
+		},
+	}
+
+	sizes := m.collectSnapshotSizes(context.Background(), "inst", client, snapshots)
+	if got, want := sizes["inst-node1-101-snap1"], int64(12<<30); got != want {
+		t.Fatalf("vm snapshot size = %d, want %d", got, want)
+	}
+	if got, want := sizes["inst-node1-102-snap2"], int64(5<<30); got != want {
+		t.Fatalf("ct snapshot size = %d, want %d", got, want)
+	}
+}
+
 func TestHostsSnapshotPreservesCanonicalUpdaterEvidence(t *testing.T) {
 	now := time.Now().UTC()
 	checked, attempted := now.Add(-time.Minute), now.Add(-time.Second)
