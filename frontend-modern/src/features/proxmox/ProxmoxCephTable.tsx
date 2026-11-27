@@ -312,10 +312,7 @@ function capacityLabel(resource: Resource): JSX.Element {
   return <span class="tabular-nums">{formatPlatformTablePercentValue(pct)}</span>;
 }
 
-function healthMessageCell(
-  resource: Resource,
-  staleNotice: CephStaleNotice | null,
-): JSX.Element {
+function healthMessageCell(resource: Resource, staleNotice: CephStaleNotice | null): JSX.Element {
   const msg = asTrimmedString(resource.ceph?.healthMessage);
   if (msg) {
     return (

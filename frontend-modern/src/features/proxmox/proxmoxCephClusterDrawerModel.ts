@@ -164,9 +164,13 @@ export const getCephClusterExceptionRows = (
       : null;
   });
 
-  return compactDetailRows([readingsRow, ...healthRows, osdRow, ...serviceRows, ...poolRows]).filter(
-    (row) => !isStated(row.value),
-  );
+  return compactDetailRows([
+    readingsRow,
+    ...healthRows,
+    osdRow,
+    ...serviceRows,
+    ...poolRows,
+  ]).filter((row) => !isStated(row.value));
 };
 
 /** The pools and daemons that stay in view: the cluster's own content. */
