@@ -22,6 +22,7 @@ import (
 	unifiedresources "github.com/rcourtman/pulse-go-rewrite/internal/unifiedresources"
 	"github.com/rcourtman/pulse-go-rewrite/internal/websocket"
 	"github.com/rcourtman/pulse-go-rewrite/pkg/proxmox"
+	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 )
 
@@ -2039,30 +2040,9 @@ func TestAlertTimelineAnnouncesOnlyLiveLifecycleChanges(t *testing.T) {
 	require.Len(t, recorded, 1, "the non-live projection still records the row")
 }
 
-func TestMonitorPollsWhileDeliveryHealthWaits(t *testing.T) {
-	withBlockedDeliveryHealth(t, func(t *testing.T, m *Monitor) {
-		nodes := m.state.GetSnapshot().Nodes
-		for _, node := range nodes {
-			if node.Name != "fixture-new-node" {
-				continue
-			}
-			if len(nodes) != 2 || node.CPU != 0.42 {
-				t.Fatalf("new node did not publish alongside its peer: nodes=%d CPU=%v", len(nodes), node.CPU)
-			}
-			history := m.GetNodeMetrics(node.ID, "cpu", time.Minute)
-			if len(history) != 1 || history[0].Value != 42 {
-				t.Fatalf("new node's first History sample = %+v, want 42%% CPU", history)
-			}
-			return
-		}
-		t.Fatalf("new connection did not publish while the delivery health projection waited: got %d nodes", len(nodes))
-	})
-}
-
 // Exercise the real Start tick, PVE collector and delivery-health projection.
 // The fixture supplies only the provider results and the projection contention.
-func withBlockedDeliveryHealth(t *testing.T, observe func(*testing.T, *Monitor)) {
-	t.Helper()
+func TestMonitorPollsWhileDeliveryHealthWaits(t *testing.T) {
 	previousMock := mock.IsMockEnabled()
 	mustSetMockEnabled(t, false)
 	t.Cleanup(func() { mustSetMockEnabled(t, previousMock) })
@@ -2133,24 +2113,36 @@ func withBlockedDeliveryHealth(t *testing.T, observe func(*testing.T, *Monitor))
 
 	// The check stamps admission before it can enter the deliberately held
 	// projection. Use real time: a mutex wait isn't durable in synctest.
-	readCheckTime := func() time.Time {
+	require.Eventually(t, func() bool {
 		m.mu.RLock()
 		defer m.mu.RUnlock()
-		return m.lastDeliveryHealthCheck
-	}
-	require.Eventually(t, func() bool { return !readCheckTime().IsZero() },
-		cadence+5*time.Second, 10*time.Millisecond, "periodic delivery check must reach projection")
-	checkTime := readCheckTime()
+		return !m.lastDeliveryHealthCheck.IsZero()
+	}, cadence+5*time.Second, 10*time.Millisecond, "periodic delivery check must reach projection")
 	// Model a new connection becoming ready after health evaluation started.
 	// There is no pre-existing queued poll for this key.
 	m.mu.Lock()
 	m.config.PVEInstances = append(m.config.PVEInstances, instance(newNode))
 	m.pveClients[newNode] = client(newNode, 0.42)
 	m.mu.Unlock()
-	// Use the same observation boundary for both sources: one ordinary tick
-	// plus enough time for a worker to notice the newly queued task.
-	time.Sleep(time.Until(checkTime.Add(cadence + 2*time.Second)))
-	observe(t, m)
+	// Keep the projection locked until both live state and History advance.
+	// Registration may fall on either side of the current tick's enqueue;
+	// an extra poll during this window is valid, but no samples is not.
+	require.EventuallyWithT(t, func(c *assert.CollectT) {
+		nodes := m.state.GetSnapshot().Nodes
+		require.Len(c, nodes, 2, "new node must publish alongside its peer")
+		for _, node := range nodes {
+			if node.Name == newNode {
+				require.Equal(c, 0.42, node.CPU, "new node live CPU fraction")
+				history := m.GetNodeMetrics(node.ID, "cpu", time.Minute)
+				require.NotEmpty(c, history, "new node CPU History")
+				for _, sample := range history {
+					require.Equal(c, float64(42), sample.Value, "new node History CPU percent")
+				}
+				return
+			}
+		}
+		c.Errorf("new node %q missing from the live snapshot", newNode)
+	}, cadence+2*time.Second, 10*time.Millisecond, "new connection must publish while delivery health is blocked")
 
 	cancel()
 	select {
