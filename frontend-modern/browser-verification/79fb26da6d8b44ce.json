@@ -1,0 +1,67 @@
+{
+  "version": 1,
+  "base_sha": "fa26be2e2f35f5daced2024060a26df0ff60bb42",
+  "verified_at": "2026-11-27T20:01:15Z",
+  "result": "passed",
+  "changed_paths": [
+    "frontend-modern/src/features/infrastructureMap/InfrastructureMapDrawer.tsx",
+    "frontend-modern/src/features/infrastructureMap/InfrastructureMapSurface.tsx",
+    "frontend-modern/src/features/infrastructureMap/infrastructureMapConnections.ts",
+    "frontend-modern/src/features/infrastructureMap/infrastructureMapDiagram.ts",
+    "frontend-modern/src/features/infrastructureMap/infrastructureMapHostDiagram.ts",
+    "frontend-modern/src/features/infrastructureMap/infrastructureMapLayout.ts",
+    "frontend-modern/src/features/infrastructureMap/infrastructureMapModel.ts",
+    "frontend-modern/src/features/infrastructureMap/infrastructureMapServices.ts",
+    "frontend-modern/src/hooks/useUnifiedResources.ts",
+    "frontend-modern/src/types/resource.ts",
+    "frontend-modern/src/utils/resourceStateAdapters.ts"
+  ],
+  "content_sha256": {
+    "frontend-modern/src/features/infrastructureMap/InfrastructureMapDrawer.tsx": "d71f34460e241fc180c2529d295f4ec7699d603512889557e543319e06298ae9",
+    "frontend-modern/src/features/infrastructureMap/InfrastructureMapSurface.tsx": "0cc495ae8eb298d93ae1a29b63e174e2b8ab99f76caf9fad1c88ae2dbfc72ab3",
+    "frontend-modern/src/features/infrastructureMap/infrastructureMapConnections.ts": "a886bf3a71caeab8c4f9603336365e10fd5a91feca4fd688e982806db90302a5",
+    "frontend-modern/src/features/infrastructureMap/infrastructureMapDiagram.ts": "309d57a55bdb003189413c9a8977d9c36d9b60d27706e42d0fd1269452924810",
+    "frontend-modern/src/features/infrastructureMap/infrastructureMapHostDiagram.ts": "d310d17836f83d2d8ca9bf315d7ced0f5c684764f06b49d8508f46492cdd1f78",
+    "frontend-modern/src/features/infrastructureMap/infrastructureMapLayout.ts": "7aa538d0e405eacb0cb67195b103cb7626e64087f035698ea0f3e3a0b508f744",
+    "frontend-modern/src/features/infrastructureMap/infrastructureMapModel.ts": "ac1d257b77f9ccd46d15976bc34157c32238d4316fada0828e767dc144ada2e8",
+    "frontend-modern/src/features/infrastructureMap/infrastructureMapServices.ts": "ff1a3eb942ec42084788bb3cc74ba51d1731505068e882007554f7ec6d10698b",
+    "frontend-modern/src/hooks/useUnifiedResources.ts": "63e1974af9a24dba1f606ce108d0785786d4024e3dc018b7433c254af5be57fa",
+    "frontend-modern/src/types/resource.ts": "5b8fcabc51f98e144aff12218d28dc7f79809ddf21ca2173d9bdda833634fd4d",
+    "frontend-modern/src/utils/resourceStateAdapters.ts": "0251ddec6409ca45cbd5a34239d9936609d89724e9100809f1a7164c97cac63c"
+  },
+  "routes": [
+    "/map"
+  ],
+  "viewports": [
+    {
+      "width": 1440,
+      "height": 900
+    },
+    {
+      "width": 1024,
+      "height": 768
+    },
+    {
+      "width": 390,
+      "height": 844
+    },
+    {
+      "width": 320,
+      "height": 568
+    }
+  ],
+  "states": [
+    "Chromium and WebKit desktop dark and light themes showing host GPU 61% pill alongside 49C thermal readout and count pill, Docker iGPU +1 pill, and Proxmox VM GPU caption",
+    "Chromium and WebKit hover spotlight showing GPU tooltip and curved talks :5432 passive peer arc",
+    "Chromium empty state, first-run single-host state, 500 error recovery state, non-admin viewer (0 add-a-check links), and 189-resource large estate",
+    "Chromium and WebKit 1024px tablet, 390px phone, and 320px phone viewports with zero horizontal overflow and zero page errors",
+    "Live 43-node homelab preview (/map) hovering qbittorrent inside Tower showing shared mount arcs to sonarr and radarr, via gluetun, and storage to Tower Array"
+  ],
+  "interactions": [
+    "Hovered pve-01 in Chromium and WebKit to verify talks :5432 curved peer arc",
+    "Pressed Tab and ArrowRight in Chromium and WebKit to verify rgb(59, 130, 246) focus ring and keyboard traversal",
+    "Toggled Hide names to verify RTX 4090 and nvr_clips redaction while keeping generic GPU and accelerator indicators",
+    "Clicked Save image in Chromium and WebKit to verify PNG/SVG export download",
+    "Hovered qbittorrent in live authenticated homelab preview to verify shared mount and mount-to-pool arcs"
+  ]
+}

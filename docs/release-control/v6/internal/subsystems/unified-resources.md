@@ -10825,3 +10825,32 @@ Verified by the 7-file Infrastructure Map Vitest suite, `tsc --noEmit`,
 Verified by `TestRefreshHostSocketPeerRelationships_MatchesMonitoredPeersOnly`,
 `TestRelationshipTypeLabel_CommunicatesWith`, and
 `TestRegistryProjectsHostSocketPeersAndAccelerators`.
+
+### Infrastructure Map GPU telemetry, hardware accelerator badges, Docker mounts, and canonical relationship arcs (27 November 2026)
+
+- `frontend-modern/src/types/resource.ts` adds `'communicates_with'`,
+  `'hosted_by'`, `'stores_on'`, `'protected_by'`, and `'member_of'` to
+  `ResourceRelationshipType` and optional `accelerators?: string[]` to
+  `ResourceProxmoxMeta` and `ResourceDockerMeta`. `useUnifiedResources.ts`
+  and `resourceStateAdapters.ts` preserve canonical `resource.relationships`
+  across REST list hydration and WebSocket snapshot merges.
+- `infrastructureMapModel.ts` extracts host GPU telemetry (`gpuSummary`,
+  `gpuUtilPercent`, `gpuTempC` from `agent.sensors.gpu[]`, anonymized to
+  generic `GPU` / `N× GPU` under Hide names) and workload hardware
+  accelerators (`accelerators` from `docker.accelerators`,
+  `proxmox.accelerators`, and device bind mounts `/dev/dri*`, `/dev/apex*`,
+  `/dev/nvidia*`, `/dev/kfd`, `/dev/hailo*`).
+- `infrastructureMapConnections.ts` and `infrastructureMapServices.ts` wire
+  shared Docker named volumes (anonymized under Hide names), shared
+  non-system host bind mounts, container bind-mount-to-pool path links,
+  Compose stack and small private network app-to-database/broker links, and
+  canonical `resource.relationships[]` (`communicates_with`, `depends_on`,
+  `stores_on`, `protected_by`, `mounted_to`, `exposed_by`) into `DiagramLink`
+  hover arcs and tooltip sentences.
+- `infrastructureMapHostDiagram.ts`, `infrastructureMapDiagram.ts`,
+  `InfrastructureMapSurface.tsx`, and `InfrastructureMapDrawer.tsx` surface
+  host GPU pills, workload accelerator pills/badges, and search indexing.
+
+Verified by the Infrastructure Map Vitest suite, `tsc --noEmit`,
+`vite build`, bundle size and lint gates, and Playwright desktop/light/mobile
+plus live homelab preview verification.

@@ -164,11 +164,23 @@ const formatDrawerLinkSpeed = (tile: DiagramTile): string => {
     : `${formatMapLinkSpeed(tile.linkSpeedMbps)} link`;
 };
 
+const formatDrawerGpu = (tile: DiagramTile): string => {
+  if (!tile.gpuSummary) return '';
+  return [
+    `GPU ${tile.gpuSummary}`,
+    tile.gpuUtilPercent !== undefined ? `${Math.round(tile.gpuUtilPercent)}%` : '',
+    tile.gpuTempC !== undefined ? `${Math.round(tile.gpuTempC)}°C` : '',
+  ]
+    .filter(Boolean)
+    .join(' · ');
+};
+
 const tileMetrics = (tile: DiagramTile): string =>
   [
     tile.cpu !== undefined ? `CPU ${Math.round(tile.cpu)}%` : '',
     tile.memory !== undefined ? `Mem ${Math.round(tile.memory)}%` : '',
     tile.temperatureC !== undefined ? `${Math.round(tile.temperatureC)}°C` : '',
+    formatDrawerGpu(tile),
     formatDrawerNet(tile),
     formatProbeAndLatency(tile.probeSummary, tile.latencyMs),
     formatDrawerLinkSpeed(tile),
@@ -781,6 +793,13 @@ export function InfrastructureMapDrawer(props: InfrastructureMapDrawerProps) {
                                     : `${entry.tile.zfsErrorCount!.toLocaleString()} ZFS errors`}
                                 </MetadataBadge>
                               </Show>
+                              <For each={entry.tile.accelerators ?? []}>
+                                {(accel) => (
+                                  <MetadataBadge tone="info" size="xs" shape="pill">
+                                    {accel}
+                                  </MetadataBadge>
+                                )}
+                              </For>
                               <Show when={entry.tile.firewallEnabled}>
                                 <MetadataBadge
                                   tone="neutral"

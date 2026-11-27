@@ -17,24 +17,29 @@ import type { Resource } from '@/types/resource';
  * nothing.
  */
 
-export type MapLinkKind = 'network' | 'route';
+export type MapLinkKind = 'network' | 'route' | 'volume' | 'mount' | 'storage' | 'stack' | 'peer';
 
 export interface MapLink {
   kind: MapLinkKind;
   /**
    * Where the connection starts, in the direction traffic takes: the
-   * container that uses another's network, or the proxy that routes to a
-   * container.
+   * container that uses another's network, the proxy that routes to a
+   * container, the workload mounting storage, or the source of a canonical
+   * resource relationship.
    */
   fromId: string;
-  /** Where that traffic goes. */
+  /** Where that traffic or dependency goes. */
   toId: string;
   /**
    * The hostnames a route answers at, from the routed container's own
-   * labels. Always empty for a shared network. They identify an estate, so
+   * labels. Always empty for non-route links. They identify an estate, so
    * the map with names hidden carries none.
    */
   hosts: string[];
+  /** Optional short factual qualifier (e.g. volume name, `:5432`, or relationship verb). */
+  detail?: string;
+  /** True when `detail` holds an estate-specific name that Hide names must clear. */
+  sensitiveDetail?: boolean;
 }
 
 export interface MapGateway {
@@ -190,9 +195,169 @@ const groupByAddress = (
 
 const isLoopback = (address: string): boolean => address === '::1' || address.startsWith('127.');
 
+const SHARED_CONTAINER_MAX_PEERS = 6;
+const ANONYMOUS_DOCKER_VOLUME = /^[0-9a-f]{64}$/i;
+const DOCKER_VOLUME_PATH = /^\/var\/lib\/docker\/volumes\/([^/]+)(?:\/_data)?\/?$/i;
+const DEFAULT_DOCKER_NETWORKS = new Set(['bridge', 'host', 'none', 'ingress', 'docker_gwbridge']);
+
+const SYSTEM_BIND_EXACT = new Set([
+  '/',
+  '/etc/localtime',
+  '/etc/timezone',
+  '/etc/hosts',
+  '/etc/resolv.conf',
+  '/etc/passwd',
+  '/etc/group',
+  '/var/run/docker.sock',
+  '/run/docker.sock',
+]);
+
+const SYSTEM_BIND_PREFIXES = [
+  '/proc',
+  '/sys',
+  '/dev',
+  '/run',
+  '/boot',
+  '/lib',
+  '/lib64',
+  '/usr',
+  '/bin',
+  '/sbin',
+];
+
+const DATA_BACKEND_REPOS = new Set([
+  'postgres',
+  'postgresql',
+  'postgis',
+  'timescaledb',
+  'pgvector',
+  'mysql',
+  'mariadb',
+  'redis',
+  'valkey',
+  'dragonfly',
+  'memcached',
+  'mongo',
+  'mongodb',
+  'influxdb',
+  'clickhouse',
+  'clickhouse-server',
+  'rabbitmq',
+  'mosquitto',
+  'eclipse-mosquitto',
+  'emqx',
+  'nats',
+  'kafka',
+  'redpanda',
+  'meilisearch',
+  'elasticsearch',
+  'opensearch',
+  'qdrant',
+  'chroma',
+  'chromadb',
+  'minio',
+  'garage',
+  'victoriametrics',
+  'victoria-metrics',
+]);
+
+const normalizeUnixPath = (raw: string | undefined): string => {
+  const trimmed = (raw ?? '').trim();
+  if (!trimmed.startsWith('/')) return '';
+  if (trimmed === '/') return '/';
+  return trimmed.replace(/\/+$/, '');
+};
+
+const isSystemBindPath = (path: string): boolean => {
+  if (!path || SYSTEM_BIND_EXACT.has(path)) return true;
+  return SYSTEM_BIND_PREFIXES.some((prefix) => path === prefix || path.startsWith(`${prefix}/`));
+};
+
+const extractNamedDockerVolume = (mount: {
+  type?: string;
+  source?: string;
+}): string | undefined => {
+  const kind = (mount.type ?? '').trim().toLowerCase();
+  const source = (mount.source ?? '').trim();
+  if (!source) return undefined;
+  if (kind === 'volume') {
+    const fromPath = DOCKER_VOLUME_PATH.exec(source);
+    const name = (fromPath ? fromPath[1] : source).trim();
+    if (!name || name.includes('/') || ANONYMOUS_DOCKER_VOLUME.test(name)) return undefined;
+    return name;
+  }
+  const fromPath = DOCKER_VOLUME_PATH.exec(source);
+  if (fromPath) {
+    const name = fromPath[1].trim();
+    if (name && !ANONYMOUS_DOCKER_VOLUME.test(name)) return name;
+  }
+  return undefined;
+};
+
+const isDataBackendContainer = (container: Resource): boolean => {
+  const repo = imageRepository(container.docker?.image);
+  if (DATA_BACKEND_REPOS.has(repo)) return true;
+  for (const token of DATA_BACKEND_REPOS) {
+    if (repo.startsWith(`${token}-`) || repo.endsWith(`-${token}`)) return true;
+  }
+  return false;
+};
+
+const pathMatchesPrefix = (childPath: string, rootPath: string): boolean => {
+  if (!childPath || !rootPath || rootPath === '/') return false;
+  return childPath === rootPath || childPath.startsWith(`${rootPath}/`);
+};
+
+const relationshipPortDetail = (
+  metadata: Record<string, unknown> | undefined,
+): string | undefined => {
+  if (!metadata) return undefined;
+  const rawPort = metadata.port;
+  if (typeof rawPort === 'number' && Number.isFinite(rawPort) && rawPort > 0) {
+    return `:${Math.round(rawPort)}`;
+  }
+  const rawPorts = metadata.ports;
+  if (Array.isArray(rawPorts) && rawPorts.length > 0) {
+    const valid = rawPorts.filter(
+      (value): value is number => typeof value === 'number' && Number.isFinite(value) && value > 0,
+    );
+    if (valid.length === 1) return `:${Math.round(valid[0])}`;
+    if (valid.length > 1) return `:${Math.round(valid[0])} +${valid.length - 1}`;
+  }
+  return undefined;
+};
+
+const PEER_RELATIONSHIP_TYPES = new Set([
+  'communicates_with',
+  'depends_on',
+  'stores_on',
+  'protected_by',
+  'mounted_to',
+  'exposed_by',
+]);
+
 export function resolveMapConnections(resources: readonly Resource[]): MapConnections {
   const containers = resources.filter((resource) => resource.type === 'app-container');
   const byHost = new Map<string, Resource[]>();
+  const hostPoolsByParent = new Map<string, Array<{ id: string; path: string }>>();
+  const resourceIds = new Set<string>();
+  for (const resource of resources) {
+    resourceIds.add(resource.id);
+    if (
+      (resource.type === 'storage' ||
+        resource.type === 'pool' ||
+        resource.type === 'datastore' ||
+        resource.type === 'ceph') &&
+      resource.parentId
+    ) {
+      const poolPath = normalizeUnixPath(resource.storage?.path);
+      if (poolPath && poolPath !== '/') {
+        const list = hostPoolsByParent.get(resource.parentId) ?? [];
+        list.push({ id: resource.id, path: poolPath });
+        hostPoolsByParent.set(resource.parentId, list);
+      }
+    }
+  }
   for (const container of containers) {
     const key = hostKeyOf(container);
     if (!key) continue;
@@ -202,6 +367,17 @@ export function resolveMapConnections(resources: readonly Resource[]): MapConnec
   }
 
   const links: MapLink[] = [];
+  const emittedKindPairs = new Set<string>();
+  const pushUniqueLink = (link: MapLink, undirected = false) => {
+    if (link.fromId === link.toId) return;
+    const a = undirected && link.fromId > link.toId ? link.toId : link.fromId;
+    const b = undirected && link.fromId > link.toId ? link.fromId : link.toId;
+    const key = `${link.kind}\0${a}\0${b}`;
+    if (emittedKindPairs.has(key)) return;
+    emittedKindPairs.add(key);
+    links.push(link);
+  };
+
   for (const siblings of byHost.values()) {
     // Whose network each container uses, when its mode names one of these.
     const owner = new Map<string, Resource>();
@@ -216,7 +392,7 @@ export function resolveMapConnections(resources: readonly Resource[]): MapConnec
       );
       if (owners.length !== 1) continue;
       owner.set(container.id, owners[0]);
-      links.push({ kind: 'network', fromId: container.id, toId: owners[0].id, hosts: [] });
+      pushUniqueLink({ kind: 'network', fromId: container.id, toId: owners[0].id, hosts: [] });
     }
 
     // A container inside another's network is reached where that one is.
@@ -231,12 +407,8 @@ export function resolveMapConnections(resources: readonly Resource[]): MapConnec
       return networksOf(target).some((name) => reachable.has(name));
     };
 
-    const routePairs = new Set<string>();
     const addRoute = (fromId: string, toId: string, hosts: string[]) => {
-      const key = `${fromId}>${toId}`;
-      if (routePairs.has(key)) return;
-      routePairs.add(key);
-      links.push({ kind: 'route', fromId, toId, hosts });
+      pushUniqueLink({ kind: 'route', fromId, toId, hosts });
     };
 
     const traefikProxies = siblings.filter(
@@ -265,7 +437,161 @@ export function resolveMapConnections(resources: readonly Resource[]): MapConnec
         }
       }
     }
+
+    // 1. Docker named volume sharing, shared non-system bind mounts, and
+    //    bind-mount-to-host-storage-pool attribution on this Docker host.
+    const byVolume = new Map<string, Resource[]>();
+    const byBindSource = new Map<string, Resource[]>();
+    for (const container of siblings) {
+      const parentPools = container.parentId
+        ? (hostPoolsByParent.get(container.parentId) ?? [])
+        : [];
+      const sortedPools =
+        parentPools.length > 1
+          ? [...parentPools].sort((a, b) => b.path.length - a.path.length)
+          : parentPools;
+      const seenVolumes = new Set<string>();
+      const seenBinds = new Set<string>();
+
+      for (const mount of container.docker?.mounts ?? []) {
+        const volumeName = extractNamedDockerVolume(mount);
+        if (volumeName) {
+          if (!seenVolumes.has(volumeName)) {
+            seenVolumes.add(volumeName);
+            const list = byVolume.get(volumeName) ?? [];
+            list.push(container);
+            byVolume.set(volumeName, list);
+          }
+          continue;
+        }
+        const mountType = (mount.type ?? '').trim().toLowerCase();
+        if (mountType && mountType !== 'bind') continue;
+        const sourcePath = normalizeUnixPath(mount.source);
+        if (!sourcePath || isSystemBindPath(sourcePath)) continue;
+
+        if (!seenBinds.has(sourcePath)) {
+          seenBinds.add(sourcePath);
+          const list = byBindSource.get(sourcePath) ?? [];
+          list.push(container);
+          byBindSource.set(sourcePath, list);
+        }
+
+        // Match deepest storage pool path on the same host (e.g. /mnt/cachepool/appdata -> cachepool).
+        if (sortedPools.length > 0) {
+          const matchedPool = sortedPools.find((pool) => pathMatchesPrefix(sourcePath, pool.path));
+          if (matchedPool) {
+            pushUniqueLink({
+              kind: 'storage',
+              fromId: container.id,
+              toId: matchedPool.id,
+              hosts: [],
+            });
+          }
+        }
+      }
+    }
+
+    for (const [volumeName, members] of byVolume) {
+      if (members.length < 2 || members.length > SHARED_CONTAINER_MAX_PEERS) continue;
+      const sorted = [...members].sort((a, b) => collator.compare(a.id, b.id));
+      for (let i = 0; i < sorted.length; i += 1) {
+        for (let j = i + 1; j < sorted.length; j += 1) {
+          pushUniqueLink(
+            {
+              kind: 'volume',
+              fromId: sorted[i].id,
+              toId: sorted[j].id,
+              hosts: [],
+              detail: volumeName,
+              sensitiveDetail: true,
+            },
+            true,
+          );
+        }
+      }
+    }
+
+    for (const members of byBindSource.values()) {
+      if (members.length < 2 || members.length > SHARED_CONTAINER_MAX_PEERS) continue;
+      const sorted = [...members].sort((a, b) => collator.compare(a.id, b.id));
+      for (let i = 0; i < sorted.length; i += 1) {
+        for (let j = i + 1; j < sorted.length; j += 1) {
+          pushUniqueLink(
+            {
+              kind: 'mount',
+              fromId: sorted[i].id,
+              toId: sorted[j].id,
+              hosts: [],
+            },
+            true,
+          );
+        }
+      }
+    }
+
+    // 2. Compose stack and small private Docker network app -> database/broker wiring.
+    const linkAppsToBackends = (members: readonly Resource[]) => {
+      if (members.length < 2 || members.length > SHARED_CONTAINER_MAX_PEERS) return;
+      const backends = members.filter((container) => isDataBackendContainer(container));
+      if (backends.length === 0 || backends.length === members.length) return;
+      const apps = members.filter((container) => !isDataBackendContainer(container));
+      for (const app of apps) {
+        for (const backend of backends) {
+          pushUniqueLink({
+            kind: 'stack',
+            fromId: app.id,
+            toId: backend.id,
+            hosts: [],
+          });
+        }
+      }
+    };
+
+    const byCompose = new Map<string, Resource[]>();
+    const byPrivateNetwork = new Map<string, Resource[]>();
+    for (const container of siblings) {
+      const project = (
+        container.docker?.composeProject ??
+        container.docker?.podman?.composeProject ??
+        ''
+      ).trim();
+      if (project) {
+        const list = byCompose.get(project) ?? [];
+        list.push(container);
+        byCompose.set(project, list);
+      }
+      for (const netName of attachedNetworks(container)) {
+        if (DEFAULT_DOCKER_NETWORKS.has(netName.toLowerCase())) continue;
+        const list = byPrivateNetwork.get(netName) ?? [];
+        list.push(container);
+        byPrivateNetwork.set(netName, list);
+      }
+    }
+    for (const members of byCompose.values()) linkAppsToBackends(members);
+    for (const members of byPrivateNetwork.values()) linkAppsToBackends(members);
   }
+
+  // 3. Canonical resource.relationships[] (passive socket peers, dependencies, storage/backup links).
+  for (const resource of resources) {
+    for (const rel of resource.relationships ?? []) {
+      if (rel.active === false) continue;
+      if (!PEER_RELATIONSHIP_TYPES.has(rel.type)) continue;
+      const fromId = (rel.sourceId || resource.id).trim();
+      const toId = (rel.targetId || '').trim();
+      if (!fromId || !toId || fromId === toId) continue;
+      if (!resourceIds.has(fromId) || !resourceIds.has(toId)) continue;
+      const portDetail =
+        rel.type === 'communicates_with' ? relationshipPortDetail(rel.metadata) : undefined;
+      pushUniqueLink({
+        kind: 'peer',
+        fromId,
+        toId,
+        hosts: [],
+        detail: portDetail ?? rel.type,
+      });
+    }
+  }
+
   links.sort(
     (a, b) =>
       collator.compare(a.kind, b.kind) ||
