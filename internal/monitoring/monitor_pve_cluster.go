@@ -499,7 +499,7 @@ func (m *Monitor) detectClusterMembership(ctx context.Context, instanceName stri
 	// endpoints, because the addresses captured at add time go stale when the
 	// cluster re-IPs - without a refresh Pulse keeps dialing (and displaying)
 	// dead addresses forever (#1493).
-	if !m.claimPVEClusterCheck(instanceName) {
+	if ctx.Err() != nil || !m.claimPVEClusterCheck(instanceName) {
 		return
 	}
 
@@ -511,7 +511,7 @@ func (m *Monitor) detectClusterMembership(ctx context.Context, instanceName stri
 		return
 	}
 	clientConfig.Fingerprint = fingerprint
-	isCluster, clusterName, clusterEndpoints := detectMonitorPVECluster(clientConfig, instanceCfg.ClusterEndpoints)
+	isCluster, clusterName, clusterEndpoints := detectMonitorPVECluster(ctx, clientConfig, instanceCfg.ClusterEndpoints)
 	if !isCluster || strings.TrimSpace(clusterName) == "" || len(clusterEndpoints) == 0 {
 		return
 	}
@@ -825,31 +825,20 @@ func (m *Monitor) updateClusterEndpointStatus(instanceName string, instanceCfg *
 	}
 }
 
-func defaultDetectMonitorPVECluster(clientConfig proxmox.ClientConfig, existingEndpoints []config.ClusterEndpoint) (bool, string, []config.ClusterEndpoint) {
-	tempClient, err := proxmox.NewClient(clientConfig)
+func defaultDetectMonitorPVECluster(ctx context.Context, clientConfig proxmox.ClientConfig, existingEndpoints []config.ClusterEndpoint) (bool, string, []config.ClusterEndpoint) {
+	// This is optional discovery inside a scheduled poll, not a separate
+	// job. Initial password authentication also has to share its lifetime.
+	tempClient, err := proxmox.NewClientWithContext(ctx, clientConfig)
 	if err != nil {
-		log.Warn().Err(err).Msg("Failed to create client for runtime cluster detection")
+		if ctx.Err() == nil {
+			log.Warn().Err(err).Msg("Failed to create client for runtime cluster detection")
+		}
 		return false, "", nil
 	}
 	defer tempClient.CloseIdleConnections()
 
-	var (
-		clusterStatus []proxmox.ClusterStatus
-		lastErr       error
-	)
-	for attempt := 0; attempt < 3; attempt++ {
-		if attempt > 0 {
-			time.Sleep(time.Duration(attempt) * time.Second)
-		}
-
-		detectCtx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
-		clusterStatus, lastErr = tempClient.GetClusterStatus(detectCtx)
-		cancel()
-		if lastErr == nil {
-			break
-		}
-	}
-	if lastErr != nil {
+	clusterStatus, err := readMonitorPVEClusterStatus(ctx, tempClient)
+	if err != nil {
 		return false, "", nil
 	}
 
@@ -858,6 +847,31 @@ func defaultDetectMonitorPVECluster(clientConfig proxmox.ClientConfig, existingE
 		return false, "", nil
 	}
 	return true, clusterName, clusterEndpoints
+}
+
+func readMonitorPVEClusterStatus(ctx context.Context, client pveClusterStatusGetter) ([]proxmox.ClusterStatus, error) {
+	var lastErr error
+	for attempt := 0; attempt < 3; attempt++ {
+		if attempt > 0 {
+			select {
+			case <-ctx.Done():
+				return nil, ctx.Err()
+			case <-time.After(time.Duration(attempt) * time.Second):
+			}
+		}
+		if err := ctx.Err(); err != nil {
+			return nil, err
+		}
+
+		detectCtx, cancel := context.WithTimeout(ctx, 5*time.Second)
+		clusterStatus, err := client.GetClusterStatus(detectCtx)
+		cancel()
+		if err == nil {
+			return clusterStatus, nil
+		}
+		lastErr = err
+	}
+	return nil, lastErr
 }
 
 func monitorClusterEndpointDefaults(rawHost string) (string, string) {
