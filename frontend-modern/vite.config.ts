@@ -5,6 +5,7 @@ import sri from 'vite-plugin-sri-gen';
 import path from 'path';
 import { URL } from 'node:url';
 import { configDefaults } from 'vitest/config';
+import { partitionVitestFiles } from './vitest.projects';
 
 const frontendDevHost = process.env.FRONTEND_DEV_HOST ?? '127.0.0.1';
 const frontendDevPort = Number(
@@ -286,18 +287,57 @@ export default defineConfig(({ mode }) => ({
       target: 'esnext',
     },
   },
-  test: {
-    environment: 'jsdom',
-    // Worker threads preserve full per-file isolation without Vitest 4's
-    // per-worker child-process fork/IPC overhead; unit tests do not rely on
-    // compiled CSS imports.
-    pool: 'threads',
-    css: false,
-    globals: true,
-    setupFiles: ['./src/test/setup.ts'],
-    alias: {
-      '@': srcAlias,
-    },
-    exclude: [...configDefaults.exclude, 'tests/integration/**', '**/tests/integration/**'],
-  },
+  test: (() => {
+    const baseExclude = [
+      ...configDefaults.exclude,
+      'tests/integration/**',
+      '**/tests/integration/**',
+    ];
+    const shared = {
+      environment: 'jsdom' as const,
+      // Worker threads preserve full per-file isolation without Vitest 4's
+      // per-worker child-process fork/IPC overhead; unit tests do not rely on
+      // compiled CSS imports.
+      pool: 'threads' as const,
+      css: false,
+      globals: true,
+      setupFiles: ['./vitest.setup.ts'],
+      alias: {
+        '@': srcAlias,
+      },
+      exclude: baseExclude,
+    };
+    if (mode !== 'test') {
+      return shared;
+    }
+    const { nodeFiles } = partitionVitestFiles(__dirname);
+    if (nodeFiles.length === 0) {
+      return shared;
+    }
+    return {
+      ...shared,
+      projects: [
+        {
+          extends: true,
+          test: {
+            name: 'node',
+            environment: 'node' as const,
+            include: nodeFiles,
+            exclude: baseExclude,
+            setupFiles: ['./vitest.setup.ts'],
+          },
+        },
+        {
+          extends: true,
+          test: {
+            name: 'jsdom',
+            environment: 'jsdom' as const,
+            include: configDefaults.include,
+            exclude: [...baseExclude, ...nodeFiles],
+            setupFiles: ['./vitest.setup.ts'],
+          },
+        },
+      ],
+    };
+  })(),
 }));
