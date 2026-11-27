@@ -301,6 +301,15 @@ without removing the collector. The runner accepts only the documented typed
 host, Proxmox guest, and container operations; shell, generic exec,
 unrestricted file reads, and deploy requests remain forbidden.
 
+Read-only Linux APT pending-update inspection runs directly in the collector
+without requiring an action runner or package-remediation authority. The
+collector resolves `apt-get` from its fixed trusted catalog and runs only
+`apt-get -s -o Debug::NoLocking=1 upgrade` in a clean environment (`LC_ALL=C`)
+with a 20-second deadline and process-group cancellation, failing closed on
+truncated or cancelled output rather than reporting zero pending updates.
+Package installation and upgrade mutations remain with the separately enrolled
+action runner and are refused on the collector command client.
+
 Agent Doctor shows the reported collector service user, command-authority
 ceiling, collector credential scope, and typed-helper configuration separately
 from the tenant- and host-bound action-runner credential and connected-session
@@ -1508,7 +1517,10 @@ or repeat an update to fill the gap.
    On Windows, `failed to sync staged binary` with a file-in-use error means
    the updater could not access its staged file. The message does not identify
    which process held it. Keep the time and redacted error without disabling
-   endpoint protection.
+   endpoint protection. Current Windows agents flush the downloaded binary
+   through its original writable handle before closing rather than reopening it
+   for write after identity and self-tests, while still refusing replacement if
+   flushing fails.
 3. **Activation, restart or rollback:** an accepted download or staged artifact
    is not a completed update. Preserve the original result and any rollback
    error, then compare fresh reporting from that same host with the intended

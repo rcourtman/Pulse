@@ -394,6 +394,20 @@ does not prove that every reading is fresh. Missing or unavailable is not zero.
   `Docker collection error — showing the last report received.`, plus
   `Last error:` when reported) without hiding retained counts, states or
   metadata.
+- **Docker images, storage and networks** (`/docker/images`, `/docker/storage`
+  covering **Volumes** and **Engine Storage Usage**, and `/docker/networks`)
+  also show an amber **Stale data** status indicator and inline **Stale data**
+  cue beside the row name when Docker or Podman reporting goes quiet or hits a
+  collection error, keeping last-reported counts, sizes, update checks and
+  network metadata visible. On `/docker/images`, stale **Current** update
+  badges switch from green to muted while worse update states stay visible. On
+  `/docker/networks`, stale networks move out of **In use** and **Unused** into
+  **Attention**, keep last-reported container counts without painting **State**
+  green, and apply source freshness to attached containers while keeping worse
+  states (such as **Offline** or **Unhealthy**) ahead of staleness. Expanded
+  drawers across images, volumes, engine storage usage and networks display the
+  same inline Docker stale-readings notice and freshness-aware status indicator
+  until live reporting recovers.
 
 Use the relevant checks for [stale TrueNAS data](TRUENAS.md#stale-truenas-data),
 [stale Kubernetes readings](KUBERNETES.md#stale-kubernetes-readings),

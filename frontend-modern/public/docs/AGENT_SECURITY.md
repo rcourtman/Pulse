@@ -481,7 +481,11 @@ by installing the collector with command execution.
 - **What does not.** Stop, shutdown and reboot. The server refuses to send
   them on this path and the collector refuses to run them. They still need the
   action runner. The collector's typed catalog is the containment probe, a
-  status read and a start. Package commands stay with the runner.
+  status read and a start. Package commands stay with the runner. Read-only
+  Linux APT pending-update inspection (`apt-get -s -o Debug::NoLocking=1
+  upgrade`) is a local monitoring read that runs in the collector without an
+  action runner or privilege gain; package installation and upgrade mutations
+  remain runner-only and are refused on the collector command client.
 - **Who decides.** An admin approves every start. There is no automatic
   authorization for it. Pulse's own Proxmox API read decides whether the guest
   is running afterwards. The collector's word is kept as evidence and does not

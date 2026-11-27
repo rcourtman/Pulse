@@ -375,8 +375,105 @@ class StaleReadingAndAgentHelpDocsTest(unittest.TestCase):
         ):
             self.assertIn(marker, model)
 
+    def test_faq_documents_docker_images_storage_and_networks_stale_readings(self):
+        faq = doc_text("docs/FAQ.md")
+        faq_section = norm(
+            faq.split("### No data showing?\n", 1)[1].split("\n### ", 1)[0]
+        )
+        for phrase in (
+            "**Docker images, storage and networks**",
+            "`/docker/images`, `/docker/storage` covering **Volumes** and **Engine Storage Usage**, and `/docker/networks`",
+            "amber **Stale data** status indicator and inline **Stale data** cue beside the row name",
+            "On `/docker/images`, stale **Current** update badges switch from green to muted",
+            "On `/docker/networks`, stale networks move out of **In use** and **Unused** into **Attention**",
+            "keep last-reported container counts without painting **State** green",
+            "apply source freshness to attached containers while keeping worse states (such as **Offline** or **Unhealthy**) ahead of staleness",
+            "same inline Docker stale-readings notice and freshness-aware status indicator",
+        ):
+            with self.subTest(phrase=phrase):
+                self.assertIn(phrase, faq_section)
+
+        images = doc_text("frontend-modern/src/features/docker/DockerImagesTable.tsx")
+        volumes = doc_text("frontend-modern/src/features/docker/DockerVolumesTable.tsx")
+        storage = doc_text("frontend-modern/src/features/docker/DockerStorageUsageTable.tsx")
+        networks = doc_text("frontend-modern/src/features/docker/DockerNetworksTable.tsx")
+        shared = doc_text("frontend-modern/src/features/docker/DockerNativeTableShared.tsx")
+        model = doc_text("frontend-modern/src/features/docker/dockerPageModel.ts")
+
+        self.assertIn("return staleNotice() && tone === 'success' ? 'muted' : tone;", images)
+        self.assertIn('<DockerStaleDataCue notice={staleNotice()} scope="image" />', images)
+        self.assertIn('<DockerStaleReadingsNotice notice={staleNotice()} class="mb-3" />', images)
+        self.assertIn('<DockerStaleDataCue notice={staleNotice()} scope="volume" />', volumes)
+        self.assertIn('<DockerStaleReadingsNotice notice={staleNotice()} class="mb-3" />', volumes)
+        self.assertIn('<DockerStaleDataCue notice={staleNotice()} scope="storage-usage" />', storage)
+        self.assertIn("<DockerStaleReadingsNotice notice={staleNotice()} />", storage)
+        for marker in (
+            '<DockerStaleDataCue notice={staleNotice()} scope="network" />',
+            "variant: attention.variant === 'success' ? 'muted' : attention.variant,",
+            "if (filter === 'attention' && !hasAttention) return false;",
+            "if (filter === 'in-use' && (hasAttention || attachments.length === 0)) return false;",
+            "if (filter === 'unused' && (hasAttention || attachments.length > 0)) return false;",
+        ):
+            self.assertIn(marker, networks)
+        self.assertIn('data-docker-stale={props.scope}', shared)
+        self.assertIn('<DockerStaleReadingsNotice notice={staleNotice()} />', shared)
+        self.assertIn(
+            "const status = applyDockerSourceFreshness(container, mapDockerContainerStatus(container));",
+            model,
+        )
+
+    def test_agent_help_documents_runner_free_apt_inspection_and_windows_staging_flush(self):
+        unified = norm(doc_text("docs/UNIFIED_AGENT.md"))
+        for phrase in (
+            "Read-only Linux APT pending-update inspection runs directly in the collector without requiring an action runner or package-remediation authority.",
+            "`apt-get -s -o Debug::NoLocking=1 upgrade`",
+            "clean environment (`LC_ALL=C`) with a 20-second deadline and process-group cancellation",
+            "failing closed on truncated or cancelled output rather than reporting zero pending updates",
+            "Current Windows agents flush the downloaded binary through its original writable handle before closing rather than reopening it for write after identity and self-tests, while still refusing replacement if flushing fails.",
+        ):
+            with self.subTest(doc="UNIFIED_AGENT.md", phrase=phrase):
+                self.assertIn(phrase, unified)
+
+        security = norm(doc_text("docs/AGENT_SECURITY.md"))
+        for phrase in (
+            "Package commands stay with the runner.",
+            "Read-only Linux APT pending-update inspection (`apt-get -s -o Debug::NoLocking=1 upgrade`) is a local monitoring read that runs in the collector without an action runner or privilege gain; package installation and upgrade mutations remain runner-only and are refused on the collector command client.",
+        ):
+            with self.subTest(doc="AGENT_SECURITY.md", phrase=phrase):
+                self.assertIn(phrase, security)
+
+        pkg_linux = doc_text("internal/hostagent/package_inspection_linux.go")
+        pkg_common = doc_text("internal/hostagent/package_inspection.go")
+        updater = doc_text("internal/agentupdate/update.go")
+        for marker in (
+            "const packageInspectionTimeout = 20 * time.Second",
+            'exec.CommandContext(ctx, path, "-s", "-o", "Debug::NoLocking=1", "upgrade")',
+            '"LC_ALL=C"',
+            "configureCommandProcessGroup(cmd)",
+            "package inspection output exceeded its limit",
+        ):
+            self.assertIn(marker, pkg_linux)
+        self.assertIn(
+            'only the fixed APT report simulation is allowed',
+            pkg_common,
+        )
+        for marker in (
+            "if runtimeGOOS == goOSWindows {",
+            "if err := syncOpenFileFn(tmpFile); err != nil {",
+            'syncErr = fmt.Errorf("failed to sync staged binary: %w", err)',
+            "if runtimeGOOS != goOSWindows {",
+        ):
+            self.assertIn(marker, updater)
+
     def test_shipped_public_docs_mirrors_match_byte_for_byte(self):
-        for name in ("FAQ.md", "KUBERNETES.md", "RECOVERY.md", "TRUENAS.md", "UNIFIED_AGENT.md"):
+        for name in (
+            "AGENT_SECURITY.md",
+            "FAQ.md",
+            "KUBERNETES.md",
+            "RECOVERY.md",
+            "TRUENAS.md",
+            "UNIFIED_AGENT.md",
+        ):
             with self.subTest(doc=name):
                 self.assertEqual(
                     (ROOT / "docs" / name).read_bytes(),
