@@ -249,33 +249,39 @@ func (mh *MetricsHistory) appendMetric(metrics []MetricPoint, point MetricPoint)
 	}
 	// Keep a single canonical value per timestamp so chart consumers never
 	// have to guess which duplicate tail point to render.
+	addPoint := true
 	if len(metrics) > 0 && metrics[len(metrics)-1].Timestamp.Equal(point.Timestamp) {
 		metrics[len(metrics)-1] = point
-	} else {
-		metrics = append(metrics, point)
+		addPoint = false
 	}
 
-	// Remove old points beyond retention time. Compact in place instead of
-	// re-slicing the front: `metrics[i:]` hides the trimmed prefix from
-	// cap() while keeping the whole backing array reachable, so seed-sized
-	// arrays stayed pinned long after their points aged out.
+	// Find the retained window as if we had appended. Trim before adding
+	// the sample so a full array does not grow just to drop old points.
 	cutoffTime := time.Now().Add(-mh.retentionTime)
-	firstRetained := len(metrics)
-	for i, p := range metrics {
-		if p.Timestamp.After(cutoffTime) {
-			firstRetained = i
-			break
-		}
+	firstRetained := 0
+	for firstRetained < len(metrics) && !metrics[firstRetained].Timestamp.After(cutoffTime) {
+		firstRetained++
 	}
-	if firstRetained == len(metrics) {
-		metrics = metrics[:0]
-	} else if firstRetained > 0 {
-		metrics = append(metrics[:0], metrics[firstRetained:]...)
+	// Retention removes the expired prefix, not late samples behind
+	// a retained point. Do not assume the incoming timestamp is ordered.
+	if firstRetained == len(metrics) && !point.Timestamp.After(cutoffTime) {
+		addPoint = false
 	}
-
-	// Ensure we don't exceed max data points, keeping the most recent.
-	if over := len(metrics) - mh.maxDataPoints; over > 0 {
-		metrics = append(metrics[:0], metrics[over:]...)
+	end := len(metrics)
+	if addPoint {
+		end++
+	}
+	firstRetained = max(firstRetained, end-mh.maxDataPoints)
+	if firstRetained >= end {
+		return releaseTrimmedCapacity(metrics[:0])
+	}
+	// Compact instead of re-slicing the front: keep the full backing
+	// capacity visible to releaseTrimmedCapacity for oversized seeds.
+	if firstRetained > 0 {
+		metrics = metrics[:copy(metrics, metrics[firstRetained:])]
+	}
+	if addPoint {
+		metrics = append(metrics, point)
 	}
 
 	return releaseTrimmedCapacity(metrics)

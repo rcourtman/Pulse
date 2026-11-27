@@ -1,11 +1,100 @@
 package monitoring
 
 import (
+	"math"
 	"runtime"
 	"runtime/debug"
+	"slices"
 	"testing"
+	"testing/synctest"
 	"time"
 )
+
+func TestMetricsHistoryFullWindowReusesBackingArray(t *testing.T) {
+	synctest.Test(t, func(t *testing.T) {
+		const window = 1000 // The live monitor's in-memory point limit.
+		mh := NewMetricsHistory(window, 24*time.Hour)
+		now := time.Now()
+		full := make([]MetricPoint, window)
+		for i := range full {
+			full[i] = MetricPoint{Value: float64(i), Timestamp: now.Add(time.Duration(i-window) * time.Second)}
+		}
+		want := append(slices.Clone(full[1:]), MetricPoint{Value: 1001, Timestamp: now})
+		mh.guestMetrics["vm"] = &GuestMetrics{CPU: full}
+
+		mh.AddGuestMetric("vm", "cpu", 1001, now)
+
+		got := mh.guestMetrics["vm"].CPU
+		if !slices.Equal(got, want) {
+			t.Fatal("rolling the full window changed the retained samples")
+		}
+		if cap(got) != window || &got[0] != &full[0] {
+			t.Errorf("full window allocated a new backing array: capacity %d -> %d points", window, cap(got))
+		}
+	})
+}
+
+func TestMetricsHistoryFullWindowReusesExpiredSlot(t *testing.T) {
+	synctest.Test(t, func(t *testing.T) {
+		mh := NewMetricsHistory(1000, 24*time.Hour)
+		now := time.Now()
+		for i := 0; ; i++ {
+			// Fill a naturally grown live buffer between 500 and 999 points.
+			// When its first observation expires the next sample fits.
+			const cadence = 150 * time.Second
+			at := now.Add(-24 * time.Hour).Add(time.Duration(i+1) * cadence)
+			mh.AddGuestMetric("vm", "cpu", float64(i), at)
+			series := mh.guestMetrics["vm"].CPU
+			if len(series) >= 500 && len(series) == cap(series) {
+				time.Sleep(time.Until(series[0].Timestamp.Add(24 * time.Hour)))
+				next := MetricPoint{Value: 1001, Timestamp: time.Now()}
+				want := append(slices.Clone(series[1:]), next)
+				mh.AddGuestMetric("vm", "cpu", next.Value, next.Timestamp)
+				got := mh.guestMetrics["vm"].CPU
+				if !slices.Equal(got, want) {
+					t.Fatal("retention trim changed the samples kept on append")
+				}
+				if cap(got) != cap(series) || &got[0] != &series[0] {
+					t.Errorf("expired slot allocated a new backing array: capacity %d -> %d points", cap(series), cap(got))
+				}
+				break
+			}
+			if i >= 998 {
+				t.Fatal("fixture did not reach a full buffer before the point limit")
+			}
+		}
+	})
+}
+
+func TestMetricsHistoryFullWindowPreservesTrimOrder(t *testing.T) {
+	synctest.Test(t, func(t *testing.T) {
+		now := time.Now()
+		cutoff := now.Add(-time.Hour)
+		fresh := MetricPoint{Value: 1, Timestamp: now.Add(-time.Minute)}
+		expired := MetricPoint{Value: 2, Timestamp: cutoff}
+		incoming := MetricPoint{Value: 3, Timestamp: now}
+		for _, tc := range []struct {
+			name      string
+			old, want []MetricPoint
+			point     MetricPoint
+		}{
+			{"single slot", []MetricPoint{fresh}, []MetricPoint{incoming}, incoming},
+			{"late sample previously kept behind fresh head", []MetricPoint{fresh, expired}, []MetricPoint{expired, incoming}, incoming},
+			{"retention trims expired prefix at cutoff", []MetricPoint{expired, expired, fresh}, []MetricPoint{fresh, incoming}, incoming},
+			{"expired series accepts fresh sample", []MetricPoint{expired, expired}, []MetricPoint{incoming}, incoming},
+			{"no retained samples", []MetricPoint{expired}, nil, MetricPoint{Value: 3, Timestamp: cutoff.Add(-time.Minute)}},
+			{"duplicate tail replaces instead of evicting", []MetricPoint{fresh, incoming}, []MetricPoint{fresh, {Value: 4, Timestamp: now}}, MetricPoint{Value: 4, Timestamp: now}},
+			{"invalid sample leaves entire buffer untouched", []MetricPoint{fresh, incoming}, []MetricPoint{fresh, incoming}, MetricPoint{Value: math.NaN(), Timestamp: now}},
+		} {
+			full := make([]MetricPoint, len(tc.old))
+			copy(full, tc.old)
+			mh := NewMetricsHistory(len(full), time.Hour)
+			if got := mh.appendMetric(full, tc.point); !slices.Equal(got, tc.want) {
+				t.Errorf("%s: retained samples = %v, want %v", tc.name, got, tc.want)
+			}
+		}
+	})
+}
 
 func TestMetricsHistoryMemoryStability(t *testing.T) {
 	if testing.Short() {
