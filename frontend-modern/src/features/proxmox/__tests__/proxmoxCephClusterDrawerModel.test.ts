@@ -6,6 +6,7 @@ import {
   buildCephClusterDetailSections,
   getCephClusterExceptionRows,
   getCephClusterFacts,
+  getCephClusterStaleNotice,
 } from '../proxmoxCephClusterDrawerModel';
 
 const cluster = (ceph: Partial<NonNullable<Resource['ceph']>> = {}): Resource =>
@@ -134,5 +135,48 @@ describe('proxmoxCephClusterDrawerModel', () => {
       'MON 3 · MGR 2',
       '128 placement groups',
     ]);
+  });
+
+  it('returns stale notices from top-level sourceStatus ahead of platformData and lifts Readings into Worth checking', () => {
+    const staleCluster: Resource = {
+      ...cluster({ services: [{ type: 'mon', running: 3, total: 3 }] }),
+      sourceStatus: {
+        proxmox: { status: 'error', error: 'Proxmox API request timed out' },
+      },
+    };
+    expect(getCephClusterStaleNotice(staleCluster)).toEqual({
+      badge: 'Stale data',
+      detail: 'Proxmox collection error: Proxmox API request timed out',
+    });
+
+    const rows = getCephClusterExceptionRows(staleCluster);
+    expect(rows).toEqual([
+      expect.objectContaining({
+        label: 'Readings',
+        value:
+          'Proxmox collection error: Proxmox API request timed out. Shown figures are last reported values.',
+        tone: 'warning',
+        wrap: true,
+      }),
+    ]);
+
+    // Live WebSocket recovery on top-level sourceStatus clears stale platformData.
+    const recoveredCluster: Resource = {
+      ...staleCluster,
+      sourceStatus: { proxmox: { status: 'online' } },
+      platformData: { sourceStatus: { proxmox: { status: 'stale' } } },
+    };
+    expect(getCephClusterStaleNotice(recoveredCluster)).toBeNull();
+    expect(getCephClusterExceptionRows(recoveredCluster)).toEqual([]);
+
+    // Older fixtures carrying sourceStatus under platformData still surface staleness.
+    const legacyStaleCluster: Resource = {
+      ...cluster({ services: [] }),
+      platformData: { sourceStatus: { proxmox: { status: 'stale' } } },
+    };
+    expect(getCephClusterStaleNotice(legacyStaleCluster)).toEqual({
+      badge: 'Stale data',
+      detail: 'Proxmox has not updated this cluster recently',
+    });
   });
 });

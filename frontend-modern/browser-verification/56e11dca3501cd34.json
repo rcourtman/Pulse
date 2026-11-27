@@ -1,0 +1,41 @@
+{
+  "version": 1,
+  "base_sha": "b7bc1ff7f66c55cba1e9cbbbe24e3e91405956ab",
+  "verified_at": "2026-11-27T10:55:00Z",
+  "result": "passed",
+  "changed_paths": [
+    "frontend-modern/src/features/proxmox/ProxmoxCephClusterDrawer.tsx",
+    "frontend-modern/src/features/proxmox/ProxmoxCephTable.tsx",
+    "frontend-modern/src/features/proxmox/proxmoxCephClusterDrawerModel.ts"
+  ],
+  "content_sha256": {
+    "frontend-modern/src/features/proxmox/ProxmoxCephClusterDrawer.tsx": "4d9304b5a3b2171e5ec6115447aed5004d41c04581c5cb1aafd2842df5182edd",
+    "frontend-modern/src/features/proxmox/ProxmoxCephTable.tsx": "6490dd42f27786f66f59b01bf78f1e79f08cc842939148dd3ad079f0d32a3b9e",
+    "frontend-modern/src/features/proxmox/proxmoxCephClusterDrawerModel.ts": "84f975d4b3901111c9dfcc8180c4f8cbf6816179864913853397fee58bc61810"
+  },
+  "routes": [
+    "/proxmox/ceph"
+  ],
+  "viewports": [
+    {
+      "width": 1440,
+      "height": 940
+    },
+    {
+      "width": 360,
+      "height": 820
+    }
+  ],
+  "states": [
+    "Paired production-build before (bba7b5bd2963, dist sha256 d55c3818dd30) vs after (b7bc1ff7f66c, dist sha256 44e0f1eaab7d) on Chromium 141.0.7390.37 (1440x940 light) and WebKit 26.0 touch (360x820 dark), 0 console/page/HTTP errors, 0px horizontal overflow",
+    "Stale HEALTH_OK cluster (ceph-east-prod) with Proxmox 401 collection error moves from Healthy into Warning with amber Stale health label, non-colour Stale data cue, amber collection error Detail, and inline drawer Worth checking Readings row while retaining quorum/OSD/PG/pool/capacity/service figures",
+    "Stale HEALTH_ERR cluster (ceph-west-dr) preserves Critical classification and ceph.healthMessage while adding Stale data cue; live healthy peer (ceph-north-edge) remains Healthy with no stale cue",
+    "Live WebSocket rawData recovery clears ceph-east-prod Stale data cue, restores Healthy chip/row/drawer status, clears Detail and Worth checking, and updates live capacity without reload",
+    "Compact 360x820 touch WebKit dark layout renders Stale data cues and wrapped Worth checking drawer rows without clipping or horizontal overflow"
+  ],
+  "interactions": [
+    "Loaded /proxmox/ceph with mixed stale HEALTH_OK, stale HEALTH_ERR, and live HEALTH_OK Ceph clusters on desktop Chromium and touch WebKit",
+    "Expanded ceph-east-prod inline cluster drawer on desktop (1440x940) and compact phone (360x820) to verify header status dot, Worth checking Readings row, and pools/services layout",
+    "Delivered live WebSocket rawData recovery frame while drawer remained open to verify in-place transition from Stale back to Healthy"
+  ]
+}

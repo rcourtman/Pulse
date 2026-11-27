@@ -13,7 +13,33 @@ import {
 import type { Resource, ResourceCephPoolMeta, ResourceCephServiceMeta } from '@/types/resource';
 import { formatBytes } from '@/utils/format';
 import { getMetricColorClass, getMetricSeverity } from '@/utils/metricThresholds';
+import { getResourceSourceStatus, hasImpairedResourceSource } from '@/utils/resourceSourceHealth';
 import { asTrimmedString } from '@/utils/stringUtils';
+
+const ERROR_SOURCE_STATUS = /^(error|failed|unauthorized)$/;
+
+export type CephStaleNotice = {
+  badge: string;
+  detail: string;
+};
+
+// Prefer live WebSocket/REST top-level sourceStatus (with platformData
+// fallback inside getResourceSourceStatus) so stale Proxmox polling never
+// leaves a Ceph cluster showing a fresh green HEALTH_OK verdict.
+export const getCephClusterStaleNotice = (resource: Resource): CephStaleNotice | null => {
+  if (!hasImpairedResourceSource(resource, 'proxmox')) return null;
+  const entry = getResourceSourceStatus(resource, 'proxmox');
+  const status = typeof entry?.status === 'string' ? entry.status.trim().toLowerCase() : '';
+  const error = asTrimmedString(entry?.error);
+  const prefix =
+    error && ERROR_SOURCE_STATUS.test(status)
+      ? 'Proxmox collection error'
+      : 'Proxmox has not updated this cluster recently';
+  return {
+    badge: 'Stale data',
+    detail: error ? `${prefix}: ${error}` : prefix,
+  };
+};
 
 // What a Ceph cluster drawer shows, kept out of the component so the
 // "is this OK, and if not, what do I do" judgement is testable on its own:
@@ -74,11 +100,20 @@ export const getCephClusterExceptionRows = (
   resource: Resource,
   statedMessages: readonly string[] = [],
 ): DetailRow[] => {
+  const staleNotice = getCephClusterStaleNotice(resource);
+  const readingsRow = staleNotice
+    ? makeDetailRow('Readings', `${staleNotice.detail}. Shown figures are last reported values.`, {
+        tone: 'warning',
+        wrap: true,
+      })
+    : null;
   const ceph = resource.ceph;
-  if (!ceph) return [];
   const stated = statedMessages.map((message) => message.toLowerCase());
   const isStated = (value: string) =>
     stated.some((message) => message.includes(value.trim().toLowerCase()));
+  if (!ceph) {
+    return compactDetailRows([readingsRow]).filter((row) => !isStated(row.value));
+  }
 
   const healthRows: Array<DetailRow | null> = [];
   const checks = (ceph.healthChecks ?? []).filter(
@@ -128,9 +163,13 @@ export const getCephClusterExceptionRows = (
       : null;
   });
 
-  return compactDetailRows([...healthRows, osdRow, ...serviceRows, ...poolRows]).filter(
-    (row) => !isStated(row.value),
-  );
+  return compactDetailRows([
+    readingsRow,
+    ...healthRows,
+    osdRow,
+    ...serviceRows,
+    ...poolRows,
+  ]).filter((row) => !isStated(row.value));
 };
 
 /** The pools and daemons that stay in view: the cluster's own content. */

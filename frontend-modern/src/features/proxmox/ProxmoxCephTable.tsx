@@ -35,6 +35,7 @@ import {
 import { useObservedElementWidth } from '@/hooks/useObservedElementWidth';
 import type { Resource, ResourceCephServiceMeta } from '@/types/resource';
 import { ProxmoxCephClusterDrawer } from './ProxmoxCephClusterDrawer';
+import { getCephClusterStaleNotice, type CephStaleNotice } from './proxmoxCephClusterDrawerModel';
 import { buildPlatformResourceSearchSuggestions } from '@/features/platformPage/platformSearchSuggestions';
 import { matchesSearchTermSplit, splitSearchExclusions } from '@/utils/searchQuery';
 
@@ -114,40 +115,70 @@ const STATUS_FILTER_OPTIONS: PlatformTableFilterOption<CephStatusFilter>[] = [
   },
 ];
 
-function classify(resource: Resource): CephHealth {
+const NAME_HEAD_CLASS = getPlatformTableHeadClassForKind('name');
+const TEXT_HEAD_CLASS = getPlatformTableHeadClassForKind('text');
+const NUMERIC_HEAD_CLASS = getPlatformTableHeadClassForKind('numeric-value');
+const NAME_CELL_CLASS = getPlatformTableCellClassForKind('name');
+const TEXT_CELL_CLASS = getPlatformTableCellClassForKind('text');
+const TEXT_BODY_CELL_CLASS = `${TEXT_CELL_CLASS} text-base-content`;
+const NUMERIC_BODY_CELL_CLASS = `${getPlatformTableCellClassForKind('numeric-value')} text-base-content`;
+
+const CEPH_HEALTH_MAP: Record<string, CephHealth> = {
+  HEALTH_OK: 'healthy',
+  OK: 'healthy',
+  ONLINE: 'healthy',
+  HEALTH_WARN: 'warning',
+  WARN: 'warning',
+  WARNING: 'warning',
+  DEGRADED: 'warning',
+  HEALTH_ERR: 'critical',
+  ERR: 'critical',
+  ERROR: 'critical',
+  CRITICAL: 'critical',
+  OFFLINE: 'critical',
+};
+
+function classifyReported(resource: Resource): CephHealth {
   // Prefer native health when reported; topology and capacity alone say
   // nothing about whether the cluster is healthy.
   const raw = (asTrimmedString(resource.ceph?.healthStatus) || resource.status || '').toUpperCase();
-  switch (raw) {
-    case 'HEALTH_OK':
-    case 'OK':
-    case 'ONLINE':
-      return 'healthy';
-    case 'HEALTH_WARN':
-    case 'WARN':
-    case 'WARNING':
-    case 'DEGRADED':
-      return 'warning';
-    case 'HEALTH_ERR':
-    case 'ERR':
-    case 'ERROR':
-    case 'CRITICAL':
-    case 'OFFLINE':
-      return 'critical';
-    default:
-      return 'unknown';
-  }
+  return CEPH_HEALTH_MAP[raw] ?? 'unknown';
 }
+
+function classify(resource: Resource): CephHealth {
+  const reported = classifyReported(resource);
+  if (reported === 'critical') return 'critical';
+  return getCephClusterStaleNotice(resource) ? 'warning' : reported;
+}
+
+const WARNING_TONE = 'text-amber-600 dark:text-amber-300';
 
 const HEALTH_INDICATORS: Record<
   CephHealth,
   { variant: StatusIndicatorVariant; label: string; tone: string }
 > = {
   healthy: { variant: 'success', label: 'Healthy', tone: 'text-emerald-600 dark:text-emerald-300' },
-  warning: { variant: 'warning', label: 'Warning', tone: 'text-amber-600 dark:text-amber-300' },
+  warning: { variant: 'warning', label: 'Warning', tone: WARNING_TONE },
   critical: { variant: 'danger', label: 'Critical', tone: 'text-red-600 dark:text-red-300' },
   unknown: { variant: 'muted', label: 'Unknown', tone: 'text-muted' },
 };
+
+const STALE_INDICATOR: { variant: StatusIndicatorVariant; label: string; tone: string } = {
+  variant: 'warning',
+  label: 'Stale',
+  tone: WARNING_TONE,
+};
+
+function getClusterIndicator(
+  resource: Resource,
+  staleNotice: CephStaleNotice | null,
+): { variant: StatusIndicatorVariant; label: string; tone: string } {
+  const reported = classifyReported(resource);
+  if (staleNotice && (reported === 'healthy' || reported === 'unknown')) {
+    return STALE_INDICATOR;
+  }
+  return HEALTH_INDICATORS[reported];
+}
 
 function servicesCell(services: ResourceCephServiceMeta[] | undefined): JSX.Element {
   const reported = (services ?? []).filter((svc) => svc.total > 0);
@@ -287,14 +318,23 @@ function capacityLabel(resource: Resource): JSX.Element {
   return <span class="tabular-nums">{formatPlatformTablePercentValue(pct)}</span>;
 }
 
-function healthMessageCell(resource: Resource): JSX.Element {
+function healthMessageCell(resource: Resource, staleNotice: CephStaleNotice | null): JSX.Element {
   const msg = asTrimmedString(resource.ceph?.healthMessage);
-  if (!msg) return <span class="text-muted">—</span>;
-  return (
-    <span class="block truncate" title={msg}>
-      {msg}
-    </span>
-  );
+  if (msg) {
+    return (
+      <span class="block truncate" title={msg}>
+        {msg}
+      </span>
+    );
+  }
+  if (staleNotice) {
+    return (
+      <span class="block truncate text-amber-700 dark:text-amber-300" title={staleNotice.detail}>
+        {staleNotice.detail}
+      </span>
+    );
+  }
+  return <span class="text-muted">—</span>;
 }
 
 export const ProxmoxCephTable: Component<{
@@ -328,12 +368,15 @@ export const ProxmoxCephTable: Component<{
     return props.resources.filter((cluster) => {
       if (want !== 'all' && classify(cluster) !== want) return false;
       if (!split.needle && split.excludes.length === 0) return true;
+      const staleNotice = getCephClusterStaleNotice(cluster);
       const haystack = [
         cluster.name,
         cluster.displayName,
         cluster.ceph?.fsid,
         cluster.ceph?.healthMessage,
         cluster.platformId,
+        staleNotice?.badge,
+        staleNotice?.detail,
         ...(cluster.ceph?.pools?.map((p) => p.name) ?? []),
       ]
         .filter(Boolean)
@@ -434,44 +477,32 @@ export const ProxmoxCephTable: Component<{
             }
             header={
               <>
-                <TableHead
-                  class={`${getPlatformTableHeadClassForKind('name')} platform-table-mobile-w-30`}
-                >
+                <TableHead class={`${NAME_HEAD_CLASS} platform-table-mobile-w-30`}>
                   Cluster
                 </TableHead>
-                <TableHead
-                  class={`${getPlatformTableHeadClassForKind('text')} platform-table-mobile-w-15`}
-                >
+                <TableHead class={`${TEXT_HEAD_CLASS} platform-table-mobile-w-15`}>
                   Health
                 </TableHead>
                 <Show when={showQuorum()}>
-                  <TableHead class={getPlatformTableHeadClassForKind('text')}>Quorum</TableHead>
+                  <TableHead class={TEXT_HEAD_CLASS}>Quorum</TableHead>
                 </Show>
-                <TableHead
-                  class={`${getPlatformTableHeadClassForKind('numeric-value')} platform-table-mobile-w-15`}
-                >
+                <TableHead class={`${NUMERIC_HEAD_CLASS} platform-table-mobile-w-15`}>
                   OSDs
                 </TableHead>
                 <Show when={showExpanded()}>
-                  <TableHead class={getPlatformTableHeadClassForKind('numeric-value')}>
-                    PGs
-                  </TableHead>
+                  <TableHead class={NUMERIC_HEAD_CLASS}>PGs</TableHead>
                 </Show>
-                <TableHead
-                  class={`${getPlatformTableHeadClassForKind('numeric-value')} platform-table-mobile-w-15`}
-                >
+                <TableHead class={`${NUMERIC_HEAD_CLASS} platform-table-mobile-w-15`}>
                   Pools
                 </TableHead>
-                <TableHead
-                  class={`${getPlatformTableHeadClassForKind('numeric-value')} platform-table-mobile-w-15`}
-                >
+                <TableHead class={`${NUMERIC_HEAD_CLASS} platform-table-mobile-w-15`}>
                   <PlatformResponsiveTableLabel compact="Used" full="Capacity" />
                 </TableHead>
                 <Show when={showServices()}>
-                  <TableHead class={getPlatformTableHeadClassForKind('text')}>Services</TableHead>
+                  <TableHead class={TEXT_HEAD_CLASS}>Services</TableHead>
                 </Show>
                 <Show when={showExpanded()}>
-                  <TableHead class={getPlatformTableHeadClassForKind('text')}>Detail</TableHead>
+                  <TableHead class={TEXT_HEAD_CLASS}>Detail</TableHead>
                 </Show>
               </>
             }
@@ -480,7 +511,8 @@ export const ProxmoxCephTable: Component<{
                 <PlatformWindowedRows items={filtered} estimatedRowHeight={32}>
                   {(cluster) => {
                     // One verdict for the row's dot and the drawer header.
-                    const ind = () => HEALTH_INDICATORS[classify(cluster)];
+                    const staleNotice = () => getCephClusterStaleNotice(cluster);
+                    const ind = () => getClusterIndicator(cluster, staleNotice());
                     const name = asTrimmedString(cluster.name) || cluster.id;
                     const isOpen = () => selectedId() === cluster.id;
                     const detailRowId = () => `proxmox-ceph-detail-${cluster.id}`;
@@ -493,8 +525,10 @@ export const ProxmoxCephTable: Component<{
                           })}
                         >
                           <TableCell
-                            class={getPlatformTableCellClassForKind('name')}
-                            title={[name, cluster.platformId].filter(Boolean).join(' · ')}
+                            class={NAME_CELL_CLASS}
+                            title={[name, cluster.platformId, staleNotice()?.detail]
+                              .filter(Boolean)
+                              .join(' · ')}
                           >
                             <div class="flex items-center gap-2 min-w-0">
                               <PlatformResourceDetailToggleButton
@@ -503,21 +537,42 @@ export const ProxmoxCephTable: Component<{
                                 controlsId={detailRowId()}
                                 onToggle={() => toggleSelected(cluster.id)}
                               />
-                              <span
-                                class={`font-semibold text-base-content ${
-                                  layout() === 'compact'
-                                    ? 'whitespace-normal wrap-anywhere leading-tight'
-                                    : 'truncate'
-                                }`}
-                                title={name}
-                              >
-                                {name}
-                              </span>
+                              <div class="min-w-0 flex-1">
+                                <span
+                                  class={`block font-semibold text-base-content ${
+                                    layout() === 'compact'
+                                      ? 'whitespace-normal wrap-anywhere leading-tight'
+                                      : 'truncate'
+                                  }`}
+                                  title={name}
+                                >
+                                  {name}
+                                </span>
+                                <Show when={staleNotice()}>
+                                  {(notice) => (
+                                    <span
+                                      class="block truncate text-[10px] leading-tight font-medium text-amber-700 dark:text-amber-300"
+                                      data-proxmox-ceph-stale="cluster"
+                                      title={notice().detail}
+                                    >
+                                      {notice().badge}
+                                    </span>
+                                  )}
+                                </Show>
+                              </div>
                             </div>
                           </TableCell>
                           <TableCell
-                            class={getPlatformTableCellClassForKind('text')}
-                            title={[ind().label, cluster.ceph?.healthStatus]
+                            class={TEXT_CELL_CLASS}
+                            title={[
+                              ind().label,
+                              cluster.ceph?.healthStatus
+                                ? staleNotice()
+                                  ? `Last reported ${cluster.ceph.healthStatus}`
+                                  : cluster.ceph.healthStatus
+                                : undefined,
+                              staleNotice()?.detail,
+                            ]
                               .filter(Boolean)
                               .join(' · ')}
                           >
@@ -534,21 +589,13 @@ export const ProxmoxCephTable: Component<{
                             </div>
                           </TableCell>
                           <Show when={showQuorum()}>
-                            <TableCell
-                              class={`${getPlatformTableCellClassForKind('text')} text-base-content`}
-                            >
+                            <TableCell class={TEXT_BODY_CELL_CLASS}>
                               {quorumLabel(cluster.ceph)}
                             </TableCell>
                           </Show>
-                          <TableCell
-                            class={`${getPlatformTableCellClassForKind('numeric-value')} text-base-content`}
-                          >
-                            {osdLabel(cluster)}
-                          </TableCell>
+                          <TableCell class={NUMERIC_BODY_CELL_CLASS}>{osdLabel(cluster)}</TableCell>
                           <Show when={showExpanded()}>
-                            <TableCell
-                              class={`${getPlatformTableCellClassForKind('numeric-value')} text-base-content tabular-nums`}
-                            >
+                            <TableCell class={`${NUMERIC_BODY_CELL_CLASS} tabular-nums`}>
                               <Show
                                 when={(cluster.ceph?.numPGs ?? 0) > 0}
                                 fallback={<span class="text-muted">—</span>}
@@ -557,28 +604,20 @@ export const ProxmoxCephTable: Component<{
                               </Show>
                             </TableCell>
                           </Show>
-                          <TableCell
-                            class={`${getPlatformTableCellClassForKind('numeric-value')} text-base-content`}
-                          >
+                          <TableCell class={NUMERIC_BODY_CELL_CLASS}>
                             {poolsLabel(cluster)}
                           </TableCell>
-                          <TableCell
-                            class={`${getPlatformTableCellClassForKind('numeric-value')} text-base-content`}
-                          >
+                          <TableCell class={NUMERIC_BODY_CELL_CLASS}>
                             {capacityLabel(cluster)}
                           </TableCell>
                           <Show when={showServices()}>
-                            <TableCell
-                              class={`${getPlatformTableCellClassForKind('text')} text-base-content text-[11px]`}
-                            >
+                            <TableCell class={`${TEXT_BODY_CELL_CLASS} text-[11px]`}>
                               {servicesCell(cluster.ceph?.services)}
                             </TableCell>
                           </Show>
                           <Show when={showExpanded()}>
-                            <TableCell
-                              class={`${getPlatformTableCellClassForKind('text')} text-base-content`}
-                            >
-                              {healthMessageCell(cluster)}
+                            <TableCell class={TEXT_BODY_CELL_CLASS}>
+                              {healthMessageCell(cluster, staleNotice())}
                             </TableCell>
                           </Show>
                         </TableRow>
