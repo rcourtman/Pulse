@@ -5423,7 +5423,14 @@ service-history reads plus denial/recovery without fabricated samples.
    intervals or those overrides. A healthy instance's staleness score is near
    zero after each success, so its cadence stretches toward the scheduler's
    maximum interval (5 minutes by default; a healthy instance polls a few
-   minutes apart). Selected intervals never exceed it; a poll can still run
+   minutes apart). Both adaptive scheduling and Scheduler Health use the
+   owning monitor's own last success for the staleness score. Exporter labels
+   are process-wide and must not make a same-named connection in a different
+   monitor look fresh. Each `staleness` row scores the same timestamp it
+   reports; missing success remains maximally stale. See
+   `TestAdaptivePollFreshnessStaysWithOwningMonitor` in
+   `internal/monitoring/staleness_tracker_test.go`.
+   Selected intervals never exceed the maximum; a poll can still run
    later than its slot while workers are busy; the factor of two gives
    headroom for that. Under adaptive scheduling
    `Monitor.resourcePollIntervals` therefore derives PVE, PBS and PMG

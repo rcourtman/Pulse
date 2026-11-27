@@ -1,8 +1,13 @@
 package monitoring
 
 import (
+	"encoding/json"
 	"testing"
+	"testing/synctest"
 	"time"
+
+	"github.com/prometheus/client_golang/prometheus"
+	"github.com/rcourtman/pulse-go-rewrite/internal/config"
 )
 
 func TestStalenessTracker_UpdateSuccess(t *testing.T) {
@@ -411,41 +416,7 @@ func TestStalenessTracker_StalenessScore_FutureLastSuccess(t *testing.T) {
 	}
 }
 
-func TestStalenessTracker_StalenessScore_WithMetrics(t *testing.T) {
-	// Create a minimal PollMetrics with lastSuccessByKey support
-	pm := &PollMetrics{
-		lastSuccessByKey: make(map[metricKey]time.Time),
-	}
-
-	tracker := NewStalenessTracker(pm)
-	tracker.SetBounds(10*time.Second, 60*time.Second)
-
-	// Set an old success time in the tracker
-	oldTime := time.Now().Add(-45 * time.Second)
-	tracker.setSnapshot(FreshnessSnapshot{
-		InstanceType: InstanceTypePVE,
-		Instance:     "metrics-test",
-		LastSuccess:  oldTime,
-	})
-
-	// Store a newer time in metrics
-	newerTime := time.Now().Add(-15 * time.Second)
-	pm.storeLastSuccess("pve", "metrics-test", newerTime)
-
-	score, ok := tracker.StalenessScore(InstanceTypePVE, "metrics-test")
-	if !ok {
-		t.Fatal("staleness score should be available")
-	}
-
-	// Should use the newer time from metrics: 15s / 60s = 0.25
-	expected := 15.0 / 60.0
-	tolerance := 0.05
-	if score < expected-tolerance || score > expected+tolerance {
-		t.Errorf("staleness score = %f, want ~%f (using metrics time)", score, expected)
-	}
-}
-
-func TestStalenessTracker_StalenessScore_MetricsNotUsedWhenLastSuccessZero(t *testing.T) {
+func TestStalenessTracker_PeerMetricsCannotSupplyFirstSuccess(t *testing.T) {
 	// Create a minimal PollMetrics with lastSuccessByKey support
 	pm := &PollMetrics{
 		lastSuccessByKey: make(map[metricKey]time.Time),
@@ -461,7 +432,7 @@ func TestStalenessTracker_StalenessScore_MetricsNotUsedWhenLastSuccessZero(t *te
 		// LastSuccess is zero
 	})
 
-	// Store a time in metrics (shouldn't be used since tracker LastSuccess is zero)
+	// Store a time in metrics (shouldn't be used because this monitor has not polled successfully)
 	pm.storeLastSuccess("pve", "error-only", time.Now().Add(-10*time.Second))
 
 	score, ok := tracker.StalenessScore(InstanceTypePVE, "error-only")
@@ -469,7 +440,7 @@ func TestStalenessTracker_StalenessScore_MetricsNotUsedWhenLastSuccessZero(t *te
 		t.Fatal("staleness score should be available")
 	}
 
-	// Should return 1.0 because LastSuccess is zero (metrics lookup is conditional on non-zero LastSuccess)
+	// Should return 1.0 because only this monitor can record a successful poll
 	if score != 1.0 {
 		t.Errorf("staleness score = %f, want 1.0 when tracker LastSuccess is zero", score)
 	}
@@ -500,38 +471,6 @@ func TestStalenessTracker_StalenessScore_NegativeMaxStaleUsesDefault(t *testing.
 	tolerance := 0.05
 	if score < expected-tolerance || score > expected+tolerance {
 		t.Errorf("staleness score = %f, want ~%f (using default 5 min maxStale)", score, expected)
-	}
-}
-
-func TestStalenessTracker_StalenessScore_MetricsLookupFails(t *testing.T) {
-	// Create a minimal PollMetrics with lastSuccessByKey support
-	pm := &PollMetrics{
-		lastSuccessByKey: make(map[metricKey]time.Time),
-	}
-
-	tracker := NewStalenessTracker(pm)
-	tracker.SetBounds(10*time.Second, 60*time.Second)
-
-	// Set snapshot with non-zero LastSuccess
-	oldTime := time.Now().Add(-30 * time.Second)
-	tracker.setSnapshot(FreshnessSnapshot{
-		InstanceType: InstanceTypePVE,
-		Instance:     "lookup-fail-test",
-		LastSuccess:  oldTime,
-	})
-
-	// Don't store anything in metrics - the lookup will fail
-
-	score, ok := tracker.StalenessScore(InstanceTypePVE, "lookup-fail-test")
-	if !ok {
-		t.Fatal("staleness score should be available")
-	}
-
-	// Should use the tracker's LastSuccess since metrics lookup failed: 30s / 60s = 0.5
-	expected := 30.0 / 60.0
-	tolerance := 0.05
-	if score < expected-tolerance || score > expected+tolerance {
-		t.Errorf("staleness score = %f, want ~%f (using tracker time, metrics lookup failed)", score, expected)
 	}
 }
 
@@ -815,4 +754,80 @@ func TestStalenessTracker_MergeSnapshot_TableDriven(t *testing.T) {
 			}
 		})
 	}
+}
+
+func TestAdaptivePollFreshnessStaysWithOwningMonitor(t *testing.T) {
+	synctest.Test(t, func(t *testing.T) {
+		// Both monitors publish into the same process-wide metrics collector.
+		// They are separately scheduled and happen to have one connection with
+		// the same type and display name.
+		const name = "pbs-main"
+		const typ = InstanceTypePBS
+		bounds := SchedulerConfig{
+			BaseInterval: 30 * time.Second,
+			MinInterval:  10 * time.Second,
+			MaxInterval:  5 * time.Minute,
+		}
+		metrics := newPollMetrics(prometheus.NewRegistry())
+		newFixtureMonitor := func() *Monitor {
+			tracker := NewStalenessTracker(metrics)
+			tracker.SetBounds(bounds.BaseInterval, bounds.MaxInterval)
+			return &Monitor{
+				config:           &config.Config{AdaptivePollingEnabled: true},
+				stalenessTracker: tracker,
+				scheduler:        NewAdaptiveScheduler(bounds, tracker, nil, nil),
+			}
+		}
+		recordSuccess := func(m *Monitor) time.Time {
+			now := time.Now()
+			m.stalenessTracker.UpdateSuccess(typ, name, nil)
+			metrics.RecordResult(PollResult{
+				InstanceName: name, InstanceType: string(typ), Success: true,
+				StartTime: now, EndTime: now,
+			})
+			return now
+		}
+		snapshot := func(m *Monitor, wantAt time.Time, wantScore float64) {
+			t.Helper()
+			health := m.SchedulerHealth()
+			payload, err := json.Marshal(health)
+			if err != nil {
+				t.Fatal(err)
+			}
+			t.Logf("scheduler-health-fixture %s", payload)
+			if len(health.Staleness) != 1 {
+				t.Fatalf("staleness rows = %d, want 1", len(health.Staleness))
+			}
+			row := health.Staleness[0]
+			if !row.LastSuccess.Equal(wantAt) || row.Score != wantScore {
+				t.Errorf("last success/score = %s/%g, want %s/%g", row.LastSuccess, row.Score, wantAt, wantScore)
+			}
+		}
+		makePlan := func(m *Monitor, lastSuccess time.Time) ScheduledTask {
+			t.Helper()
+			plan := m.scheduler.BuildPlan(time.Now(), []InstanceDescriptor{{
+				Name: name, Type: typ, LastSuccess: lastSuccess,
+			}}, 0)
+			if len(plan) != 1 {
+				t.Fatalf("planned tasks = %d, want 1", len(plan))
+			}
+			return plan[0]
+		}
+		quiet, peer := newFixtureMonitor(), newFixtureMonitor()
+		quietAt := recordSuccess(quiet)
+		time.Sleep(6 * time.Minute)
+		peerAt := recordSuccess(peer)
+
+		snapshot(quiet, quietAt, 1)
+		snapshot(peer, peerAt, 0)
+		quietPlan, peerPlan := makePlan(quiet, quietAt), makePlan(peer, peerAt)
+		if quietPlan.Priority != 1 || peerPlan.Priority != 0 || quietPlan.Interval >= peerPlan.Interval {
+			t.Errorf("scheduler must favor the stale connection: stale priority/interval %g/%s, fresh %g/%s",
+				quietPlan.Priority, quietPlan.Interval, peerPlan.Priority, peerPlan.Interval)
+		}
+
+		time.Sleep(time.Minute)
+		snapshot(quiet, recordSuccess(quiet), 0)
+		snapshot(peer, peerAt, 0.2)
+	})
 }
