@@ -300,12 +300,23 @@ func (q *TaskQueue) wakeEarlierHeadLocked(previous time.Time, hadHead bool) {
 // WaitNext blocks until a task is due or context is cancelled. A successful
 // caller owns the target until it calls completeClaim, even after a deadline.
 func (q *TaskQueue) WaitNext(ctx context.Context) (ScheduledTask, bool) {
-	var timer *time.Timer
-	defer func() {
-		if timer != nil {
-			timer.Stop()
-		}
-	}()
+	return q.waitNext(ctx, &taskQueueWaiter{})
+}
+
+// A worker owns its waiter for the lifetime of its loop. The timer is
+// allocated only when needed and stopped before returning to the worker.
+type taskQueueWaiter struct {
+	timer *time.Timer
+}
+
+func (w *taskQueueWaiter) stop() {
+	if w.timer != nil {
+		w.timer.Stop()
+	}
+}
+
+func (q *TaskQueue) waitNext(ctx context.Context, waiter *taskQueueWaiter) (ScheduledTask, bool) {
+	defer waiter.stop()
 	done := ctx.Done()
 	for ctx.Err() == nil {
 		q.mu.Lock()
@@ -327,14 +338,14 @@ func (q *TaskQueue) WaitNext(ctx context.Context) (ScheduledTask, bool) {
 		var timerCh <-chan time.Time
 		if hasHead {
 			delay := time.Until(next)
-			if timer == nil {
-				timer = time.NewTimer(delay)
+			if waiter.timer == nil {
+				waiter.timer = time.NewTimer(delay)
 			} else {
-				timer.Reset(delay)
+				waiter.timer.Reset(delay)
 			}
-			timerCh = timer.C
-		} else if timer != nil {
-			timer.Stop()
+			timerCh = waiter.timer.C
+		} else {
+			waiter.stop()
 		}
 		select {
 		case <-done:

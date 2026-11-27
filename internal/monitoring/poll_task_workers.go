@@ -22,8 +22,9 @@ func (m *Monitor) dispatchTaskWorkers(ctx context.Context, limiter *pollTaskWork
 	defer m.pollMetrics.trackTaskQueue(ctx, m.taskQueue)()
 	progress := m.pollWorkProgress()
 
+	var waiter taskQueueWaiter
 	for {
-		task, ok := m.taskQueue.WaitNext(ctx)
+		task, ok := m.taskQueue.waitNext(ctx, &waiter)
 		if !ok {
 			return
 		}
@@ -56,8 +57,9 @@ func (m *Monitor) taskWorker(ctx context.Context, id int) {
 	if logging.IsLevelEnabled(zerolog.DebugLevel) {
 		log.Debug().Int("worker", id).Msg("task worker started")
 	}
+	var waiter taskQueueWaiter
 	for {
-		task, ok := m.taskQueue.WaitNext(ctx)
+		task, ok := m.taskQueue.waitNext(ctx, &waiter)
 		if !ok {
 			if logging.IsLevelEnabled(zerolog.DebugLevel) {
 				log.Debug().Int("worker", id).Msg("task worker stopping")
