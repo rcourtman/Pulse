@@ -19,7 +19,7 @@ func (m *Monitor) pollWorkProgress() *pollWorkProgress {
 
 func (m *Monitor) dispatchTaskWorkers(ctx context.Context, limiter *pollTaskWorkerLimiter) {
 	defer recoverFromPanic("taskWorkerDispatcher")
-	defer m.pollMetrics.trackTaskQueue(m.taskQueue)()
+	defer m.pollMetrics.trackTaskQueue(ctx, m.taskQueue)()
 	progress := m.pollWorkProgress()
 
 	for {
@@ -50,7 +50,7 @@ func (m *Monitor) dispatchTaskWorkers(ctx context.Context, limiter *pollTaskWork
 
 func (m *Monitor) taskWorker(ctx context.Context, id int) {
 	defer recoverFromPanic(fmt.Sprintf("taskWorker-%d", id))
-	defer m.pollMetrics.trackTaskQueue(m.taskQueue)()
+	defer m.pollMetrics.trackTaskQueue(ctx, m.taskQueue)()
 	progress := m.pollWorkProgress()
 
 	if logging.IsLevelEnabled(zerolog.DebugLevel) {
