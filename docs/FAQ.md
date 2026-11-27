@@ -163,6 +163,16 @@ the URL and API key. Pulse monitors the appliance, native VMs, apps, pools,
 datasets, disks, ZFS snapshots, replication tasks, and alerts. Those resources
 appear on the dedicated TrueNAS page.
 
+When a TrueNAS connection hits a collection error, stops reporting fresh
+telemetry, or goes offline in Pulse, **TrueNAS → Protection**
+(`/truenas/protection`) marks cached snapshots and replication tasks
+**Stale data** (**Stale** on phones for stale **Healthy** rows), excludes stale
+**Healthy** and **Running** events from those filters, includes them in
+**Attention** and the dynamic amber **Stale** filter chip, and shows an inline
+warning notice with **Status** and **Last reported** in expanded row details.
+See [No data showing?](#no-data-showing) and
+[Read TrueNAS protection evidence](TRUENAS.md#read-truenas-protection-evidence).
+
 ### How is navigation organised in Pulse v6?
 Pulse uses platform-shaped top-level pages:
 
@@ -333,6 +343,20 @@ does not prove that every reading is fresh. Missing or unavailable is not zero.
   under **Worth checking** (`Shown figures are last reported values.`), and
   inline History withholds stale snapshot values as live chart readings until
   fresh Proxmox updates arrive.
+- **TrueNAS protection** (`/truenas/protection`) matches cached ZFS snapshots
+  and replication tasks to their owning TrueNAS system (by connection ID or
+  provider scope first, then unambiguous hostname) when TrueNAS polling hits a
+  collection error, goes stale, or the system goes offline in Pulse. Stale
+  **Healthy** and **Running** events leave those filters, join **Attention**
+  and the dynamic amber **Stale** filter chip, and rank above fresh events
+  behind **Failed** and **Warning**. Stale **Healthy** rows show an amber
+  **Stale data** badge (**Stale** on phones), while stale **Failed**,
+  **Warning**, muted non-pulsing **Running**, and **Unknown** rows keep their
+  outcome badge with an amber **Stale data** cue beneath the dataset name.
+  Expanded drawers show `Readings from <system> may be out of date.` and
+  `Showing the last reported protection event. Newer snapshots, replication
+  runs, or failures may be missing.` alongside **Status** (`Stale data`) and
+  **Last reported**, clearing automatically when live polling recovers.
 - **vSphere datastores** keep their last reported capacity, active alarms,
   maintenance state and **Last reported inaccessible** status visible while
   marking stale rows **Stale data** beside the name (and noting `vCenter has not

@@ -312,6 +312,40 @@ class TrueNASDocsTest(unittest.TestCase):
         self.assertIn("**Degraded**", stale_section)
         self.assertIn("**not updated**", stale_section)
 
+    def test_protection_stale_guidance_matches_truenas_protection_table(self):
+        text = DOC.read_text(encoding="utf-8")
+        section = " ".join(
+            text.split("## Read TrueNAS protection evidence\n", 1)[1]
+            .split("## Disk temperature and health", 1)[0]
+            .split()
+        )
+        for phrase in (
+            "**TrueNAS → Protection** (`/truenas/protection`)",
+            "connection ID or provider scope first (keeping appliances that share a hostname isolated)",
+            "excluded from the **Healthy** and **Running** filter counts",
+            "included in **Attention**",
+            "amber **Stale** filter chip",
+            "amber **Stale data** outcome badge (**Stale** on phones)",
+            "muted non-pulsing **Running**, and **Unknown** rows keep their primary outcome badge and add an amber **Stale data** cue beneath the dataset name",
+            "`Readings from <system> may be out of date.`",
+            "`Showing the last reported protection event. Newer snapshots, replication runs, or failures may be missing.`",
+            "**Status** (`Stale data`) and **Last reported**",
+        ):
+            with self.subTest(phrase=phrase):
+                self.assertIn(phrase, section)
+
+        table = (
+            ROOT / "frontend-modern/src/features/truenas/TrueNASProtectionTable.tsx"
+        ).read_text(encoding="utf-8")
+        model = (
+            ROOT / "frontend-modern/src/features/truenas/truenasPageModel.ts"
+        ).read_text(encoding="utf-8")
+        self.assertIn('compact="Stale" full="Stale data"', table)
+        self.assertIn("detailRow('Status', staleNotice.badge, { tone: 'warning' })", table)
+        self.assertIn("detailRow('Last reported', outcomeLabel, { tone: outcomeTone(point) })", table)
+        self.assertIn("point.details?.connectionId", model)
+        self.assertIn("point.providerScope", model)
+
     def test_poll_timeout_and_config_edit_boundaries_match_source(self):
         poller = (ROOT / "internal/monitoring/truenas_poller.go").read_text(encoding="utf-8")
         client = (ROOT / "internal/truenas/client.go").read_text(encoding="utf-8")
