@@ -769,7 +769,10 @@ This administrative inventory covers saved **PVE, PBS and PMG connections**,
 not individual VMs or agents. Keep its response private. Use the returned
 connection `id` for updates, deletion and tests; a display name, VMID or another
 installation's node name is not that ID. Re-read the inventory before a change
-rather than guessing an ID from a list position.
+rather than guessing an ID from a list position. Listing saved nodes returns
+retained configuration for paused Proxmox VE connections without running
+passive cluster discovery probes, while explicit tests and active discovery
+stay unchanged.
 
 ### Add Node
 `POST /api/config/nodes` (admin, `settings:write`)
@@ -1246,6 +1249,13 @@ it, use the snooze and unsnooze endpoints below.
 - `GET /api/alerts/deadman/status` — live watchdog health, monitor-loop
   progress, sanitized delivery failure state, and the most recent restart
   interruption; never includes the URL or endpoint fingerprint
+  When monitoring progress recovers after a stall, `monitor_stalled` clears
+  immediately and reports `starting` or `delivery_failed` if the recovery
+  heartbeat fails. Replacing, removing, or saving an invalid watchdog URL
+  clears stale `lastSuccessAt` and `lastAttemptAt` timestamps immediately while
+  re-saving the same configured URL preserves `lastSuccessAt`, and shutdown or
+  configuration changes fence superseded cycles from overwriting clean shutdown
+  records or the new destination's status.
 - `POST /api/alerts/activate` enables notification delivery and can notify about existing unacknowledged critical alerts. It is not a maintenance toggle, and there is no matching `/api/alerts/deactivate` endpoint.
 - `GET /api/alerts/active` (see [Active alerts](#active-alerts) for live `metricStatus` evaluation fields)
 - `GET /api/alerts/delivery-diagnosis?alertIdentifier=<alert-id>` (omit `alertIdentifier` to get the diagnosis array for every active alert)
@@ -1588,6 +1598,12 @@ poll interval:
   `present`, `reason` and `nextRetry`. `nextRetry` does not schedule a poll. A
   later successful scheduled poll clears the dead-letter entry on current
   builds, though older builds may retain it after recovery.
+- **`staleness`**: Per-connection freshness entries (`instance`, `type`,
+  `score`, `lastSuccess`, and optional `lastError`) computed locally inside
+  this monitor. Each `score` ages from `0` right after a successful poll up to
+  `1` at the maximum staleness window, or `1` after a recorded error with no
+  success. A success from a same-named connection monitored elsewhere does not
+  change this monitor's score.
 
 This endpoint covers scheduled polling only. Zero overdue queued tasks or
 advancing `lastSuccess` does not prove that a poll claimed by a worker finished,

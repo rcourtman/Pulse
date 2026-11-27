@@ -567,7 +567,11 @@ full refresh succeeds. When an edited TrueNAS connection fails client
 initialization, Pulse closes the previous live connection and clears stale
 cached records rather than continuing to poll the old endpoint. A valid edit
 that builds a new client preserves the last accepted cached records until
-the rebuilt connection completes an accepted refresh.
+the rebuilt connection completes an accepted refresh. When a saved TrueNAS
+connection is edited, paused, or removed, Pulse retires the old poller
+ownership before closing its transport and cancels in-flight RPC work
+(including a socket blocked in negotiation) without waiting for an appliance
+timeout or replaying interrupted operations.
 
 **Test connection** is not a complete poll. Some older builds, including Pulse
 6.4.1 and 6.4.5, also let a saved-connection test update `lastAttemptAt` and

@@ -125,6 +125,16 @@ sender or a stale browser status read:
 After a restart, **Last interruption** records any monitoring gap of two minutes
 or longer and distinguishes a `clean restart` from an `unexpected stop`.
 
+When monitoring progress recovers after a stall, **Monitoring stalled** clears
+immediately and moves to **Starting** or **Delivery failing** if the recovery
+heartbeat fails to deliver rather than staying stuck in **Monitoring stalled**.
+Replacing, removing, or saving an invalid watchdog URL clears prior **Last
+success** and **Last attempt** timestamps (and clears prior delivery alerts on
+replacement) immediately, while re-saving the same configured URL preserves its
+**Last success**. Concurrent shutdown or configuration replacement cancels
+superseded watchdog cycles so an in-flight heartbeat cannot overwrite a clean
+shutdown record or the new destination's status.
+
 ## Check that DNS answers correctly
 
 Choose the **DNS resolution** protocol (or the **DNS resolver (Pi-hole / AdGuard / Unbound)** preset) to verify that a resolver such as Pi-hole, AdGuard Home, Technitium, or Unbound answers queries correctly.

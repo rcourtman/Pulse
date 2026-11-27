@@ -187,6 +187,16 @@ class NodeAPIDocsTest(unittest.TestCase):
         self.assertIn('--output "$result_file"', helper)
         self.assertNotIn('--retry', helper)
 
+    def test_paused_pve_passive_discovery_skip_matches_handler_source(self):
+        handlers = (ROOT / "internal/api/configapi/config_handlers.go").read_text(encoding="utf-8")
+        self.assertIn("if current == nil || current.Disabled {", handlers)
+        prose = " ".join(section().split())
+        self.assertIn(
+            "Listing saved nodes returns retained configuration for paused Proxmox VE connections without running passive cluster discovery probes",
+            prose,
+        )
+        self.assertIn("explicit tests and active discovery stay unchanged", prose)
+
 
 if __name__ == "__main__":
     unittest.main()
