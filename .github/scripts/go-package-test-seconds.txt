@@ -6,7 +6,9 @@
 # and 2-way from 2434.9/2498.6 (spread 63.7s) to 2461.0/2472.4 (spread 11.4s).
 # Weights schedule the source-listed inventory. New and small packages use
 # the mean of the medians below 20 seconds. The release queue runs monitoring
-# and installtests whole, so keep their separate whole-package estimates.
+# and installtests whole, so keep their separate whole-package estimates
+# (refreshed 27 Nov 2026 from post-#5239 runs 45940742093, 45942566161,
+# 45942829787 and 45944948230).
 DEFAULT_WEIGHT 4.233
 # With monitoring-test-seconds.txt and installtests-test-seconds.txt
 # refreshed together, the two-way and three-way fixed slices are balanced
@@ -29,7 +31,7 @@ github.com/rcourtman/pulse-go-rewrite/internal/dockeragent 104.608
 github.com/rcourtman/pulse-go-rewrite/internal/hostagent 52.153
 github.com/rcourtman/pulse-go-rewrite/internal/kubernetesagent 24.444
 github.com/rcourtman/pulse-go-rewrite/internal/mock 96.831
-github.com/rcourtman/pulse-go-rewrite/internal/monitoring 1260.860
+github.com/rcourtman/pulse-go-rewrite/internal/monitoring 1081.008
 github.com/rcourtman/pulse-go-rewrite/internal/notifications 341.424
 github.com/rcourtman/pulse-go-rewrite/internal/recovery/store 33.988
 github.com/rcourtman/pulse-go-rewrite/internal/relay 73.048
@@ -44,5 +46,5 @@ github.com/rcourtman/pulse-go-rewrite/pkg/metrics 260.591
 github.com/rcourtman/pulse-go-rewrite/pkg/proxmox 37.562
 github.com/rcourtman/pulse-go-rewrite/pkg/pulsecli 39.691
 github.com/rcourtman/pulse-go-rewrite/pkg/server 53.419
-github.com/rcourtman/pulse-go-rewrite/scripts/installtests 645.270
+github.com/rcourtman/pulse-go-rewrite/scripts/installtests 880.655
 github.com/rcourtman/pulse-go-rewrite/tests/migration 25.482
