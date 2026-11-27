@@ -211,6 +211,41 @@ func TestRateTrackerCleanupUsesLatestSampleEvenWhenIdleOrPartial(t *testing.T) {
 	}
 }
 
+func TestRateTrackerCleanupRechecksOlderInsertionsAndKeepsCutoffSample(t *testing.T) {
+	tracker := NewRateTracker()
+	cutoff := time.Unix(1_700_000_000, 0)
+	tracker.CalculateRates("current", fullCounterSample(cutoff, 10, 0, 0, 0))
+	if removed := tracker.Cleanup(cutoff); removed != 0 {
+		t.Fatalf("removed %d series at the cutoff, want 0", removed)
+	}
+
+	// The first cleanup skipped its scan. A later insertion may still
+	// have an older receipt, regardless of its counter sampling clock.
+	older := cutoff.Add(-time.Second)
+	sampled := counterSampleTime{clock: "agent", at: cutoff.Add(time.Hour)}
+	tracker.calculateSampledCounterRate("late", 100, older, sampled)
+	if removed := tracker.Cleanup(cutoff); removed != 1 {
+		t.Fatalf("removed %d series after older insertion, want 1", removed)
+	}
+	if read, _, _, _ := tracker.CalculateRates("current", fullCounterSample(cutoff.Add(time.Second), 20, 0, 0, 0)); read != 10 {
+		t.Fatalf("rate from retained cutoff sample = %v, want 10", read)
+	}
+	sampled.at = sampled.at.Add(time.Second)
+	if rate := tracker.calculateSampledCounterRate("late", 200, cutoff, sampled); rate != -1 {
+		t.Fatalf("first rate after older baseline expired = %v, want unknown", rate)
+	}
+
+	// After every remaining entry expires, a new entry must establish
+	// the bound from its own receipt time, not from an empty tracker.
+	if removed := tracker.Cleanup(cutoff.Add(2 * time.Second)); removed != 2 {
+		t.Fatalf("removed %d series past both baselines, want 2", removed)
+	}
+	tracker.CalculateRates("reborn", fullCounterSample(older, 1, 0, 0, 0))
+	if removed := tracker.Cleanup(cutoff); removed != 1 {
+		t.Fatalf("removed %d series after repopulating, want 1", removed)
+	}
+}
+
 func TestRateTrackerDiskBusyUsesElapsedMilliseconds(t *testing.T) {
 	tracker := NewRateTracker()
 	start := time.Unix(1_700_000_000, 0)

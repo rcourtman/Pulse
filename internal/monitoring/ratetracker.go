@@ -53,6 +53,10 @@ func (sampled counterSampleTime) counterTime(counterReceivedAt, receivedAt time.
 type RateTracker struct {
 	mu      sync.RWMutex
 	history map[string]*counterHistory
+	// A lower bound on the oldest receipt time in history. Refreshes can
+	// move an entry forward, but only insertion can move the bound back.
+	// Cleanup recomputes the exact oldest remaining time when it scans.
+	oldestReceiptLowerBound time.Time
 }
 
 // NewRateTracker creates a new rate tracker.
@@ -127,7 +131,8 @@ func (rt *RateTracker) sampledHistory(seriesID string, receivedAt time.Time, sam
 		sampled = counterSampleTime{}
 	}
 	history := rt.history[seriesID]
-	if history == nil {
+	inserted := history == nil
+	if inserted {
 		history = &counterHistory{}
 		rt.history[seriesID] = history
 	}
@@ -137,6 +142,9 @@ func (rt *RateTracker) sampledHistory(seriesID string, receivedAt time.Time, sam
 	}
 	if receivedAt.After(history.lastObservedAt) {
 		history.lastObservedAt = receivedAt
+	}
+	if inserted && (len(rt.history) == 1 || history.lastObservedAt.Before(rt.oldestReceiptLowerBound)) {
+		rt.oldestReceiptLowerBound = history.lastObservedAt
 	}
 	return history, sampled
 }
@@ -216,6 +224,7 @@ func (rt *RateTracker) Clear() {
 	rt.mu.Lock()
 	defer rt.mu.Unlock()
 	rt.history = make(map[string]*counterHistory)
+	rt.oldestReceiptLowerBound = time.Time{}
 }
 
 // Cleanup removes resources that have not supplied any newer sample since the
@@ -224,11 +233,23 @@ func (rt *RateTracker) Cleanup(cutoff time.Time) (removed int) {
 	rt.mu.Lock()
 	defer rt.mu.Unlock()
 
+	// An ordinary poll tick should not walk the live fleet while holding
+	// the same lock needed by polls and incoming agent reports.
+	if len(rt.history) == 0 || !rt.oldestReceiptLowerBound.Before(cutoff) {
+		return 0
+	}
+
+	var oldest time.Time
+	haveRetained := false
 	for guestID, history := range rt.history {
 		if history.lastObservedAt.Before(cutoff) {
 			delete(rt.history, guestID)
 			removed++
+		} else if !haveRetained || history.lastObservedAt.Before(oldest) {
+			oldest = history.lastObservedAt
+			haveRetained = true
 		}
 	}
+	rt.oldestReceiptLowerBound = oldest
 	return removed
 }
