@@ -165,3 +165,123 @@ func TestRetiredPollClaimDoesNotEnterProvider(t *testing.T) {
 		})
 	}
 }
+
+type completionCadenceProvider struct {
+	pollProviderAdapter
+	readCadence func() time.Duration
+}
+
+func (p completionCadenceProvider) FixedInstanceInterval(*Monitor, string) time.Duration {
+	return p.readCadence()
+}
+
+func TestProcessPollWorkerSkipsRetiredSuccessor(t *testing.T) {
+	for _, scenario := range []string{"retired monitor", "removed target", "replaced target"} {
+		t.Run(scenario, func(t *testing.T) {
+			synctest.Test(t, func(t *testing.T) {
+				ctx, cancel := context.WithCancel(t.Context())
+				defer cancel()
+				oldCtx, retireMonitor := context.WithCancel(ctx)
+				defer retireMonitor()
+				limiter := newPollTaskWorkerLimiter(1)
+				releasePoll := make(chan struct{})
+				releaseCadence := make(chan struct{})
+				defer close(releaseCadence)
+
+				var polls, cadenceReads, peerPolls int
+				provider := completionCadenceProvider{
+					pollProviderAdapter: pollProviderAdapter{
+						instanceType: InstanceTypeAvailability,
+						buildPollTask: func(*Monitor, string) (PollTask, error) {
+							return PollTask{Run: func(context.Context) {
+								polls++
+								if polls == 1 {
+									<-releasePoll
+								}
+							}}, nil
+						},
+					},
+					readCadence: func() time.Duration {
+						cadenceReads++
+						if polls == 1 {
+							<-releaseCadence
+						}
+						return time.Minute
+					},
+				}
+				peerProvider := pollProviderAdapter{
+					instanceType: InstanceTypePVE,
+					buildPollTask: func(*Monitor, string) (PollTask, error) {
+						return PollTask{Run: func(context.Context) { peerPolls++ }}, nil
+					},
+				}
+				old := &Monitor{
+					taskQueue: NewTaskQueue(),
+					pollProviders: map[InstanceType]PollProvider{
+						InstanceTypeAvailability: provider,
+						InstanceTypePVE:          peerProvider,
+					},
+				}
+				old.SetExecutor(nil)
+				start := time.Now()
+				check := ScheduledTask{InstanceType: InstanceTypeAvailability, InstanceName: "check", NextRun: start, Interval: time.Minute}
+				old.taskQueue.Upsert(check)
+				go old.dispatchTaskWorkers(oldCtx, limiter)
+				synctest.Wait()
+				if polls != 1 {
+					close(releasePoll)
+					t.Fatalf("original poll did not enter its read: polls=%d", polls)
+				}
+
+				active := old
+				switch scenario {
+				case "retired monitor":
+					retireMonitor()
+					active = &Monitor{
+						taskQueue:     NewTaskQueue(),
+						pollProviders: map[InstanceType]PollProvider{InstanceTypePVE: peerProvider},
+					}
+					active.SetExecutor(nil)
+					go active.dispatchTaskWorkers(ctx, limiter)
+				case "removed target", "replaced target":
+					old.taskQueue.refreshAvailabilitySchedule(nil)
+				}
+				replacement := check
+				replacement.NextRun = start.Add(10 * time.Second)
+				if scenario == "replaced target" {
+					old.taskQueue.refreshAvailabilitySchedule(map[string]ScheduledTask{"check": replacement})
+				}
+				peer := ScheduledTask{InstanceType: InstanceTypePVE, InstanceName: "peer", NextRun: start, Interval: time.Minute}
+				active.taskQueue.Upsert(peer)
+				synctest.Wait()
+				if peerPolls != 0 {
+					t.Error("retirement released the process slot before the admitted read returned")
+				}
+
+				close(releasePoll)
+				synctest.Wait()
+				if cadenceReads != 0 || peerPolls != 1 {
+					t.Fatalf("after retired read returned: cadence reads=%d, peer polls=%d; want 0, 1", cadenceReads, peerPolls)
+				}
+				if !time.Now().Equal(start) {
+					t.Fatal("the due peer did not run immediately")
+				}
+				queued, ok := old.taskQueue.Get(check.InstanceType, check.InstanceName)
+				if wantReplacement := scenario == "replaced target"; ok != wantReplacement || (ok && queued != replacement) {
+					t.Fatalf("unexpected successor: %+v, queued=%v", queued, ok)
+				}
+				if ok {
+					time.Sleep(time.Until(queued.NextRun))
+					synctest.Wait()
+					if polls != 2 || cadenceReads != 1 {
+						t.Fatalf("live replacement did not poll and read its cadence once: polls=%d, cadence reads=%d", polls, cadenceReads)
+					}
+					next, ok := old.taskQueue.Get(check.InstanceType, check.InstanceName)
+					if !ok || !next.NextRun.Equal(replacement.NextRun.Add(time.Minute)) {
+						t.Fatalf("live replacement cadence lost: next=%+v, queued=%v", next, ok)
+					}
+				}
+			})
+		})
+	}
+}

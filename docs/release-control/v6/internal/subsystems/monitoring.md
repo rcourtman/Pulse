@@ -6677,6 +6677,12 @@ peer and a later same-key replacement with the process slot held.
 `TestRetiredPollClaimDoesNotEnterProvider` exercises retirement between
 dequeue and provider entry, and verifies that the worker can run the live
 peer immediately and the replacement only when due.
+When an admitted read returns, a stopped monitor or a retired claim skips
+successor calculation rather than starting a new cadence lookup. The slot
+remains occupied until the admitted read really returns. In
+`TestProcessPollWorkerSkipsRetiredSuccessor`, a due peer takes the only slot
+without waiting for that lookup, and an explicit same-key replacement
+retains its deadline and resumes ordinary cadence planning.
 
 ### Configured fixed poll intervals hold on both scheduler paths
 
