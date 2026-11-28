@@ -46,7 +46,7 @@ On your TrueNAS system:
 | Network shares | TrueNAS → Shares | Protocol, path, access flags, allowed clients, security mapping, and share status |
 | [ZFS Snapshots](TRUENAS.md#collection-scope-and-snapshot-polling) | TrueNAS → Protection | Dataset, creation time, size, referenced data |
 | Replication Tasks | TrueNAS → Protection | Source/target datasets, direction, last run status |
-| TrueNAS Alerts | Alerts | Native TrueNAS alert messages and severity levels |
+| TrueNAS Alerts | TrueNAS → Overview (**Health Alerts**) and **Alerts** | Native TrueNAS alert messages, severity levels, and stale-source cues when TrueNAS polling is quiet or impaired |
 
 ## Unified Resource Mapping
 
@@ -59,7 +59,7 @@ TrueNAS resources are mapped into the unified resource model:
 - **TrueNAS VMs** → appear as canonical `vm` workloads under **TrueNAS → VMs** (`/truenas/vms`).
 - **Network shares** → appear as canonical `network-share` resources under **TrueNAS → Shares** (`/truenas/shares`).
 - **ZFS snapshots and replication** → appear under **TrueNAS → Protection** (`/truenas/protection`) as recovery points.
-- **TrueNAS alerts** → surfaced on the **Alerts** page alongside Proxmox and other platform alerts.
+- **TrueNAS alerts** → surfaced in **Health Alerts** on **TrueNAS → Overview** (`/truenas/overview`) and on the **Alerts** page alongside Proxmox and other platform alerts. When TrueNAS reporting goes stale or hits a collection error, **Health Alerts** rows keep their **Critical**, **Warning**, and **Info** severity indicators, show an amber **Stale data** cue beneath the affected resource name, match stale labels and collection-error text in search, and display an amber drawer notice (`This alert reflects the last report received and may no longer be current.`) that clears automatically when live polling recovers.
 
 TrueNAS drive-health alerts that identify a specific disk remain disk-health
 evidence after they are dismissed in TrueNAS. Dismissal acknowledges the
