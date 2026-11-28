@@ -188,7 +188,16 @@ while TrueNAS still reports the condition.
 use the saved per-disk temperature override, then the TrueNAS-wide default,
 then the inherited agent/by-type policy. An Off or disabled temperature policy
 leaves the reading visible but unjudged; a last known reading is never current
-heat. A display mismatch is not proof that your saved rule failed. Compare the same disk, observation time and saved threshold with
+heat. When TrueNAS polling goes stale or hits a collection error, clear physical
+disks switch from **Healthy** to amber **Stale** (leaving the **Healthy** filter
+and joining **Attention** and **Warning**), while **Replace Now** and **Needs
+Attention** verdicts stay visible with an inline amber **Stale data** cue
+beneath the disk name. Stale temperatures and SSD **Life remaining** values
+render as muted last-known readings without triggering **Running Hot**, disk
+search matches stale labels and source errors, and expanding the disk shows an
+amber notice (`Stale data. Retained last-known disk readings.`) while deferring
+temperature and SMART history charts as last-known values until live polling
+recovers. A display mismatch is not proof that your saved rule failed. Compare the same disk, observation time and saved threshold with
 its existing TrueNAS reading and SMART state; do not raise thresholds, run new
 SMART tests, force a probe or restart merely to make the views agree.
 

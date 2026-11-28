@@ -907,6 +907,7 @@ The agent can report S.M.A.R.T. disk temperatures, health status, identity, and 
 **Notes:**
 - Disks in standby mode are reported as such (no temperature) to avoid waking them
 - S.M.A.R.T. data is collected alongside other host metrics and can enrich the Physical Disks view with temperature, stable disk identity, power-on hours, SSD life, pending sectors, media errors, and related counters
+- When a host agent stops updating or hits a collection error, Physical Disks (and **Physical Disks & SMART** cards inside guest, machine, and host drawers) switch clear disks from **Healthy** or **Online** to amber **Stale** (moving them out of **Healthy** into **Attention** and **Warning**), keep **Replace Now** and **Needs Attention** verdicts visible with an inline amber **Stale data** cue, style stale temperatures and SSD **Life remaining** as muted last-known values so they never trigger **Running Hot**, and display an inline `Stale data. Retained last-known disk readings.` notice while deferring temperature and SMART history charts until fresh agent reports arrive
 - If `smartctl` is not available, S.M.A.R.T. monitoring is silently skipped
 - **Disk exclusions** (`--disk-exclude` / `PULSE_DISK_EXCLUDE`) also apply to S.M.A.R.T. monitoring.
   Use patterns like `sda`, `/dev/sdb`, `nvme*`, or `*cache*` to exclude specific block devices.

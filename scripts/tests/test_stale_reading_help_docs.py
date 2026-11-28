@@ -626,6 +626,105 @@ class StaleReadingAndAgentHelpDocsTest(unittest.TestCase):
         self.assertIn("ReportEncodedBodyLimitBytes int64 = 2 * 1024 * 1024", report_limits)
         self.assertIn("ReportDecodedBodyLimitBytes int64 = 10 * 1024 * 1024", report_limits)
 
+    def test_help_documents_physical_disk_stale_readings_across_storage_and_drawers(self):
+        faq = doc_text("docs/FAQ.md")
+        faq_section = norm(
+            faq.split("### No data showing?\n", 1)[1].split("\n### ", 1)[0]
+        )
+        for phrase in (
+            "**Physical disks**",
+            "**Physical Disks & SMART** cards in guest, machine, and host drawers",
+            "switch from **Healthy** or **Online** to amber **Stale**",
+            "leave the **Healthy** filter, join **Attention** and **Warning**, and sort ahead of fresh healthy disks",
+            "Worse verdicts (**Replace Now** and **Needs Attention**) stay visible with an inline amber **Stale data** cue beneath the disk name",
+            "Stale temperatures and SSD **Life remaining** percentages render in muted dotted-underline last-known styling and never trigger a live **Running Hot** verdict",
+            "Physical disk search matches `stale`, `stale data`, refresh age, and recorded source error text",
+            "`Stale data. Retained last-known disk readings.`",
+            "`Health, temperature, and SMART readings reflect the last report received and may no longer be current.`",
+            "labels the health card **Last known temperature**, and defers temperature and SMART history charts as last-known values until live reporting recovers",
+        ):
+            with self.subTest(doc="FAQ.md", phrase=phrase):
+                self.assertIn(phrase, faq_section)
+
+        truenas = doc_text("docs/TRUENAS.md")
+        truenas_disk = norm(
+            truenas.split("## Disk temperature and health\n", 1)[1].split(
+                "## Multiple TrueNAS Systems", 1
+            )[0]
+        )
+        for phrase in (
+            "switch from **Healthy** to amber **Stale** (leaving the **Healthy** filter and joining **Attention** and **Warning**)",
+            "**Replace Now** and **Needs Attention** verdicts stay visible with an inline amber **Stale data** cue beneath the disk name",
+            "Stale temperatures and SSD **Life remaining** values render as muted last-known readings without triggering **Running Hot**",
+            "`Stale data. Retained last-known disk readings.`",
+            "deferring temperature and SMART history charts as last-known values until live polling recovers",
+        ):
+            with self.subTest(doc="TRUENAS.md", phrase=phrase):
+                self.assertIn(phrase, truenas_disk)
+
+        unified = doc_text("docs/UNIFIED_AGENT.md")
+        smart_section = norm(
+            unified.split("## S.M.A.R.T. Disk Health\n", 1)[1].split(
+                "\n## Auto-Update", 1
+            )[0]
+        )
+        for phrase in (
+            "**Physical Disks & SMART** cards inside guest, machine, and host drawers",
+            "switch clear disks from **Healthy** or **Online** to amber **Stale**",
+            "keep **Replace Now** and **Needs Attention** verdicts visible with an inline amber **Stale data** cue",
+            "style stale temperatures and SSD **Life remaining** as muted last-known values so they never trigger **Running Hot**",
+            "`Stale data. Retained last-known disk readings.`",
+            "deferring temperature and SMART history charts until fresh agent reports arrive",
+        ):
+            with self.subTest(doc="UNIFIED_AGENT.md", phrase=phrase):
+                self.assertIn(phrase, smart_section)
+
+        disk_pres = doc_text("frontend-modern/src/features/storageBackups/diskPresentation.ts")
+        disk_temp = doc_text(
+            "frontend-modern/src/features/storageBackups/diskTemperaturePresentation.ts"
+        )
+        disk_drawer = doc_text(
+            "frontend-modern/src/features/storageBackups/diskDrawerPresentation.ts"
+        )
+        disk_list = doc_text("frontend-modern/src/components/Storage/DiskList.tsx")
+        disk_overview = doc_text("frontend-modern/src/components/Storage/DiskDrawerOverview.tsx")
+        guest_disks = doc_text("frontend-modern/src/components/Workloads/GuestPhysicalDisks.tsx")
+        pool_detail = doc_text(
+            "frontend-modern/src/features/storageBackups/storagePoolDetailPresentation.ts"
+        )
+
+        for marker in (
+            "export function extractPhysicalDiskFreshness(resource: Resource)",
+            "return `Retained last-known disk readings.${age}${error}`.trim();",
+            "disk.freshness === 'stale' ? 'stale stale data' : ''",
+            "label: 'Stale'",
+            "if (verdict.kind === 'attention' || disk.freshness === 'stale') return 'warning';",
+            "return disk.freshness === 'stale' ? 100 : 0;",
+        ):
+            self.assertIn(marker, disk_pres)
+        for marker in (
+            "if (freshness === 'stale') return false;",
+            "if (!isPhysicalDiskTemperatureCurrent(disk.collection, disk.freshness)) return false;",
+        ):
+            self.assertIn(marker, disk_temp)
+        for marker in (
+            "if (disk.freshness === 'stale') return {};",
+            "if (disk.freshness === 'stale') {",
+            "temperature.current ? 'Temperature' : 'Last known temperature'",
+        ):
+            self.assertIn(marker, disk_drawer)
+        self.assertIn("data-disk-stale-cue", disk_list)
+        self.assertIn('data-life-reading={isStale() ? \'last-known\' : \'current\'}', disk_list)
+        for marker in (
+            'data-testid="disk-drawer-stale-notice"',
+            '<span class="font-medium">Stale data.</span>',
+            "Health, temperature, and",
+            "SMART readings reflect the last report received and may no longer be current.",
+        ):
+            self.assertIn(marker, disk_overview)
+        self.assertIn("data-disk-stale-cue", guest_disks)
+        self.assertIn("extractPhysicalDiskFreshness(disk)", pool_detail)
+
     def test_shipped_public_docs_mirrors_match_byte_for_byte(self):
         for name in (
             "AGENT_SECURITY.md",
