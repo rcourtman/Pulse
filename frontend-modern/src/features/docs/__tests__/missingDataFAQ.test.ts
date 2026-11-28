@@ -69,9 +69,17 @@ describe('shipped missing-data FAQ', () => {
   it('routes each symptom to a real heading in a shipped guide', () => {
     const sections = [section('no-data-showing'), section('connection-refused')];
     const links = sections.flatMap((element) => [...element.querySelectorAll('a[href]')]);
-    expect(links).toHaveLength(12);
+    expect(links).toHaveLength(15);
     expect(
       sections[0].querySelector('a[href="/docs/KUBERNETES#stale-kubernetes-readings"]'),
+    ).not.toBeNull();
+    expect(
+      sections[0].querySelector('a[href="/docs/RECOVERY#stale-proxmox-backup-telemetry"]'),
+    ).not.toBeNull();
+    expect(
+      sections[0].querySelector(
+        'a[href="/docs/PBS#stale-pbs-readings-and-unread-datastore-capacity"]',
+      ),
     ).not.toBeNull();
     expect(
       sections[0].querySelector(
