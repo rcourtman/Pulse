@@ -8,7 +8,10 @@ Saving **Automatic Stable Updates** does not provision or start a missing
 systemd update timer. Timer scheduling belongs to the installed deployment;
 check its existing service and timer before changing automation. Source-built
 servers do not use unattended release updates, and Docker/Kubernetes servers
-are updated through their existing deployment manager.
+are updated through their existing deployment manager. On Docker deployments,
+check **Settings → System → Updates** for a `container-data-persistence`
+warning and confirm `PULSE_DATA_DIR` (default `/data`) is on a mounted volume
+before recreating the container.
 
 Do not rewrite `system.json` through a shared temporary file to change update
 preferences: that can expose configuration and replace its ownership or

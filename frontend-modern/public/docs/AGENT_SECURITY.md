@@ -52,6 +52,21 @@ capacity monitoring, for example a log2ram `/var/log` mount. This reports
 filesystem capacity and usage metadata. It does not read or transmit file
 contents. Local `--disk-exclude` rules still take precedence.
 
+Passive host network and accelerator telemetry stays bounded to endpoint and
+device metadata. On Linux, routing and resolver reads inspect `/proc/net/route`,
+`/etc/resolv.conf` (and `/run/systemd/resolve/resolv.conf` when only loopback
+stubs are listed) for up to `8` default gateways and `8` DNS servers. Passive
+peer reads inspect `/proc/net/tcp` and `/proc/net/tcp6` for at most `128`
+unique established internal peer pairs per snapshot, keeping only private RFC
+1918, IPv6 ULA (`fc00::/7`), and RFC 6598 CGNAT or overlay (`100.64.0.0/10`)
+addresses while discarding public internet, loopback, link-local, multicast,
+and self-IP sockets on the host before transmission. No packet capture, socket
+payload, or process command line is collected. Docker accelerator reporting
+inspects only container runtime and device mappings (`/dev/nvidia*`,
+`/dev/kfd*`, `/dev/dri*`, `/dev/apex*`, `/dev/hailo*`) to emit bounded class
+labels (`GPU`, `AMD GPU`, `iGPU`, `TPU`, `NPU`, at most `8` labels of up to
+`24` characters each).
+
 For a container the runtime marks unhealthy, the Docker module reads the last
 health-check result on the host and reports why it failed as one of a fixed
 set of reason codes (for example connection refused or an HTTP status), with

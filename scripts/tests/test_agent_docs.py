@@ -473,6 +473,59 @@ Path(os.environ['HOME'], '.config/pulse/agent-install.sh').write_text('other sav
                 self.assertEqual(src_bytes, (ROOT / "frontend-modern/public/docs" / name).read_bytes())
                 self.assertIn("/settings/infrastructure/agent-doctor", src_bytes.decode("utf-8"))
 
+    def test_passive_network_and_accelerator_telemetry_bounds_match_runtime(self):
+        routing_go = (ROOT / "internal/hostmetrics/routing.go").read_text(encoding="utf-8")
+        peers_go = (ROOT / "internal/hostmetrics/socket_peers.go").read_text(encoding="utf-8")
+        accel_go = (ROOT / "internal/monitoring/guest_accelerators.go").read_text(encoding="utf-8")
+
+        for token in (
+            'procNetRoutePath      = "/proc/net/route"',
+            'resolvConfPath        = "/etc/resolv.conf"',
+            'resolvedUpstreamsPath = "/run/systemd/resolve/resolv.conf"',
+            "maxDefaultGateways = 8",
+            "maxDNSServers      = 8",
+        ):
+            self.assertIn(token, routing_go)
+
+        for token in (
+            'procNetTCPPath  = "/proc/net/tcp"',
+            'procNetTCP6Path = "/proc/net/tcp6"',
+            "maxActivePeers = 128",
+            'netip.MustParsePrefix("100.64.0.0/10")',
+        ):
+            self.assertIn(token, peers_go)
+
+        for token in (
+            "maxReportedAccelerators   = 8",
+            "maxAcceleratorLabelLength = 24",
+        ):
+            self.assertIn(token, accel_go)
+
+        for name in ("UNIFIED_AGENT.md", "AGENT_SECURITY.md"):
+            src_bytes = (ROOT / "docs" / name).read_bytes()
+            self.assertEqual(src_bytes, (ROOT / "frontend-modern/public/docs" / name).read_bytes())
+            normalized = " ".join(src_bytes.decode("utf-8").split())
+            for phrase in (
+                "/proc/net/route",
+                "/etc/resolv.conf",
+                "/run/systemd/resolve/resolv.conf",
+                "/proc/net/tcp",
+                "/proc/net/tcp6",
+                "`128`",
+                "`fc00::/7`",
+                "`100.64.0.0/10`",
+                "public internet, loopback, link-local, multicast, and self-IP",
+                "`/dev/nvidia*`",
+                "`/dev/kfd*`",
+                "`/dev/dri*`",
+                "`/dev/apex*`",
+                "`/dev/hailo*`",
+                "`8`",
+                "`24`",
+            ):
+                with self.subTest(doc=name, phrase=phrase):
+                    self.assertIn(phrase, normalized)
+
 
 if __name__ == "__main__":
     unittest.main()

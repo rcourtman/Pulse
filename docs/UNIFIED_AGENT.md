@@ -275,6 +275,26 @@ installed agent version; the remaining platform trust trade-offs are in
 - **Auto-Update**: Automatically updates when a new version is released
 - **Multi-Platform**: Linux, macOS, Windows support
 
+Host reports also carry bounded passive network and hardware metadata when the
+underlying platform exposes it. On Linux, the host module reads IPv4 default
+gateways from `/proc/net/route` (up to `8`, lowest metric first, skipping
+point-to-point routes without a gateway) and DNS servers from `/etc/resolv.conf`
+(falling back to `/run/systemd/resolve/resolv.conf` when `/etc/resolv.conf`
+lists only loopback `systemd-resolved` stubs, up to `8` servers), omitting the
+field on platforms where neither file is present. On Linux, it also passively
+reads established TCP socket endpoints from `/proc/net/tcp` and
+`/proc/net/tcp6` (capped at `128` unique internal peer pairs per snapshot),
+keeping only private RFC 1918, IPv6 ULA (`fc00::/7`), and RFC 6598 CGNAT or
+overlay (`100.64.0.0/10`) peers and discarding public internet, loopback,
+link-local, multicast, and self-IP sockets on the host before transmission.
+When Docker monitoring is enabled, container reports include detected hardware
+accelerator classes (`GPU`, `AMD GPU`, `iGPU`, `TPU`, `NPU`) from container
+device requests, runtime settings, and device mappings (`/dev/nvidia*`,
+`/dev/kfd*`, `/dev/dri*`, `/dev/apex*`, `/dev/hailo*`), bounded on the server
+to at most `8` labels of up to `24` characters each. Proxmox VE VM `hostpci*`
+and LXC device passthrough entries are parsed on the server from cached guest
+configurations with no extra Proxmox API requests.
+
 The opt-in Linux typed-helper collector profile keeps auto-update enabled
 without making its root-owned binary writable by the service account. The
 collector downloads and self-tests the signed artifact in a fixed
