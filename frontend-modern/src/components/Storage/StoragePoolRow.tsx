@@ -1,6 +1,9 @@
 import { Component, Show, createMemo } from 'solid-js';
 import type { StorageRecord } from '@/features/storageBackups/models';
-import { getStoragePoolProtectionTextClass } from '@/features/storageBackups/rowPresentation';
+import {
+  getStoragePoolProtectionTextClass,
+  shouldShowStoragePoolInlineStaleCue,
+} from '@/features/storageBackups/rowPresentation';
 import {
   buildStoragePoolRowModel,
   STORAGE_POOL_ROW_GROWTH_CELL_CLASS,
@@ -16,6 +19,7 @@ import {
   STORAGE_POOL_ROW_NAME_TEXT_CLASS,
   STORAGE_POOL_ROW_PROTECTION_CELL_CLASS,
   STORAGE_POOL_ROW_PROTECTION_TEXT_CLASS,
+  STORAGE_POOL_ROW_STALE_CUE_CLASS,
   STORAGE_POOL_ROW_TEXT_TRUNCATE_CLASS,
   STORAGE_POOL_ROW_TYPE_CELL_CLASS,
   STORAGE_POOL_ROW_USAGE_FALLBACK_CLASS,
@@ -35,7 +39,6 @@ import {
 } from '@/features/storageBackups/storagePagePresentation';
 import { getPlatformTableCellClassForKind } from '@/features/platformPage/sharedPlatformPage';
 import { EnhancedStorageBar } from './EnhancedStorageBar';
-import { StoragePoolDrawer } from './StoragePoolDrawer';
 import {
   buildSummaryDisclosureControlsId,
   createSummaryInteractiveRowPreviewHandlers,
@@ -44,6 +47,8 @@ import { SummaryRowActionButton } from '@/components/shared/SummaryRowActionButt
 import { InlineDetailTableRow } from '@/components/shared/InlineDetailTableRow';
 import { createRowTextSelectionGuard } from '@/components/shared/Table';
 import type { Alert } from '@/types/api';
+
+import { StoragePoolDrawer } from './StoragePoolDrawer';
 
 interface StoragePoolRowProps {
   layoutMode: StoragePoolTableLayoutMode;
@@ -78,6 +83,10 @@ export const StoragePoolRow: Component<StoragePoolRowProps> = (props) => {
       .replace(/\s+/g, ' ')
       .trim();
   const isPhoneLayout = () => props.layoutMode === 'narrow' || props.layoutMode === 'compact';
+  const stateTextClass = () =>
+    isPhoneLayout()
+      ? 'block whitespace-normal wrap-anywhere text-[11px] font-semibold leading-tight'
+      : STORAGE_POOL_ROW_ISSUE_TEXT_CLASS;
   const row = createMemo(() => buildStoragePoolRowModel(props.record, props.growthDelta ?? null));
   const detailControlsId = createMemo(() =>
     buildSummaryDisclosureControlsId(props.summarySeriesId),
@@ -146,12 +155,11 @@ export const StoragePoolRow: Component<StoragePoolRowProps> = (props) => {
                 fallback={<span class={STORAGE_POOL_ROW_PLACEHOLDER_CLASS}>—</span>}
               >
                 <span
-                  class={`${
-                    isPhoneLayout()
-                      ? 'block whitespace-normal wrap-anywhere text-[11px] font-semibold leading-tight'
-                      : STORAGE_POOL_ROW_ISSUE_TEXT_CLASS
-                  } ${row().stateToneClass}`}
+                  class={`${stateTextClass()} ${row().stateToneClass}`}
                   title={row().stateTitle || row().stateLabel}
+                  data-storage-pool-stale={
+                    row().isStale && row().stateLabel === 'Stale' ? 'true' : undefined
+                  }
                 >
                   {row().stateLabel}
                 </span>
@@ -160,17 +168,24 @@ export const StoragePoolRow: Component<StoragePoolRowProps> = (props) => {
           >
             {(headline) => (
               <span
-                class={`${
-                  isPhoneLayout()
-                    ? 'block whitespace-normal wrap-anywhere text-[11px] font-semibold leading-tight'
-                    : STORAGE_POOL_ROW_ISSUE_TEXT_CLASS
-                } ${props.alertHeadlineClass ?? ''}`}
+                class={`${stateTextClass()} ${props.alertHeadlineClass ?? ''}`}
                 title={`${headline()} · ${row().stateTitle || row().stateLabel}`}
                 data-storage-alert-headline
               >
                 {isPhoneLayout() ? (props.alertHeadlineCompact ?? headline()) : headline()}
               </span>
             )}
+          </Show>
+          <Show
+            when={shouldShowStoragePoolInlineStaleCue(props.record, Boolean(props.alertHeadline))}
+          >
+            <span
+              class={STORAGE_POOL_ROW_STALE_CUE_CLASS}
+              title={row().staleDetail || undefined}
+              data-storage-pool-stale="true"
+            >
+              Stale data
+            </span>
           </Show>
         </td>
 

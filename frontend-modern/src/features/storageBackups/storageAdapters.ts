@@ -1,4 +1,5 @@
 import type { Resource } from '@/types/resource';
+import { getResourceStaleness } from '@/features/platformPage/resourceStaleness';
 import type { StorageRecord, StorageAdapter, StorageAdapterContext } from './models';
 import {
   getCanonicalStoragePlatformKey,
@@ -31,6 +32,27 @@ import {
   metricsTargetForStorageResource,
   normalizeStorageResourceHealth,
 } from './storageAdapterCore';
+
+const STALE_STORAGE_SOURCE_STATUSES = new Set([
+  'stale',
+  'offline',
+  'error',
+  'failed',
+  'unauthorized',
+]);
+const CONNECTED_STORAGE_SOURCE_STATUSES = new Set([
+  'online',
+  'running',
+  'healthy',
+  'connected',
+  'ok',
+]);
+
+const promoteStaleHealth = (
+  health: StorageRecord['health'],
+  freshness: StorageRecord['freshness'],
+): StorageRecord['health'] =>
+  freshness === 'stale' && (health === 'healthy' || health === 'unknown') ? 'warning' : health;
 
 const mapResourceStorageRecord = (resource: Resource, adapterId: string): StorageRecord => {
   const platformData = (resource.platformData as Record<string, unknown> | undefined) || {};
@@ -152,7 +174,7 @@ const mapResourceStorageRecord = (resource: Resource, adapterId: string): Storag
     resource.tags,
     resource.incidentSeverity,
   );
-  const health =
+  const baseHealth =
     normalizedHealth === 'warning' && isUnraid && !hasUnraidStorageAttentionIssue(resource)
       ? 'healthy'
       : normalizedHealth;
@@ -166,17 +188,25 @@ const mapResourceStorageRecord = (resource: Resource, adapterId: string): Storag
     resource.storage?.vdevLayout || resource.storage?.topology,
   );
   const metricsTarget = metricsTargetForStorageResource(resource);
-  const sourceStatuses = Object.values(resource.sourceStatus ?? {});
-  const degradedSource = sourceStatuses.find((source) =>
-    ['stale', 'offline', 'error', 'failed', 'unauthorized'].includes(
-      (source.status || '').trim().toLowerCase(),
-    ),
+  const sourceStatus =
+    resource.sourceStatus ?? (platformData.sourceStatus as Resource['sourceStatus'] | undefined);
+  const sourceEntries = Object.entries(sourceStatus ?? {}).filter(
+    ([source]) => source.trim().toLowerCase() !== 'availability',
   );
-  const freshness = degradedSource
-    ? 'stale'
-    : sourceStatuses.some((source) => (source.status || '').trim().toLowerCase() === 'online')
-      ? 'fresh'
-      : 'unknown';
+  const degradedSource = sourceEntries.find(([, source]) =>
+    STALE_STORAGE_SOURCE_STATUSES.has((source?.status || '').trim().toLowerCase()),
+  )?.[1];
+  const healthStale = getResourceStaleness(resource);
+  const freshness: StorageRecord['freshness'] =
+    degradedSource || healthStale
+      ? 'stale'
+      : sourceEntries.some(([, source]) =>
+            CONNECTED_STORAGE_SOURCE_STATUSES.has((source?.status || '').trim().toLowerCase()),
+          )
+        ? 'fresh'
+        : 'unknown';
+  const freshnessError = degradedSource?.error?.trim() || healthStale?.label || undefined;
+  const health = promoteStaleHealth(baseHealth, freshness);
 
   return {
     id: resource.id,
@@ -221,7 +251,7 @@ const mapResourceStorageRecord = (resource: Resource, adapterId: string): Storag
         ? resource.lastSeen
         : Date.now(),
     freshness,
-    freshnessError: degradedSource?.error?.trim() || undefined,
+    freshnessError,
     metricsTarget,
     refs: {
       resourceId: metricsTarget?.resourceId || resource.id,
@@ -287,15 +317,27 @@ const mergeStorageRecords = (current: StorageRecord, incoming: StorageRecord): S
   const preferred =
     (current.incidentPriority || 0) >= (incoming.incidentPriority || 0) ? current : incoming;
   const secondary = preferred === current ? incoming : current;
+  const mergedFreshness: StorageRecord['freshness'] =
+    preferred.freshness === 'stale' || secondary.freshness === 'stale'
+      ? 'stale'
+      : preferred.freshness === 'fresh' || secondary.freshness === 'fresh'
+        ? 'fresh'
+        : (preferred.freshness ?? secondary.freshness);
+  const mergedFreshnessError =
+    mergedFreshness === 'stale' ? preferred.freshnessError || secondary.freshnessError : undefined;
+  const baseMergedHealth =
+    preferred.health === 'unknown' && secondary.health !== 'unknown'
+      ? secondary.health
+      : preferred.health;
+  const mergedHealth = promoteStaleHealth(baseMergedHealth, mergedFreshness);
 
   return {
     ...secondary,
     ...preferred,
     capabilities: dedupe([...(current.capabilities || []), ...(incoming.capabilities || [])]),
-    health:
-      preferred.health === 'unknown' && secondary.health !== 'unknown'
-        ? secondary.health
-        : preferred.health,
+    health: mergedHealth,
+    freshness: mergedFreshness,
+    freshnessError: mergedFreshnessError,
     statusLabel: preferred.statusLabel || secondary.statusLabel,
     hostLabel: preferred.hostLabel || secondary.hostLabel,
     platformLabel: preferred.platformLabel || secondary.platformLabel,

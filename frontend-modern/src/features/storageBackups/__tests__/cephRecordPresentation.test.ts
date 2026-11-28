@@ -238,4 +238,30 @@ describe('cephRecordPresentation', () => {
       { ...sickMount, absorbedAlertResourceIds: getStorageRecordAlertResourceIds(healthyPool) },
     ]);
   });
+
+  it('lifts stale freshness from a folded Ceph cluster pool row onto its surviving mount', () => {
+    const stalePool = makeRecord({
+      id: 'pool-stale',
+      name: 'vm-pool',
+      health: 'warning',
+      freshness: 'stale',
+      freshnessError: 'Ceph poll timed out',
+      details: { type: 'ceph', node: 'cluster', status: 'online' },
+    });
+    const freshMount = makeRecord({
+      id: 'mount-fresh',
+      name: 'fast-rbd',
+      health: 'healthy',
+      freshness: 'fresh',
+      details: { type: 'rbd', node: 'shared', pool: 'vm-pool', status: 'online' },
+    });
+
+    const [survivor] = consolidateCephClusterPoolRecords([stalePool, freshMount]);
+    expect(survivor).toMatchObject({
+      id: 'mount-fresh',
+      health: 'warning',
+      freshness: 'stale',
+      freshnessError: 'Ceph poll timed out',
+    });
+  });
 });

@@ -6,8 +6,8 @@ import type { Alert } from '@/types/api';
 import type { Resource, ResourceType } from '@/types/resource';
 import Storage from '@/components/Storage/Storage';
 import { ROUTE_STATE_REPLACE_OPTIONS } from '@/utils/routeStateNavigation';
-// Pool and disk drawers load their charts lazily; warm the module so a cold
-// transform does not outlast the tests' waits.
+// Pool and disk drawers load GuestDrawerHistory lazily; warm the module so a
+// cold transform does not outlast the tests' waits.
 import '@/components/Workloads/GuestDrawerHistory';
 
 // Stub ResizeObserver for jsdom (used by HistoryChart in pool detail panels)
@@ -78,7 +78,7 @@ const setStorageFilter = (filterLabel: string, optionLabel: string) => {
     return;
   }
   const inlineGroup = screen.queryByRole('group', { name: filterLabel });
-  if (inlineGroup) {
+  if (inlineGroup && inlineGroup.tagName !== 'OPTGROUP') {
     fireEvent.click(within(inlineGroup).getByRole('button', { name: optionLabel }));
     return;
   }
@@ -1625,5 +1625,167 @@ describe('Storage', () => {
     const params = new URLSearchParams(path.split('?')[1] || '');
     expect(params.get('source')).toBe('proxmox-pve');
     expect(params.get('status')).toBe('warning');
+  });
+
+  it('surfaces stale storage pools across rows, alert headlines, filters, search, priority order, and live recovery', async () => {
+    const staleAlertId = 'alert-stale-usage';
+    wsActiveAlerts = {
+      [staleAlertId]: {
+        id: staleAlertId,
+        type: 'usage',
+        level: 'warning',
+        resourceId: 'storage-alert-stale',
+        resourceName: 'Alert-Stale-Pool',
+        node: 'pve1',
+        instance: 'cluster-main',
+        message: 'Storage usage above 85%',
+        value: 88,
+        threshold: 85,
+        startTime: new Date().toISOString(),
+        acknowledged: false,
+      } as Alert,
+    };
+
+    hookResources = [
+      buildStorageResource('storage-fresh', 'Fresh-High-Usage', 'pve1', {
+        status: 'online',
+        current: 80,
+        used: 800,
+        total: 1000,
+        free: 200,
+        platformData: { sourceStatus: { proxmox: { status: 'online' } } },
+      }),
+      {
+        ...buildStorageResource('storage-stale', 'Stale-Clear-Pool', 'pve1', {
+          status: 'online',
+          current: 30,
+          used: 300,
+          total: 1000,
+          free: 700,
+        }),
+        sourceStatus: {
+          proxmox: {
+            status: 'stale',
+            error: 'Datastore.Audit permission denied',
+          },
+        },
+      },
+      {
+        ...buildStorageResource('storage-alert-stale', 'Alert-Stale-Pool', 'pve1', {
+          status: 'online',
+          current: 88,
+          used: 880,
+          total: 1000,
+          free: 120,
+        }),
+        sourceStatus: {
+          proxmox: {
+            status: 'stale',
+            error: 'Proxmox storage poll timed out',
+          },
+        },
+      },
+      {
+        ...buildStorageResource('storage-faulted-stale', 'Faulted-Stale-ZFS', 'pve1', {
+          status: 'faulted',
+          current: 45,
+          used: 450,
+          total: 1000,
+          free: 550,
+          storage: {
+            type: 'zfspool',
+            isZfs: true,
+            zfsPool: {
+              name: 'Faulted-Stale-ZFS',
+              state: 'FAULTED',
+              status: 'FAULTED',
+              scan: '',
+              readErrors: 3,
+              writeErrors: 0,
+              checksumErrors: 1,
+              devices: [],
+            },
+          },
+        }),
+        sourceStatus: {
+          proxmox: {
+            status: 'stale',
+            error: 'Node pve1 unreachable',
+          },
+        },
+      },
+    ];
+
+    render(() => <Storage forcedSourceFilter="proxmox-pve" />);
+
+    const table = screen.getByRole('table');
+    const rowIds = () =>
+      Array.from(table.querySelectorAll<HTMLTableRowElement>('tbody tr[data-row-id]')).map(
+        (tr) => tr.dataset.rowId,
+      );
+
+    // Priority order: open alert first, then stale pools ahead of higher-usage fresh pool.
+    expect(rowIds()[0]).toBe('storage-alert-stale');
+    expect(rowIds().indexOf('storage-stale')).toBeLessThan(rowIds().indexOf('storage-fresh'));
+
+    // Clear stale pool displays amber Stale; alert-bearing & faulted stale pools preserve primary state + stacked Stale data cue.
+    const clearStaleRow = table.querySelector('tr[data-row-id="storage-stale"]') as HTMLElement;
+    expect(within(clearStaleRow).getByText('Stale')).toHaveAttribute(
+      'data-storage-pool-stale',
+      'true',
+    );
+    expect(within(clearStaleRow).queryByText('Stale data')).not.toBeInTheDocument();
+
+    const alertStaleRow = table.querySelector(
+      'tr[data-row-id="storage-alert-stale"]',
+    ) as HTMLElement;
+    expect(alertStaleRow.querySelector('[data-storage-alert-headline]')).toBeInTheDocument();
+    expect(within(alertStaleRow).getByText('Stale data')).toHaveAttribute(
+      'data-storage-pool-stale',
+      'true',
+    );
+
+    const faultedStaleRow = table.querySelector(
+      'tr[data-row-id="storage-faulted-stale"]',
+    ) as HTMLElement;
+    expect(within(faultedStaleRow).getByText('Faulted')).toBeInTheDocument();
+    expect(within(faultedStaleRow).getByText('Stale data')).toHaveAttribute(
+      'data-storage-pool-stale',
+      'true',
+    );
+
+    // Healthy status filter excludes stale pools; Warning filter includes stale online pools.
+    setStorageFilter('Status', 'Healthy');
+    expect(rowIds()).toEqual(['storage-fresh']);
+
+    setStorageFilter('Status', 'Warning');
+    expect(rowIds()).toEqual(['storage-alert-stale', 'storage-stale']);
+
+    setStorageFilter('Status', 'Needs attention');
+    expect(rowIds()).toEqual(['storage-alert-stale', 'storage-faulted-stale', 'storage-stale']);
+
+    setStorageFilter('Status', 'All');
+    const searchInput = screen.getByPlaceholderText(/Search storage/i);
+    fireEvent.input(searchInput, { target: { value: 'Datastore.Audit' } });
+    expect(rowIds()).toEqual(['storage-stale']);
+
+    fireEvent.input(searchInput, { target: { value: '' } });
+
+    // Live recovery clears stale cues and restores Healthy membership.
+    hookResources = hookResources.map((resource) =>
+      resource.id === 'storage-stale'
+        ? { ...resource, sourceStatus: { proxmox: { status: 'online' } } }
+        : resource,
+    );
+    setHookResourcesVersion((v) => v + 1);
+
+    await waitFor(() => {
+      const recoveredRow = table.querySelector('tr[data-row-id="storage-stale"]') as HTMLElement;
+      expect(within(recoveredRow).getByText('Online')).toBeInTheDocument();
+      expect(recoveredRow.querySelector('[data-storage-pool-stale]')).toBeNull();
+    });
+
+    setStorageFilter('Status', 'Healthy');
+    expect(rowIds()).toEqual(['storage-fresh', 'storage-stale']);
   });
 });

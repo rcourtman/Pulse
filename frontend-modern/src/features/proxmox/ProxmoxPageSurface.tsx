@@ -1,5 +1,14 @@
 import { useLocation } from '@solidjs/router';
-import { Show, createEffect, createMemo, createSignal, onCleanup, type Accessor } from 'solid-js';
+import {
+  Show,
+  Suspense,
+  createEffect,
+  createMemo,
+  createSignal,
+  lazy,
+  onCleanup,
+  type Accessor,
+} from 'solid-js';
 import StorageSurface from '@/components/Storage/Storage';
 import { WorkloadsFilter } from '@/components/Workloads/WorkloadsFilter';
 import { WorkloadsSurface } from '@/components/Workloads/WorkloadsSurface';
@@ -51,7 +60,6 @@ import {
 import { ProxmoxBackupsTable, type BackupResourceReadIssue } from './ProxmoxBackupsTable';
 import { ProxmoxBackupJobsSection } from './ProxmoxBackupJobsCard';
 import { ProxmoxCephTable } from './ProxmoxCephTable';
-import { ProxmoxMailGatewayTable } from './ProxmoxMailGatewayTable';
 import { ProxmoxNodesTable } from './ProxmoxNodesTable';
 import { ProxmoxReplicationTable, fetchReplicationJobs } from './ProxmoxReplicationTable';
 import { createNonSuspendingQuery } from '@/hooks/createNonSuspendingQuery';
@@ -97,6 +105,12 @@ const PROXMOX_WORKLOAD_STATUS_OPTIONS: readonly WorkloadsStatusOption[] = [
   { value: 'degraded', label: 'Attention' },
   { value: 'stopped', label: 'Stopped' },
 ];
+
+const ProxmoxMailGatewayTable = lazy(() =>
+  import('./ProxmoxMailGatewayTable').then(({ ProxmoxMailGatewayTable }) => ({
+    default: ProxmoxMailGatewayTable,
+  })),
+);
 
 const ProxmoxIcon = getPlatformIcon('proxmox');
 const proxmoxIcon = () => <ProxmoxIcon class="h-6 w-6 text-slate-400" />;
@@ -516,11 +530,13 @@ export function ProxmoxPageSurface() {
               />
             </Show>
             <Show when={activeTab() === 'mail'}>
-              <ProxmoxMailGatewayTable
-                resources={model().pmg}
-                emptyTitle="No Proxmox Mail Gateway instances"
-                emptyDescription="PMG instances appear here once a Proxmox Mail Gateway connection reports them."
-              />
+              <Suspense>
+                <ProxmoxMailGatewayTable
+                  resources={model().pmg}
+                  emptyTitle="No Proxmox Mail Gateway instances"
+                  emptyDescription="PMG instances appear here once a Proxmox Mail Gateway connection reports them."
+                />
+              </Suspense>
             </Show>
           </Show>
         </Show>

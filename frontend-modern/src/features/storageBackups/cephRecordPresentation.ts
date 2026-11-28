@@ -58,6 +58,7 @@ export const consolidateCephClusterPoolRecords = (records: StorageRecord[]): Sto
 
   const consumedPoolIds = new Set<string>();
   const liftBySiblingId = new Map<string, StorageRecord>();
+  const stalePoolBySiblingId = new Map<string, StorageRecord>();
   const absorbedAlertIdsBySiblingId = new Map<string, string[]>();
 
   for (const pool of poolRecords) {
@@ -78,6 +79,12 @@ export const consolidateCephClusterPoolRecords = (records: StorageRecord[]): Sto
     if (!existing || storageHealthRank(pool.health) > storageHealthRank(existing.health)) {
       liftBySiblingId.set(sibling.id, pool);
     }
+    if (pool.freshness === 'stale') {
+      const existingStale = stalePoolBySiblingId.get(sibling.id);
+      if (!existingStale || (!existingStale.freshnessError && pool.freshnessError)) {
+        stalePoolBySiblingId.set(sibling.id, pool);
+      }
+    }
   }
 
   if (consumedPoolIds.size === 0) return records;
@@ -87,7 +94,8 @@ export const consolidateCephClusterPoolRecords = (records: StorageRecord[]): Sto
     .map((record) => {
       const pool = liftBySiblingId.get(record.id);
       if (!pool) return record;
-      const absorbed = {
+      const stalePool = stalePoolBySiblingId.get(record.id);
+      const absorbed: StorageRecord = {
         ...record,
         absorbedAlertResourceIds: Array.from(
           new Set([
@@ -95,8 +103,18 @@ export const consolidateCephClusterPoolRecords = (records: StorageRecord[]): Sto
             ...(absorbedAlertIdsBySiblingId.get(record.id) ?? []),
           ]),
         ),
+        ...(stalePool && record.freshness !== 'stale'
+          ? {
+              freshness: 'stale' as const,
+              freshnessError: stalePool.freshnessError || record.freshnessError,
+              health:
+                record.health === 'healthy' || record.health === 'unknown'
+                  ? ('warning' as const)
+                  : record.health,
+            }
+          : {}),
       };
-      if (storageHealthRank(pool.health) <= storageHealthRank(record.health)) return absorbed;
+      if (storageHealthRank(pool.health) <= storageHealthRank(absorbed.health)) return absorbed;
       const poolStatus = getRecordStatusDetail(pool) || pool.statusLabel || pool.health;
       return {
         ...absorbed,
