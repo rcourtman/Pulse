@@ -1,0 +1,58 @@
+{
+  "version": 1,
+  "base_sha": "e52dead8669fb0356773c3af1a9784252c638915",
+  "verified_at": "2026-11-24T21:25:39Z",
+  "result": "passed",
+  "changed_paths": [
+    "frontend-modern/src/api/sessionActivity.ts",
+    "frontend-modern/src/components/Settings/GeneralSettingsPanel.tsx",
+    "frontend-modern/src/components/Settings/useSettingsSystemPanels.tsx",
+    "frontend-modern/src/components/Settings/useSystemSettingsState.ts",
+    "frontend-modern/src/components/SetupWizard/steps/SecurityStep.tsx",
+    "frontend-modern/src/i18n/messages.de.ts",
+    "frontend-modern/src/i18n/messages.es.ts",
+    "frontend-modern/src/i18n/messages.fr.ts",
+    "frontend-modern/src/i18n/messages.ts",
+    "frontend-modern/src/stores/systemSettings.ts"
+  ],
+  "content_sha256": {
+    "frontend-modern/src/api/sessionActivity.ts": "397469fca09c0bd2b8d7decd1aee9dcf4c0a25762e1aad87451291d9498daa98",
+    "frontend-modern/src/components/Settings/GeneralSettingsPanel.tsx": "cb4fa408567198e7db9d298e5443995437dfcec443ac9b346efd2db101c225c4",
+    "frontend-modern/src/components/Settings/useSettingsSystemPanels.tsx": "9838c0373f430fd77638e347c11899fbb530f6efdc6150e9332ff0ffb3fab2fd",
+    "frontend-modern/src/components/Settings/useSystemSettingsState.ts": "c819b075ed8419d14cd32af194c81ca57d371623a31ce5f78d7a3584eab291f1",
+    "frontend-modern/src/components/SetupWizard/steps/SecurityStep.tsx": "24262a29202fe878b113fa79eea64a2db9c251175f7edbe13167fa820127afeb",
+    "frontend-modern/src/i18n/messages.de.ts": "71c4843e5b99bb4c382265ae447206174196b12dbcae60ce3f397452cffc11d2",
+    "frontend-modern/src/i18n/messages.es.ts": "8ff397ac38ae73ad36c554f54cc3890cfe894d0aa10b201dde14dc5f60dffd84",
+    "frontend-modern/src/i18n/messages.fr.ts": "4f7a69bd26e6e4531f6d544356e5332b4e98ed8eb397eae57b943786f1ecbd9e",
+    "frontend-modern/src/i18n/messages.ts": "28815d5fd05f35b5e1b0176c67d3a3c447d9156f73a704fe07e45d8f3da0c496",
+    "frontend-modern/src/stores/systemSettings.ts": "c09a4cb16bbcaf1c50985ca6b449f8abedbdb2bf931e7599a00877e08927b1c2"
+  },
+  "routes": [
+    "/settings/system-general",
+    "/docs/PRIVACY",
+    "/proxmox/overview"
+  ],
+  "viewports": [
+    {
+      "width": 1280,
+      "height": 800
+    },
+    {
+      "width": 390,
+      "height": 844
+    }
+  ],
+  "states": [
+    "General settings Usage data and privacy card desktop (1280x800) and mobile (390x844) with zero horizontal overflow",
+    "Updated summary copy mentioning Patrol, Assistant, capability-API, workload-history, and infrastructure-map counts",
+    "Telemetry payload preview expanded showing update_check_outcome skipped under PULSE_DISABLE_UPDATE_CHECKS=true",
+    "Shipped /docs/PRIVACY popup showing DO_NOT_TRACK=1, PULSE_DISABLE_UPDATE_CHECKS=true, setup-gated first ping, and Docker registry checks at desktop and mobile widths",
+    "Telemetry toggled off and persisted across page reload with zero /api/usage/* POST requests during navigation"
+  ],
+  "interactions": [
+    "Opened Full details popup and inspected desktop and narrow mobile rendering",
+    "Expanded Preview payload and verified JSON contract fields",
+    "Opened Reset ID dialog, dismissed via Escape, reopened, and confirmed ID rotation",
+    "Toggled Outbound usage telemetry off via keyboard Enter, reloaded page, navigated workloads, then re-enabled via click"
+  ]
+}

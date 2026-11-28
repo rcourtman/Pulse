@@ -81,6 +81,11 @@ server:
   env:
     - name: TZ
       value: UTC
+    # Uncomment to disable outbound usage telemetry or GitHub release update checks:
+    # - name: PULSE_TELEMETRY
+    #   value: "false"
+    # - name: PULSE_DISABLE_UPDATE_CHECKS
+    #   value: "true"
   envFrom: []
   extraEnv: []
   extraEnvFrom: []

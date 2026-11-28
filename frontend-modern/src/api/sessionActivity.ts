@@ -1,4 +1,5 @@
 import { apiFetchJSON } from '@/utils/apiClient';
+import { isTelemetryEnabled } from '@/stores/systemSettings';
 
 export interface SessionActivityRecorder<Activity extends string> {
   /** Posts the milestone unless this browser session already did. */
@@ -52,6 +53,7 @@ export const createSessionActivityRecorder = <Activity extends string>(options: 
 
   return {
     record: (activity) => {
+      if (!isTelemetryEnabled()) return;
       if (wasRecordedThisSession(activity)) return;
       rememberThisSession(activity);
 

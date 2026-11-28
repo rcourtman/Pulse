@@ -4,6 +4,7 @@ import { showError } from '@/utils/toast';
 import { setApiToken as setApiClientToken, apiFetchJSON } from '@/utils/apiClient';
 import { STORAGE_KEYS } from '@/utils/localStorage';
 import { SettingsAPI } from '@/api/settings';
+import { updateTelemetryEnabledSetting } from '@/stores/systemSettings';
 import { Toggle } from '@/components/shared/Toggle';
 import type { WizardState } from '../SetupWizard';
 
@@ -138,14 +139,17 @@ export const SecurityStep: Component<SecurityStepProps> = (props) => {
         // side channel. The account exists either way; only report the miss.
         try {
           await SettingsAPI.updateSystemSettings({ telemetryEnabled: false });
+          updateTelemetryEnabledSetting(false);
         } catch {
           // A server started with PULSE_TELEMETRY owns this choice and refuses
           // the write. Read what it chose rather than report a failure: when
           // it already keeps statistics off there is nothing to tell.
           const outcome = await readTelemetryOutcome();
-          if (outcome === 'lockedOn') {
+          if (outcome === 'off') {
+            updateTelemetryEnabledSetting(false);
+          } else if (outcome === 'lockedOn') {
             showError(t('setup.security.error.telemetryLockedOn'));
-          } else if (outcome !== 'off') {
+          } else {
             showError(t('setup.security.error.telemetryDisableFailed'));
           }
         }

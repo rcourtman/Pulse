@@ -7,12 +7,14 @@ import { EN_MESSAGES } from '@/i18n/messages';
 import {
   areSystemSettingsLoaded,
   clearRuntimeBranding,
+  isTelemetryEnabled,
   markSystemSettingsLoadedWithDefaults,
   runtimeBranding,
   shouldHideDockerUpdateActions,
   shouldReduceProUpsellNoise,
   updateRuntimeBrandingFromResponse,
   updateRuntimeDisplayFromResponse,
+  updateTelemetryEnabledSetting,
 } from '@/stores/systemSettings';
 
 const __filename = fileURLToPath(import.meta.url);
@@ -30,11 +32,16 @@ describe('systemSettings store', () => {
     updateRuntimeDisplayFromResponse({
       theme: 'dark',
       disableDockerUpdateActions: true,
+      telemetryEnabled: false,
       reduceProUpsellNoise: true,
     });
 
     expect(shouldHideDockerUpdateActions()).toBe(true);
+    expect(isTelemetryEnabled()).toBe(false);
     expect(shouldReduceProUpsellNoise()).toBe(true);
+
+    updateTelemetryEnabledSetting(true);
+    expect(isTelemetryEnabled()).toBe(true);
   });
 
   it('resets route and docker feature flags to safe defaults', () => {

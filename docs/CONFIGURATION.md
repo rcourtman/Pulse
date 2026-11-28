@@ -489,8 +489,10 @@ When `allowEmbedding` is `false`, Pulse sends `X-Frame-Options: DENY` and `frame
 | `PULSE_ENABLE_PROXMOX_GUEST_DOCKER_DETECTION` | Allow Proxmox-side LXC Docker socket hinting with `pct exec` | `false` |
 | `PULSE_ENABLE_PROXMOX_GUEST_DOCKER_INVENTORY` | Allow Proxmox-side minimal LXC Docker inventory collection with `pct exec`; collects Docker host/container summary, not inspect/env/mount/process data. Admins can also toggle this in Settings → System → General; setting the env var locks the toggle | `false` |
 | `PULSE_PROXMOX_GUEST_DOCKER_INVENTORY_VMIDS` | Optional comma-separated VMID allowlist for Proxmox-side LXC Docker discovery; when set, only these guests are socket-probed and inventoried. Empty means all running LXCs are eligible when detection or inventory is enabled | *(unset)* |
-| `PULSE_TELEMETRY` | Outbound usage telemetry ([details](PRIVACY.md)); set `false` to disable | `true` |
-| `PULSE_DEPLOYMENT_METHOD` | Optional closed telemetry label: `docker_compose`, `docker_run`, `container_other`, `systemd`, `binary_other`, or `other`; invalid values are reported only as the safe runtime fallback | Inferred as `container_other` or `binary_other` |
+| `PULSE_TELEMETRY` | Outbound usage telemetry ([details](PRIVACY.md)), set `false` to disable | `true` |
+| `DO_NOT_TRACK` | Standard opt-out environment variable: any value other than `0`, `false`, `no`, or `off` disables outbound usage telemetry unless `PULSE_TELEMETRY` is explicitly set | *(unset)* |
+| `PULSE_DISABLE_UPDATE_CHECKS` | Disable automatic and on-demand Pulse release update checks against GitHub Releases and the Pulse Pro download broker | `false` |
+| `PULSE_DEPLOYMENT_METHOD` | Optional closed telemetry label: `docker_compose`, `docker_run`, `container_other`, `systemd`, `binary_other`, or `other`. Invalid values are reported only as the safe runtime fallback | Inferred as `container_other` or `binary_other` |
 
 ### Backup polling and guest safety
 

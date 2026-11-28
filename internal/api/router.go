@@ -1456,9 +1456,13 @@ func (r *Router) StartBackgroundWorkers() {
 	}
 	r.backgroundWorkersOnce.Do(func() {
 		r.startLifecycleWorker(r.forwardUpdateProgress)
-		r.startLifecycleWorker(func() {
-			r.backgroundUpdateChecker(r.lifecycleCtx)
-		})
+		if updates.IsUpdateChecksDisabled(r.config) {
+			log.Info().Msg("Background update checks disabled via PULSE_DISABLE_UPDATE_CHECKS")
+		} else {
+			r.startLifecycleWorker(func() {
+				r.backgroundUpdateChecker(r.lifecycleCtx)
+			})
+		}
 		r.startLifecycleWorker(func() {
 			r.recoverExecutingActions("system:restart-recovery")
 		})

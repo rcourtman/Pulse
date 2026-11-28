@@ -916,9 +916,15 @@ func (h *SystemSettingsHandler) HandleUpdateSystemSettings(w http.ResponseWriter
 	}
 
 	// Reject early if telemetryEnabled is locked by env var
-	if _, ok := rawRequest["telemetryEnabled"]; ok && h.config.EnvOverrides["PULSE_TELEMETRY"] {
-		writeErrorResponse(w, http.StatusConflict, "env_locked", "telemetryEnabled is locked by the PULSE_TELEMETRY environment variable", nil)
-		return
+	if _, ok := rawRequest["telemetryEnabled"]; ok {
+		if h.config.EnvOverrides["PULSE_TELEMETRY"] {
+			writeErrorResponse(w, http.StatusConflict, "env_locked", "telemetryEnabled is locked by the PULSE_TELEMETRY environment variable", nil)
+			return
+		}
+		if h.config.EnvOverrides["DO_NOT_TRACK"] {
+			writeErrorResponse(w, http.StatusConflict, "env_locked", "telemetryEnabled is locked by the DO_NOT_TRACK environment variable", nil)
+			return
+		}
 	}
 
 	// A disabled deployment-owned field is still included by the settings form.

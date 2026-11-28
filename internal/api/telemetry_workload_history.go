@@ -49,6 +49,11 @@ func (r *Router) HandleWorkloadHistoryActivity(w http.ResponseWriter, req *http.
 		return
 	}
 
+	if r.config != nil && !r.config.TelemetryEnabled {
+		w.WriteHeader(http.StatusNoContent)
+		return
+	}
+
 	persistence := r.persistenceForOrg(req.Context())
 	if persistence != nil {
 		if err := persistence.RecordWorkloadHistoryActivity(activity, time.Now().UTC()); err != nil {

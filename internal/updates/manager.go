@@ -125,6 +125,20 @@ func updateReleaseRepo() string {
 	return repo
 }
 
+// IsUpdateChecksDisabled reports whether outbound release update checks have
+// been disabled via configuration or PULSE_DISABLE_UPDATE_CHECKS.
+func IsUpdateChecksDisabled(cfg *config.Config) bool {
+	if cfg != nil && cfg.DisableUpdateChecks {
+		return true
+	}
+	switch strings.ToLower(strings.TrimSpace(os.Getenv("PULSE_DISABLE_UPDATE_CHECKS"))) {
+	case "1", "true", "t", "yes", "on":
+		return true
+	default:
+		return false
+	}
+}
+
 func updateReleaseDownloadPrefix() string {
 	return fmt.Sprintf("https://github.com/%s/releases/download/", updateReleaseRepo())
 }
@@ -454,6 +468,25 @@ func (m *Manager) CheckForUpdatesWithOptions(ctx context.Context, options Update
 	}
 
 	m.publishCheckStatus(statusTicket, "checking", 0, "Checking for updates...")
+
+	// Skip update check when disabled by configuration or environment
+	if IsUpdateChecksDisabled(m.config) {
+		info := &UpdateInfo{
+			Availability:   UpdateUnavailable,
+			Available:      false,
+			CurrentVersion: currentInfo.Version,
+			LatestVersion:  currentInfo.Version,
+		}
+		if useCache {
+			m.statusMu.Lock()
+			m.checkCache[channel] = info
+			m.cacheTime[channel] = time.Now()
+			m.statusMu.Unlock()
+		}
+		m.recordUpdateCheck(channel, effectiveChannel, UpdateCheckOutcomeSkipped, false)
+		m.publishCheckStatus(statusTicket, "idle", 0, "Update checks are disabled by configuration")
+		return info, nil
+	}
 
 	// Skip update check for source builds
 	if currentInfo.IsSourceBuild {

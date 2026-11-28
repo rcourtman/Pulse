@@ -969,3 +969,28 @@ func TestAllowedOriginsGetUsesDeploymentPolicy(t *testing.T) {
 		t.Fatal("GET misrepresented deployment-owned browser trust")
 	}
 }
+
+func TestTelemetryLockedByDoNotTrack(t *testing.T) {
+	dir := t.TempDir()
+	cfg := &config.Config{
+		DataPath:         dir,
+		ConfigPath:       dir,
+		TelemetryEnabled: false,
+		EnvOverrides:     map[string]bool{"DO_NOT_TRACK": true, "telemetryEnabled": true},
+	}
+	h, _, token := setupTelemetryTest(t, cfg)
+
+	body, _ := json.Marshal(map[string]interface{}{"telemetryEnabled": true})
+	req := httptest.NewRequest(http.MethodPost, "/api/system/settings", bytes.NewReader(body))
+	req.Header.Set("Content-Type", "application/json")
+	req.Header.Set("X-API-Token", token)
+	rec := httptest.NewRecorder()
+	h.HandleUpdateSystemSettings(rec, req)
+
+	if rec.Code != http.StatusConflict {
+		t.Fatalf("status = %d, want 409", rec.Code)
+	}
+	if !strings.Contains(rec.Body.String(), "DO_NOT_TRACK") {
+		t.Fatalf("expected DO_NOT_TRACK in error response, got %s", rec.Body.String())
+	}
+}

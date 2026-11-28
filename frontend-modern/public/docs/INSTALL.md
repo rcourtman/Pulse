@@ -155,10 +155,14 @@ services:
       - pulse_data:/data
     environment:
       - PULSE_DEPLOYMENT_METHOD=docker_compose
+      # - PULSE_TELEMETRY=false
+      # - PULSE_DISABLE_UPDATE_CHECKS=true
 
 volumes:
   pulse_data:
 ```
+
+> **Telemetry and offline deployments:** After initial setup completes, Pulse sends a daily, content-free usage summary by default (using `PULSE_DEPLOYMENT_METHOD` for the coarse deployment bucket) and checks GitHub Releases for updates. Opt out during first-run setup, in **Settings → System → General**, or upfront with `PULSE_TELEMETRY=false` (or `DO_NOT_TRACK=1`). Set `PULSE_DISABLE_UPDATE_CHECKS=true` to disable release update checks. See [PRIVACY.md](PRIVACY.md).
 
 The `PULSE_IMAGE` variable lets paid Docker users switch the same compose file
 to the private Pulse Pro image shown on

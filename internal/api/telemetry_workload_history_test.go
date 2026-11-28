@@ -71,3 +71,26 @@ func TestApplyWorkloadHistoryTelemetrySnapshotAggregatesRollingCounts(t *testing
 		t.Fatalf("unexpected workload history snapshot: %+v", snapshot)
 	}
 }
+
+func TestHandleWorkloadHistoryActivitySkipsWhenTelemetryDisabled(t *testing.T) {
+	persistence := config.NewConfigPersistence(t.TempDir())
+	router := &Router{
+		persistence: persistence,
+		config:      &config.Config{TelemetryEnabled: false},
+	}
+	req := httptest.NewRequest(http.MethodPost, "/api/usage/workload-history", strings.NewReader(`{"activity":"preview"}`))
+	rec := httptest.NewRecorder()
+
+	router.HandleWorkloadHistoryActivity(rec, req)
+
+	if rec.Code != http.StatusNoContent {
+		t.Fatalf("status = %d, want 204", rec.Code)
+	}
+	tally, err := persistence.LoadWorkloadHistoryActivityTally()
+	if err != nil {
+		t.Fatalf("LoadWorkloadHistoryActivityTally = %v", err)
+	}
+	if got := tally.PreviewsSince(time.Now().UTC().AddDate(0, 0, -30)); got != 0 {
+		t.Fatalf("previews = %d, want 0 when telemetry disabled", got)
+	}
+}

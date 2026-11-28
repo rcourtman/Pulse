@@ -380,6 +380,7 @@ describe('useSystemSettingsState', () => {
 
     vi.doMock('@/stores/systemSettings', () => ({
       updateDockerUpdateActionsSetting: vi.fn(),
+      updateTelemetryEnabledSetting: vi.fn(),
       loadRuntimeBranding: vi.fn().mockResolvedValue(undefined),
     }));
 

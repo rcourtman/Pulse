@@ -101,3 +101,26 @@ func TestApplyInfrastructureMapTelemetrySnapshotAggregatesRollingCounts(t *testi
 			snapshot.InfrastructureMapExportNamesHiddenSessions30d)
 	}
 }
+
+func TestHandleInfrastructureMapActivitySkipsWhenTelemetryDisabled(t *testing.T) {
+	persistence := config.NewConfigPersistence(t.TempDir())
+	router := &Router{
+		persistence: persistence,
+		config:      &config.Config{TelemetryEnabled: false},
+	}
+	req := httptest.NewRequest(http.MethodPost, "/api/usage/infrastructure-map", strings.NewReader(`{"activity":"open"}`))
+	rec := httptest.NewRecorder()
+
+	router.HandleInfrastructureMapActivity(rec, req)
+
+	if rec.Code != http.StatusNoContent {
+		t.Fatalf("status = %d, want 204", rec.Code)
+	}
+	tally, err := persistence.LoadInfrastructureMapActivityTally()
+	if err != nil {
+		t.Fatalf("LoadInfrastructureMapActivityTally = %v", err)
+	}
+	if got := tally.CountSince(config.InfrastructureMapActivityOpen, time.Now().UTC().AddDate(0, 0, -30)); got != 0 {
+		t.Fatalf("opens = %d, want 0 when telemetry disabled", got)
+	}
+}

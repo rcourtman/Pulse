@@ -141,6 +141,10 @@ const (
 	// ping, giving the monitor time to connect to nodes and populate state.
 	startupDelay = 2 * time.Minute
 
+	// readyPollInterval is how often the background runner checks whether
+	// first-run setup has completed before starting the initial startup delay.
+	readyPollInterval = 15 * time.Second
+
 	// httpTimeout is the maximum time for a single telemetry request.
 	httpTimeout = 10 * time.Second
 
@@ -1241,6 +1245,10 @@ type Config struct {
 	// fall back to container_other or binary_other without exporting raw input.
 	DeploymentMethod string
 	Enabled          bool // From cfg.TelemetryEnabled (system settings or env var)
+	// IsReady, when set, gates outbound telemetry until initial setup has
+	// completed so fresh installations do not ping before the operator reviews
+	// the setup wizard.
+	IsReady          func() bool
 	GetSnapshot      SnapshotFunc
 	GetServiceHealth func() ServiceHealthObservation
 }
@@ -1257,18 +1265,23 @@ var (
 )
 
 // Start begins outbound usage telemetry if enabled.
-// It reads or creates a rotating install ID in dataDir, waits for the monitor
-// to populate state, sends a startup ping, and schedules a daily heartbeat.
+// It reads or creates a rotating install ID in dataDir, waits for initial
+// setup (when gated) and monitor state population, sends a startup ping, and
+// schedules a daily heartbeat.
 // Call Stop() on shutdown.
 //
 // This is a no-op when outbound usage telemetry is disabled.
 func Start(ctx context.Context, cfg Config) {
-	startWithDelay(ctx, cfg, startupDelay)
+	startWithDelays(ctx, cfg, startupDelay, readyPollInterval)
 }
 
 // Keep the production settling delay constant while allowing deterministic
 // tests to exercise the same background runner without a two-minute sleep.
 func startWithDelay(ctx context.Context, cfg Config, initialDelay time.Duration) {
+	startWithDelays(ctx, cfg, initialDelay, readyPollInterval)
+}
+
+func startWithDelays(ctx context.Context, cfg Config, initialDelay time.Duration, pollInterval time.Duration) {
 	if !cfg.Enabled {
 		log.Info().Msg("Outbound usage telemetry is disabled (enable via PULSE_TELEMETRY=true or Settings → System)")
 		return
@@ -1297,6 +1310,22 @@ func startWithDelay(ctx context.Context, cfg Config, initialDelay time.Duration)
 	go func() {
 		defer r.wg.Done()
 
+		if cfg.IsReady != nil && !cfg.IsReady() {
+			if pollInterval <= 0 {
+				pollInterval = readyPollInterval
+			}
+			ticker := time.NewTicker(pollInterval)
+			for !cfg.IsReady() {
+				select {
+				case <-ctx.Done():
+					ticker.Stop()
+					return
+				case <-ticker.C:
+				}
+			}
+			ticker.Stop()
+		}
+
 		// Wait for the monitor to connect and populate state before the first ping.
 		startTimer := time.NewTimer(initialDelay)
 		select {
@@ -1304,6 +1333,10 @@ func startWithDelay(ctx context.Context, cfg Config, initialDelay time.Duration)
 			startTimer.Stop()
 			return
 		case <-startTimer.C:
+		}
+
+		if cfg.IsReady != nil && !cfg.IsReady() {
+			return
 		}
 
 		// Send startup ping with current snapshot.
@@ -1346,7 +1379,7 @@ func BuildPreview(cfg Config) (Ping, error) {
 // before the normal delayed startup heartbeat. Disabled telemetry and mock
 // mode remain fully suppressed.
 func SendServiceHealthEvent(ctx context.Context, cfg Config, event string, observation ServiceHealthObservation) error {
-	if !cfg.Enabled || mock.IsMockEnabled() {
+	if !cfg.Enabled || mock.IsMockEnabled() || (cfg.IsReady != nil && !cfg.IsReady()) {
 		return nil
 	}
 	cfg.GetServiceHealth = func() ServiceHealthObservation { return observation }
@@ -1364,13 +1397,17 @@ func ResetInstallID(dataDir string) (string, error) {
 }
 
 // IsEnabled reports whether telemetry is enabled.
-// Telemetry is on by default; set PULSE_TELEMETRY=false to disable.
+// Telemetry is on by default; set PULSE_TELEMETRY=false or DO_NOT_TRACK=1 to disable.
 func IsEnabled() bool {
-	v := os.Getenv("PULSE_TELEMETRY")
-	if v == "" {
-		return true // enabled by default
+	v := strings.TrimSpace(os.Getenv("PULSE_TELEMETRY"))
+	if v != "" {
+		return v == "true" || v == "1"
 	}
-	return v == "true" || v == "1"
+	dnt := strings.ToLower(strings.TrimSpace(os.Getenv("DO_NOT_TRACK")))
+	if dnt != "" && dnt != "0" && dnt != "false" && dnt != "no" && dnt != "off" {
+		return false
+	}
+	return true // enabled by default
 }
 
 // jitteredHeartbeat returns heartbeatInterval ± a random offset up to maxHeartbeatJitter.

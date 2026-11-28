@@ -343,3 +343,33 @@ func runtimeArchiveFixture(t *testing.T, tag string) ReleaseAsset {
 	}
 	return ReleaseAsset{Name: asset.Name, BrowserDownloadURL: "https://example.com/" + asset.Name}
 }
+
+func TestCheckForUpdatesSkippedWhenDisabled(t *testing.T) {
+	withBuildVersion(t, "6.8.0")
+	var requests int
+	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		requests++
+		w.WriteHeader(http.StatusInternalServerError)
+	}))
+	defer server.Close()
+
+	t.Setenv("PULSE_UPDATE_SERVER", server.URL)
+	t.Setenv("PULSE_DISABLE_UPDATE_CHECKS", "true")
+
+	cfg := &config.Config{UpdateChannel: "stable", DisableUpdateChecks: true}
+	manager := NewManager(cfg)
+
+	info, err := manager.CheckForUpdatesWithOptions(context.Background(), UpdateCheckOptions{Force: true})
+	if err != nil {
+		t.Fatalf("CheckForUpdatesWithOptions returned error: %v", err)
+	}
+	if info == nil || info.Available || info.Availability != UpdateUnavailable {
+		t.Fatalf("unexpected update info when disabled: %+v", info)
+	}
+	if requests != 0 {
+		t.Fatalf("expected 0 outbound requests when update checks are disabled, got %d", requests)
+	}
+	if obs := manager.LastUpdateCheck(); obs.Outcome != UpdateCheckOutcomeSkipped {
+		t.Fatalf("telemetry outcome = %q, want %q", obs.Outcome, UpdateCheckOutcomeSkipped)
+	}
+}

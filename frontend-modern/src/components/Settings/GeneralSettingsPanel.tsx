@@ -82,6 +82,7 @@ export interface GeneralSettingsPanelProps {
 
   telemetryEnabled: Accessor<boolean>;
   telemetryEnabledLocked: () => boolean;
+  telemetryLockEnvVar?: () => string;
   savingTelemetry: Accessor<boolean>;
   handleTelemetryEnabledChange: (enabled: boolean) => Promise<void>;
   telemetryPreview: Accessor<TelemetryPreviewResponse | null>;
@@ -257,7 +258,11 @@ export const GeneralSettingsPanel: Component<GeneralSettingsPanelProps> = (props
                   {t('settings.general.telemetry.title')}
                 </span>
                 <Show when={props.telemetryEnabledLocked()}>
-                  <EnvironmentLockBadge envVar={TELEMETRY_ENV_VAR} />
+                  <EnvironmentLockBadge
+                    envVar={
+                      props.telemetryLockEnvVar ? props.telemetryLockEnvVar() : TELEMETRY_ENV_VAR
+                    }
+                  />
                 </Show>
               </div>
               <p class="hidden text-xs leading-relaxed text-muted sm:block">
