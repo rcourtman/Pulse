@@ -1,7 +1,8 @@
-import { Show, type Accessor } from 'solid-js';
+import { Show, type Accessor, type JSX } from 'solid-js';
 import { makeDetailRow, type DetailRow } from '@/components/shared/DetailSectionTable';
 import { filterChipStatusDot } from '@/components/shared/FilterBar';
 import { type FilterOption } from '@/components/shared/FilterButtonGroup';
+import { InlineNotice } from '@/components/shared/InlineNotice';
 import { MetadataBadge, type MetadataBadgeTone } from '@/components/shared/MetadataBadge';
 import { ProgressBar } from '@/components/shared/ProgressBar';
 import { TableHead } from '@/components/shared/Table';
@@ -519,5 +520,69 @@ export function SortableHead<K extends string>(props: {
         {getTableSortIndicator(isActive(), props.direction())}
       </button>
     </TableHead>
+  );
+}
+
+export const NO_USABLE_SIZE_NOTE =
+  'No usable size was reported. Unknown does not mean this restore point is empty.';
+export const SIZE_IN_PROGRESS_NOTE = 'Size will be reported after the backup finishes.';
+
+export function BackupStaleHeaderCue(props: { notice?: string | null; attr: 'verdict' | 'jobs' }) {
+  return (
+    <Show when={props.notice}>
+      {(notice) => (
+        <span
+          class="whitespace-nowrap text-[11px] font-medium normal-case tracking-normal text-amber-800 dark:text-amber-300"
+          title={notice()}
+          data-backup-verdict-stale={props.attr === 'verdict' ? '' : undefined}
+          data-backup-jobs-stale={props.attr === 'jobs' ? '' : undefined}
+        >
+          · Stale data
+        </span>
+      )}
+    </Show>
+  );
+}
+
+export function BackupStaleRowCue(props: {
+  notice: { badge: string; compactBadge: string; detail: string } | null;
+  compact: boolean;
+  attr: 'coverage' | 'recoverable';
+}) {
+  return (
+    <Show when={props.notice}>
+      {(notice) => (
+        <span
+          class="block truncate text-[10px] font-medium leading-tight text-amber-800 dark:text-amber-300"
+          title={notice().detail}
+          data-coverage-stale-cue={props.attr === 'coverage' ? '' : undefined}
+          data-recoverable-stale-cue={props.attr === 'recoverable' ? '' : undefined}
+        >
+          {props.compact ? notice().compactBadge : notice().badge}
+        </span>
+      )}
+    </Show>
+  );
+}
+
+export function BackupStaleDrawerNotice(props: {
+  notice?: { detail: string } | null;
+  lead: string;
+  attr: 'coverage' | 'recoverable';
+}): JSX.Element {
+  return (
+    <Show when={props.notice}>
+      {(notice) => (
+        <InlineNotice
+          tone="warning"
+          role="status"
+          class="text-xs whitespace-normal wrap-anywhere"
+          data-coverage-stale-notice={props.attr === 'coverage' ? '' : undefined}
+          data-recoverable-stale-notice={props.attr === 'recoverable' ? '' : undefined}
+        >
+          <span class="font-medium">{props.lead}</span> {notice().detail}
+        </InlineNotice>
+      )}
+    </Show>
   );
 }

@@ -254,6 +254,9 @@ export default defineConfig(({ mode }) => ({
     target: 'esnext',
     rollupOptions: {
       output: {
+        // Merge tiny (<2 kB) shared helper chunks into their importing chunks
+        // to eliminate fragmented HTTP waterfalls and duplicate gzip headers.
+        experimentalMinChunkSize: 2048,
         // Dynamic-import facades named index.tsx/index.ts all produce chunks
         // called "index", colliding with the real entry chunk in dist/assets
         // and polluting the entry's bundle-size budget line. Name those

@@ -16,10 +16,8 @@ import type { StatusIndicatorVariant } from '@/utils/status';
 import { TableCell, TableHead, TableRow } from '@/components/shared/Table';
 import { apiErrorFromResponse, apiFetch } from '@/utils/apiClient';
 import { useRelativeTimeNow } from '@/utils/relativeTimeClock';
-import { getResourceStaleness } from '@/features/platformPage/resourceStaleness';
-import { getResourceSourceStatus } from '@/utils/resourceSourceHealth';
-import { asTrimmedString } from '@/utils/stringUtils';
 import type { Resource } from '@/types/resource';
+import { resolveProxmoxSourceStaleness } from './proxmoxBackupStaleness';
 import {
   PlatformTableToolbar,
   PlatformErrorState,
@@ -80,15 +78,6 @@ export interface ReplicationStaleNotice {
   error?: string;
 }
 
-const CONNECTED_PROXMOX_SOURCE_STATUSES = new Set([
-  'online',
-  'running',
-  'healthy',
-  'connected',
-  'ok',
-]);
-const IMPAIRED_PROXMOX_CONNECTION_HEALTH = new Set(['stale', 'error', 'degraded', 'offline']);
-
 const normalizeReplicationToken = (value: unknown): string =>
   typeof value === 'string' ? value.trim().toLowerCase() : '';
 
@@ -96,63 +85,13 @@ const buildProxmoxNodeStaleNotice = (
   node: Resource,
   subjectOverride?: string,
 ): ReplicationStaleNotice | null => {
-  const staleness = getResourceStaleness(node);
-  const proxmoxSource = getResourceSourceStatus(node, 'proxmox');
-  const sourceStatus = normalizeReplicationToken(proxmoxSource?.status);
-  const sourceError = asTrimmedString(proxmoxSource?.error);
-  const connectionHealth = normalizeReplicationToken(node.proxmox?.connectionHealth);
-  const nodeStatus = normalizeReplicationToken(node.status);
-
-  const sourceImpaired =
-    sourceStatus !== '' &&
-    sourceStatus !== 'pending' &&
-    !CONNECTED_PROXMOX_SOURCE_STATUSES.has(sourceStatus);
-  const connectionImpaired = IMPAIRED_PROXMOX_CONNECTION_HEALTH.has(connectionHealth);
-  const nodeOfflineOrUnknown =
-    (nodeStatus === 'offline' || nodeStatus === 'unknown') &&
-    !CONNECTED_PROXMOX_SOURCE_STATUSES.has(sourceStatus);
-
-  if (!staleness && !sourceImpaired && !connectionImpaired && !nodeOfflineOrUnknown) {
-    return null;
-  }
-
-  const subject =
-    asTrimmedString(subjectOverride) ||
-    asTrimmedString(node.proxmox?.nodeName) ||
-    asTrimmedString(node.name) ||
-    'Proxmox';
-
-  let reason: string;
-  const ageSuffix = staleness?.age ? ` (last report ${staleness.age} ago)` : '';
-  if (sourceError && staleness?.age) {
-    reason = `No Proxmox report from ${subject} for ${staleness.age} (${sourceError})`;
-  } else if (sourceError) {
-    reason = `Proxmox poll failed on ${subject} (${sourceError})`;
-  } else if (
-    connectionHealth === 'error' ||
-    sourceStatus === 'error' ||
-    sourceStatus === 'failed'
-  ) {
-    reason = `Proxmox API poll failed on ${subject}${ageSuffix}`;
-  } else if (
-    connectionHealth === 'offline' ||
-    sourceStatus === 'offline' ||
-    nodeStatus === 'offline'
-  ) {
-    reason = `Proxmox node ${subject} is offline in Pulse${ageSuffix}`;
-  } else if (staleness?.age) {
-    reason = `No Proxmox report from ${subject} for ${staleness.age}`;
-  } else if (connectionHealth === 'degraded') {
-    reason = `Proxmox connection for ${subject} is degraded`;
-  } else {
-    reason = `No recent Proxmox report from ${subject}`;
-  }
-
+  const stale = resolveProxmoxSourceStaleness(node, 'proxmox', subjectOverride);
+  if (!stale) return null;
   return {
     badge: 'Stale data',
     compactBadge: 'Stale',
-    detail: `${reason} — showing the last values received.`,
-    ...(sourceError ? { error: sourceError } : {}),
+    detail: `${stale.reason} — showing the last values received.`,
+    ...(stale.error ? { error: stale.error } : {}),
   };
 };
 

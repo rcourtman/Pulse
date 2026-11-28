@@ -54,7 +54,11 @@ import { formatDurationFromSeconds, type CoverageSortKey } from './proxmoxBackup
 import {
   ArtifactSourceIdentity,
   ArtifactStateBadge,
+  BackupStaleDrawerNotice,
+  BackupStaleRowCue,
+  NO_USABLE_SIZE_NOTE,
   PROXMOX_BACKUP_COLUMN_LABELS,
+  SIZE_IN_PROGRESS_NOTE,
   ProxmoxBackupAgeText,
   ProxmoxBackupWorkloadTypeBadge,
   SortableHead,
@@ -78,6 +82,7 @@ import {
   type CoverageColumnId,
 } from './proxmoxBackupsTablePresentation';
 import { compactBackupReasonLabel } from './proxmoxBackupVerdict';
+import type { BackupStaleNotice } from './proxmoxBackupStaleness';
 import { PlatformWindowedRows } from '@/features/platformPage/PlatformWindowedRows';
 
 // Each evidence column is already named by its header, so an empty cell says
@@ -598,9 +603,7 @@ function coverageRestorePointDetails(artifact: RecoverableArtifact) {
             ]),
             footerContent: hasSize() ? undefined : (
               <p class="whitespace-normal text-[11px] leading-snug text-muted wrap-anywhere">
-                {artifact.running
-                  ? 'Size will be reported after the backup finishes.'
-                  : 'No usable size was reported. Unknown does not mean this restore point is empty.'}
+                {artifact.running ? SIZE_IN_PROGRESS_NOTE : NO_USABLE_SIZE_NOTE}
               </p>
             ),
           },
@@ -647,6 +650,8 @@ export function ProxmoxCoverageTable(props: {
   showWorkloadConnection?: boolean;
   /** Register focus retention with each row/detail's own cleanup owner. */
   retainInspectionFocus?: (content: HTMLElement) => void;
+  /** Backend-authoritative stale PVE/PBS notice affecting this workload row. */
+  staleNoticeForRow?: (row: WorkloadCoverageRow) => BackupStaleNotice | null;
 }) {
   const [evidenceLimit, setEvidenceLimit] = createSignal(COVERAGE_RESTORE_EVIDENCE_PAGE_SIZE);
   // There is one open workload. Keep its deliberate preview expansion across
@@ -836,6 +841,11 @@ export function ProxmoxCoverageTable(props: {
               >
                 {(row) => {
                   const isExpanded = () => props.expandedKey === row.key;
+                  const staleNotice = () => props.staleNoticeForRow?.(row) ?? null;
+                  const effectivePostureVariant = (): StatusIndicatorVariant => {
+                    const base = coveragePostureVariant(row.posture);
+                    return staleNotice() && base === 'success' ? 'warning' : base;
+                  };
                   const explanation = () => postureExplanation(row, props.guestMatchingUnavailable);
                   const evidence = createMemo(() =>
                     selectCoverageRestoreEvidence(row.artifacts, evidenceLimit()),
@@ -960,29 +970,36 @@ export function ProxmoxCoverageTable(props: {
                           >
                             <StatusDot
                               size="sm"
-                              variant={coveragePostureVariant(row.posture)}
-                              title={explanation()}
+                              variant={effectivePostureVariant()}
+                              title={staleNotice()?.detail ?? explanation()}
                               ariaHidden
                             />
-                            <span
-                              title={explanation()}
-                              class={`truncate text-[11px] font-medium ${statusWordToneClass(
-                                coveragePostureVariant(row.posture),
-                              )}`}
-                            >
-                              <Show
-                                when={layoutMode() === 'compact'}
-                                fallback={getWorkloadRecoveryPostureLabel(row.posture)}
+                            <div class="min-w-0">
+                              <span
+                                title={explanation()}
+                                class={`block truncate text-[11px] font-medium ${statusWordToneClass(
+                                  effectivePostureVariant(),
+                                )}`}
                               >
-                                <span class="sr-only">
-                                  {getWorkloadRecoveryPostureLabel(row.posture)}: {explanation()}
-                                </span>
-                                <span aria-hidden="true">
-                                  {compactBackupReasonLabel(row) ??
-                                    compactPostureLabel(row.posture)}
-                                </span>
-                              </Show>
-                            </span>
+                                <Show
+                                  when={layoutMode() === 'compact'}
+                                  fallback={getWorkloadRecoveryPostureLabel(row.posture)}
+                                >
+                                  <span class="sr-only">
+                                    {getWorkloadRecoveryPostureLabel(row.posture)}: {explanation()}
+                                  </span>
+                                  <span aria-hidden="true">
+                                    {compactBackupReasonLabel(row) ??
+                                      compactPostureLabel(row.posture)}
+                                  </span>
+                                </Show>
+                              </span>
+                              <BackupStaleRowCue
+                                notice={staleNotice()}
+                                compact={layoutMode() === 'compact'}
+                                attr="coverage"
+                              />
+                            </div>
                           </div>
                         </TableCell>
                         <TableCell class={ageCellClass('numeric-value')}>
@@ -1097,8 +1114,10 @@ export function ProxmoxCoverageTable(props: {
                             detailFor={row.key}
                             title={row.workload.name || row.workload.label}
                             status={{
-                              variant: coveragePostureVariant(row.posture),
-                              label: getWorkloadRecoveryPostureLabel(row.posture),
+                              variant: effectivePostureVariant(),
+                              label: staleNotice()
+                                ? `${getWorkloadRecoveryPostureLabel(row.posture)} · ${staleNotice()!.badge}`
+                                : getWorkloadRecoveryPostureLabel(row.posture),
                             }}
                             summary={explanation()}
                             actions={
@@ -1109,6 +1128,11 @@ export function ProxmoxCoverageTable(props: {
                             sections={[]}
                             onClose={() => props.onToggleExpand(row.key)}
                           >
+                            <BackupStaleDrawerNotice
+                              notice={staleNotice()}
+                              lead="Readings are stale."
+                              attr="coverage"
+                            />
                             <Show when={row.latestTask?.label === 'Failed'}>
                               <InlineNotice
                                 tone="warning"

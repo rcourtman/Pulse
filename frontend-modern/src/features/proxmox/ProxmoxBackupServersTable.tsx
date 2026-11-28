@@ -58,6 +58,7 @@ import {
   isBackupServerDatastoreAlert,
   type DatastoreFillForecast,
 } from './proxmoxBackupServerForecast';
+import { isPBSServerPollStale } from './proxmoxBackupStaleness';
 
 // "Backup servers" answers the two questions the coverage table can't: is my
 // PBS reachable, and is its datastore about to fill? Datastore fill is the
@@ -645,7 +646,7 @@ export function buildBackupServerRows(
       serverName: server.name,
       // Use the registry's PBS cadence, not aggregate status or lastSeen
       // (which can still advance from a linked host agent).
-      pollStale: server.sourceStatus?.pbs?.status === 'stale',
+      pollStale: isPBSServerPollStale(server),
       ...serverConnection(server),
     };
     // Each keyed row has a reconciled Solid store. Give it its own JSON DTO
