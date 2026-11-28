@@ -255,6 +255,12 @@ the peer's next ordinary poll updates its PVE row and writes its next CPU
 History point. `TestScheduledPollPanicLogKeepsWorkerVisible` stalls the
 recovery log in both worker modes and verifies the running gauge ages past
 the budget and clears when the log returns, without retaining a queue claim.
+`TestScheduledPVENodeOfflineLogDoesNotBlockPeerPoll` holds the routine PVE
+node-offline diagnostic inside and after the offline grace period. The
+diagnostic must not hold the shared monitor lock: an independent PVE poll
+still publishes its node and CPU History point before the sink is released.
+The affected poll still reports the same grace-adjusted status and does not
+move its last-online timestamp.
 These fixtures do not establish an installed outage's cause or recovery.
 
 ### Idle poll workers wake when work becomes eligible sooner

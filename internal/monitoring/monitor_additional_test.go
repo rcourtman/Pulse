@@ -3062,6 +3062,119 @@ type stalledPollPanicLog struct {
 	release <-chan struct{}
 }
 
+type stalledNodeOfflineLog struct {
+	message string
+	entered chan<- struct{}
+	release <-chan struct{}
+}
+
+func (w stalledNodeOfflineLog) Write(p []byte) (int, error) {
+	if strings.Contains(string(p), w.message) {
+		close(w.entered)
+		<-w.release
+	}
+	return len(p), nil
+}
+
+func TestScheduledPVENodeOfflineLogDoesNotBlockPeerPoll(t *testing.T) {
+	for _, tc := range []struct {
+		name, message, wantStatus string
+		age                       time.Duration
+	}{
+		{"inside grace", "Node offline but within grace period", "online", time.Second},
+		{"expired grace", "Node offline and grace period expired", "offline", 10 * time.Minute},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			original, originalLevel := log.Logger, zerolog.GlobalLevel()
+			defer func() {
+				log.Logger = original
+				zerolog.SetGlobalLevel(originalLevel)
+			}()
+			synctest.Test(t, func(t *testing.T) {
+				ctx, cancel := context.WithCancel(t.Context())
+				defer cancel()
+				const peerName = "fixture-peer"
+				m := newScheduleFixture(ctx, false, func(context.Context) ([]proxmox.Node, error) {
+					return []proxmox.Node{{Node: scheduleFixtureNode, Status: "offline"}}, nil
+				})
+				peer := m.config.PVEInstances[0]
+				peer.Name, peer.Host = peerName, "https://fixture-peer.invalid:8006"
+				m.config.PVEInstances = append(m.config.PVEInstances, peer)
+				m.lastClusterCheck[peerName] = time.Now()
+				m.pveClients[peerName] = &pollWorkFixturePVE{getNodes: func(context.Context) ([]proxmox.Node, error) {
+					return []proxmox.Node{{Node: peerName, Status: "online", CPU: 0.42, Uptime: 36000}}, nil
+				}}
+				firstID := m.pveNodeID(scheduleFixtureNode, &m.config.PVEInstances[0], scheduleFixtureNode)
+				lastOnline := time.Now().Add(-tc.age)
+				m.nodeLastOnline[firstID] = lastOnline
+
+				entered, release := make(chan struct{}), make(chan struct{})
+				unblock := sync.OnceFunc(func() { close(release) })
+				defer unblock()
+				log.Logger = zerolog.New(stalledNodeOfflineLog{tc.message, entered, release}).Level(zerolog.DebugLevel)
+				zerolog.SetGlobalLevel(zerolog.DebugLevel)
+
+				runPoll := func(name string) <-chan struct{} {
+					t.Helper()
+					m.taskQueue.Upsert(ScheduledTask{
+						InstanceType: InstanceTypePVE, InstanceName: name,
+						NextRun: time.Now(), Interval: scheduleFixtureCadence,
+					})
+					task, ok := m.taskQueue.WaitNext(ctx)
+					if !ok || task.InstanceName != name {
+						t.Fatalf("did not claim %s: %+v, ok=%v", name, task, ok)
+					}
+					done := make(chan struct{})
+					go func() {
+						defer close(done)
+						m.executeAndRescheduleTask(ctx, task, nil, 0)
+					}()
+					return done
+				}
+				firstDone := runPoll(scheduleFixtureNode)
+				select {
+				case <-entered:
+				case <-firstDone:
+					t.Fatal("offline poll returned without reaching its grace diagnostic")
+				}
+
+				// The logger is already parked and no peer is running. Check the
+				// shared lock first so a regression fails without waiting for a
+				// peer blocked on a mutex (which synctest cannot time out).
+				if !m.mu.TryRLock() {
+					t.Error("offline diagnostic held the monitor lock shared by peer polls")
+					unblock()
+				} else {
+					m.mu.RUnlock()
+				}
+				<-runPoll(peerName)
+				node, found := breakerFixtureNode(m, peerName)
+				points := m.metricsHistory.GetNodeMetrics(node.ID, "cpu", time.Minute)
+				if !found || node.Status != "online" || node.CPU != 0.42 || len(points) != 1 || points[0].Value != 42 {
+					t.Errorf("peer lost its live observation or History: node=%+v points=%+v", node, points)
+				}
+				select {
+				case <-release:
+					// On the failing baseline the peer could only finish after release.
+				default:
+					t.Logf("while log was held: peer online at %.0f%% CPU, %d CPU History point", node.CPU*100, len(points))
+				}
+
+				unblock()
+				<-firstDone
+
+				node, found = breakerFixtureNode(m, scheduleFixtureNode)
+				if !found || node.Status != tc.wantStatus || m.nodeLastOnline[firstID] != lastOnline {
+					t.Errorf("offline poll changed grace semantics: found=%v status=%q want=%q, last online=%v want=%v",
+						found, node.Status, tc.wantStatus, m.nodeLastOnline[firstID], lastOnline)
+				} else {
+					t.Logf("after releasing log: offline observation published as %s; last-online timestamp unchanged", node.Status)
+				}
+			})
+		})
+	}
+}
+
 func (w stalledPollPanicLog) Write(p []byte) (int, error) {
 	if strings.Contains(string(p), "Recovered from panic in scheduled poll task") {
 		close(w.entered)
