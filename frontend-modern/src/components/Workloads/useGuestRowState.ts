@@ -10,6 +10,7 @@ import { getGuestHealthIndicator, isGuestRunning } from '@/utils/status';
 import { formatBytes } from '@/utils/format';
 import { getContainerRuntimeBadgeForRuntime } from '@/utils/resourceBadgePresentation';
 import { getWorkloadGuestDiskRead } from '@/utils/workloadGuestPresentation';
+import { getWorkloadSourceStaleNotice } from '@/utils/workloadSourceFreshness';
 import { getWorkloadDiskUsagePercent } from '@/utils/workloadDiskUsage';
 import {
   getCanonicalWorkloadId,
@@ -238,6 +239,7 @@ export function useGuestRowState(props: GuestRowProps) {
   const parentOnline = createMemo(() => props.parentNodeOnline !== false);
   const isRunning = createMemo(() => isGuestRunning(props.guest, parentOnline()));
   const guestStatus = createMemo(() => getGuestHealthIndicator(props.guest, parentOnline()));
+  const staleNotice = createMemo(() => getWorkloadSourceStaleNotice(props.guest));
   const lockLabel = createMemo(() => (props.guest.lock || '').trim());
 
   const hasUnacknowledgedAlert = createMemo(() => !!props.alertStyles?.hasUnacknowledgedAlert);
@@ -318,6 +320,7 @@ export function useGuestRowState(props: GuestRowProps) {
     firstCellIndent,
     guestId,
     guestStatus,
+    staleNotice,
     hasDiskUsage,
     hasNetworkInterfaces,
     hasOsInfo,

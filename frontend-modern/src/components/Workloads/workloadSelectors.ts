@@ -13,6 +13,7 @@ import {
 import { normalizeSourcePlatformQueryValue } from '@/utils/sourcePlatforms';
 import { OFFLINE_HEALTH_STATUSES } from '@/utils/status';
 import { hasFailedAttachedAvailabilityCheck } from '@/utils/availabilityProbePresentation';
+import { getWorkloadSourceStaleNotice } from '@/utils/workloadSourceFreshness';
 import {
   isContainerWorkloadViewMode,
   getWorkloadCPUPercent,
@@ -93,6 +94,12 @@ const resolveWorkloadStatusBucket = (guest: WorkloadGuest): WorkloadStatusBucket
     return 'degraded';
   }
 
+  // A running guest whose owning platform poller is stale or failing cannot be
+  // counted as healthy Running; surface it under Attention until fresh data returns.
+  if (bucket === 'running' && getWorkloadSourceStaleNotice(guest)) {
+    return 'degraded';
+  }
+
   return bucket;
 };
 
@@ -102,27 +109,33 @@ type SortValue = string | number | boolean | null | undefined;
 
 export const getWorkloadSearchCandidates = (
   guest: WorkloadGuest,
-): Array<string | number | undefined> => [
-  guest.name,
-  guest.id,
-  guest.displayId,
-  guest.vmid,
-  guest.node,
-  guest.status,
-  guest.image,
-  guest.namespace,
-  guest.contextLabel,
-  guest.clusterName,
-  guest.instance,
-  guest.platformType,
-  guest.platformScopes?.join(' '),
-  guest.workloadType,
-  guest.containerRuntime,
-  guest.containerId,
-  guest.dockerHostId,
-  guest.dockerHostName,
-  guest.kubernetesAgentId,
-];
+): Array<string | number | undefined> => {
+  const staleNotice = getWorkloadSourceStaleNotice(guest);
+  return [
+    guest.name,
+    guest.id,
+    guest.displayId,
+    guest.vmid,
+    guest.node,
+    guest.status,
+    guest.image,
+    guest.namespace,
+    guest.contextLabel,
+    guest.clusterName,
+    guest.instance,
+    guest.platformType,
+    guest.platformScopes?.join(' '),
+    guest.workloadType,
+    guest.containerRuntime,
+    guest.containerId,
+    guest.dockerHostId,
+    guest.dockerHostName,
+    guest.kubernetesAgentId,
+    staleNotice?.badge,
+    staleNotice?.detail,
+    staleNotice?.error,
+  ];
+};
 
 const matchesWorkloadTextSearch = (guest: WorkloadGuest, term: string): boolean => {
   const needle = term.trim().toLowerCase();

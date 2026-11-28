@@ -24,6 +24,10 @@ import {
   getWorkloadGuestDiskStatusMessage,
   getWorkloadsGuestBackupStatusPresentation,
 } from '@/utils/workloadGuestPresentation';
+import {
+  formatWorkloadStaleDetail,
+  getWorkloadSourceStaleNotice,
+} from '@/utils/workloadSourceFreshness';
 import { getWorkloadCPUPercent, resolveWorkloadType } from '@/utils/workloads';
 import { getWorkloadMetricHistoryTarget } from '@/utils/workloadMetricHistoryTarget';
 import { getWorkloadDiskUsagePercent } from '@/utils/workloadDiskUsage';
@@ -167,6 +171,34 @@ export const getGuestDrawerDeferredMetrics = (
       message: memory.message,
     };
   }
+  const staleNotice = getWorkloadSourceStaleNotice(guest);
+  if (staleNotice) {
+    const message = formatWorkloadStaleDetail(staleNotice);
+    const availability = guest.telemetryAvailability;
+    const available = (metric: keyof NonNullable<Guest['telemetryAvailability']>): boolean =>
+      availability?.[metric] ?? true;
+    const finite = (value: number | undefined): number | undefined =>
+      typeof value === 'number' && Number.isFinite(value) ? value : undefined;
+    if (available('cpu')) {
+      metrics.cpu = { lastKnownValue: finite(getWorkloadCPUPercent(guest.cpu)), message };
+    }
+    if (!metrics.memory && available('memory')) {
+      metrics.memory = { lastKnownValue: finite(getGuestDrawerMemoryUsage(guest)), message };
+    }
+    if (!metrics.disk && !guest.disksFromAgent && available('disk')) {
+      metrics.disk = { lastKnownValue: getGuestDrawerDiskUsage(guest), message };
+    }
+    for (const [metric, lastKnownValue] of Object.entries({
+      netin: available('networkIO') ? finite(guest.networkIn) : undefined,
+      netout: available('networkIO') ? finite(guest.networkOut) : undefined,
+      diskread: available('diskIO') ? finite(guest.diskRead) : undefined,
+      diskwrite: available('diskIO') ? finite(guest.diskWrite) : undefined,
+    })) {
+      if (lastKnownValue !== undefined) {
+        metrics[metric] = { lastKnownValue, message };
+      }
+    }
+  }
   return metrics;
 };
 
@@ -177,17 +209,20 @@ export const getGuestDrawerCurrentMetrics = (guest: Guest): Record<string, numbe
   const availability = guest.telemetryAvailability;
   const available = (metric: keyof NonNullable<Guest['telemetryAvailability']>): boolean =>
     availability?.[metric] ?? true;
-  const cpuPercent = available('cpu') ? getWorkloadCPUPercent(guest.cpu) : undefined;
-  const memoryReading = getGuestDrawerMemoryReading(guest);
-  const memUsage =
-    available('memory') && (!memoryReading || memoryReading.state === 'current')
-      ? getGuestDrawerMemoryUsage(guest)
-      : undefined;
   // A paused filesystem read is not current, even if the snapshot still
   // carries a numeric summary. Retained evidence has its own labelled path.
   const diskUsage =
     getWorkloadGuestDiskRead(guest, isGuestDrawerVM(guest)).state === 'current'
       ? getGuestDrawerDiskUsage(guest)
+      : undefined;
+  if (getWorkloadSourceStaleNotice(guest)) {
+    return guest.disksFromAgent && diskUsage !== undefined ? { disk: diskUsage } : {};
+  }
+  const cpuPercent = available('cpu') ? getWorkloadCPUPercent(guest.cpu) : undefined;
+  const memoryReading = getGuestDrawerMemoryReading(guest);
+  const memUsage =
+    available('memory') && (!memoryReading || memoryReading.state === 'current')
+      ? getGuestDrawerMemoryUsage(guest)
       : undefined;
   const finite = (value: number | undefined): number | undefined =>
     typeof value === 'number' && Number.isFinite(value) ? value : undefined;

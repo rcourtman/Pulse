@@ -5,6 +5,7 @@ import type {
   ResourceAvailabilityMeta,
   ResourceDiscoveryTarget,
   ResourceMetricsTarget,
+  ResourceSourceStatus,
 } from './resource';
 
 export type WorkloadType = 'vm' | 'system-container' | 'app-container' | 'pod';
@@ -32,6 +33,8 @@ export type WorkloadGuest = (VM | Container) & {
   metricsTarget?: ResourceMetricsTarget;
   /** Canonical unified-resource health, kept separate from runtime power state in `status`. */
   resourceStatus?: string;
+  /** Per-source freshness and collection errors from the unified resource model. */
+  sourceStatus?: Record<string, ResourceSourceStatus>;
   /** The unified-resource health names an open warning or critical alert. */
   hasOpenAlert?: boolean;
   displayId?: string;

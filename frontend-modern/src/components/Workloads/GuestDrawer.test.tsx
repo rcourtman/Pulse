@@ -1769,3 +1769,78 @@ it('forwards the mounted guest clock without changing the evaluated breach or cl
   expect(copy.title).toContain('Last reading at or above 80%: 92%, 31 mins ago');
   expect(now).toHaveBeenCalledOnce();
 });
+
+it('shows stale source notice, defers platform metrics as last known, and recovers live', async () => {
+  chartsApiMocks.getMetricsHistory.mockResolvedValue({
+    resourceType: 'vm',
+    resourceId: 'inst1:node1:100',
+    range: '24h',
+    start: 1,
+    end: 3,
+    metrics: {},
+    source: 'store',
+  });
+  const [guest, setGuest] = createSignal(
+    makeGuest({
+      platformType: 'vmware-vsphere',
+      platformScopes: ['vmware-vsphere'],
+      memory: {
+        total: 8 * 1024 ** 3,
+        used: 5.4 * 1024 ** 3,
+        free: 2.6 * 1024 ** 3,
+        usage: 67.5,
+        observation: {
+          state: 'current',
+          source: 'vmware-tools',
+          observedAt: '2026-11-27T23:20:00Z',
+        },
+      },
+      disk: { total: 100 * 1024 ** 3, used: 54 * 1024 ** 3, free: 46 * 1024 ** 3, usage: 54 },
+      sourceStatus: {
+        vmware: {
+          status: 'error',
+          lastSeen: '2026-11-27T23:20:00Z',
+          error: 'vCenter session expired (401)',
+        },
+      },
+    }),
+  );
+  solidRender(() => <GuestDrawer guest={guest()} onClose={vi.fn()} />);
+
+  const notice = screen.getByTestId('guest-source-stale-notice');
+  expect(notice).toHaveTextContent('Stale data.');
+  expect(notice).toHaveTextContent('vCenter collection error: vCenter session expired (401).');
+  expect(screen.getByTestId('guest-drawer-facts')).toHaveTextContent('8.00 GB RAM');
+  expect(screen.getByTestId('guest-drawer-facts')).not.toHaveTextContent('5.40 GB of 8.00 GB RAM');
+  expect(screen.getByTestId('guest-drawer-facts')).not.toHaveTextContent('54.0 GB of 100 GB disk');
+
+  await waitFor(() => expect(chartsApiMocks.getMetricsHistory).toHaveBeenCalledTimes(1));
+  const utilChart = screen.getAllByTestId('guest-history-group-chart')[0];
+  expect(utilChart.querySelector('[data-history-current="cpu"]')).toBeNull();
+  expect(utilChart.querySelector('[data-history-current="memory"]')).toBeNull();
+  expect(utilChart.querySelector('[data-history-current="disk"]')).toBeNull();
+  expect(utilChart.querySelector('[data-history-last-known="cpu"]')).toHaveTextContent(
+    '25.0%last known',
+  );
+  expect(utilChart.querySelector('[data-history-last-known="memory"]')).toHaveTextContent(
+    '67.5%last known',
+  );
+  expect(utilChart.querySelector('[data-history-deferred="cpu"]')).toHaveTextContent(
+    'vCenter collection error: vCenter session expired (401).',
+  );
+
+  // Live recovery clears the stale notice and restores current readings without remounting.
+  setGuest({
+    ...guest(),
+    sourceStatus: {
+      vmware: { status: 'online', lastSeen: '2026-11-27T23:40:00Z' },
+    },
+  });
+  expect(screen.queryByTestId('guest-source-stale-notice')).toBeNull();
+  expect(utilChart.querySelector('[data-history-current="cpu"]')).toHaveTextContent('25.0%current');
+  expect(utilChart.querySelector('[data-history-current="memory"]')).toHaveTextContent(
+    '67.5%current',
+  );
+  expect(utilChart.querySelector('[data-history-deferred="cpu"]')).toBeNull();
+  expect(screen.getByTestId('guest-drawer-facts')).toHaveTextContent('5.40 GB of 8.00 GB RAM');
+});

@@ -27,6 +27,7 @@ import type {
   ResourceAvailabilityMeta,
   ResourceDiscoveryTarget,
   ResourceMetricsTarget,
+  ResourceSourceStatus,
   ResourceVMwareTag,
 } from '@/types/resource';
 
@@ -74,6 +75,7 @@ type APIResource = {
   uptime?: number;
   lastSeen?: string;
   sources?: string[];
+  sourceStatus?: Record<string, ResourceSourceStatus>;
   platformScopes?: string[];
   metricsTarget?: ResourceMetricsTarget;
   canonicalIdentity?: {
@@ -193,6 +195,15 @@ type APIResource = {
   availability?: ResourceAvailabilityMeta;
   availabilityChecks?: ResourceAvailabilityMeta[];
   actionReadiness?: ResourceActionReadiness[];
+};
+
+const cloneSourceStatus = (
+  sourceStatus?: Record<string, ResourceSourceStatus>,
+): Record<string, ResourceSourceStatus> | undefined => {
+  if (!sourceStatus) return undefined;
+  const entries = Object.entries(sourceStatus);
+  if (entries.length === 0) return undefined;
+  return Object.fromEntries(entries.map(([key, value]) => [key, value ? { ...value } : value]));
 };
 
 const buildAlertResourceIds = (resource: APIResource): string[] => {
@@ -721,6 +732,7 @@ const mapResourceToWorkload = (resource: APIResource): WorkloadGuest | null => {
         : undefined,
     availability: resource.availability as ResourceAvailabilityMeta | undefined,
     availabilityChecks: resource.availabilityChecks as ResourceAvailabilityMeta[] | undefined,
+    ...(resource.sourceStatus ? { sourceStatus: cloneSourceStatus(resource.sourceStatus) } : {}),
   };
 };
 
@@ -749,6 +761,8 @@ const mapCanonicalResourceToWorkload = (resource: Resource): WorkloadGuest | nul
     uptime: resource.uptime,
     lastSeen: resource.lastSeen ? new Date(resource.lastSeen).toISOString() : undefined,
     sources: resource.sources,
+    sourceStatus:
+      resource.sourceStatus ?? (resource.platformData?.sourceStatus as APIResource['sourceStatus']),
     platformScopes: resource.platformScopes,
     metricsTarget: resource.metricsTarget,
     canonicalIdentity: resource.canonicalIdentity,

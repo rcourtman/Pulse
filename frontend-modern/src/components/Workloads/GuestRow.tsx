@@ -91,6 +91,7 @@ export function GuestRow(props: GuestRowProps) {
     firstCellIndent,
     guestId,
     guestStatus,
+    staleNotice,
     hasDiskUsage,
     hasNetworkInterfaces,
     hasOsInfo,
@@ -429,6 +430,7 @@ export function GuestRow(props: GuestRowProps) {
       <tr
         class={`${rowClass()} workload-row ${props.onClick ? 'cursor-pointer group' : ''}`.trim()}
         data-guest-id={guestId()}
+        data-workload-stale={staleNotice() ? 'true' : undefined}
         data-history-lens-active={historyLensActive() ? 'true' : undefined}
         data-history-lens-pending={
           historyLensActive() && !historyLensVisible() ? 'true' : undefined
@@ -468,7 +470,7 @@ export function GuestRow(props: GuestRowProps) {
               />
             </Show>
             <div
-              class={`min-w-0 ${usesCondensedIdentity() ? 'flex flex-1 flex-col items-start gap-0.5' : 'flex items-center gap-2'}`}
+              class={`min-w-0 ${usesCondensedIdentity() || staleNotice() ? 'flex flex-1 flex-col items-start gap-0.5' : 'flex items-center gap-2'}`}
             >
               <div
                 class={`flex items-center gap-1.5 min-w-0 ${usesCondensedIdentity() ? 'w-full' : ''}`}
@@ -513,6 +515,18 @@ export function GuestRow(props: GuestRowProps) {
                   </Show>
                 </div>
               </div>
+
+              <Show when={staleNotice()}>
+                {(notice) => (
+                  <span
+                    class="block max-w-full truncate text-[10px] font-medium leading-tight text-amber-800 dark:text-amber-300"
+                    data-testid="workload-stale-cue"
+                    title={notice().detail}
+                  >
+                    {notice().badge}
+                  </span>
+                )}
+              </Show>
 
               <Show when={lockLabel()}>
                 <span

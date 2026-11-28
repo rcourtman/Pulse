@@ -10,6 +10,10 @@ import type {
 } from '@/types/api';
 import type { ResourceAvailabilityMeta } from '@/types/resource';
 import { hasFailedAttachedAvailabilityCheck } from '@/utils/availabilityProbePresentation';
+import {
+  getWorkloadSourceStaleNotice,
+  type WorkloadSourceFreshnessTarget,
+} from '@/utils/workloadSourceFreshness';
 
 const ONLINE_STATUS = 'online';
 const RUNNING_STATUS = 'running';
@@ -198,18 +202,31 @@ export function getGuestPowerIndicator(
  */
 export function getGuestHealthIndicator(
   guest:
-    | (Partial<VM | Container> & {
-        availability?: ResourceAvailabilityMeta;
-        availabilityChecks?: ResourceAvailabilityMeta[];
-      })
+    | (Partial<VM | Container> &
+        WorkloadSourceFreshnessTarget & {
+          availability?: ResourceAvailabilityMeta;
+          availabilityChecks?: ResourceAvailabilityMeta[];
+        })
     | undefined
     | null,
   parentNodeOnline = true,
 ): StatusIndicator {
   const power = getGuestPowerIndicator(guest, parentNodeOnline);
-  if (!guest || power.variant !== 'success') return power;
+  if (!guest) return power;
+  const staleNotice = getWorkloadSourceStaleNotice(guest);
+  if (power.variant !== 'success') {
+    return staleNotice ? { ...power, label: `${power.label} · ${staleNotice.badge}` } : power;
+  }
   if (hasFailedAttachedAvailabilityCheck(guest)) {
-    return { variant: 'warning', label: 'Running, not responding to probe' };
+    return {
+      variant: 'warning',
+      label: staleNotice
+        ? `Running, not responding to probe · ${staleNotice.badge}`
+        : 'Running, not responding to probe',
+    };
+  }
+  if (staleNotice) {
+    return { variant: 'warning', label: `Running · ${staleNotice.badge}` };
   }
   return power;
 }
