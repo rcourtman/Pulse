@@ -726,7 +726,7 @@ describe('docsLinks', () => {
     const history = apiReference.split('`GET /api/metrics-store/history`')[1].split('\n---')[0];
     expect(history).toContain('Omitted or blank defaults to `24h`');
     expect(history).toContain('Maximum `365d` (`8760h`) per request');
-    expect(history).toContain('invalid or longer ranges return `400`');
+    expect(history).toContain('Invalid or longer ranges return `400`');
     expect(history).toContain('The same request limit applies on every plan');
   });
 
