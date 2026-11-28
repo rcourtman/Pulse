@@ -969,7 +969,6 @@ func (mh *MetricsHistory) GetDiskMetrics(resourceID string, metricType string, d
 // This prevents unbounded memory growth when containers/VMs are deleted.
 func (mh *MetricsHistory) Cleanup() {
 	mh.mu.Lock()
-	defer mh.mu.Unlock()
 
 	cutoffTime := time.Now().Add(-mh.retentionTime)
 	var guestsRemoved, nodesRemoved, storageRemoved, disksRemoved int
@@ -1046,19 +1045,26 @@ func (mh *MetricsHistory) Cleanup() {
 		}
 	}
 
-	// Log cleanup activity at debug level
-	if guestsRemoved > 0 || nodesRemoved > 0 || storageRemoved > 0 || disksRemoved > 0 {
-		log.Debug().
-			Int("guestsRemoved", guestsRemoved).
-			Int("nodesRemoved", nodesRemoved).
-			Int("storageRemoved", storageRemoved).
-			Int("disksRemoved", disksRemoved).
-			Int("guestsRemaining", len(mh.guestMetrics)).
-			Int("nodesRemaining", len(mh.nodeMetrics)).
-			Int("storageRemaining", len(mh.storageMetrics)).
-			Int("disksRemaining", len(mh.diskMetrics)).
-			Msg("Cleaned up stale metrics history entries")
+	if guestsRemoved == 0 && nodesRemoved == 0 && storageRemoved == 0 && disksRemoved == 0 {
+		mh.mu.Unlock()
+		return
 	}
+
+	// Report counts from the completed sweep, without making chart readers
+	// or poll writers wait for a slow diagnostic sink.
+	guestsRemaining, nodesRemaining := len(mh.guestMetrics), len(mh.nodeMetrics)
+	storageRemaining, disksRemaining := len(mh.storageMetrics), len(mh.diskMetrics)
+	mh.mu.Unlock()
+	log.Debug().
+		Int("guestsRemoved", guestsRemoved).
+		Int("nodesRemoved", nodesRemoved).
+		Int("storageRemoved", storageRemoved).
+		Int("disksRemoved", disksRemoved).
+		Int("guestsRemaining", guestsRemaining).
+		Int("nodesRemaining", nodesRemaining).
+		Int("storageRemaining", storageRemaining).
+		Int("disksRemaining", disksRemaining).
+		Msg("Cleaned up stale metrics history entries")
 }
 
 // cleanupMetrics removes points older than cutoff time.
