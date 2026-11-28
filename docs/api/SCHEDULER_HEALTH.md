@@ -87,7 +87,7 @@ appear here. Neither `enabled` nor the queue depth is a health verdict.
 ## 🔍 Key Fields
 
 ### Instances (`instances`)
-The scheduler's record of each connection's recent poll results.
+The scheduler's record of each connection's recent poll results. For Availability checks, Scheduler Health describes every enabled check from one catalog snapshot, including remote-only checks run by external agents, without reloading the catalog to look up local-only tasks.
 
 *   **`pollStatus`**: `lastSuccess` timestamp, the current outstanding `lastError` if present, and `consecutiveFailures`. A complete success clears the error. A partial read can record both a success and a `partial` error with no consecutive failures. Proxmox VE startup and reconnect construction failures populate `pollStatus`, breaker state, and staleness tracking immediately. TrueNAS and VMware pollers drop explicit shutdown cancellations without fabricating poll failures while still reporting genuine poll timeouts, and fence in-flight completions against active provider ownership so deleted, paused, or unreadable-config fail-closed connections cannot resurrect cached state or overwrite a replacement provider.
 *   **`breaker`**: `state` (`closed`/`open`/`half_open`), `retryAt` next retry, `since` state start, `lastTransition` timestamp.
@@ -283,7 +283,9 @@ logging finishes. When a monitor is retired during poll planning, Pulse abandons
 the returned plan once cancellation is observed instead of queuing tasks or
 running post-plan statistics and alert reconciliation, while keeping any
 still-running roster read visible in `pulse_scheduler_poll_planning_age_seconds`
-until it returns.
+until it returns. Once cancellation is observed, the retired planner also stops
+starting further provider roster or cadence reads between providers without
+pretending to cancel a callback already in flight.
 
 If no result advanced, read `retry.after` beside the later snapshot's
 `updatedAt`. For an `open` or `half_open` breaker, `retryAt` is the earliest

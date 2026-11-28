@@ -541,12 +541,20 @@ History before changing anything in the guest.
 Confirm the Machines entry belongs to the **same guest**, using its existing
 identity and host details, not a similar name alone. Check the filesystem and
 its observation time: a retained History sample or an agent's recent contact
-is not proof of a current disk reading. Use available, current readings there
-as an interim view; this does not repair the missing Proxmox reading or prove
-that the two entries are linked correctly. If the guest has no existing Pulse
-Agent entry or no current filesystem readings, use its own filesystem tools
-through your normal interface. **Do not install another agent, restart services,
-restore a VM or force guest-agent checks just to recover these readings.**
+is not proof of a current disk reading. When a Pulse Agent stops reporting,
+**Machines** (`/standalone/machines`) moves that host out of **Healthy** into
+**Degraded** with an amber **Stale** status indicator, shows a table-level
+warning banner (`Telemetry is stale for ...`), places a compact amber
+`Stale · <age>` or `Stale data` cue beneath the machine name (**Stale** on
+phones), and shows an expanded warning notice (`Agent has stopped reporting.`
+with `Showing last known readings.` and any recorded `Last error:`). Explicit
+**Offline** and awaiting-first-report states remain distinct. Use available,
+current readings there as an interim view. This does not repair the missing
+Proxmox reading or prove that the two entries are linked correctly. If the guest
+has no existing Pulse Agent entry or no current filesystem readings, use its own
+filesystem tools through your normal interface. **Do not install another agent,
+restart services, restore a VM or force guest-agent checks just to recover these
+readings.**
 
 This alternative does **not** relax [Backup safety](#backup-safety). A responsive
 guest, running agent services, working Machines readings or an expired cooldown

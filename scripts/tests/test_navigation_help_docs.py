@@ -295,6 +295,90 @@ class NavigationHelpDocsTest(unittest.TestCase):
         self.assertIn("clusterID := proxmox.ExtractClusterID(statuses)", cluster_go)
         self.assertIn("Proxmox cluster-id changed during membership read", cluster_go)
 
+    def test_machines_stale_telemetry_and_resource_detail_api_match_runtime(self):
+        unified = doc_text("UNIFIED_RESOURCES.md")
+        vm_disk = doc_text("VM_DISK_MONITORING.md")
+        self.assertEqual(
+            unified,
+            (ROOT / "frontend-modern/public/docs/UNIFIED_RESOURCES.md").read_text(encoding="utf-8"),
+        )
+        self.assertEqual(
+            vm_disk,
+            (ROOT / "frontend-modern/public/docs/VM_DISK_MONITORING.md").read_text(encoding="utf-8"),
+        )
+
+        # Keep preview-only standaloneVms out of stable user guides.
+        for name, text in (("UNIFIED_RESOURCES.md", unified), ("VM_DISK_MONITORING.md", vm_disk)):
+            with self.subTest(preview_guard=name):
+                self.assertNotIn("/standalone/vms", text)
+                self.assertNotIn("Machines VMs", text)
+
+        unified_norm = " ".join(unified.split())
+        for phrase in (
+            "| `health` | Backend-owned canonical health envelope with a `verdict` (including `stale` and `critical`) and stable `reasons` (`code` such as `telemetry_stale` plus optional detail) |",
+            "### Stale Pulse Agent telemetry on Machines",
+            "**Machines** (`/standalone/machines`)",
+            "`health.verdict` is `stale`, `telemetry_stale` is recorded, `sourceStatus.agent` is impaired, `agent.stale` is true, or `lastSeen` is older than 5 minutes",
+            "leaves **Healthy**, joins **Degraded**, and shows an amber **Stale** status indicator",
+            "Explicit **Offline** and awaiting-first-report states remain distinct.",
+            "`Telemetry is stale for <host> (<age>). CPU, memory, disk, and sensor readings shown are last known values until their agents report again.`",
+            "`Stale · <age>` or `Stale data` on desktop, and `Stale` on narrow screens",
+            "`Agent has stopped reporting.`",
+            "`Showing last known readings.`",
+            "`Last error:`",
+            "`RAID Arrays (last known)`",
+            "| `sort` | Sort field: `name` (default), `status`, `type`, or `lastSeen` |",
+            "`GET /api/resources/{id}`",
+            "PMG domain statistics",
+        ):
+            with self.subTest(doc="UNIFIED_RESOURCES.md", phrase=phrase):
+                self.assertIn(phrase, unified_norm)
+
+        vm_disk_norm = " ".join(vm_disk.split())
+        for phrase in (
+            "**Machines** (`/standalone/machines`) moves that host out of **Healthy** into **Degraded** with an amber **Stale** status indicator",
+            "`Telemetry is stale for ...`",
+            "`Stale · <age>` or `Stale data` cue beneath the machine name (**Stale** on phones)",
+            "`Agent has stopped reporting.` with `Showing last known readings.` and any recorded `Last error:`",
+            "Explicit **Offline** and awaiting-first-report states remain distinct.",
+        ):
+            with self.subTest(doc="VM_DISK_MONITORING.md", phrase=phrase):
+                self.assertIn(phrase, vm_disk_norm)
+
+        staleness_ts = source("features/standalone/standaloneStaleness.ts")
+        machines_tsx = source("features/standalone/AgentsMachinesTable.tsx")
+        model_ts = source("features/standalone/agentMachineTableModel.ts")
+        resources_go = (ROOT / "internal/api/resourceapi/resources.go").read_text(encoding="utf-8")
+
+        for marker in (
+            "const AGENT_REPORT_STALE_AFTER_MS = 5 * 60 * 1000;",
+            "badge: age ? `Stale · ${age}` : 'Stale data',",
+            "compactBadge: 'Stale',",
+            "detail: `Agent has stopped reporting.${lastReportText} Showing last known readings.${errorText}`,",
+            "{ variant: 'warning', label: 'Stale' }",
+            "Telemetry is stale for ${list}. CPU, memory, disk, and sensor readings shown are last known values until their agents report again.",
+        ):
+            with self.subTest(source="standaloneStaleness.ts", marker=marker):
+                self.assertIn(marker, staleness_ts)
+        for marker in (
+            "title={lastKnownTitle() ? 'RAID Arrays (last known)' : 'RAID Arrays'}",
+            'data-testid="agent-machines-stale-banner"',
+            'data-agent-machine-stale-cue="true"',
+            'data-testid="agent-machine-stale-notice"',
+        ):
+            with self.subTest(source="AgentsMachinesTable.tsx", marker=marker):
+                self.assertIn(marker, machines_tsx)
+        self.assertIn("const staleNotice = getStandaloneMachineStaleness(machine, nowMs ?? 0);", model_ts)
+        for marker in (
+            "// HandleGetResource handles GET /api/resources/{id}.",
+            "// PMG domain stats can be very large; keep summary-only in list.",
+            'case "status":',
+            'case "type":',
+            'case "lastSeen":',
+        ):
+            with self.subTest(source="resources.go", marker=marker):
+                self.assertIn(marker, resources_go)
+
     def test_all_changed_guides_match_their_shipped_copies(self):
         for name in (
             "README.md",
@@ -306,6 +390,7 @@ class NavigationHelpDocsTest(unittest.TestCase):
             "METRICS_HISTORY.md",
             "KUBERNETES.md",
             "UNIFIED_RESOURCES.md",
+            "VM_DISK_MONITORING.md",
             "MIGRATION_UNIFIED_NAV.md",
             "RELAY.md",
         ):
