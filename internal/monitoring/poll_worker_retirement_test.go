@@ -88,3 +88,80 @@ func TestProcessPollDispatcherReleasesRetiredClaim(t *testing.T) {
 		})
 	}
 }
+
+// Hold a claim between dequeue and execution, without relying on a goroutine
+// happening to lose a race to the settings refresh.
+func TestRetiredPollClaimDoesNotEnterProvider(t *testing.T) {
+	for _, readd := range []bool{false, true} {
+		name := "deleted"
+		if readd {
+			name = "re-added"
+		}
+		t.Run(name, func(t *testing.T) {
+			synctest.Test(t, func(t *testing.T) {
+				ctx, cancel := context.WithCancel(t.Context())
+				defer cancel()
+				start := time.Now()
+				var builds, reads []string
+				build := func(_ *Monitor, name string) (PollTask, error) {
+					builds = append(builds, name)
+					return PollTask{Run: func(context.Context) { reads = append(reads, name) }}, nil
+				}
+				m := &Monitor{
+					taskQueue: NewTaskQueue(),
+					pollProviders: map[InstanceType]PollProvider{
+						InstanceTypeAvailability: pollProviderAdapter{instanceType: InstanceTypeAvailability, buildPollTask: build},
+						InstanceTypePVE:          pollProviderAdapter{instanceType: InstanceTypePVE, buildPollTask: build},
+					},
+				}
+				m.SetExecutor(newRealExecutor(m))
+
+				check := ScheduledTask{InstanceType: InstanceTypeAvailability, InstanceName: "check", NextRun: start, Interval: time.Minute}
+				m.taskQueue.Upsert(check)
+				claimed, ok := m.taskQueue.WaitNext(ctx)
+				if !ok || claimed != check {
+					t.Fatalf("expected the original claim, got %+v, claimed=%v", claimed, ok)
+				}
+				m.taskQueue.refreshAvailabilitySchedule(nil)
+				replacement := check
+				replacement.NextRun = start.Add(10 * time.Second)
+				if readd {
+					m.taskQueue.refreshAvailabilitySchedule(map[string]ScheduledTask{"check": replacement})
+				}
+
+				m.executeAndRescheduleTask(ctx, claimed, nil, 0)
+				if len(builds) != 0 || len(reads) != 0 {
+					t.Fatalf("retired claim reached provider setup or the read: builds=%v reads=%v", builds, reads)
+				}
+				queued, ok := m.taskQueue.Get(check.InstanceType, check.InstanceName)
+				if ok != readd || (ok && queued != replacement) {
+					t.Fatalf("wanted replacement=%v at its saved cadence, got %+v, queued=%v", readd, queued, ok)
+				}
+
+				peer := ScheduledTask{InstanceType: InstanceTypePVE, InstanceName: "peer", NextRun: start, Interval: time.Minute}
+				m.taskQueue.Upsert(peer)
+				claimed, ok = m.taskQueue.WaitNext(ctx)
+				if !ok || claimed != peer || !time.Now().Equal(start) {
+					t.Fatalf("expected the live peer to be due immediately, got %+v, claimed=%v", claimed, ok)
+				}
+				m.executeAndRescheduleTask(ctx, claimed, nil, 0)
+				m.taskQueue.Remove(peer.InstanceType, peer.InstanceName)
+				if !slices.Equal(builds, []string{"peer"}) || !slices.Equal(reads, []string{"peer"}) {
+					t.Errorf("expected only the live peer now: builds=%v reads=%v", builds, reads)
+				}
+				if !readd {
+					return
+				}
+				claimed, ok = m.taskQueue.WaitNext(ctx)
+				if !ok || claimed != replacement || !time.Now().Equal(replacement.NextRun) {
+					t.Fatalf("expected replacement at its own deadline, got %+v, claimed=%v", claimed, ok)
+				}
+				m.executeAndRescheduleTask(ctx, claimed, nil, 0)
+				want := []string{"peer", "check"}
+				if !slices.Equal(builds, want) || !slices.Equal(reads, want) {
+					t.Errorf("expected %v after the replacement deadline: builds=%v reads=%v", want, builds, reads)
+				}
+			})
+		})
+	}
+}
