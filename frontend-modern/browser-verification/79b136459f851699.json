@@ -1,0 +1,57 @@
+{
+  "version": 1,
+  "base_sha": "97360445741b95fb235687ae0048c091507ccedf",
+  "verified_at": "2026-11-28T03:00:23Z",
+  "result": "passed",
+  "changed_paths": [
+    "frontend-modern/src/components/Storage/StoragePoolRow.tsx",
+    "frontend-modern/src/features/proxmox/ProxmoxPageSurface.tsx",
+    "frontend-modern/src/features/storageBackups/cephRecordPresentation.ts",
+    "frontend-modern/src/features/storageBackups/recordPresentation.ts",
+    "frontend-modern/src/features/storageBackups/rowPresentation.ts",
+    "frontend-modern/src/features/storageBackups/storageAdapters.ts",
+    "frontend-modern/src/features/storageBackups/storageModelCore.ts",
+    "frontend-modern/src/features/storageBackups/storagePoolRowPresentation.ts"
+  ],
+  "content_sha256": {
+    "frontend-modern/src/components/Storage/StoragePoolRow.tsx": "4edd4fbeab437cef7135deaf2931e609c479b6a3cf9129d09fe19dd77d0bd978",
+    "frontend-modern/src/features/proxmox/ProxmoxPageSurface.tsx": "914f120cfd7449c47c6c7cf30dc932ad8e7cdb7d0dc031eb152b09d035f829a7",
+    "frontend-modern/src/features/storageBackups/cephRecordPresentation.ts": "066b8383c70934b1c0650e3809691196f6f14a73daa1b77e205588edaa51406c",
+    "frontend-modern/src/features/storageBackups/recordPresentation.ts": "25f70058cc0f0912be84066da523c5e51917659c22c1ac42470da7ef2c6102cf",
+    "frontend-modern/src/features/storageBackups/rowPresentation.ts": "da44392d8f829bffaf4e4fa36fa5874b4981b283a1d3624df95be7fe2512ac26",
+    "frontend-modern/src/features/storageBackups/storageAdapters.ts": "9b01a4442927da8ffad225bace93cc68a3052e1ba0bb672a6506b9fe7c5792ee",
+    "frontend-modern/src/features/storageBackups/storageModelCore.ts": "e7bda61f592584962e4bba7c7f4b94055277955bf4e3035e456f01111fcb1eca",
+    "frontend-modern/src/features/storageBackups/storagePoolRowPresentation.ts": "ecec0d93b06351765fd66683e4ceb5b6ad1f7cd5d23cdf56105ee0913c672cec"
+  },
+  "routes": [
+    "/proxmox/storage",
+    "/proxmox/mail"
+  ],
+  "viewports": [
+    {
+      "width": 1440,
+      "height": 940
+    },
+    {
+      "width": 360,
+      "height": 820
+    }
+  ],
+  "states": [
+    "Default priority-sorted Storage Pools table with alerted-stale, faulted-stale, clear-stale, and fresh-healthy pools (desktop light Chromium and touch phone dark WebKit)",
+    "Status: Healthy filter excluding all stale pools and retaining only fresh Online local-lvm",
+    "Status: Needs attention filter surfacing alerted-stale, faulted-stale, and clear-stale pools",
+    "Search query matching stale source error detail (Datastore.Audit)",
+    "Expanded clear-stale StoragePoolDrawer showing Worth checking stale explanation and retained last-known capacity, transitioning to fresh Online via live WebSocket recovery",
+    "Expanded faulted-stale StoragePoolDrawer preserving red Faulted indicator and ZFS device error context alongside stale telemetry explanation",
+    "Lazy-loaded Proxmox Mail Gateway tab (/proxmox/mail) rendering live PMG row with zero console/page/network errors"
+  ],
+  "interactions": [
+    "Rendered /proxmox/storage across 1440x940 light Chromium and 360x820 dark WebKit with zero console/page/network errors and 0px horizontal overflow",
+    "Toggled Status: Healthy, Status: Needs attention, and Status: All filters (including mobile Filters disclosure)",
+    "Filtered table via search input with Datastore.Audit stale source error text and cleared search",
+    "Expanded clear-stale pool row, pushed live WebSocket rawData recovery frame, verified row re-sort and drawer recovery to current reading",
+    "Expanded faulted-stale pool row and verified preserved Faulted badge, red status dot, and ZFS error details",
+    "Navigated to /proxmox/mail and verified lazy-loaded ProxmoxMailGatewayTable renders pmg-edge cleanly"
+  ]
+}

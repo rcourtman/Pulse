@@ -11,6 +11,7 @@ import {
   getStoragePoolStateIndicator,
   getStoragePoolStateLabel,
   getStoragePoolStateTextClass,
+  shouldShowStoragePoolInlineStaleCue,
 } from '@/features/storageBackups/rowPresentation';
 
 const baseRecord = (): StorageRecord =>
@@ -193,8 +194,22 @@ describe('getStoragePoolStateIndicator', () => {
       variant: 'warning',
       label: 'Stale',
     });
+    expect(getStoragePoolStateIndicator(withState('FAULTED', 'stale'))).toEqual({
+      variant: 'danger',
+      label: 'Faulted',
+    });
+    expect(getStoragePoolStateIndicator(withState('DEGRADED', 'stale'))).toEqual({
+      variant: 'warning',
+      label: 'Degraded',
+    });
+    expect(shouldShowStoragePoolInlineStaleCue(withState('ONLINE', 'stale'), false)).toBe(false);
+    expect(shouldShowStoragePoolInlineStaleCue(withState('ONLINE', 'stale'), true)).toBe(true);
+    expect(shouldShowStoragePoolInlineStaleCue(withState('FAULTED', 'stale'), false)).toBe(true);
+    expect(shouldShowStoragePoolInlineStaleCue(withState('DEGRADED', 'stale'), false)).toBe(true);
+    expect(shouldShowStoragePoolInlineStaleCue(withState('ONLINE', 'fresh'), true)).toBe(false);
     // The cell colour and the dot read one judgement.
     expect(getStoragePoolStateTextClass(withState('FAULTED'))).toContain('text-red-700');
+    expect(getStoragePoolStateTextClass(withState('FAULTED', 'stale'))).toContain('text-red-700');
     expect(getStoragePoolStateTextClass(withState('DEGRADED'))).toContain('text-amber-700');
   });
 });

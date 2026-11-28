@@ -79,8 +79,95 @@ describe('storageAdapters', () => {
 
     expect(records[0]).toMatchObject({
       observedAt: 1731000000000,
+      health: 'warning',
       freshness: 'stale',
       freshnessError: 'Datastore.Audit permission denied',
+    });
+  });
+
+  it('derives stale freshness from backend telemetry_stale health and platformData.sourceStatus without downgrading critical/offline health', () => {
+    const records = buildStorageRecords({
+      state: baseState(),
+      resources: [
+        makeResourceStorage({
+          id: 'health-stale',
+          name: 'health-stale-pool',
+          status: 'online',
+          health: {
+            verdict: 'stale',
+            reasons: [{ code: 'telemetry_stale', detail: '14m' }],
+          },
+        }),
+        makeResourceStorage({
+          id: 'platform-data-stale',
+          name: 'platform-stale-pool',
+          status: 'offline',
+          platformData: {
+            type: 'zfspool',
+            node: 'pve1',
+            instance: 'cluster-a',
+            shared: false,
+            sourceStatus: {
+              proxmox: { status: 'error', error: 'PVE API timed out' },
+            },
+          },
+        }),
+        makeResourceStorage({
+          id: 'availability-only-stale',
+          name: 'availability-pool',
+          status: 'online',
+          sourceStatus: {
+            availability: { status: 'error', error: 'probe failed' },
+            proxmox: { status: 'online' },
+          },
+        }),
+      ],
+    });
+
+    expect(records.find((r) => r.id === 'health-stale')).toMatchObject({
+      health: 'warning',
+      freshness: 'stale',
+      freshnessError: 'No report for 14m',
+    });
+    expect(records.find((r) => r.id === 'platform-data-stale')).toMatchObject({
+      health: 'offline',
+      freshness: 'stale',
+      freshnessError: 'PVE API timed out',
+    });
+    expect(records.find((r) => r.id === 'availability-only-stale')).toMatchObject({
+      health: 'healthy',
+      freshness: 'fresh',
+    });
+  });
+
+  it('preserves stale freshness and warning promotion when merging duplicate storage records', () => {
+    const records = buildStorageRecords({
+      state: baseState(),
+      resources: [
+        makeResourceStorage({
+          id: 'dup-fresh',
+          name: 'shared-zfs',
+          status: 'online',
+          incidentPriority: 2,
+          sourceStatus: { proxmox: { status: 'online' } },
+        }),
+        makeResourceStorage({
+          id: 'dup-stale',
+          name: 'shared-zfs',
+          status: 'online',
+          incidentPriority: 0,
+          sourceStatus: {
+            proxmox: { status: 'stale', error: 'Collection stalled' },
+          },
+        }),
+      ],
+    });
+
+    expect(records).toHaveLength(1);
+    expect(records[0]).toMatchObject({
+      health: 'warning',
+      freshness: 'stale',
+      freshnessError: 'Collection stalled',
     });
   });
 

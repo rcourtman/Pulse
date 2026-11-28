@@ -8,6 +8,7 @@ import { matchesStorageNodeTerms, parseStorageSearchQuery } from './storageSearc
 import type { StorageCapacityDeltaPresentation } from './storageCapacityDeltaPresentation';
 import { resolveStorageRecordMetricResourceId } from './storageMetricsIdentity';
 import {
+  getEffectiveStorageRecordHealth,
   getStorageRecordActionSummary,
   getStorageRecordContent,
   getStorageRecordHostLabel,
@@ -24,7 +25,11 @@ import {
   getStorageRecordType,
   getStorageRecordUsagePercent,
 } from './recordPresentation';
-import { getCompactStoragePoolProtectionLabel, getStoragePoolStateLabel } from './rowPresentation';
+import {
+  getCompactStoragePoolProtectionLabel,
+  getStoragePoolStaleDetail,
+  getStoragePoolStateLabel,
+} from './rowPresentation';
 
 export type StorageSortKey =
   'priority' | 'name' | 'state' | 'source' | 'type' | 'host' | 'protection' | 'usage' | 'growth';
@@ -119,6 +124,10 @@ export const matchesStorageRecordSearch = (record: StorageRecord, query: string)
     getStorageRecordType(record),
     getStorageRecordContent(record),
     getStorageRecordStatus(record),
+    getStoragePoolStateLabel(record),
+    record.freshness === 'stale' ? 'stale stale data' : '',
+    record.freshnessError,
+    record.freshness === 'stale' ? getStoragePoolStaleDetail(record) : '',
     ...(record.capabilities || []),
   ]
     .filter(Boolean)
@@ -155,7 +164,9 @@ export const filterStorageRecords = (
     .filter((record) =>
       storageSourceMatchesFilter(normalizeStorageSourceKey(record.source.platform), selectedSource),
     )
-    .filter((record) => matchesStorageHealthFilter(record.health, options.healthFilter))
+    .filter((record) =>
+      matchesStorageHealthFilter(getEffectiveStorageRecordHealth(record), options.healthFilter),
+    )
     .filter((record) => matchesStorageRecordNode(record, options.selectedNode))
     .filter((record) => matchesStorageRecordSearch(record, query));
 };
@@ -196,6 +207,7 @@ export const sortStorageRecords = (
       comparison =
         numericCompare(alertWeight?.(a.id) ?? 0, alertWeight?.(b.id) ?? 0) ||
         numericCompare(a.incidentPriority || 0, b.incidentPriority || 0) ||
+        numericCompare(a.freshness === 'stale' ? 1 : 0, b.freshness === 'stale' ? 1 : 0) ||
         numericCompare(getStorageRecordUsagePercent(a), getStorageRecordUsagePercent(b));
     } else if (sortKey === 'state') {
       comparison = textCompare(getStoragePoolStateLabel(a), getStoragePoolStateLabel(b));
@@ -241,7 +253,10 @@ export const groupStorageRecords = (
       groupBy === 'type'
         ? getStorageRecordType(record)
         : groupBy === 'status'
-          ? getStorageRecordStatus(record)
+          ? record.freshness === 'stale' &&
+            getStoragePoolStateLabel(record).toLowerCase() === 'stale'
+            ? 'stale'
+            : getStorageRecordStatus(record)
           : getStorageRecordNodeLabel(record);
     const normalized = key.trim() || 'unknown';
     if (!groups.has(normalized)) groups.set(normalized, []);

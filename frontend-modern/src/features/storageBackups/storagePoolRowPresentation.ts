@@ -8,6 +8,7 @@ import {
 import {
   getCompactStoragePoolProtectionLabel,
   getCompactStoragePoolProtectionTitle,
+  getStoragePoolStaleDetail,
   getStoragePoolStateLabel,
   getStoragePoolStateTextClass,
   getStoragePoolStateTitle,
@@ -22,6 +23,8 @@ export interface StoragePoolRowModel {
   topologyLabel: string;
   compactProtection: string;
   compactProtectionTitle: string;
+  isStale: boolean;
+  staleDetail: string;
   stateLabel: string;
   stateTitle: string;
   stateToneClass: string;
@@ -53,6 +56,8 @@ export const STORAGE_POOL_ROW_GROWTH_TEXT_CLASS = 'block truncate font-mono font
 export const STORAGE_POOL_ROW_ISSUE_CELL_CLASS =
   'overflow-hidden px-1.5 sm:px-2 py-1 align-middle text-[11px]';
 export const STORAGE_POOL_ROW_ISSUE_TEXT_CLASS = 'block truncate text-[11px] font-semibold';
+export const STORAGE_POOL_ROW_STALE_CUE_CLASS =
+  'block truncate text-[10px] font-medium leading-tight text-amber-800 dark:text-amber-300';
 export const STORAGE_POOL_ROW_PLACEHOLDER_CLASS = 'text-muted';
 export const STORAGE_POOL_ROW_USAGE_FALLBACK_CLASS = 'text-[11px] text-muted';
 
@@ -74,6 +79,8 @@ export const buildStoragePoolRowModel = (
     topologyLabel: getStorageRecordTopologyLabel(record),
     compactProtection: getCompactStoragePoolProtectionLabel(record),
     compactProtectionTitle: getCompactStoragePoolProtectionTitle(record),
+    isStale: record.freshness === 'stale',
+    staleDetail: getStoragePoolStaleDetail(record),
     stateLabel: getStoragePoolStateLabel(record),
     stateTitle: getStoragePoolStateTitle(record),
     stateToneClass: getStoragePoolStateTextClass(record),

@@ -238,4 +238,79 @@ describe('storageModelCore', () => {
     expect(groupStorageRecords([], 'none')).toEqual([]);
     expect(groupStorageRecords([], 'status')).toEqual([]);
   });
+
+  it('filters, searches, sorts, groups, and summarizes stale storage pools truthfully', () => {
+    const freshHighUsage = makeRecord({
+      id: 'fresh-high',
+      name: 'fresh-high',
+      health: 'healthy',
+      freshness: 'fresh',
+      capacity: { totalBytes: 100, usedBytes: 85, freeBytes: 15, usagePercent: 85 },
+      details: { status: 'online', node: 'pve1', nodeHints: ['cluster-main'] },
+    });
+    const stalePool = makeRecord({
+      id: 'stale-low',
+      name: 'stale-low',
+      health: 'healthy',
+      freshness: 'stale',
+      freshnessError: 'Datastore.Audit permission denied',
+      capacity: { totalBytes: 100, usedBytes: 25, freeBytes: 75, usagePercent: 25 },
+      details: { status: 'online', node: 'pve1', nodeHints: ['cluster-main'] },
+    });
+    const staleFaulted = makeRecord({
+      id: 'stale-faulted',
+      name: 'stale-faulted',
+      health: 'critical',
+      freshness: 'stale',
+      freshnessError: 'PVE poll stalled',
+      details: { status: 'faulted', node: 'pve1', nodeHints: ['cluster-main'] },
+    });
+
+    const all = [freshHighUsage, stalePool, staleFaulted];
+
+    expect(
+      filterStorageRecords(all, {
+        search: '',
+        sourceFilter: 'all',
+        healthFilter: 'healthy',
+        selectedNode: null,
+      }).map((r) => r.id),
+    ).toEqual(['fresh-high']);
+
+    expect(
+      filterStorageRecords(all, {
+        search: '',
+        sourceFilter: 'all',
+        healthFilter: 'attention',
+        selectedNode: null,
+      }).map((r) => r.id),
+    ).toEqual(['stale-low', 'stale-faulted']);
+
+    expect(
+      filterStorageRecords(all, {
+        search: '',
+        sourceFilter: 'all',
+        healthFilter: 'warning',
+        selectedNode: null,
+      }).map((r) => r.id),
+    ).toEqual(['stale-low']);
+
+    expect(matchesStorageRecordSearch(stalePool, 'stale')).toBe(true);
+    expect(matchesStorageRecordSearch(stalePool, 'stale data')).toBe(true);
+    expect(matchesStorageRecordSearch(stalePool, 'datastore.audit')).toBe(true);
+    expect(matchesStorageRecordSearch(freshHighUsage, 'stale')).toBe(false);
+
+    expect(
+      sortStorageRecords([freshHighUsage, stalePool], 'priority', 'desc').map((r) => r.id),
+    ).toEqual(['stale-low', 'fresh-high']);
+
+    expect(
+      groupStorageRecords([freshHighUsage, stalePool, staleFaulted], 'status').map((g) => g.key),
+    ).toEqual(['faulted', 'online', 'stale']);
+
+    expect(summarizeStorageRecords([freshHighUsage, stalePool]).byHealth).toMatchObject({
+      healthy: 1,
+      warning: 1,
+    });
+  });
 });

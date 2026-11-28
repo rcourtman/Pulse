@@ -49,25 +49,21 @@ export function getStoragePoolIssueTextClass(record: StorageRecord): string {
 
 export type StoragePoolStateTone = 'danger' | 'warning' | 'ok' | 'unknown';
 
+const DANGER_STATE_LABELS = new Set(['critical', 'faulted', 'failed', 'offline', 'unavailable']);
+const WARNING_STATE_LABELS = new Set(['warning', 'warn', 'degraded']);
+
+const toneForStateLabel = (label: string): StoragePoolStateTone => {
+  const normalized = label.trim().toLowerCase();
+  if (DANGER_STATE_LABELS.has(normalized)) return 'danger';
+  if (WARNING_STATE_LABELS.has(normalized)) return 'warning';
+  return !normalized || normalized === '—' || normalized === 'unknown' ? 'unknown' : 'ok';
+};
+
 // One judgement of the State cell's word: the cell's colour and the pool
 // drawer's status dot both read it, so the two cannot disagree.
 export function getStoragePoolStateTone(record: StorageRecord): StoragePoolStateTone {
-  if (record.freshness === 'stale') return 'warning';
-  const normalized = getStoragePoolStateLabel(record).trim().toLowerCase();
-  if (
-    normalized === 'critical' ||
-    normalized === 'faulted' ||
-    normalized === 'failed' ||
-    normalized === 'offline' ||
-    normalized === 'unavailable'
-  ) {
-    return 'danger';
-  }
-  if (normalized === 'warning' || normalized === 'warn' || normalized === 'degraded') {
-    return 'warning';
-  }
-  if (!normalized || normalized === '—' || normalized === 'unknown') return 'unknown';
-  return 'ok';
+  const tone = toneForStateLabel(getStoragePoolStateLabel(record));
+  return record.freshness === 'stale' && tone !== 'danger' ? 'warning' : tone;
 }
 
 export function getStoragePoolStateTextClass(record: StorageRecord): string {
@@ -128,29 +124,51 @@ export function getCompactStoragePoolProtectionLabel(record: StorageRecord): str
 }
 
 export function getStoragePoolStateLabel(record: StorageRecord): string {
+  const raw =
+    getRecordStringDetail(record, 'arrayState') ||
+    getStorageRecordZfsPool(record)?.state ||
+    getRecordStringDetail(record, 'status');
   if (record.freshness === 'stale') {
+    const explicit = raw || (record.statusLabel || '').trim();
+    if (explicit) {
+      const label = titleize(explicit);
+      const tone = toneForStateLabel(label);
+      if (tone === 'danger' || tone === 'warning') return label;
+    } else if (record.health === 'critical' || record.health === 'offline') {
+      return titleize(record.health);
+    }
     return 'Stale';
   }
-  const arrayState = getRecordStringDetail(record, 'arrayState');
-  if (arrayState) {
-    return titleize(arrayState);
-  }
-  const pool = getStorageRecordZfsPool(record);
-  if (pool?.state) {
-    // zpool reports upper-case states; present them like every other state
-    // path so a DEGRADED pool reads the same as a degraded array.
-    return titleize(pool.state);
-  }
-  const status = getStorageRecordStatus(record);
+  const status = raw || getStorageRecordStatus(record);
   return status ? titleize(status) : '—';
+}
+
+export function getStoragePoolStaleDetail(record: StorageRecord): string {
+  if (record.freshness !== 'stale') return '';
+  const observed =
+    typeof record.observedAt === 'number' &&
+    Number.isFinite(record.observedAt) &&
+    record.observedAt > 0
+      ? formatRelativeTime(record.observedAt)
+      : '';
+  const age = observed ? ` Last successful refresh ${observed}.` : '';
+  const error = record.freshnessError?.trim() ? ` ${record.freshnessError.trim()}` : '';
+  return `Retained last-known storage values.${age}${error}`.trim();
+}
+
+export function shouldShowStoragePoolInlineStaleCue(
+  record: StorageRecord,
+  hasAlertHeadline: boolean,
+): boolean {
+  return (
+    record.freshness === 'stale' &&
+    (hasAlertHeadline || getStoragePoolStateLabel(record).toLowerCase() !== 'stale')
+  );
 }
 
 export function getStoragePoolStateTitle(record: StorageRecord): string {
   if (record.freshness === 'stale') {
-    const observed = formatRelativeTime(record.observedAt);
-    const age = observed ? ` Last successful refresh ${observed}.` : '';
-    const error = record.freshnessError ? ` ${record.freshnessError}` : '';
-    return `Retained last-known storage values.${age}${error}`.trim();
+    return getStoragePoolStaleDetail(record);
   }
   const label = getStoragePoolStateLabel(record);
   const summary =

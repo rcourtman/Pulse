@@ -119,11 +119,17 @@ const toZfsPool = (value: unknown): ZFSPool | null => {
 export const getStorageRecordZfsPool = (record: StorageRecord): ZFSPool | null =>
   toZfsPool(getRecordDetails(record).zfsPool);
 
+export const getEffectiveStorageRecordHealth = (record: StorageRecord): NormalizedHealth =>
+  record.freshness === 'stale' && (record.health === 'healthy' || record.health === 'unknown')
+    ? 'warning'
+    : record.health;
+
 export const getStorageRecordStats = (items: StorageRecord[]): StorageRecordStats => {
   const seenShared = new Set<string>();
   const totals = items.reduce(
     (acc, record) => {
-      acc.byHealth[record.health] = (acc.byHealth[record.health] || 0) + 1;
+      const health = getEffectiveStorageRecordHealth(record);
+      acc.byHealth[health] = (acc.byHealth[health] || 0) + 1;
 
       const isShared = getStorageRecordShared(record) === true;
       if (isShared) {

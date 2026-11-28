@@ -79,11 +79,27 @@ describe('storage pool row presentation', () => {
       }),
     );
 
+    expect(model.isStale).toBe(true);
     expect(model.stateLabel).toBe('Stale');
     expect(model.stateToneClass).toContain('text-amber');
     expect(model.stateTitle).toBe(
       'Retained last-known storage values. Last successful refresh 5 mins ago. Datastore.Audit permission denied',
     );
+    expect(model.staleDetail).toBe(model.stateTitle);
+
+    const faultedStale = buildStoragePoolRowModel(
+      baseRecord({
+        statusLabel: 'Faulted',
+        health: 'critical',
+        freshness: 'stale',
+        observedAt: now.getTime() - 5 * 60 * 1000,
+        freshnessError: 'PVE poll stalled',
+      }),
+    );
+    expect(faultedStale.isStale).toBe(true);
+    expect(faultedStale.stateLabel).toBe('Faulted');
+    expect(faultedStale.stateToneClass).toContain('text-red-700');
+    expect(faultedStale.staleDetail).toContain('PVE poll stalled');
 
     vi.useRealTimers();
   });
