@@ -1,6 +1,7 @@
 import { Show } from 'solid-js';
 import { A } from '@solidjs/router';
 import BellOffIcon from 'lucide-solid/icons/bell-off';
+import RefreshCwIcon from 'lucide-solid/icons/refresh-cw';
 
 import { Card } from '@/components/shared/Card';
 import {
@@ -35,7 +36,10 @@ export function AlertDeliveryPausedCard(props: AlertDeliveryPausedCardProps) {
     >
       <div class="flex flex-col gap-3 sm:flex-row sm:items-start sm:justify-between">
         <div class="flex min-w-0 items-start gap-3">
-          <BellOffIcon class="mt-0.5 h-4 w-4 shrink-0 text-amber-700 dark:text-amber-300" />
+          <BellOffIcon
+            class="mt-0.5 h-4 w-4 shrink-0 text-amber-700 dark:text-amber-300"
+            aria-hidden="true"
+          />
           <div class="min-w-0">
             <h3 class="text-sm font-semibold text-amber-900 dark:text-amber-100">
               {getAlertDestinationsDeliveryPausedTitle()}
@@ -50,7 +54,7 @@ export function AlertDeliveryPausedCard(props: AlertDeliveryPausedCardProps) {
             {(href) => (
               <A
                 href={href()}
-                class="text-sm font-medium text-amber-800 underline underline-offset-2 hover:text-amber-900 dark:text-amber-200 dark:hover:text-amber-100"
+                class="inline-flex min-h-11 items-center rounded-sm text-sm font-medium text-amber-800 underline underline-offset-2 hover:text-amber-900 focus-visible:outline-solid focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-blue-500 sm:min-h-0 dark:text-amber-200 dark:hover:text-amber-100"
               >
                 {getAlertDestinationsDeliverySetupLinkLabel()}
               </A>
@@ -58,10 +62,14 @@ export function AlertDeliveryPausedCard(props: AlertDeliveryPausedCardProps) {
           </Show>
           <button
             type="button"
-            class="inline-flex shrink-0 items-center justify-center gap-2 rounded-md border border-amber-300 bg-transparent px-3 py-1.5 text-sm font-medium text-amber-800 transition hover:bg-amber-100 disabled:cursor-not-allowed disabled:opacity-50 dark:border-amber-700 dark:text-amber-200 dark:hover:bg-amber-900/30"
+            class="inline-flex min-h-11 shrink-0 items-center justify-center gap-2 rounded-md border border-amber-300 bg-transparent px-3 py-1.5 text-sm font-medium text-amber-800 transition hover:bg-amber-100 focus-visible:outline-solid focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-blue-500 disabled:cursor-not-allowed disabled:opacity-50 sm:min-h-0 dark:border-amber-700 dark:text-amber-200 dark:hover:bg-amber-900/30"
             disabled={props.activating}
+            aria-busy={props.activating}
             onClick={props.onActivate}
           >
+            <Show when={props.activating}>
+              <RefreshCwIcon class="h-4 w-4 animate-spin" aria-hidden="true" />
+            </Show>
             {getAlertDestinationsDeliveryPausedActionLabel()}
           </button>
         </div>

@@ -1,0 +1,41 @@
+{
+  "version": 1,
+  "base_sha": "a453fe365fcb9454c62afd71af79167aa121c40c",
+  "verified_at": "2026-11-28T15:18:13Z",
+  "result": "passed",
+  "changed_paths": [
+    "frontend-modern/src/features/alerts/AlertDeliveryPausedCard.tsx",
+    "frontend-modern/src/features/alerts/AlertDestinationsLoadErrorCard.tsx",
+    "frontend-modern/src/features/alerts/AlertNoDestinationsCard.tsx"
+  ],
+  "content_sha256": {
+    "frontend-modern/src/features/alerts/AlertDeliveryPausedCard.tsx": "11a1b25e7eae2f394d4fb83cf2771c0a10cef3798a2ecae0ad24b4946a5f5016",
+    "frontend-modern/src/features/alerts/AlertDestinationsLoadErrorCard.tsx": "6393867733e897f7fd3a9f3b506029dd4976e13642cf37756ed1ad3d04b3a6be",
+    "frontend-modern/src/features/alerts/AlertNoDestinationsCard.tsx": "ab26250552a56c208348a871dc7173585575a97c4a233151f5fd12fa0aa6ae2e"
+  },
+  "routes": [
+    "/alerts",
+    "/alerts/notifications"
+  ],
+  "viewports": [
+    {
+      "width": 1440,
+      "height": 940
+    },
+    {
+      "width": 360,
+      "height": 820
+    }
+  ],
+  "states": [
+    "Paired production dist builds of base a453fe365f and patched AlertDeliveryPausedCard, AlertDestinationsLoadErrorCard, and AlertNoDestinationsCard served over loopback HTTP via pulse-worker-browser in desktop Chromium (1440x940 light) and touch phone WebKit (360x820 dark, isMobile=true, hasTouch=true) with 0 console errors, 0 page errors, 0 unexpected HTTP>=400 responses, and 0px horizontal overflow across all 12 captures (all 12 PNGs inspected via native image reading).",
+    "/alerts paused delivery state (AlertDeliveryPausedCard): desktop preserves compact 20px/34px layout; phone touch controls increase from 20px (Set up where alerts go) and 34px (Turn on delivery) to 44px/44px with decorative icon aria-hidden=true.",
+    "/alerts active delivery with zero enabled destinations (AlertNoDestinationsCard): desktop preserves compact 32px/34px layout; phone touch controls increase from 32px (Manage destinations) and 34px (Dismiss) to 44px/44px with decorative icon aria-hidden=true.",
+    "/alerts/notifications destination config load failure (AlertDestinationsLoadErrorCard): card exposes role=alert (previously missing), Retry declares type=button (previously missing), icon top-aligns cleanly with multi-line phone error text with aria-hidden=true, and phone Retry control increases from 34px to 44px."
+  ],
+  "interactions": [
+    "Clicked Turn on delivery in AlertDeliveryPausedCard on /alerts in both desktop Chromium and phone WebKit; verified POST /api/alerts/activate succeeded.",
+    "Clicked Dismiss in AlertNoDestinationsCard on /alerts in both desktop Chromium and phone WebKit; verified banner dismissed cleanly.",
+    "Clicked Retry in AlertDestinationsLoadErrorCard on /alerts/notifications after simulated HTTP 503 on GET /api/notifications/webhooks in both desktop Chromium and phone WebKit; verified fresh GET /api/notifications/webhooks succeeded and the error banner cleared."
+  ]
+}

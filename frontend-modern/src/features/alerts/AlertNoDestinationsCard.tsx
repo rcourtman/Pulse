@@ -22,7 +22,10 @@ export function AlertNoDestinationsCard(props: AlertNoDestinationsCardProps) {
     >
       <div class="flex flex-col gap-3 sm:flex-row sm:items-start sm:justify-between">
         <div class="flex min-w-0 items-start gap-3">
-          <BellIcon class="mt-0.5 h-4 w-4 shrink-0 text-blue-700 dark:text-blue-300" />
+          <BellIcon
+            class="mt-0.5 h-4 w-4 shrink-0 text-blue-700 dark:text-blue-300"
+            aria-hidden="true"
+          />
           <div class="min-w-0">
             <h3 class="text-sm font-semibold text-blue-900 dark:text-blue-100">
               No notification destinations enabled
@@ -36,13 +39,13 @@ export function AlertNoDestinationsCard(props: AlertNoDestinationsCardProps) {
         <div class="flex shrink-0 flex-wrap items-center gap-3">
           <A
             href={props.setupHref}
-            class="inline-flex shrink-0 items-center justify-center rounded-md bg-blue-600 px-3 py-1.5 text-sm font-medium text-white transition hover:bg-blue-700 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-blue-500 focus-visible:ring-offset-2 dark:bg-blue-500 dark:hover:bg-blue-600 dark:focus-visible:ring-offset-surface"
+            class="inline-flex min-h-11 shrink-0 items-center justify-center rounded-md bg-blue-600 px-3 py-1.5 text-sm font-medium text-white transition hover:bg-blue-700 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-blue-500 focus-visible:ring-offset-2 sm:min-h-0 dark:bg-blue-500 dark:hover:bg-blue-600 dark:focus-visible:ring-offset-surface"
           >
             Manage destinations
           </A>
           <button
             type="button"
-            class="inline-flex shrink-0 items-center justify-center rounded-md border border-blue-300 bg-transparent px-3 py-1.5 text-sm font-medium text-blue-800 transition hover:bg-blue-100 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-blue-500 focus-visible:ring-offset-2 dark:border-blue-700 dark:text-blue-200 dark:hover:bg-blue-900/30 dark:focus-visible:ring-offset-surface"
+            class="inline-flex min-h-11 shrink-0 items-center justify-center rounded-md border border-blue-300 bg-transparent px-3 py-1.5 text-sm font-medium text-blue-800 transition hover:bg-blue-100 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-blue-500 focus-visible:ring-offset-2 sm:min-h-0 dark:border-blue-700 dark:text-blue-200 dark:hover:bg-blue-900/30 dark:focus-visible:ring-offset-surface"
             onClick={props.onDismiss}
           >
             Dismiss
