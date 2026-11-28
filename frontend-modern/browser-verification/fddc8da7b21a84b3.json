@@ -1,0 +1,35 @@
+{
+  "version": 1,
+  "base_sha": "322b91e17cf6ba91f72e4c783c048094fdc88fbc",
+  "verified_at": "2026-11-28T11:56:24Z",
+  "result": "passed",
+  "changed_paths": [
+    "frontend-modern/src/features/alerts/AlertDeliveryLogCard.tsx"
+  ],
+  "content_sha256": {
+    "frontend-modern/src/features/alerts/AlertDeliveryLogCard.tsx": "e518312a266ce4dcfe57ba23fb9a5b00f285a865ab1ae0111eb4a5fe606bf393"
+  },
+  "routes": [
+    "/alerts/notifications"
+  ],
+  "viewports": [
+    {
+      "width": 1440,
+      "height": 940
+    },
+    {
+      "width": 360,
+      "height": 820
+    }
+  ],
+  "states": [
+    "Paired production Vite builds of untouched main (939b7976ad) and patched HEAD served locally via pulse-worker-browser over identical synthetic notification health, delivery-log, and held-event payloads in desktop Chromium (1440x940 light theme, en-GB, UTC) and touch phone WebKit (360x820 dark theme, en-GB, UTC).",
+    "/alerts/notifications Recent delivery activity unfiltered view: renders inline outcome filter chips with counts (All (8), Failures (2), Retrying (1), Held (2), Delivered (3)), canonical SearchField (0 native type=search inputs, 40px desktop height, 44px phone height, unclipped placeholder), visible held/deferred explanation paragraphs, visible attempt counts (4 attempts, 3 attempts, 2 attempts), and semantic theme tokens.",
+    "/alerts/notifications Recent delivery activity filtered view: clicking Failures (2) sets aria-pressed=true and isolates both failure rows (Ops Discord dead_letter and Email failed); searching 'quiet hours' narrows to pve2-db (memory) and reveals the canonical Clear search button (24x24 desktop, 44x44 phone) which restores all 8 rows; searching 'flapping' and pressing Escape restores all 8 rows; non-matching search shows 'No matching delivery activity.' with a working 'Clear filters' reset.",
+    "Zero console errors, zero page errors, zero HTTP >= 400 responses, and 0px horizontal overflow across all captured desktop and phone states; all 6 paired before/after worker-owned PNG captures were visually inspected."
+  ],
+  "interactions": [
+    "Loaded /alerts/notifications on desktop Chromium (1440x940 light) and touch phone WebKit (360x820 dark), confirmed all 8 interleaved rows, canonical SearchField chrome with zero native type=search inputs, visible held explanation copy, and attempt counts.",
+    "Clicked Failures (2) chip and verified aria-pressed=true and 2 filtered rows, returned to All (8), searched 'quiet hours' and clicked SearchField's Clear search button, searched 'flapping' and pressed Escape, searched 'no-such-destination' and clicked Clear filters to restore all 8 rows."
+  ]
+}

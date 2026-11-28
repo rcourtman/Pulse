@@ -721,6 +721,13 @@ describe('AlertDeliveryLogCard', () => {
     expect(screen.getAllByRole('listitem')).toHaveLength(1);
     expect(screen.getByText('nas-main (disk)')).toBeInTheDocument();
 
+    fireEvent.click(screen.getByRole('button', { name: 'Clear search' }));
+    expect(search).toHaveValue('');
+    expect(screen.getAllByRole('listitem')).toHaveLength(3);
+
+    fireEvent.input(search, { target: { value: '4 state changes' } });
+    expect(screen.getAllByRole('listitem')).toHaveLength(1);
+
     fireEvent.keyDown(search, { key: 'Escape' });
     expect(search).toHaveValue('');
     expect(screen.getAllByRole('listitem')).toHaveLength(3);

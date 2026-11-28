@@ -7,6 +7,7 @@ import type {
   Webhook,
 } from '@/api/notifications';
 import { Card } from '@/components/shared/Card';
+import { SearchField } from '@/components/shared/SearchField';
 import type { AlertEvent } from '@/types/api';
 import {
   getAlertDeliveryLogFailureClassLabel,
@@ -359,20 +360,13 @@ export function AlertDeliveryLogCard(props: AlertDeliveryLogCardProps) {
                 </div>
               </Show>
               <Show when={showSearch()}>
-                <div class="w-full sm:ml-auto sm:w-64">
-                  <input
-                    type="search"
+                <div class="w-full sm:ml-auto sm:w-72">
+                  <SearchField
                     value={searchQuery()}
-                    onInput={(event) => setSearchQuery(event.currentTarget.value)}
-                    onKeyDown={(event) => {
-                      if (event.key === 'Escape' && searchQuery()) {
-                        event.preventDefault();
-                        setSearchQuery('');
-                      }
-                    }}
+                    onChange={setSearchQuery}
                     placeholder="Filter destination, alert, or error"
-                    aria-label="Filter delivery activity"
-                    class="w-full rounded-md border border-border bg-surface px-2.5 py-1.5 text-xs text-base-content placeholder:text-muted focus-visible:outline-solid focus-visible:outline-2 focus-visible:outline-blue-500"
+                    title="Filter delivery activity"
+                    role="searchbox"
                   />
                 </div>
               </Show>
