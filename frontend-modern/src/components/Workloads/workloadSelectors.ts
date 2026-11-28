@@ -70,6 +70,18 @@ const classifyWorkloadStatus = (status: string): WorkloadStatusBucket => {
 const resolveWorkloadStatusBucket = (guest: WorkloadGuest): WorkloadStatusBucket => {
   const resourceStatus = (guest.resourceStatus || '').trim().toLowerCase();
 
+  // Stale primary telemetry leaves both running and stopped power states
+  // unverified, so route them to Attention unless the resource itself is
+  // explicitly offline or failed.
+  if (
+    guest.telemetryStale &&
+    resourceStatus !== 'offline' &&
+    resourceStatus !== 'error' &&
+    resourceStatus !== 'failed'
+  ) {
+    return 'degraded';
+  }
+
   // Unified-resource health owns warning/offline posture, while a healthy
   // resource still defers to the provider-authored runtime power state.
   if (resourceStatus && !RUNNING_HEALTH_STATUSES.has(resourceStatus)) {
@@ -122,6 +134,9 @@ export const getWorkloadSearchCandidates = (
   guest.dockerHostId,
   guest.dockerHostName,
   guest.kubernetesAgentId,
+  guest.telemetryStale?.label,
+  guest.telemetryStale?.detail,
+  guest.telemetryStale?.error,
 ];
 
 const matchesWorkloadTextSearch = (guest: WorkloadGuest, term: string): boolean => {

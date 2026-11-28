@@ -134,6 +134,15 @@ describe('getNodeStatusIndicator', () => {
     const result = getNodeStatusIndicator({ status: 'degraded', uptime: 1000 });
     expect(result.variant).toBe('warning');
   });
+
+  it('returns warning for stale node connection health', () => {
+    const result = getNodeStatusIndicator({
+      status: 'online',
+      uptime: 1000,
+      connectionHealth: 'stale',
+    });
+    expect(result).toEqual({ variant: 'warning', label: 'Stale' });
+  });
 });
 
 describe('getGuestPowerIndicator', () => {
@@ -242,6 +251,36 @@ describe('getGuestHealthIndicator', () => {
       true,
     );
     expect(result.variant).toBe('warning');
+  });
+
+  it('degrades a running guest with stale telemetry and preserves severe states with stale context', () => {
+    const stale = {
+      label: 'Stale data',
+      detail: 'Proxmox has not updated this recently (last report 18m ago).',
+    };
+    expect(getGuestHealthIndicator({ status: 'running', telemetryStale: stale }, true)).toEqual({
+      variant: 'warning',
+      label: stale.detail,
+    });
+    expect(getGuestHealthIndicator({ status: 'stopped', telemetryStale: stale }, true)).toEqual({
+      variant: 'danger',
+      label: `Stopped · ${stale.detail}`,
+    });
+    expect(
+      getGuestHealthIndicator(
+        { status: 'running', availability: failedAttachedProbe, telemetryStale: stale },
+        true,
+      ),
+    ).toEqual({
+      variant: 'warning',
+      label: 'Running, not responding to probe · Stale data',
+    });
+    expect(
+      getGuestHealthIndicator({ status: 'running', resourceStatus: 'degraded' }, true),
+    ).toEqual({
+      variant: 'warning',
+      label: 'Degraded',
+    });
   });
 });
 

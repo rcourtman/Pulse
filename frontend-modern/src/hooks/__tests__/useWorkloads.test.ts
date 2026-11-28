@@ -1984,6 +1984,121 @@ describe('useWorkloads', () => {
     expect(useWorkloadsSource).not.toContain("const DEFAULT_ORG_SCOPE = 'default'");
     expect(useWorkloadsSource).not.toContain('const normalizeOrgScope =');
   });
+
+  it.each(['api', 'snapshot'] as const)(
+    'maps provider telemetry staleness and preserves hybrid agent isolation through %s refreshes',
+    async (transport) => {
+      const [snapshot, setSnapshot] = createSignal<Resource[]>([]);
+      let dispose = () => {};
+      let result!: ReturnType<UseWorkloadsModule['useWorkloads']>;
+      createRoot((d) => {
+        dispose = d;
+        result = useWorkloads(
+          () => true,
+          transport === 'snapshot' ? { resourceSnapshot: snapshot } : {},
+        );
+      });
+
+      const applyResources = async (items: Array<Record<string, unknown>>) => {
+        if (transport === 'api') {
+          apiFetchJSONMock.mockResolvedValue({ data: items, meta: { totalPages: 1 } });
+          await result.refetch();
+        } else {
+          setSnapshot(
+            items.map((item) => ({
+              ...item,
+              lastSeen:
+                typeof item.lastSeen === 'string' ? Date.parse(item.lastSeen) : item.lastSeen,
+            })) as unknown as Resource[],
+          );
+        }
+        await flushAsync();
+      };
+
+      try {
+        await flushAsync();
+        await applyResources([
+          {
+            ...sampleResource,
+            id: 'pve-stale-101',
+            name: 'db-primary',
+            health: { verdict: 'stale', reasons: [{ code: 'telemetry_stale', detail: '18m' }] },
+            sourceStatus: {
+              proxmox: { status: 'stale', error: 'dial tcp 10.0.0.10:8006: i/o timeout' },
+            },
+          },
+          {
+            ...sampleResource,
+            id: 'pve-hybrid-201',
+            name: 'web-hybrid',
+            sources: ['proxmox', 'agent'],
+            health: { verdict: 'stale', reasons: [{ code: 'telemetry_stale', detail: '14m' }] },
+            sourceStatus: {
+              proxmox: { status: 'ok' },
+              agent: { status: 'stale' },
+            },
+            agent: { agentId: 'ag-201', stale: true },
+          },
+          {
+            id: 'vsphere-vm-stale',
+            type: 'vm',
+            name: 'app-db-01',
+            status: 'running',
+            lastSeen: '2026-02-06T11:38:00Z',
+            sources: ['vmware-vsphere'],
+            platformScopes: ['vmware-vsphere'],
+            health: { verdict: 'stale', reasons: [{ code: 'telemetry_stale', detail: '22m' }] },
+            sourceStatus: {
+              vmware: { status: 'stale', error: 'vCenter session expired' },
+            },
+            vmware: { managedObjectId: 'vm-206', connectionName: 'vc-main' },
+          },
+          {
+            ...sampleResource,
+            id: 'pve-health-only-stale',
+            name: 'health-only',
+            health: { verdict: 'stale', reasons: [{ code: 'telemetry_stale', detail: '9m' }] },
+          },
+        ]);
+
+        const byId = new Map(result.workloads().map((guest) => [guest.id, guest]));
+        expect(byId.get('pve-stale-101')?.telemetryStale).toEqual({
+          label: 'Stale data',
+          age: '18m',
+          error: 'dial tcp 10.0.0.10:8006: i/o timeout',
+          detail:
+            'Proxmox has not updated this recently: dial tcp 10.0.0.10:8006: i/o timeout (last report 18m ago). Showing the last values received.',
+        });
+        expect(byId.get('pve-hybrid-201')?.telemetryStale).toBeUndefined();
+        expect(byId.get('pve-hybrid-201')?.agentStale).toBe(true);
+        expect(byId.get('vsphere-vm-stale')?.telemetryStale).toEqual({
+          label: 'Stale data',
+          age: '22m',
+          error: 'vCenter session expired',
+          detail:
+            'vCenter has not updated this recently: vCenter session expired (last report 22m ago). Showing the last values received.',
+        });
+        expect(byId.get('pve-health-only-stale')?.telemetryStale).toEqual({
+          label: 'Stale data',
+          age: '9m',
+          detail: 'No Proxmox report for 9m. Showing the last values received.',
+        });
+
+        await applyResources([
+          {
+            ...sampleResource,
+            id: 'pve-stale-101',
+            name: 'db-primary',
+            health: { verdict: 'ok', reasons: [] },
+            sourceStatus: { proxmox: { status: 'ok' } },
+          },
+        ]);
+        expect(result.workloads()[0]?.telemetryStale).toBeUndefined();
+      } finally {
+        dispose();
+      }
+    },
+  );
 });
 
 describe('resource-owned workload identity', () => {

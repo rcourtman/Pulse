@@ -3863,4 +3863,53 @@ describe('backup disclosures keep completion separate from guest safety', () => 
       expect(dialog).toHaveTextContent(GUEST_DRAWER_BACKUP_PRECAUTION);
     },
   );
+
+  it('surfaces inline stale telemetry cue across desktop and phone and clears reactively on recovery', () => {
+    const stale = {
+      label: 'Stale data',
+      age: '18m',
+      error: 'dial tcp 10.0.0.10:8006: i/o timeout',
+      detail:
+        'Proxmox has not updated this recently: dial tcp 10.0.0.10:8006: i/o timeout (last report 18m ago). Showing the last values received.',
+    };
+    const [guestSignal, setGuestSignal] = createSignal(
+      makeGuest({ name: 'db-primary', status: 'running', telemetryStale: stale }),
+    );
+    const { container } = render(() => (
+      <table>
+        <tbody>
+          <GuestRow guest={guestSignal()} visibleColumnIds={['name', 'cpu', 'memory', 'disk']} />
+        </tbody>
+      </table>
+    ));
+
+    const cue = container.querySelector('[data-workload-stale-cue]');
+    expect(cue).not.toBeNull();
+    expect(cue).toHaveTextContent('Stale · 18m');
+    expect(cue).toHaveAttribute('title', stale.detail);
+    const dot = screen.getByTestId('status-dot');
+    expect(dot).toHaveAttribute('data-variant', 'warning');
+    expect(dot).toHaveAttribute('title', stale.detail);
+
+    setGuestSignal(makeGuest({ name: 'db-primary', status: 'running' }));
+    expect(container.querySelector('[data-workload-stale-cue]')).toBeNull();
+    expect(screen.getByTestId('status-dot')).toHaveAttribute('data-variant', 'success');
+  });
+
+  it('preserves stopped danger indicator alongside the stale cue on phone layout', () => {
+    const stale = {
+      label: 'Stale data',
+      detail: 'Proxmox has not updated this recently. Showing the last values received.',
+    };
+    const { container } = renderGuestRow({
+      guest: makeGuest({ name: 'cache-standby', status: 'stopped', telemetryStale: stale }),
+      visibleColumnIds: ['name', 'cpu', 'memory', 'disk'],
+      workloadTableLayoutMode: 'phone',
+    });
+
+    const cue = container.querySelector('[data-workload-stale-cue]');
+    expect(cue).not.toBeNull();
+    expect(cue).toHaveTextContent('Stale data');
+    expect(screen.getByTestId('status-dot')).toHaveAttribute('data-variant', 'danger');
+  });
 });
