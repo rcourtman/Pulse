@@ -1,0 +1,38 @@
+{
+  "version": 1,
+  "base_sha": "ccd24be3ecd4273d316a69ea430398aa58cde533",
+  "verified_at": "2026-11-28T14:38:37Z",
+  "result": "passed",
+  "changed_paths": [
+    "frontend-modern/src/features/alerts/AlertDeliveryHealthCard.tsx",
+    "frontend-modern/src/utils/alertDestinationsPresentation.ts"
+  ],
+  "content_sha256": {
+    "frontend-modern/src/features/alerts/AlertDeliveryHealthCard.tsx": "86448ec4f6fa2e75109bf0e6ea44e671fa7b4de6cb43262c9558325054aa4bd9",
+    "frontend-modern/src/utils/alertDestinationsPresentation.ts": "f94c53cc7a1c36f360dad10e9f7654034481743ec7290d417c5afdd086678827"
+  },
+  "routes": [
+    "/alerts/notifications",
+    "/alerts"
+  ],
+  "viewports": [
+    {
+      "width": 1440,
+      "height": 940
+    },
+    {
+      "width": 360,
+      "height": 820
+    }
+  ],
+  "states": [
+    "paired before/after production builds of base ccd24be3ec and patched source on /alerts/notifications (full detailLevel) and /alerts (summary detailLevel) with degraded notification queue health (1 failed, 2 dead-lettered, 2 pending, 1 sending, 12 sent; failureClasses7d authentication=2, connectivity=1, tls=1)",
+    "desktop Chromium 1440x940 light theme: 0 console errors, 0 page errors, 0 HTTP >= 400 errors, 0px horizontal overflow on both routes; all 5 queue pills (Failed 1, Retries stopped 2, Queued 2, Sending 1, Delivered 12) and all 3 failure causes with per-class guidance render cleanly",
+    "touch phone WebKit 360x820 dark theme (isMobile=true, hasTouch=true): 0 console errors, 0 page errors, 0 HTTP >= 400 errors, 0px horizontal overflow on both routes; all action controls measure 44px touch height and queue counts plus failure causes render legibly above the fold"
+  ],
+  "interactions": [
+    "clicked Refresh delivery status on /alerts/notifications and confirmed a fresh GET /api/notifications/health request succeeded in both desktop Chromium and phone WebKit",
+    "verified /alerts overview warning banner exposes Review delivery activity link, Retry retained deliveries and Dismiss retained failures buttons (2 buttons total), 5 queue count pills, and all 3 failure causes in desktop Chromium and phone WebKit",
+    "visually inspected all 8 paired before/after PNG screenshots via native image reading"
+  ]
+}
