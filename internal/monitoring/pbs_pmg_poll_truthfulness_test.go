@@ -1,6 +1,7 @@
 package monitoring
 
 import (
+	"bytes"
 	"context"
 	"encoding/json"
 	"net/http"
@@ -15,7 +16,89 @@ import (
 	"github.com/rcourtman/pulse-go-rewrite/internal/models"
 	"github.com/rcourtman/pulse-go-rewrite/pkg/pbs"
 	"github.com/rcourtman/pulse-go-rewrite/pkg/pmg"
+	"github.com/rs/zerolog"
+	"github.com/rs/zerolog/log"
 )
+
+type blockedPBSConfigLog struct {
+	enter   func()
+	release <-chan struct{}
+}
+
+func (w blockedPBSConfigLog) Write(p []byte) (int, error) {
+	if bytes.Contains(p, []byte("Found PBS instance config")) &&
+		bytes.Contains(p, []byte(`"instance":"pbs-held"`)) {
+		w.enter()
+		<-w.release
+	}
+	return len(p), nil
+}
+
+func TestPollPBSConfigLoggingDoesNotBlockConfigEditOrPeerPoll(t *testing.T) {
+	held, peer := newPBSHealthTestServer(t), newPBSHealthTestServer(t)
+	m := newPBSHealthAuthorityMonitor([]config.PBSInstance{
+		{Name: "pbs-held", Host: held.server.URL, MonitorDatastores: true, ExcludeDatastores: []string{"backups"}},
+		{Name: "pbs-peer", Host: peer.server.URL, MonitorDatastores: true},
+	})
+	heldClient := newPBSHealthTestClient(t, held.server.URL)
+	peerClient := newPBSHealthTestClient(t, peer.server.URL)
+
+	// The package logger is shared; don't run this test in parallel.
+	original, originalLevel := log.Logger, zerolog.GlobalLevel()
+	entered, release, done := make(chan struct{}), make(chan struct{}), make(chan struct{})
+	unblock := sync.OnceFunc(func() { close(release) })
+	log.Logger = zerolog.New(blockedPBSConfigLog{sync.OnceFunc(func() { close(entered) }), release}).Level(zerolog.DebugLevel)
+	zerolog.SetGlobalLevel(zerolog.DebugLevel)
+	defer func() {
+		unblock()
+		<-done
+		log.Logger = original
+		zerolog.SetGlobalLevel(originalLevel)
+	}()
+	go func() {
+		defer close(done)
+		m.pollPBSInstance(t.Context(), "pbs-held", heldClient)
+	}()
+	select {
+	case <-entered:
+	case <-done:
+		t.Fatal("poll returned before its config diagnostic")
+	case <-time.After(5 * time.Second):
+		t.Fatal("poll did not reach its config diagnostic")
+	}
+
+	// There is no other config user in this fixture. TryLock makes a failure
+	// deterministic and lets teardown release the diagnostic before joining.
+	if !config.Mu.TryLock() {
+		t.Fatal("blocked PBS config diagnostic held the shared config lock against writers")
+	}
+	// Change the existing backing array to verify the admitted poll owns its
+	// copied exclusions, rather than reusing a slice from the live config.
+	m.config.PBSInstances[0].ExcludeDatastores[0] = "other"
+	config.Mu.Unlock()
+
+	m.pollPBSInstance(t.Context(), "pbs-peer", peerClient)
+	state := m.state.GetSnapshot()
+	observed := pbsInstanceByName(t, state, "pbs-peer")
+	if len(state.PBSInstances) != 1 || observed.Status != "online" ||
+		len(observed.Datastores) != 1 || observed.Datastores[0].Name != "backups" {
+		t.Fatalf("while first diagnostic was blocked, want only the peer online with backups: %+v", state.PBSInstances)
+	}
+	t.Log("while diagnostic was blocked: config edit completed and independent PBS poll published online with backups")
+
+	unblock()
+	<-done
+	observed = pbsInstanceByName(t, m.state.GetSnapshot(), "pbs-held")
+	if observed.Status != "online" || len(observed.Datastores) != 0 {
+		t.Fatalf("released poll did not retain the original exclusion: %+v", observed)
+	}
+	m.pollPBSInstance(t.Context(), "pbs-held", heldClient)
+	observed = pbsInstanceByName(t, m.state.GetSnapshot(), "pbs-held")
+	if observed.Status != "online" || len(observed.Datastores) != 1 || observed.Datastores[0].Name != "backups" {
+		t.Fatalf("next poll did not use the edited exclusion: %+v", observed)
+	}
+	t.Log("after release: admitted poll preserved its original exclusion; next poll picked up the edit")
+}
 
 func TestPollPBSInstancePausedDoesNotFabricateSuccess(t *testing.T) {
 	var hits atomic.Int32
