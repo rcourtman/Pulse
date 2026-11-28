@@ -504,7 +504,7 @@ export function renderMapSceneBody(
         const index = inspectIndex;
         inspectIndex += 1;
         const label = escapeXml(node.label);
-        return `<rect x="${n(node.x)}" y="${n(node.y)}" width="${n(node.w)}" height="${n(node.h)}" rx="${n(node.r)}" pointer-events="all" class="${INSPECT_CLASS}" ${MAP_INSPECT_ATTRIBUTE}="${index}" role="button" aria-label="${label}"><title>${label}</title></rect>`;
+        return `<rect x="${n(node.x)}" y="${n(node.y)}" width="${n(node.w)}" height="${n(node.h)}" rx="${n(node.r)}" pointer-events="all" class="${INSPECT_CLASS}" ${MAP_INSPECT_ATTRIBUTE}="${index}" role="button" aria-label="${label}"/>`;
       }
       if (node.kind !== 'hit') return nodeToSvg(node, palette, true);
       const index = hitIndex;
