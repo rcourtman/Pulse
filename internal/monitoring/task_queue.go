@@ -87,6 +87,14 @@ type TaskQueue struct {
 	queuedByType map[string]int // heap membership only; claimed entries do not count
 	earlierHead  chan struct{}  // lazily shared by workers waiting for new eligibility
 
+	// Upper bounds since the queue last held one entry. Removed and retimed
+	// entries can leave them too high, which only forces the normal walk.
+	// Track wall time for all entries and monotonic time where available.
+	// Mixed time.Time comparisons cannot order monotonic deadlines across
+	// a wall-clock step, so the fast path must satisfy both bounds.
+	latestMonotonicDeadline time.Time
+	latestWallDeadline      time.Time
+
 	// Serialize availability settings refreshes from catalog read through
 	// reconciliation. Planners and workers never need the refresh mutex.
 	availabilityRefreshMu        sync.Mutex
@@ -159,6 +167,7 @@ func (q *TaskQueue) upsertLocked(task ScheduledTask, fromPlanner bool) {
 		previous, hadHead := q.headTimeLocked()
 		entry.task = task
 		entry.keepSchedule = !fromPlanner
+		q.noteQueuedDeadlineLocked(task.NextRun)
 		heap.Fix(&q.heap, entry.index)
 		q.wakeEarlierHeadLocked(previous, hadHead)
 		return
@@ -268,7 +277,22 @@ func (q *TaskQueue) removeLocked(key taskQueueKey, entry *scheduledTaskEntry) {
 
 func (q *TaskQueue) pushLocked(entry *scheduledTaskEntry) {
 	heap.Push(&q.heap, entry)
+	q.noteQueuedDeadlineLocked(entry.task.NextRun)
 	q.queuedByType[string(entry.task.InstanceType)]++
+}
+
+func (q *TaskQueue) noteQueuedDeadlineLocked(deadline time.Time) {
+	if len(q.heap) == 1 {
+		q.latestMonotonicDeadline = time.Time{}
+		q.latestWallDeadline = time.Time{}
+	}
+	wall := deadline.Round(0)
+	if wall.After(q.latestWallDeadline) {
+		q.latestWallDeadline = wall
+	}
+	if deadline != wall && deadline.After(q.latestMonotonicDeadline) {
+		q.latestMonotonicDeadline = deadline
+	}
 }
 
 func (q *TaskQueue) uncountLocked(kind InstanceType) {
@@ -413,9 +437,14 @@ func (q *TaskQueue) snapshotWithTypeCounts(dst []queuedTypeCount) (QueueSnapshot
 
 func (q *TaskQueue) snapshotTimingLocked() QueueSnapshot {
 	now := time.Now()
-	snapshot := QueueSnapshot{
-		Depth:            len(q.heap),
-		DueWithinSeconds: q.heap.countDue(0, now.Add(12*time.Second)),
+	cutoff := now.Add(12 * time.Second)
+	snapshot := QueueSnapshot{Depth: len(q.heap)}
+	if !q.latestWallDeadline.After(cutoff) && !q.latestMonotonicDeadline.After(cutoff) {
+		// Don't keep workers behind a full heap walk when every queued
+		// poll is already inside the 12-second readiness window.
+		snapshot.DueWithinSeconds = snapshot.Depth
+	} else {
+		snapshot.DueWithinSeconds = q.heap.countDue(0, cutoff)
 	}
 	if oldest := q.heap.oldestTimestamped(0); !oldest.IsZero() {
 		snapshot.OldestOverdueSeconds = max(0, now.Sub(oldest)).Seconds()

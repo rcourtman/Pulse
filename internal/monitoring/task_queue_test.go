@@ -8,6 +8,69 @@ import (
 	"time"
 )
 
+func TestTaskQueueReadinessAcrossDeadlineChanges(t *testing.T) {
+	synctest.Test(t, func(t *testing.T) {
+		q := NewTaskQueue()
+		now := time.Now()
+		task := func(name string, next time.Time) ScheduledTask {
+			return ScheduledTask{InstanceType: InstanceTypePVE, InstanceName: name, NextRun: next}
+		}
+		check := func(phase string, depth, ready int, overdue time.Duration) {
+			t.Helper()
+			public := q.Snapshot()
+			metrics, counts := q.snapshotWithTypeCounts(nil)
+			for _, sample := range []QueueSnapshot{public, metrics} {
+				if sample.Depth != depth || sample.DueWithinSeconds != ready || sample.OldestOverdueSeconds != overdue.Seconds() {
+					t.Errorf("%s: got depth=%d ready=%d overdue=%v, want %d/%d/%v",
+						phase, sample.Depth, sample.DueWithinSeconds, sample.OldestOverdueSeconds,
+						depth, ready, overdue.Seconds())
+				}
+			}
+			if public.PerType["pve"] != depth || ((depth == 0 && len(counts) != 0) ||
+				(depth > 0 && (len(counts) != 1 || counts[0] != (queuedTypeCount{kind: "pve", count: depth})))) {
+				t.Errorf("%s: incorrect type counts: %v, %v", phase, public.PerType, counts)
+			}
+		}
+
+		q.Upsert(task("untimestamped", time.Time{}))
+		q.Upsert(task("retimed", now.Add(-time.Second)))
+		q.Upsert(task("boundary", now.Add(12*time.Second)))
+		check("all ready including exact cutoff and zero timestamp", 3, 3, time.Second)
+
+		q.Upsert(task("retimed", now.Add(12*time.Second+time.Nanosecond)))
+		check("queued deadline moves outside cutoff", 3, 2, 0)
+		q.Remove(InstanceTypePVE, "retimed")
+		check("removing latest still counts remaining work", 2, 2, 0)
+
+		claimed, ok := q.WaitNext(t.Context())
+		if !ok || claimed.InstanceName != "untimestamped" {
+			t.Fatalf("unexpected claim: %+v, ok=%v", claimed, ok)
+		}
+		q.Upsert(task(claimed.InstanceName, now.Add(time.Minute).Round(0)))
+		check("pending explicit successor is not queued", 1, 1, 0)
+		q.completeClaim(claimed, claimed, pollOnCadence)
+		check("explicit successor outside cutoff", 2, 1, 0)
+
+		time.Sleep(12 * time.Second)
+		claimed, ok = q.WaitNext(t.Context())
+		if !ok || claimed.InstanceName != "boundary" {
+			t.Fatalf("unexpected claim: %+v, ok=%v", claimed, ok)
+		}
+		next := claimed
+		next.NextRun = time.Now().Add(12*time.Second + time.Nanosecond)
+		q.completeClaim(claimed, next, pollAfterBackoff)
+		check("worker retry outside cutoff", 2, 0, 0)
+		time.Sleep(time.Nanosecond)
+		check("retry enters cutoff without queue mutation", 2, 1, 0)
+
+		q.Remove(InstanceTypePVE, "untimestamped")
+		q.Remove(InstanceTypePVE, "boundary")
+		check("empty", 0, 0, 0)
+		q.Upsert(task("new", time.Now().Add(-time.Second)))
+		check("refilled", 1, 1, time.Second)
+	})
+}
+
 func TestTaskQueue_Snapshot(t *testing.T) {
 	tests := []struct {
 		name                 string
