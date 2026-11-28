@@ -277,7 +277,13 @@ taken by a worker or an unfinished poll planning pass blocked before tasks reach
 the queue. If you have Prometheus, check the separate
 [claimed-poll stages and poll planning age](../monitoring/PROMETHEUS_METRICS.md#-scheduler-health)
 (`pulse_scheduler_claimed_poll_overdue_seconds` and
-`pulse_scheduler_poll_planning_age_seconds`).
+`pulse_scheduler_poll_planning_age_seconds`). A worker that releases its queue
+claim during panic recovery logging stays visible under `stage="running"` until
+logging finishes. When a monitor is retired during poll planning, Pulse abandons
+the returned plan once cancellation is observed instead of queuing tasks or
+running post-plan statistics and alert reconciliation, while keeping any
+still-running roster read visible in `pulse_scheduler_poll_planning_age_seconds`
+until it returns.
 
 If no result advanced, read `retry.after` beside the later snapshot's
 `updatedAt`. For an `open` or `half_open` breaker, `retryAt` is the earliest
