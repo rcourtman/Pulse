@@ -13,8 +13,10 @@ import (
 // A body interrupted after the response headers must not erase the server's
 // rejection. These fixtures use only the HTTP transport, without queue workers.
 func TestWebhookTruncatedResponseClassification(t *testing.T) {
+	t.Parallel()
 	for _, code := range []int{200, 401, 403, 421, 422, 423, 425, 429, 503} {
 		t.Run(fmt.Sprint(code), func(t *testing.T) {
+			t.Parallel()
 			server := newIPv4HTTPServer(t, http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 				w.Header().Set("Content-Length", "100")
 				w.Header().Set("Retry-After", "0")
@@ -51,8 +53,10 @@ func TestWebhookTruncatedResponseClassification(t *testing.T) {
 }
 
 func TestWebhookRetryTruncatedResponse(t *testing.T) {
+	t.Parallel()
 	for _, code := range []int{403, 421, 423, 425, 503} {
 		t.Run(fmt.Sprint(code), func(t *testing.T) {
+			t.Parallel()
 			var attempts atomic.Int32
 			server := newIPv4HTTPServer(t, http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 				if r.Header.Get("X-Pulse-Event-ID") != "synthetic:alert" {

@@ -70,6 +70,7 @@ func awaitTelegramSizeQueue(t *testing.T, q *NotificationQueue, sent, dead, held
 // The receiver enforces just the built-in provider's documented text budget
 // after entity parsing; it is not a model of Telegram's network or service.
 func TestTelegramOversizedGroupDeliversEveryMember(t *testing.T) {
+	t.Parallel()
 	url, received := telegramSizeReceiver(t, "")
 	m, _ := telegramSizeManager(t, t.TempDir(), url)
 	batch := telegramReportedAlerts()
@@ -110,6 +111,7 @@ func mustTelegramDLQ(t *testing.T, q *NotificationQueue) []*QueuedNotification {
 }
 
 func TestTelegramOversizedSingletonFitsBeforeEscaping(t *testing.T) {
+	t.Parallel()
 	url, received := telegramSizeReceiver(t, "")
 	m, hook := telegramSizeManager(t, t.TempDir(), url)
 	alert := telegramReportedAlerts()[0]
@@ -139,6 +141,7 @@ func TestTelegramOversizedSingletonFitsBeforeEscaping(t *testing.T) {
 }
 
 func TestTelegramPartsKeepRateHoldAndProviderRejectionIndependent(t *testing.T) {
+	t.Parallel()
 	url, received := telegramSizeReceiver(t, "reject-this-part")
 	dir := t.TempDir()
 	m, hook := telegramSizeManager(t, dir, url)
@@ -218,6 +221,7 @@ func TestTelegramPartsKeepRateHoldAndProviderRejectionIndependent(t *testing.T) 
 }
 
 func TestTelegramSizedRecoveriesKeepTheirWindowAndReceipts(t *testing.T) {
+	t.Parallel()
 	url, received := telegramSizeReceiver(t, "")
 	m, hook := telegramSizeManager(t, t.TempDir(), url)
 	m.SetNotifyOnResolve(true)

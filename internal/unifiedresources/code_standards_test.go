@@ -116,6 +116,7 @@ func TestProviderNeutralVirtualMachineJSONContract(t *testing.T) {
 }
 
 func TestActionTruthTypesStayUnifiedResourceOwned(t *testing.T) {
+	t.Parallel()
 	repoRoot := filepath.Join("..", "..")
 	roots := []string{"internal/api", "internal/ai", "internal/agentexec", "internal/hostagent", "internal/dockeragent", "internal/relay", "internal/workflow", "internal/workflows"}
 	forbidden := []*regexp.Regexp{
@@ -145,6 +146,7 @@ func TestActionTruthTypesStayUnifiedResourceOwned(t *testing.T) {
 }
 
 func TestOperationReceiptProtocolRemainsInternalToIngestAndRuntime(t *testing.T) {
+	t.Parallel()
 	repoRoot := filepath.Join("..", "..")
 	for _, path := range []string{
 		"internal/models/models_frontend.go",
@@ -248,6 +250,7 @@ func TestProductionActionLifecycleDoesNotUseRecordActionAuditAsUpsert(t *testing
 }
 
 func TestActionPolicyDecisionProvenanceHasOneOwnerAndNoPublicAuthorityField(t *testing.T) {
+	t.Parallel()
 	declaration := regexp.MustCompile(`(?m)^type\s+ActionPolicyDecisionProvenance\b`)
 	found := []string{}
 	for _, root := range []string{"..", "../../pkg"} {
@@ -286,6 +289,7 @@ func TestActionPolicyDecisionProvenanceHasOneOwnerAndNoPublicAuthorityField(t *t
 }
 
 func TestCanonicalActionPlanConstructionCannotBypassPolicyProvenancePlanner(t *testing.T) {
+	t.Parallel()
 	allowed := map[string]bool{
 		"../actionplanner/planner.go": true,
 		// Boundary-only compatibility conversions and retired command-shaped
@@ -1395,6 +1399,7 @@ func TestHostAPTTelemetryTruthStaysUnifiedResourceOwned(t *testing.T) {
 // TestNoLegacyMigrationHintsInRuntimeCode prevents reintroducing runtime
 // messages that point removed aliases at the wrong token guidance.
 func TestNoLegacyMigrationHintsInRuntimeCode(t *testing.T) {
+	t.Parallel()
 	bannedPhrases := []string{
 		`no longer supported; use "agent"`,
 		`no longer supported; use "agent:*"`,

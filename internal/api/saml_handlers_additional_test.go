@@ -94,6 +94,8 @@ func TestHandleSAMLLogout_Fallback(t *testing.T) {
 }
 
 func TestEstablishSAMLSession(t *testing.T) {
+	useSAMLTestAuthStores(t)
+
 	router := &Router{}
 	req := httptest.NewRequest(http.MethodGet, "/", nil)
 	rec := httptest.NewRecorder()

@@ -339,6 +339,7 @@ func TestSendWebhookWithRetry_RateLimitExhaustion(t *testing.T) {
 // A 503 may advertise a recovery delay longer than our initial backoff.
 // Observe request spacing, not merely eventual success, to detect ignored hints.
 func TestSendWebhookWithRetry_ServiceUnavailableRetryAfter(t *testing.T) {
+	t.Parallel()
 	for _, tc := range []struct {
 		name    string
 		header  string
@@ -348,6 +349,7 @@ func TestSendWebhookWithRetry_ServiceUnavailableRetryAfter(t *testing.T) {
 		{"invalid", "not-a-number", WebhookInitialBackoff},
 	} {
 		t.Run(tc.name, func(t *testing.T) {
+			t.Parallel()
 			nm := NewNotificationManager("http://pulse.local")
 			t.Cleanup(nm.Stop)
 			require.NoError(t, nm.UpdateAllowedPrivateCIDRs("127.0.0.1"))
@@ -446,6 +448,7 @@ func TestSendWebhookWithRetry_InvalidRetryAfterFallsBackToExponentialBackoff(t *
 }
 
 func TestSendWebhookWithRetry_RetriesRequestTimeoutResponses(t *testing.T) {
+	t.Parallel()
 	nm := NewNotificationManager("http://pulse.local")
 	_ = nm.UpdateAllowedPrivateCIDRs("127.0.0.1")
 
@@ -533,6 +536,7 @@ func TestSendWebhookWithRetry_RetriesLockedResponses(t *testing.T) {
 }
 
 func TestSendWebhookWithRetry_RetriesTooEarlyResponses(t *testing.T) {
+	t.Parallel()
 	nm := NewNotificationManager("http://pulse.local")
 	_ = nm.UpdateAllowedPrivateCIDRs("127.0.0.1")
 

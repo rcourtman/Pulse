@@ -12,6 +12,7 @@ import (
 )
 
 func TestPublishedAgentReleaseIdentity(t *testing.T) {
+	t.Parallel()
 	if testing.Short() {
 		t.Skip("real release-style executable build")
 	}
@@ -51,6 +52,7 @@ func TestPublishedAgentReleaseIdentity(t *testing.T) {
 }
 
 func TestUnstampedAgentReleaseIdentityCannotUseLinkerLiteral(t *testing.T) {
+	t.Parallel()
 	if testing.Short() {
 		t.Skip("real unstamped executable control")
 	}
@@ -85,6 +87,7 @@ func TestUnstampedAgentReleaseIdentityCannotUseLinkerLiteral(t *testing.T) {
 }
 
 func TestPublishedAgentReleaseIdentityNonTrimpath(t *testing.T) {
+	t.Parallel()
 	if testing.Short() {
 		t.Skip("real non-trimpath release build")
 	}

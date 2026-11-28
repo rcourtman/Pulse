@@ -14,6 +14,8 @@ import (
 )
 
 func newHostedAuthzTestRouter(t *testing.T) *Router {
+	t.Helper()
+	useSAMLTestAuthStores(t)
 	baseDir := t.TempDir()
 
 	hashed, err := internalauth.HashPassword("Password!1")

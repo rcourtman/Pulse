@@ -184,6 +184,7 @@ func TestPendingFiringGroupCancellationAndFlush(t *testing.T) {
 // Bootstrap restart, autonomous processing and recovery use normal entry points;
 // no synthetic successful receipt, direct dispatcher or edited queue clock.
 func TestPendingFiringGroupHTTPAcrossRestart(t *testing.T) {
+	t.Parallel()
 	type message struct {
 		destination string
 		Event       string          `json:"event"`
@@ -330,6 +331,7 @@ func TestPendingFiringGroupHTTPAcrossRestart(t *testing.T) {
 }
 
 func TestPendingFiringGroupStopCancelsTimer(t *testing.T) {
+	t.Parallel()
 	received := make(chan struct{}, 4)
 	server := newIPv4HTTPServer(t, http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		received <- struct{}{}
