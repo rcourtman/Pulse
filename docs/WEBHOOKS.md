@@ -134,6 +134,12 @@ HTTP 429 or 503, a usable `Retry-After` can extend the usual wait up to
 `Retry-After` is absent or unusable, Pulse also accepts positive numeric seconds
 in `X-RateLimit-Reset-After` within the same 1-second to 15-minute cap.
 
+Alert webhook deliveries time out after **30 seconds** (**10 seconds** for
+**Test** sends), with a **5-second** DNS lookup timeout and **10-second** TCP
+dial timeout. Pulse also limits each webhook URL to **10 requests per minute**.
+Deliveries past that local cap fail with `rate_limited` and retry through the
+queue rather than flooding the receiver.
+
 | Observed failure | Automatic queue behaviour |
 | --- | --- |
 | Authentication, configuration or rejected request (most HTTP 4xx, including 400, 401 and 403) | Stops as soon as this failure is classified, even with attempts left; retains the delivery as a terminal failure. |
@@ -352,6 +358,7 @@ actions. Do not cause a production outage or notification storm for this test.
 - **Signing**: Prefer `signingSecret` (above) over bare bearer headers when the receiver supports verification — it authenticates the payload itself, not just the connection.
 - **Saved headers and custom fields**: Masked values in custom headers and custom fields stay preserved only while editing the same webhook URL origin. Changing the webhook address to a different scheme, host, or port requires entering those saved values again. A masked `signingSecret` can still be kept across URL edits because it only signs the payload and is never sent to the receiver.
 - **Same-origin redirects**: Alert webhooks follow redirects only within the same scheme, host, and port, stopping on a third redirect (at most 2 redirects across 3 requests). Cross-origin redirects fail immediately as configuration errors without forwarding alert bodies, custom headers, or signatures.
+- **Outbound HTTP/HTTPS proxies**: Alert webhooks and Apprise HTTP requests deliberately ignore `HTTP_PROXY` and `HTTPS_PROXY` and dial pinned resolved IP addresses directly so an outbound proxy cannot bypass private-IP SSRF checks. Ensure the Pulse host has a direct network route to the receiver, and allowlist private targets in **Settings → System → Network → Webhook Security** when intended.
 
 ## 🧾 Audit Webhooks (Pro/legacy Pro+/Cloud)
 

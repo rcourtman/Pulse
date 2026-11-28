@@ -87,6 +87,20 @@ loopback.
 When using Apprise CLI mode, Pulse passes the alert body over standard input
 with NUL bytes removed and truncates the CLI title argument to one line (at
 most 1024 bytes) so unusual resource names cannot break grouped deliveries.
+Pulse always runs `apprise` from `PATH` (ignoring custom CLI binary paths) and
+discards any configured target starting with `-` so it cannot be parsed as a
+CLI flag. Across both Apprise CLI and HTTP modes, the delivery timeout defaults
+to **15 seconds** and is clamped between **5 and 120 seconds**. Apprise HTTP
+mode uses the same DNS-pinned, non-proxied HTTP transport and private-IP
+allowlist as alert webhooks and ignores `HTTP_PROXY` and `HTTPS_PROXY`.
+
+Email delivery enforces an SMTP send rate limit defaulting to **60 emails per
+minute** when unset. Pulse negotiates `AUTH PLAIN` and falls back to
+`AUTH LOGIN` for mail servers (such as Microsoft 365) that advertise only
+`LOGIN`. Incident emails for the same alert occurrence share a deterministic
+RFC 5322 thread ID in `In-Reply-To` and `References` so mail clients group
+firing, reminder, and recovery messages together, while keeping a distinct
+`Message-ID` on each message so providers do not drop reminders as duplicates.
 
 Across queued email, webhook, and Apprise destinations, when a later live alert
 or recovery succeeds for the exact same saved destination configuration, Pulse
@@ -180,7 +194,8 @@ failures can still prevent recovery delivery. See
 Pulse needs its server and an outbound connection to send notifications.
 Configure the **External watchdog** under **Alerts → Notifications** with an
 independent Healthchecks-compatible service outside the power and network
-failure you want to detect. The [watchdog setup and verification recipe](TROUBLESHOOTING.md#no-alert-when-pulse-power-or-internet-goes-down)
+failure you want to detect. External watchdog ping URLs are capped at
+**2,048 characters**. The [watchdog setup and verification recipe](TROUBLESHOOTING.md#no-alert-when-pulse-power-or-internet-goes-down)
 explains heartbeat timing and a controlled outage test.
 
 For website, port and device reachability, use [availability checks](AVAILABILITY.md).
@@ -301,7 +316,11 @@ is not zero):
   Both default per-monitor workers and the process dispatcher also check claim
   retirement again at the execution boundary before provider setup, so a target
   removed or replaced after dequeue or slot admission skips starting an
-  obsolete poll while keeping any saved replacement's own due time.
+  obsolete poll while keeping any saved replacement's own due time. When an
+  already-admitted `stage="running"` poll returns after its monitor context or
+  queue claim was retired, the worker releases the slot without reading
+  provider cadence to plan a successor while still preserving any explicit
+  replacement schedule.
   A stopped scheduler drops out of
   `pulse_scheduler_queued_poll_overdue_seconds` even if a blocked worker has
   not returned yet, so keep checking
