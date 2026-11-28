@@ -285,5 +285,34 @@ class UnraidGoUpdate(unittest.TestCase):
                 self.assertEqual(events.read_text().splitlines(), expected)
 
 
+    def test_preflight_refuses_custom_launch_without_leaving_staging_and_reports_reason(self):
+        original = (
+            '#!/bin/bash\n'
+            '# Pulse Agent\n'
+            'setsid -f bash ' + str(self.wrapper) + ' >/dev/null 2>&1 < /dev/null\n'
+        )
+        self.write(original)
+        code = (
+            'set -euo pipefail\nAGENT_NAME=pulse-agent\n' + definitions(self.source) +
+            '\nif write_unraid_go_entry "$1" "$2" "$3" preflight; then exit 0; fi\n'
+            'printf "REASON=%s\n" "$UNRAID_GO_FAILURE_REASON"\nexit 1\n'
+        )
+        result = subprocess.run([BASH, '-c', code, '_', str(self.boot), str(self.wrapper), str(self.runtime)],
+                                env=self.environment, capture_output=True, text=True, timeout=10)
+        self.assertNotEqual(result.returncode, 0)
+        self.assertEqual(self.boot.read_bytes(), original.encode())
+        self.assertEqual(list(self.boot.parent.glob('*.pulse-setup.*')), [])
+        self.assertIn('custom, compound, or unrecognized Pulse Agent entry', result.stdout)
+        self.assertNotIn('synthetic-secret-not-for-logs', result.stdout + result.stderr)
+
+    def test_preflight_runs_before_stopping_existing_agents(self):
+        start = self.source.index('if [[ -f /etc/unraid-version ]]; then')
+        end = self.source.index('# 3b. QNAP', start)
+        unraid = self.source[start:end]
+        preflight_pos = unraid.index('write_unraid_go_entry "$GO_SCRIPT" "$WRAPPER_SCRIPT" "$RUNTIME_BINARY" preflight')
+        stop_pos = unraid.index('Stopping any existing pulse agents...')
+        self.assertLess(preflight_pos, stop_pos)
+
+
 if __name__ == '__main__':
     unittest.main()
