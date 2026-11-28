@@ -263,6 +263,17 @@ The affected poll still reports the same grace-adjusted status and does not
 move its last-online timestamp.
 These fixtures do not establish an installed outage's cause or recovery.
 
+### History expiry diagnostics do not own the metrics lock
+
+The in-memory History sweep finishes expiry and snapshots its removed and
+remaining counts under the History lock, then releases it before debug output.
+A blocked diagnostic may still delay the calling maintenance tick; it must not
+prevent independent poll writers from adding samples or charts from reading
+them. Retention and chart selection are unchanged.
+`TestMetricsHistoryCleanupLoggingDoesNotBlockHistory` gates the cleanup log
+after an expired guest is dropped and verifies a live node's retained and newly
+written CPU points are readable before the sink returns.
+
 ### Idle poll workers wake when work becomes eligible sooner
 
 An empty active queue has no idle recheck timer. If its head is in the
