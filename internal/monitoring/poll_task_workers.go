@@ -73,8 +73,12 @@ func (m *Monitor) taskWorker(ctx context.Context, id int) {
 }
 
 func (m *Monitor) executeAndRescheduleTask(ctx context.Context, task ScheduledTask, progress *pollWorkProgress, work uint64) {
+	// The worker is still occupied until it returns, even after a timeout
+	// or while the panic handler is blocked writing to the log sink.
+	defer progress.finish(work)
+
 	// Recover at the task boundary so one panic cannot end a reusable worker.
-	// The claim and work marker still unwind before this handler runs.
+	// The queue claim unwinds before logging; the running marker does not.
 	defer func() {
 		if recovered := recover(); recovered != nil {
 			log.Error().
@@ -85,8 +89,6 @@ func (m *Monitor) executeAndRescheduleTask(ctx context.Context, task ScheduledTa
 				Msg("Recovered from panic in scheduled poll task")
 		}
 	}()
-	// Do not clear this at context expiry. An unreturned worker is still busy.
-	defer progress.finish(work)
 	var next ScheduledTask
 	var reschedule pollReschedule
 	defer func() { m.taskQueue.completeClaim(task, next, reschedule) }()

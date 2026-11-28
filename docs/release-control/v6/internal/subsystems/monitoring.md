@@ -125,10 +125,11 @@ stages and no connection, provider or tenant identity. `waiting_for_slot`
 measures the maximum time beyond one task timeout from the scheduled due time
 for work dequeued by the process-limited dispatcher but not admitted.
 `running` measures the maximum time beyond one task timeout from worker
-admission through task preparation, polling and rescheduling. Values are
-computed at scrape time from active claims, without taking a provider,
-monitor or queue lock. An expired context does not end a claim that has
-not returned. A returned failure in backoff is not an active claim.
+admission through task preparation, polling, rescheduling and recovery
+logging. Values are computed at scrape time from outstanding work, without
+taking a provider, monitor or queue lock. An expired context does not
+remove work that has not returned. A returned failure in backoff is not
+outstanding work.
 
 Proxmox runtime cluster discovery is part of its poll: temporary client
 authentication, membership reads and retry delays stop on the poll context.
@@ -189,10 +190,11 @@ entries sharing the same name untouched.
 `TestAvailabilityConcurrentPollAndRefreshIsRaceFree` verify these boundaries.
 
 A panic escaping a scheduled task is recovered at the task boundary in both
-worker modes. It is logged with the task type and connection. Unwinding
-releases the claim and work marker, and the default worker keeps taking
-ordinary queued work. A preparation panic does not invent a provider result
-or start an immediate retry; the ordinary planner can schedule that key again.
+worker modes. Unwinding releases the queue claim before logging the task type
+and connection, but the running marker remains until the recovery log returns:
+a blocked log sink still occupies that worker. A preparation panic does not
+invent a provider result or start an immediate retry; the ordinary planner can
+schedule that key again.
 
 Both gauges are zero when nothing in their stage exceeds the budget. Neither
 gauge measures work still in the queue, agent ingestion, alert evaluation
@@ -241,8 +243,10 @@ periodic slot holds and can still tighten when the configured cadence shrinks.
 `TestScheduledPollTaskPanicDoesNotStopWorker` uses one slot at a time in
 each worker mode. After a different source panics during task preparation,
 the peer's next ordinary poll updates its PVE row and writes its next CPU
-History point. These fixtures do not establish an installed outage's cause
-or recovery.
+History point. `TestScheduledPollPanicLogKeepsWorkerVisible` stalls the
+recovery log in both worker modes and verifies the running gauge ages past
+the budget and clears when the log returns, without retaining a queue claim.
+These fixtures do not establish an installed outage's cause or recovery.
 
 ### Idle poll workers wake when work becomes eligible sooner
 
