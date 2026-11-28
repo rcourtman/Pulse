@@ -926,6 +926,27 @@ class StaleReadingAndAgentHelpDocsTest(unittest.TestCase):
         ):
             self.assertIn(marker, status_util)
 
+    def test_recovery_series_window_and_rollup_scope_isolation_match_source(self):
+        recovery = norm(doc_text("docs/RECOVERY.md"))
+        types_go = (ROOT / "internal/recovery/model/types.go").read_text(encoding="utf-8")
+        series_go = (ROOT / "internal/recovery/store/store_series.go").read_text(encoding="utf-8")
+        handlers_go = (ROOT / "internal/api/recovery_handlers.go").read_text(encoding="utf-8")
+        keys_go = (ROOT / "internal/recovery/keys.go").read_text(encoding="utf-8")
+
+        self.assertIn("const MaxPointsSeriesDays = 3660", types_go)
+        self.assertIn("1-recovery.MaxPointsSeriesDays", series_go)
+        self.assertIn("1-recovery.MaxPointsSeriesDays", handlers_go)
+        self.assertIn("func externalSubjectScope(p RecoveryPoint) string", keys_go)
+        self.assertIn("case ProviderKubernetes, ProviderTrueNAS:", keys_go)
+
+        for phrase in (
+            "`/api/recovery/series` returns dense daily buckets bounded to at most **3,660** UTC days ending at `to`",
+            "Unlinked Kubernetes PVC and TrueNAS dataset rollups include their reporting cluster or connection scope",
+            "stay separate instead of sharing one rollup",
+        ):
+            with self.subTest(phrase=phrase):
+                self.assertIn(phrase, recovery)
+
     def test_shipped_public_docs_mirrors_match_byte_for_byte(self):
         for name in (
             "AGENT_SECURITY.md",

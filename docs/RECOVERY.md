@@ -654,6 +654,11 @@ Points and rollups accept `page` (starting at 1) and `limit` (default **100**,
 maximum **500**). Their response has a `data` array and `meta` pagination;
 inspect every required page rather than assuming the first is the inventory.
 Series and facets return aggregate data, not that paged-list contract.
+`/api/recovery/series` returns dense daily buckets bounded to at most **3,660**
+UTC days ending at `to`, so a wider `from` to `to` window keeps only the newest
+3,660 days. Unlinked Kubernetes PVC and TrueNAS dataset rollups include their
+reporting cluster or connection scope so same-named subjects on different
+clusters or appliances stay separate instead of sharing one rollup.
 
 ### Posture lookup
 

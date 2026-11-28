@@ -152,6 +152,10 @@ Native DNS checks run locally on the Pulse server in Community, and run from rem
 
 For an HTTPS check, **Monitor TLS certificate validity** and **Expiry warning (days)** (default `30`) track certificate expiry on the target.
 
-When an HTTPS check sends stored credentials, custom header values or a request body, Pulse does not send them to an untrusted certificate. The server certificate must be trusted by the checking host or match **Pinned certificate fingerprint (optional)** (SHA-256), unless you explicitly enable **Allow an unverified certificate**.
+When an HTTPS check sends stored credentials, custom header values or a request body, Pulse does not send them to an untrusted certificate. The server certificate must be trusted by the checking host or match **Pinned certificate fingerprint (optional)** (a 64-character hexadecimal SHA-256 value, with colons stripped automatically), unless you explicitly enable **Allow an unverified certificate**.
 
 If a test is refused for an untrusted certificate, Pulse reports the **presented certificate SHA-256** without sending stored values. Verify that fingerprint through an independent trusted path before pinning it, rather than turning off certificate verification.
+
+Stored Basic passwords, Bearer tokens, custom header values and request bodies are write-only through the API. Reads report only whether each value is configured. Edits preserve saved values only while the target URL keeps the same scheme, host and port, so changing the target origin requires entering them again rather than replaying stored credentials to another server. Because an assigned observation-location agent receives those values in its signed remote configuration, adding a new observation-location agent to an existing check also requires re-entering the stored request body, credentials and header values (otherwise Pulse refuses the save with HTTP `400` and `http_secrets_reentry_required`).
+
+HTTP response contracts support at most 16 custom request headers. HTTP checks read at most 64 KiB of response headers and truncate stored transport error text to 240 bytes.
