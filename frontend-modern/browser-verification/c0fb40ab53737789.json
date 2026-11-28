@@ -1,0 +1,35 @@
+{
+  "version": 1,
+  "base_sha": "44cff355f7962f8a970efdc71bd661351d387170",
+  "verified_at": "2026-11-28T10:25:20Z",
+  "result": "passed",
+  "changed_paths": [
+    "frontend-modern/src/features/alerts/AlertDeliveryLogCard.tsx"
+  ],
+  "content_sha256": {
+    "frontend-modern/src/features/alerts/AlertDeliveryLogCard.tsx": "9313dcbe3383016cadfe561bd5785e2ce6cbb2916c7a2df1447c38dc8ce33327"
+  },
+  "routes": [
+    "/alerts/notifications"
+  ],
+  "viewports": [
+    {
+      "width": 1440,
+      "height": 940
+    },
+    {
+      "width": 360,
+      "height": 820
+    }
+  ],
+  "states": [
+    "Paired production Vite builds of untouched base (44cff355f7) and patched HEAD served locally via pulse-worker-browser over identical synthetic notification health, delivery-log, and held-event payloads in desktop Chromium (1440x940 light theme, en-GB, UTC) and touch phone WebKit (360x820 dark theme, en-GB, UTC).",
+    "/alerts/notifications Recent delivery activity unfiltered view: renders inline outcome filter chips with counts (All (8), Failures (2), Retrying (1), Held (2), Delivered (3)), search box, visible held/deferred explanation paragraphs (quiet hours replay and flapping suppression) no longer hidden only in hover titles, attempt counts (4 attempts, 2 attempts, 3 attempts) on retries and multi-attempt deliveries, and semantic theme tokens.",
+    "/alerts/notifications Recent delivery activity filtered view: clicking Failures (2) sets aria-pressed=true and isolates both terminal failure rows (Ops Discord dead_letter and Email failed) with full error details above the fold on both desktop and phone; searching 'quiet hours' narrows to the deferred pve2-db (memory) row; non-matching search shows 'No matching delivery activity.' with a working 'Clear filters' reset restoring all 8 rows.",
+    "Zero console errors, zero page errors, zero HTTP >= 400 responses, and 0px horizontal overflow across all captured desktop and phone states; all 6 paired before/after PNGs were visually inspected."
+  ],
+  "interactions": [
+    "Loaded /alerts/notifications on desktop Chromium (1440x940 light) and touch WebKit phone (360x820 dark), verified all 8 interleaved attempt and held rows, visible held explanation copy, and visible attempt counts.",
+    "Clicked Failures (2) outcome chip to isolate retained failures and verified aria-pressed and row count, switched back to All (8), filtered via the searchbox by held explanation text ('quiet hours'), tested zero-match search, and clicked Clear filters to restore all 8 rows."
+  ]
+}

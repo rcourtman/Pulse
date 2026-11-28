@@ -1,12 +1,16 @@
 import { createSignal } from 'solid-js';
-import { cleanup, render, screen } from '@solidjs/testing-library';
+import { cleanup, fireEvent, render, screen } from '@solidjs/testing-library';
 import { afterEach, describe, expect, it, vi } from 'vitest';
 
 import type { NotificationDeliveryLog, Webhook } from '@/api/notifications';
 import type { AlertEvent } from '@/types/api';
 import { RELATIVE_TIME_TICK_MS } from '@/utils/relativeTimeClock';
 
-import { AlertDeliveryLogCard, mergeDeliveryLogRows } from './AlertDeliveryLogCard';
+import {
+  AlertDeliveryLogCard,
+  getDeliveryLogRowBucket,
+  mergeDeliveryLogRows,
+} from './AlertDeliveryLogCard';
 
 const webhooks: Webhook[] = [
   {
@@ -570,5 +574,192 @@ describe('AlertDeliveryLogCard', () => {
     } finally {
       vi.useRealTimers();
     }
+  });
+
+  it('shows attempt counts for multi-attempt and retrying deliveries while keeping single-shot sends quiet', () => {
+    render(() => (
+      <AlertDeliveryLogCard
+        log={{
+          ...log,
+          entries: [
+            log.entries[0], // dead_letter, 3 attempts
+            {
+              ...log.entries[1],
+              notificationId: 'retry-1',
+              outcome: 'retry',
+              attempts: 1,
+              success: false,
+            },
+            log.entries[1], // sent, 1 attempt
+          ],
+        }}
+        unavailable={false}
+        refreshing={false}
+        onRefresh={vi.fn()}
+        webhooks={webhooks}
+      />
+    ));
+
+    expect(screen.getByText('3 attempts')).toBeInTheDocument();
+    expect(screen.getByText('1 attempt')).toBeInTheDocument();
+    expect(screen.getAllByText(/^\d+ attempts?$/)).toHaveLength(2);
+  });
+
+  it('renders held and deferred explanations visibly without hiding them behind hover tooltips', () => {
+    render(() => (
+      <AlertDeliveryLogCard
+        log={{ ...log, entries: [] }}
+        unavailable={false}
+        refreshing={false}
+        onRefresh={vi.fn()}
+        webhooks={webhooks}
+        heldEvents={[
+          {
+            id: 21,
+            occurredAt: '2026-11-28T09:56:00Z',
+            type: 'notification_deferred',
+            alertId: 'pve2-memory',
+            resourceName: 'pve2',
+            alertType: 'memory',
+            reason: 'quiet_hours:performance',
+            message: 'Deferred by quiet hours. Queued for replay when quiet hours end.',
+          },
+          {
+            id: 22,
+            occurredAt: '2026-11-28T09:50:00Z',
+            type: 'notification_suppressed',
+            alertId: 'dup-reason',
+            resourceName: 'nas-1',
+            alertType: 'disk',
+            reason: 'flapping',
+            message: 'Flapping',
+          },
+        ]}
+      />
+    ));
+
+    expect(
+      screen.getByText('Deferred by quiet hours. Queued for replay when quiet hours end.'),
+    ).toBeInTheDocument();
+    // Duplicate text matching the reason chip is not repeated below the row.
+    expect(screen.getAllByText('Flapping')).toHaveLength(1);
+  });
+
+  it('filters delivery activity by outcome bucket and resets cleanly when a bucket clears on refresh', () => {
+    const [currentLog, setCurrentLog] = createSignal<NotificationDeliveryLog>(log);
+    render(() => (
+      <AlertDeliveryLogCard
+        log={currentLog()}
+        unavailable={false}
+        refreshing={false}
+        onRefresh={vi.fn()}
+        webhooks={webhooks}
+        heldEvents={[
+          {
+            id: 31,
+            occurredAt: '2026-11-28T09:55:00Z',
+            type: 'notification_deferred',
+            alertId: 'pve2-mem',
+            resourceName: 'pve2',
+            alertType: 'memory',
+            reason: 'quiet_hours',
+            message: 'Deferred until morning.',
+          },
+        ]}
+      />
+    ));
+
+    const allButton = screen.getByRole('button', { name: 'All (3)' });
+    const failuresButton = screen.getByRole('button', { name: 'Failures (1)' });
+    const heldButton = screen.getByRole('button', { name: 'Held (1)' });
+    const deliveredButton = screen.getByRole('button', { name: 'Delivered (1)' });
+
+    expect(allButton).toHaveAttribute('aria-pressed', 'true');
+    expect(failuresButton).toHaveAttribute('aria-pressed', 'false');
+    expect(heldButton).toBeInTheDocument();
+    expect(deliveredButton).toBeInTheDocument();
+
+    fireEvent.click(failuresButton);
+    expect(failuresButton).toHaveAttribute('aria-pressed', 'true');
+    expect(screen.getAllByRole('listitem')).toHaveLength(1);
+    expect(screen.getByText('Ops Discord')).toBeInTheDocument();
+    expect(screen.queryByText('Email')).not.toBeInTheDocument();
+    expect(screen.queryByText('pve2 (memory)')).not.toBeInTheDocument();
+
+    // After failures clear on refresh, the view returns to All instead of going empty.
+    setCurrentLog({ ...log, entries: [log.entries[1]] });
+    expect(screen.getAllByRole('listitem')).toHaveLength(2);
+    expect(screen.getByText('Email')).toBeInTheDocument();
+    expect(screen.getByText('pve2 (memory)')).toBeInTheDocument();
+  });
+
+  it('searches across destinations, errors, and held messages with clear and Escape support', () => {
+    render(() => (
+      <AlertDeliveryLogCard
+        log={log}
+        unavailable={false}
+        refreshing={false}
+        onRefresh={vi.fn()}
+        webhooks={webhooks}
+        heldEvents={[
+          {
+            id: 41,
+            occurredAt: '2026-11-28T09:54:00Z',
+            type: 'notification_suppressed',
+            alertId: 'nas-disk-1',
+            resourceName: 'nas-main',
+            alertType: 'disk',
+            reason: 'flapping',
+            message: 'Suppressed after 4 state changes.',
+          },
+        ]}
+      />
+    ));
+
+    const search = screen.getByRole('searchbox', { name: 'Filter delivery activity' });
+    fireEvent.input(search, { target: { value: '4 state changes' } });
+    expect(screen.getAllByRole('listitem')).toHaveLength(1);
+    expect(screen.getByText('nas-main (disk)')).toBeInTheDocument();
+
+    fireEvent.keyDown(search, { key: 'Escape' });
+    expect(search).toHaveValue('');
+    expect(screen.getAllByRole('listitem')).toHaveLength(3);
+
+    fireEvent.input(search, { target: { value: 'no-such-destination' } });
+    expect(screen.queryByRole('list')).not.toBeInTheDocument();
+    expect(screen.getByText('No matching delivery activity.')).toBeInTheDocument();
+
+    fireEvent.click(screen.getByRole('button', { name: 'Clear filters' }));
+    expect(screen.getAllByRole('listitem')).toHaveLength(3);
+  });
+
+  it('classifies attempt and held rows into expected outcome filter buckets', () => {
+    expect(getDeliveryLogRowBucket({ kind: 'attempt', timestamp: '', entry: log.entries[0] })).toBe(
+      'failed',
+    );
+    expect(getDeliveryLogRowBucket({ kind: 'attempt', timestamp: '', entry: log.entries[1] })).toBe(
+      'sent',
+    );
+    expect(
+      getDeliveryLogRowBucket({
+        kind: 'attempt',
+        timestamp: '',
+        entry: { ...log.entries[0], outcome: 'retry' },
+      }),
+    ).toBe('retry');
+    expect(
+      getDeliveryLogRowBucket({
+        kind: 'attempt',
+        timestamp: '',
+        entry: { ...log.entries[0], outcome: 'cancelled' },
+      }),
+    ).toBe('cancelled');
+    expect(
+      getDeliveryLogRowBucket({
+        kind: 'held',
+        timestamp: '',
+        event: { id: 1, occurredAt: '', type: 'notification_deferred', alertId: 'a' },
+      }),
+    ).toBe('held');
   });
 });
