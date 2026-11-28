@@ -383,7 +383,6 @@ func TestLoadTest500Nodes_WriteAndQueryIntegration(t *testing.T) {
 		t.Skip("skipping 500-node load test in short mode")
 	}
 	t.Parallel()
-	suppressLogs(t)
 
 	store := func() *Store {
 		t.Helper()

@@ -1177,6 +1177,7 @@ func TestStoreQueryMetricTypesBatchFiltersMetricTypes(t *testing.T) {
 // ~60MB of live data. Reclaiming every cycle, proportional to the freelist,
 // returns the freed pages to the OS so the file shrinks.
 func TestStoreRetentionReclaimsFreePages(t *testing.T) {
+	t.Parallel()
 	dir := t.TempDir()
 	cfg := DefaultConfig(dir)
 	cfg.DBPath = filepath.Join(dir, "metrics-reclaim.db")
@@ -1253,6 +1254,7 @@ func TestStoreRetentionReclaimsFreePages(t *testing.T) {
 // Exercise shared query reuse under race detection without latency assertions.
 // A one-connection pool also exposes preparation/read-transaction lock inversion.
 func TestStoreRetainedConcurrentQueryBindings(t *testing.T) {
+	t.Parallel()
 	db := newPlanTestDB(t)
 	db.SetMaxOpenConns(1)
 	store := &Store{db: pdb.Wrap(db, "concurrent-retained-bindings")}

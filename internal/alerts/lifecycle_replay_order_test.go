@@ -135,6 +135,7 @@ func TestReplayLifecycleEventsFollowsDurableIDsAndKeepsStoredFacts(t *testing.T)
 }
 
 func TestReplayLifecycleEventsReturnsVisitorErrorAndBoundsConcurrentAppends(t *testing.T) {
+	t.Parallel()
 	m, store, deliveries := replayOrderManager(t)
 	base := time.Now().UTC().Add(-3 * time.Hour).Truncate(time.Second)
 	var events []eventlog.Event

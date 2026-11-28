@@ -23,6 +23,7 @@ import (
 //  2. Channel state is cleaned up (channels map reset to empty).
 //  3. The client reconnects successfully.
 func TestClient_AbruptDisconnectCancelsInFlightHandlers(t *testing.T) {
+	t.Parallel()
 	// Use Nop logger to avoid panics from async goroutines logging after test completion.
 	logger := zerolog.Nop()
 
@@ -214,6 +215,7 @@ func TestClient_AbruptDisconnectCancelsInFlightHandlers(t *testing.T) {
 //  2. The channels map is completely cleared on reconnect (no stale entries).
 //  3. New channels on the second connection work independently.
 func TestClient_AbruptDisconnectMultipleChannelCleanup(t *testing.T) {
+	t.Parallel()
 	// Use Nop logger to avoid panics from async goroutines logging after test completion.
 	logger := zerolog.Nop()
 
@@ -478,6 +480,7 @@ func TestClient_AbruptDisconnectMultipleChannelCleanup(t *testing.T) {
 // ensures the relay server can resume the instance session rather than
 // creating a new one.
 func TestClient_AbruptDisconnectPreservesSessionToken(t *testing.T) {
+	t.Parallel()
 	// Use Nop logger to avoid panics from async goroutines logging after test completion.
 	logger := zerolog.Nop()
 

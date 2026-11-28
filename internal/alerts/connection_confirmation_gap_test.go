@@ -36,6 +36,7 @@ func interruptConnectionSnapshot(m *Manager, snap ConnectionSnapshot, gap string
 }
 
 func TestConnectionConfirmationInterrupted(t *testing.T) {
+	t.Parallel()
 	for _, platform := range []ConnectionType{ConnectionTypePVE, ConnectionTypePBS, ConnectionTypePMG, ConnectionTypeVMware, ConnectionTypeTrueNAS} {
 		for _, gap := range []string{"pending", "unknown", "healthy", "paused", "disabled", "offline-policy"} {
 			t.Run(string(platform)+"/"+gap, func(t *testing.T) {

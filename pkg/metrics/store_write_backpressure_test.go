@@ -49,6 +49,7 @@ func requireBoundedReturn(t *testing.T, s *Store, label string) {
 }
 
 func TestWriteBatchBoundedReturnsWhenQueueSaturated(t *testing.T) {
+	t.Parallel()
 	s := newUnservicedStore(1)
 	s.writeCh <- writeRequest{metrics: []bufferedMetric{{}}}
 
@@ -60,6 +61,7 @@ func TestWriteBatchBoundedReturnsWhenQueueSaturated(t *testing.T) {
 }
 
 func TestWriteBatchBoundedReturnsWhenCommitLags(t *testing.T) {
+	t.Parallel()
 	s := newUnservicedStore(4)
 
 	requireBoundedReturn(t, s, "lagging commit")
@@ -70,6 +72,7 @@ func TestWriteBatchBoundedReturnsWhenCommitLags(t *testing.T) {
 }
 
 func TestWriteBatchBoundedReturnsOnClosedStore(t *testing.T) {
+	t.Parallel()
 	s := newUnservicedStore(1)
 	s.writeCh <- writeRequest{metrics: []bufferedMetric{{}}}
 	close(s.stopCh)
@@ -92,6 +95,7 @@ func TestWriteBatchBoundedReturnsOnClosedStore(t *testing.T) {
 // the write-path invariant tests on slow disks, which is exactly what a
 // bounded WriteBatchSync did to CI (run 31494553977).
 func TestWriteBatchSyncWaitsForCommitBeyondBoundedBudget(t *testing.T) {
+	t.Parallel()
 	s := newUnservicedStore(4)
 
 	returned := make(chan struct{})

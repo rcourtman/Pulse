@@ -254,6 +254,7 @@ func TestDurableLifecycleFailureSurfacesRecoveryMarkerFailure(t *testing.T) {
 }
 
 func TestOversizedAlertIsLeftOutOfReadableRecoveryFiles(t *testing.T) {
+	t.Parallel()
 	dataDir := t.TempDir()
 	m := NewManagerWithDataDir(dataDir)
 	m.EnableEventLog()

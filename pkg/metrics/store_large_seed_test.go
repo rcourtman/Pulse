@@ -12,6 +12,7 @@ import (
 // SQLite during the second synchronous seed; this is a diagnostic invariant,
 // not a reproducer or a claim that the unexplained crash has been repaired.
 func TestStoreLargeSummarySeedSurvivesReopen(t *testing.T) {
+	t.Parallel()
 	cfg := DefaultConfig(t.TempDir())
 	cfg.DBPath = filepath.Join(filepath.Dir(cfg.DBPath), "summary-seed.db")
 	cfg.FlushInterval = time.Hour

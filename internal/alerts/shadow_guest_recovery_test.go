@@ -76,6 +76,7 @@ func assertShadowGuestParity(t *testing.T, m *Manager, wantFiring bool) {
 // guest interrupts the first pending run. A later stop must satisfy its own
 // full grace/confirmation run; the shadow must not reuse the old evidence.
 func TestShadowGuestRecoveryRestartsPendingRun(t *testing.T) {
+	t.Parallel()
 	for _, kind := range []string{"vm", "container"} {
 		for _, policy := range []string{"600-second-grace", "two-confirmations"} {
 			for _, healthy := range []string{"running", "paused", "suspended", "onboot-disabled"} {

@@ -180,8 +180,10 @@ func TestStoreRollupPreservesRetainedExtrema(t *testing.T) {
 }
 
 func TestRetainedReadStatementsReadCurrentSnapshot(t *testing.T) {
+	t.Parallel()
 	for _, step := range []int64{0, 60} {
 		t.Run(fmt.Sprint(step), func(t *testing.T) {
+			t.Parallel()
 			db := newPlanTestDB(t)
 			db.SetMaxOpenConns(1)
 			store := &Store{db: pdb.Wrap(db, "presence-snapshot")}

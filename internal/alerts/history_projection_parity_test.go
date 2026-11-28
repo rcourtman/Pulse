@@ -533,6 +533,7 @@ func TestHistoryReadResultsDoNotAliasTheSharedFold(t *testing.T) {
 
 // A limited read copies only the rows it returns, not the whole fold.
 func TestLimitedHistoryReadCopiesOnlyReturnedRows(t *testing.T) {
+	t.Parallel()
 	m := newHistoryParityManager(t)
 	store := m.eventLogStore()
 	at := recentHistoryParityBase()

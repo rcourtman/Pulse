@@ -38,6 +38,7 @@ func snapshotDateJSON(t *testing.T, v any) []byte {
 }
 
 func TestSnapshotDateObservations(t *testing.T) {
+	t.Parallel()
 	invalid := map[string]time.Time{
 		"zero": {}, "epoch": time.Unix(0, 0), "negative": time.Unix(-1, 0), "future": time.Now().Add(24 * time.Hour),
 	}

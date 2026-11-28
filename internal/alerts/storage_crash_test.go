@@ -78,8 +78,10 @@ func TestStorageLifecycleAcrossProcessExit(t *testing.T) {
 		os.Exit(0) // Intentionally bypass all cleanups, Stop and store Close.
 	}
 
+	t.Parallel()
 	for _, phase := range []string{"fired", "resolved"} {
 		t.Run(phase, func(t *testing.T) {
+			t.Parallel()
 			dir := t.TempDir()
 			ctx, cancel := context.WithTimeout(context.Background(), 30*time.Second)
 			defer cancel()
@@ -169,8 +171,10 @@ func TestStorageProcessExitChildDiagnostics(t *testing.T) {
 		}
 		return
 	}
+	t.Parallel()
 	for _, mode := range []string{"timeout", "exit", "success"} {
 		t.Run(mode, func(t *testing.T) {
+			t.Parallel()
 			ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
 			defer cancel()
 			cmd := exec.CommandContext(ctx, os.Args[0], "-test.run=^TestStorageProcessExitChildDiagnostics$")

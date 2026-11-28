@@ -1703,6 +1703,7 @@ func TestCheckSnapshotsForInstanceIncludesAgeAndSizeReasons(t *testing.T) {
 }
 
 func TestCheckBackupsRequiresObservedSuccessDates(t *testing.T) {
+	t.Parallel()
 	testBackupDateObservations(t)
 }
 
