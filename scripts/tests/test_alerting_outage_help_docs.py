@@ -534,6 +534,106 @@ class AlertingOutageHelpDocsTest(unittest.TestCase):
             with self.subTest(phrase=phrase):
                 self.assertIn(phrase, flow_doc)
 
+    def test_metrics_data_flow_aligns_with_backups_machines_and_workloads_staleness(
+        self,
+    ) -> None:
+        backups_src = (
+            ROOT / "frontend-modern/src/features/proxmox/proxmoxBackupStaleness.ts"
+        ).read_text(encoding="utf-8")
+        standalone_src = (
+            ROOT / "frontend-modern/src/features/standalone/standaloneStaleness.ts"
+        ).read_text(encoding="utf-8")
+        guest_drawer_src = (
+            ROOT / "frontend-modern/src/components/Workloads/GuestDrawer.tsx"
+        ).read_text(encoding="utf-8")
+        workload_selectors_src = (
+            ROOT / "frontend-modern/src/components/Workloads/workloadSelectors.ts"
+        ).read_text(encoding="utf-8")
+
+        self.assertIn("Backup telemetry is stale for", backups_src)
+        self.assertIn("Stale data", standalone_src)
+        self.assertIn("Readings are stale", guest_drawer_src)
+        self.assertIn("telemetryStale", workload_selectors_src)
+
+        flow_doc = " ".join(
+            (ROOT / "docs/monitoring/METRICS_DATA_FLOW.md")
+            .read_text(encoding="utf-8")
+            .split()
+        )
+        for phrase in (
+            "**Proxmox Backups** (`/proxmox/backups`) adds a page-level stale telemetry banner naming stale PVE or PBS sources",
+            "amber **Stale data** header cues on **Backup health** and **Backup jobs**",
+            "scoped stale cues and drawer notices on affected **Coverage** rows, **By date** restore points, and **Backup servers**",
+            "**Machines** (`/standalone/machines`) and **Standalone VMs** (`/standalone/vms`) surface amber **Stale data** (or `Stale · <age>`) cues and drawer notices",
+            "**Workloads** (`/workloads`) routes stale running Proxmox, vSphere, Docker, and Kubernetes workloads out of **Running** into **Attention**",
+            "amber **Readings are stale** notice in the guest drawer without flagging fresh hypervisor telemetry when only an optional linked agent is stale",
+        ):
+            with self.subTest(phrase=phrase):
+                self.assertIn(phrase, flow_doc)
+
+    def test_alert_api_and_alerting_help_align_with_bounds_and_recovery_hardening(
+        self,
+    ) -> None:
+        update_src = (ROOT / "internal/alerts/config/update.go").read_text(
+            encoding="utf-8"
+        )
+        alerts_api_src = (ROOT / "internal/api/alerting/alerts.go").read_text(
+            encoding="utf-8"
+        )
+        apprise_src = (ROOT / "internal/notifications/apprise_exec.go").read_text(
+            encoding="utf-8"
+        )
+        limits_src = (ROOT / "internal/alerts/file_read_limits.go").read_text(
+            encoding="utf-8"
+        )
+        bootstrap_src = (
+            ROOT / "internal/alerts/active_state_bootstrap.go"
+        ).read_text(encoding="utf-8")
+
+        for src, marker in (
+            (update_src, "maxCustomRules       = 500"),
+            (update_src, "maxCustomRuleFilters = 100"),
+            (update_src, "maxEscalationLevels  = 100"),
+            (alerts_api_src, "const maxBulkAlertIdentifiers = 16384"),
+            (alerts_api_src, 'result["error"] = "alert not found"'),
+            (alerts_api_src, "r.Body = http.MaxBytesReader(w, r.Body, 8*1024)"),
+            (apprise_src, "const appriseCLITitleBytes = 1024"),
+            (apprise_src, "cmd.Stdin = strings.NewReader(body)"),
+            (limits_src, "maxActiveAlertsFileSizeBytes int64 = 16 * 1024 * 1024"),
+            (bootstrap_src, "envelope.Incomplete = true"),
+        ):
+            self.assertIn(marker, src)
+
+        api_doc = (ROOT / "docs/API.md").read_text(encoding="utf-8")
+        api_mirror = (ROOT / "frontend-modern/public/docs/API.md").read_text(
+            encoding="utf-8"
+        )
+        self.assertEqual(api_doc, api_mirror)
+        api_norm = " ".join(api_doc.split())
+        for phrase in (
+            "`PUT /api/alerts/config` (up to 1 MiB JSON object)",
+            "more than 500 `customRules`, more than 100 `filterConditions.filters` on a custom rule, or more than 100 `schedule.escalation.levels` are rejected with `400`",
+            "`POST /api/alerts/incidents/note` (up to 8 KiB JSON body:",
+            "`POST /api/alerts/bulk/acknowledge` (up to 1 MiB JSON body: `{ \"alertIdentifiers\": [\"alert-id-1\", ...] }`, up to 16,384 identifiers)",
+            "ignores any client-supplied `user` field",
+            'without repeating unknown IDs in the error text',
+            "`POST /api/alerts/bulk/clear` (up to 1 MiB JSON body: `{ \"alertIdentifiers\": [\"alert-id-1\", ...] }`, up to 16,384 identifiers)",
+        ):
+            with self.subTest(doc="API.md", phrase=phrase):
+                self.assertIn(phrase, api_norm)
+
+        alerting_doc = DOC.read_text(encoding="utf-8")
+        alerting_mirror = SHIPPED.read_text(encoding="utf-8")
+        self.assertEqual(alerting_doc, alerting_mirror)
+        alerting_norm = " ".join(alerting_doc.split())
+        for phrase in (
+            "Apprise CLI mode, Pulse passes the alert body over standard input with NUL bytes removed and truncates the CLI title argument to one line (at most 1024 bytes)",
+            "Active-alert recovery checkpoints and degraded recovery markers are capped at 16 MiB.",
+            "marks degraded markers incomplete so startup restores from the SQLite alert projection and journal tail without deleting omitted active alerts",
+        ):
+            with self.subTest(doc="ALERTING.md", phrase=phrase):
+                self.assertIn(phrase, alerting_norm)
+
 
 if __name__ == "__main__":
     unittest.main()
