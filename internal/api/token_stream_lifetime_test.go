@@ -31,7 +31,9 @@ func TestTokenStreamWriterNativeMedia(t *testing.T) {
 		responseMediaCase{"sse_parameters", "Text/Event-Stream; charset=iso-8859-1", "text/event-stream; charset=utf-8"})
 	for _, media := range cases {
 		for _, commit := range []string{"write", "header", "flush", "informational"} {
+			media, commit := media, commit
 			t.Run(media.name+"/"+commit, func(t *testing.T) {
+				t.Parallel()
 				server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 					ctx, cancel := context.WithCancel(r.Context())
 					writer := &tokenStreamWriter{writer: w, flusher: w.(http.Flusher), ctx: ctx, cancel: cancel, allowed: func() bool { return true }}
@@ -447,7 +449,9 @@ func TestProtectedReadStreamsKeepOrgAndInstanceSplit(t *testing.T) {
 
 func TestTokenStreamWriterChecksReplayQueueAndFinalClosure(t *testing.T) {
 	for _, stage := range []string{"before_replay", "between_replay", "queued_write", "flush", "after_handler"} {
+		stage := stage
 		t.Run(stage, func(t *testing.T) {
+			t.Parallel()
 			cfg := newTestConfigWithTokens(t, newTokenRecord(t, scopedReadToken, []string{config.ScopeSettingsRead}, nil))
 			revoke := func() { config.Mu.Lock(); cfg.RemoveAPIToken(cfg.APITokens[0].ID); config.Mu.Unlock() }
 			var retained http.ResponseWriter

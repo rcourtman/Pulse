@@ -24,7 +24,9 @@ func TestQuickSecuritySetupFixturesInFreshProcesses(t *testing.T) {
 		"TestQuickSecuritySetupRotatesWithBasicAuth",
 		"TestQuickSecuritySetupAllowsRecoveryTokenRotation",
 	} {
+		name := name
 		t.Run(name, func(t *testing.T) {
+			t.Parallel()
 			ctx, cancel := context.WithTimeout(t.Context(), 30*time.Second)
 			defer cancel()
 			cmd := exec.CommandContext(ctx, executable,

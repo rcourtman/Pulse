@@ -27,7 +27,9 @@ func TestDockerAgentReportSizeContractAcceptsOrdinaryAndLargeFleets(t *testing.T
 	}
 
 	for _, test := range tests {
+		test := test
 		t.Run(test.name, func(t *testing.T) {
+			t.Parallel()
 			handler, _ := newDockerAgentHandlers(t, nil)
 			body := dockerFleetReportBody(t, test.runtime, test.containers)
 			if test.compressed {
@@ -50,6 +52,7 @@ func TestDockerAgentReportSizeContractAcceptsOrdinaryAndLargeFleets(t *testing.T
 
 func TestDockerAgentReportSizeContractBoundaries(t *testing.T) {
 	t.Run("uncompressed exact encoded limit accepted", func(t *testing.T) {
+		t.Parallel()
 		handler, _ := newDockerAgentHandlers(t, nil)
 		body := padDockerReportBody(t, dockerFleetReportBody(t, "docker", 1), agentsdocker.ReportEncodedBodyLimitBytes)
 		rec := postDockerReport(handler, body, "")
@@ -59,6 +62,7 @@ func TestDockerAgentReportSizeContractBoundaries(t *testing.T) {
 	})
 
 	t.Run("uncompressed byte over encoded limit rejected", func(t *testing.T) {
+		t.Parallel()
 		handler := &DockerAgentHandlers{}
 		body := padDockerReportBody(t, dockerFleetReportBody(t, "docker", 1), agentsdocker.ReportEncodedBodyLimitBytes+1)
 		rec := postDockerReport(handler, body, "")
@@ -66,6 +70,7 @@ func TestDockerAgentReportSizeContractBoundaries(t *testing.T) {
 	})
 
 	t.Run("gzip exact encoded limit accepted", func(t *testing.T) {
+		t.Parallel()
 		handler, _ := newDockerAgentHandlers(t, nil)
 		body := gzipAPIReportBodyWithEncodedSize(
 			t,
@@ -79,6 +84,7 @@ func TestDockerAgentReportSizeContractBoundaries(t *testing.T) {
 	})
 
 	t.Run("gzip byte over encoded limit rejected before decompression", func(t *testing.T) {
+		t.Parallel()
 		handler := &DockerAgentHandlers{}
 		body := gzipAPIReportBodyWithEncodedSize(
 			t,
@@ -90,6 +96,7 @@ func TestDockerAgentReportSizeContractBoundaries(t *testing.T) {
 	})
 
 	t.Run("gzip exact decoded limit accepted", func(t *testing.T) {
+		t.Parallel()
 		handler, _ := newDockerAgentHandlers(t, nil)
 		decoded := padDockerReportBody(t, dockerFleetReportBody(t, "podman", 1), agentsdocker.ReportDecodedBodyLimitBytes)
 		rec := postDockerReport(handler, gzipAPIReportBody(t, decoded), "gzip")
@@ -99,6 +106,7 @@ func TestDockerAgentReportSizeContractBoundaries(t *testing.T) {
 	})
 
 	t.Run("gzip byte over decoded limit rejected", func(t *testing.T) {
+		t.Parallel()
 		handler := &DockerAgentHandlers{}
 		decoded := padDockerReportBody(t, dockerFleetReportBody(t, "podman", 1), agentsdocker.ReportDecodedBodyLimitBytes+1)
 		rec := postDockerReport(handler, gzipAPIReportBody(t, decoded), "gzip")

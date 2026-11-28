@@ -913,7 +913,7 @@ func TestAlertAcknowledge_AllowsPrintableAlertIDs(t *testing.T) {
 }
 
 func TestStateEndpointReturnsMockData(t *testing.T) {
-	srv := newFleetIntegrationServer(t)
+	srv := newIntegrationServer(t)
 
 	res, err := http.Get(srv.server.URL + "/api/state")
 	if err != nil {
@@ -1277,7 +1277,7 @@ func TestHealthEndpointHeadAllowed(t *testing.T) {
 }
 
 func TestConfigNodesUsesMockTopology(t *testing.T) {
-	srv := newFleetIntegrationServer(t)
+	srv := newIntegrationServer(t)
 
 	res, err := http.Get(srv.server.URL + "/api/config/nodes")
 	if err != nil {
@@ -1300,7 +1300,7 @@ func TestConfigNodesUsesMockTopology(t *testing.T) {
 }
 
 func TestMockModeToggleEndpoint(t *testing.T) {
-	srv := newFleetIntegrationServer(t)
+	srv := newIntegrationServer(t)
 
 	if !mock.IsMockEnabled() {
 		t.Fatalf("mock mode should be enabled at start of test")

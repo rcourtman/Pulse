@@ -112,27 +112,37 @@ func TestReportingSubjectBoundaryExemptionIsExact(t *testing.T) {
 			})
 		}
 	}
+	sourceFiles := make(map[string][]byte)
+	for _, dir := range []string{"internal/api"} {
+		err := filepath.WalkDir(filepath.Join(repo, dir), func(path string, entry fs.DirEntry, err error) error {
+			if err != nil {
+				return err
+			}
+			if entry.IsDir() || !strings.HasSuffix(path, ".go") || strings.HasSuffix(path, "_test.go") {
+				return nil
+			}
+			rel, err := filepath.Rel(repo, path)
+			if err != nil {
+				return err
+			}
+			data, err := os.ReadFile(path)
+			if err != nil {
+				return err
+			}
+			sourceFiles[rel] = data
+			return nil
+		})
+		if err != nil {
+			t.Fatal(err)
+		}
+	}
 	for _, tc := range variants {
+		tc := tc
 		t.Run(tc.name, func(t *testing.T) {
+			t.Parallel()
 			root := t.TempDir()
-			for _, dir := range []string{"internal/api"} {
-				err := filepath.WalkDir(filepath.Join(repo, dir), func(path string, entry fs.DirEntry, err error) error {
-					if err != nil {
-						return err
-					}
-					if entry.IsDir() || !strings.HasSuffix(path, ".go") || strings.HasSuffix(path, "_test.go") {
-						return nil
-					}
-					rel, err := filepath.Rel(repo, path)
-					if err != nil {
-						return err
-					}
-					copyReportingBoundaryFile(t, path, filepath.Join(root, rel))
-					return nil
-				})
-				if err != nil {
-					t.Fatal(err)
-				}
+			for rel, data := range sourceFiles {
+				writeReportingBoundaryFile(t, filepath.Join(root, rel), data)
 			}
 			apiDir := filepath.Join(root, "internal/api")
 			if tc.file != "" {
@@ -148,12 +158,8 @@ func TestReportingSubjectBoundaryExemptionIsExact(t *testing.T) {
 	}
 }
 
-func copyReportingBoundaryFile(t *testing.T, source, target string) {
+func writeReportingBoundaryFile(t *testing.T, target string, data []byte) {
 	t.Helper()
-	data, err := os.ReadFile(source)
-	if err != nil {
-		t.Fatal(err)
-	}
 	if err := os.MkdirAll(filepath.Dir(target), 0700); err != nil {
 		t.Fatal(err)
 	}

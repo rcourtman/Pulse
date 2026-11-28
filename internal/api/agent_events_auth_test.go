@@ -132,7 +132,9 @@ func (w *agentEventRefreshWriter) Flush() {
 // of WithValue's context to prove it cannot retain earlier refresh snapshots.
 func TestAgentEventTokenRefreshKeepsBoundedContext(t *testing.T) {
 	for _, transport := range []string{"header", "bearer"} {
+		transport := transport
 		t.Run(transport, func(t *testing.T) {
+			t.Parallel()
 			const orgID = "refresh-tenant"
 			token := newTokenRecord(t, agentEventLifecycleToken, []string{config.ScopeMonitoringRead, config.ScopeAIExecute}, nil)
 			token.OrgID = orgID
@@ -314,7 +316,9 @@ func TestAgentEventTokenLifecycleClosesIdleStream(t *testing.T) {
 func TestAgentEventTokenLifecycleResolvesLiveTenantInventory(t *testing.T) {
 	const orgID = "tenant-a"
 	for _, change := range []string{"replaced", "removed", "same_credential_in_new_owner", "changes_during_validation", "no_global_fallback"} {
+		change := change
 		t.Run(change, func(t *testing.T) {
+			t.Parallel()
 			record := newTokenRecord(t, agentEventLifecycleToken, []string{config.ScopeMonitoringRead, config.ScopeAIExecute}, nil)
 			record.OrgID = orgID
 			base := &config.Config{}

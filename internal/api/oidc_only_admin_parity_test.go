@@ -10,7 +10,6 @@ import (
 
 	"github.com/rcourtman/pulse-go-rewrite/internal/config"
 	"github.com/rcourtman/pulse-go-rewrite/pkg/auth"
-	"golang.org/x/crypto/bcrypt"
 )
 
 func adminParitySession(t *testing.T, user string) *http.Cookie {
@@ -31,12 +30,12 @@ func adminParityConfig(t *testing.T, adminUser string) *config.Config {
 	}
 	cfg := &config.Config{DataPath: dir, ConfigPath: dir, APITokens: []config.APITokenRecord{*record}}
 	if adminUser != "" {
-		hashed, err := bcrypt.GenerateFromPassword([]byte("admin-parity-password"), bcrypt.DefaultCost)
+		hashed, err := auth.HashPassword("admin-parity-password")
 		if err != nil {
-			t.Fatalf("bcrypt: %v", err)
+			t.Fatalf("hash password: %v", err)
 		}
 		cfg.AuthUser = adminUser
-		cfg.AuthPass = string(hashed)
+		cfg.AuthPass = hashed
 	}
 	return cfg
 }

@@ -366,6 +366,7 @@ func requireWithin(t *testing.T, label string, done <-chan struct{}) {
 // withdrawal expire it, and nothing is written afterwards.
 func TestTokenStreamWriterInterruptsStalledTransport(t *testing.T) {
 	t.Run("close", func(t *testing.T) {
+		t.Parallel()
 		writer, base, wrote := guardOverStalledTransport(func() bool { return true })
 		closed := make(chan struct{})
 		go func() { writer.close(); close(closed) }()
@@ -380,6 +381,7 @@ func TestTokenStreamWriterInterruptsStalledTransport(t *testing.T) {
 	})
 
 	t.Run("withdrawal", func(t *testing.T) {
+		t.Parallel()
 		var allowed atomic.Bool
 		allowed.Store(true)
 		writer, _, wrote := guardOverStalledTransport(allowed.Load)
@@ -397,6 +399,7 @@ func TestTokenStreamWriterInterruptsStalledTransport(t *testing.T) {
 	})
 
 	t.Run("deadline control", func(t *testing.T) {
+		t.Parallel()
 		writer, base, wrote := guardOverStalledTransport(func() bool { return true })
 		set := make(chan struct{})
 		go func() {
@@ -533,7 +536,9 @@ func (p *panickingTransport) SetWriteDeadline(time.Time) error {
 // write that no longer exists.
 func TestTokenStreamWriterClearsIOStateOnTransportPanic(t *testing.T) {
 	for _, op := range []string{"write", "header", "flush"} {
+		op := op
 		t.Run(op, func(t *testing.T) {
+			t.Parallel()
 			base := &panickingTransport{ResponseRecorder: httptest.NewRecorder(), op: op}
 			ctx, cancel := context.WithCancel(context.Background())
 			defer cancel()

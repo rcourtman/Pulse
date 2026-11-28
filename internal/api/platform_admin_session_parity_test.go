@@ -12,7 +12,6 @@ import (
 	"github.com/rcourtman/pulse-go-rewrite/internal/config"
 	"github.com/rcourtman/pulse-go-rewrite/internal/models"
 	"github.com/rcourtman/pulse-go-rewrite/pkg/auth"
-	"golang.org/x/crypto/bcrypt"
 )
 
 func platformAdminSession(t *testing.T, user string) *http.Cookie {
@@ -27,12 +26,12 @@ func platformAdminConfig(t *testing.T, adminUser string) *config.Config {
 	dir := t.TempDir()
 	cfg := &config.Config{DataPath: dir, ConfigPath: dir}
 	if adminUser != "" {
-		hashed, err := bcrypt.GenerateFromPassword([]byte("platform-admin-password"), bcrypt.DefaultCost)
+		hashed, err := auth.HashPassword("platform-admin-password")
 		if err != nil {
-			t.Fatalf("bcrypt: %v", err)
+			t.Fatalf("hash password: %v", err)
 		}
 		cfg.AuthUser = adminUser
-		cfg.AuthPass = string(hashed)
+		cfg.AuthPass = hashed
 	}
 	return cfg
 }
