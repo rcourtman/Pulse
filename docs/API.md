@@ -1646,7 +1646,11 @@ scraping is enabled, check `pulse_scheduler_poll_planning_age_seconds` for
 unfinished planning passes and `pulse_scheduler_claimed_poll_overdue_seconds`
 (`waiting_for_slot` and `running`, which stays active while a worker is
 occupied in panic recovery logging after releasing its queue claim) for held
-workers. Check the other paths separately with
+workers. Under `POLL_TASK_WORKERS`, a confirmed removal releases a claim still
+waiting in `waiting_for_slot` without starting provider setup or changing the
+concurrency limit so another due target can proceed, preserving any explicit
+replacement's due time while an already-admitted `running` poll keeps its claim
+until it returns. Check the other paths separately with
 [System Health](#system-health), [Active alerts](#active-alerts),
 [missing-data checks](FAQ.md#no-data-showing) and
 [outage detection](ALERTING.md#detect-an-outage-of-pulse-itself). Do not

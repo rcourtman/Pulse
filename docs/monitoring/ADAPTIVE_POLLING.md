@@ -35,7 +35,12 @@ positive `pulse_scheduler_poll_planning_age_seconds` value means an active poll
 planning pass has not finished (for example while reading a provider roster),
 which can leave the queue empty before any task is scheduled. A positive
 `waiting_for_slot` value in `pulse_scheduler_claimed_poll_overdue_seconds` means
-overdue work is waiting for a shared worker slot. A positive `running` value
+overdue work is waiting for a shared worker slot. When a target is removed
+while its claim is still waiting for a process-wide slot (`POLL_TASK_WORKERS`),
+the dispatcher releases the retired claim without starting provider setup or
+changing the worker cap and moves on to another due target, while keeping any
+explicit replacement's own due time and leaving already-admitted `running`
+polls to finish under normal in-flight fences. A positive `running` value
 means a worker took the poll and has not returned within its time budget,
 including while a worker stays occupied in synchronous panic recovery logging
 after releasing its queue claim. Those are server-wide signals, not one
@@ -120,7 +125,7 @@ The separate Prometheus metrics listener binds to `127.0.0.1:9091` by default. `
 | `pulse_scheduler_claimed_poll_overdue_seconds` | Gauge | Seconds past one poll task timeout for the most overdue claimed poll, split by `waiting_for_slot` and `running` stages (retaining `running` while a worker is occupied in panic recovery logging after releasing its queue claim). |
 | `pulse_scheduler_dead_letter_depth` | Gauge | Terminal poll entries parked in running schedulers at scrape time. Cleared or retired label sets report zero for up to five minutes, then expire from the scrape. |
 
-Stopped or replaced schedulers drop out of the live queue and dead-letter gauges, while any unfinished planning pass remains visible in `pulse_scheduler_poll_planning_age_seconds` until it completes and any worker still holding a claimed poll (or blocked in panic recovery logging) remains visible in `pulse_scheduler_claimed_poll_overdue_seconds` until it returns. Delayed older poll results still increment `pulse_monitor_poll_total` without moving the latest completion timestamp or staleness age backwards.
+Stopped or replaced schedulers drop out of the live queue and dead-letter gauges, while any unfinished planning pass remains visible in `pulse_scheduler_poll_planning_age_seconds` until it completes and any worker still holding a claimed poll (or blocked in panic recovery logging) remains visible in `pulse_scheduler_claimed_poll_overdue_seconds` until it returns. Under `POLL_TASK_WORKERS`, a confirmed target removal releases a claim still waiting in `waiting_for_slot` without starting provider setup so another due target can take its turn. Delayed older poll results still increment `pulse_monitor_poll_total` without moving the latest completion timestamp or staleness age backwards.
 
 If a scrape still works but polling stops producing results, use the
 [last-success timestamp](PROMETHEUS_METRICS.md#check-whether-polling-is-still-running)

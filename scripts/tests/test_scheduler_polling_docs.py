@@ -452,8 +452,20 @@ class SchedulerPollingDocsTest(unittest.TestCase):
             "`pulse_scheduler_poll_planning_age_seconds`",
             "`pulse_scheduler_claimed_poll_overdue_seconds`",
             "panic recovery logging",
+            "Under `POLL_TASK_WORKERS`, removing a target releases a claim still waiting for a worker slot without starting provider setup so other due targets are not held behind it, while an already-admitted poll still finishes before releasing its claim.",
         ):
             self.assertIn(expected, rollout)
+
+        task_queue = (ROOT / "internal/monitoring/task_queue.go").read_text()
+        self.assertIn("func (l *pollTaskWorkerLimiter) acquireClaim(", task_workers)
+        self.assertIn("func (q *TaskQueue) watchClaimRetirement(", task_queue)
+        self.assertIn("func (q *TaskQueue) canStartClaim(", task_queue)
+        for expected in (
+            "When a target is removed while its claim is still waiting for a process-wide slot (`POLL_TASK_WORKERS`), the dispatcher releases the retired claim without starting provider setup or changing the worker cap and moves on to another due target",
+            "keeping any explicit replacement's own due time and leaving already-admitted `running` polls to finish under normal in-flight fences",
+            "Under `POLL_TASK_WORKERS`, a confirmed target removal releases a claim still waiting in `waiting_for_slot` without starting provider setup so another due target can take its turn.",
+        ):
+            self.assertIn(expected, adaptive)
 
 
 if __name__ == "__main__":

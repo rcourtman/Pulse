@@ -222,9 +222,57 @@ class WatchdogHelpDocsTest(unittest.TestCase):
 
         avail_poller = (ROOT / "internal/monitoring/availability_poller.go").read_text(encoding="utf-8")
         poll_providers = (ROOT / "internal/monitoring/poll_providers.go").read_text(encoding="utf-8")
+        task_queue_src = (ROOT / "internal/monitoring/task_queue.go").read_text(encoding="utf-8")
         self.assertIn("func (availabilityPollProvider) describesCompleteHealthRoster() {}", avail_poller)
         self.assertIn("type completeInstanceInfoPollProvider interface {", poll_providers)
         self.assertIn("func (m *Monitor) describeInstancesForScheduler(ctx context.Context) []InstanceDescriptor {", schedule_src)
+
+        for token in (
+            "func (l *pollTaskWorkerLimiter) acquireClaim(",
+            "if !limiter.acquireClaim(ctx, m.taskQueue, task) {",
+            "retired := q.watchClaimRetirement(task)",
+            "if ctx.Err() != nil || !q.canStartClaim(task) {",
+        ):
+            with self.subTest(retired_claim_worker_token=token):
+                self.assertIn(token, workers_src)
+
+        for token in (
+            "func (q *TaskQueue) watchClaimRetirement(",
+            "func (q *TaskQueue) canStartClaim(",
+            "entry.claimRetired = true",
+            "close(entry.retirement)",
+        ):
+            with self.subTest(retired_claim_queue_token=token):
+                self.assertIn(token, task_queue_src)
+
+        retired_claim_docs_checks = (
+            (
+                "docs/ALERTING.md",
+                (
+                    'Under POLL_TASK_WORKERS, a confirmed removal releases a claim still waiting under stage="waiting_for_slot" without starting provider setup or changing the worker limit so another due target can run',
+                    'preserving any explicit replacement\'s due time while already-admitted stage="running" polls keep their claim until they return',
+                ),
+            ),
+            (
+                "docs/monitoring/PROMETHEUS_METRICS.md",
+                (
+                    "If the connection or check is removed while its claim is still waiting for a slot, the dispatcher releases the retired claim without starting provider setup or changing the POLL_TASK_WORKERS limit and moves on to another due target",
+                    "An explicit replacement keeps its own due time, while a poll already admitted to running keeps its claim until it returns",
+                ),
+            ),
+            (
+                "docs/api/SCHEDULER_HEALTH.md",
+                (
+                    'Under POLL_TASK_WORKERS, a confirmed removal also retires a claim still waiting for a process worker slot (stage="waiting_for_slot"): the dispatcher releases that claim without starting provider setup or changing the concurrency cap and moves on to another due target',
+                    'preserving any explicit replacement\'s due time while an already-admitted stage="running" poll keeps its claim until it returns',
+                ),
+            ),
+        )
+        for rel_path, phrases in retired_claim_docs_checks:
+            text = plain((ROOT / rel_path).read_text(encoding="utf-8"))
+            for phrase in phrases:
+                with self.subTest(retired_claim_doc=rel_path, phrase=phrase):
+                    self.assertIn(phrase, text)
 
 
 if __name__ == "__main__":

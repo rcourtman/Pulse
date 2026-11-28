@@ -289,7 +289,12 @@ is not zero):
   and `stage="running"`) across fresh scrapes. Growing ages show queued or
   claimed polls falling behind their schedule or timeout budget. A worker stays
   visible under `stage="running"` even while occupied in panic recovery logging
-  after releasing its queue claim. A stopped scheduler drops out of
+  after releasing its queue claim. Under `POLL_TASK_WORKERS`, a confirmed
+  removal releases a claim still waiting under `stage="waiting_for_slot"`
+  without starting provider setup or changing the worker limit so another due
+  target can run, preserving any explicit replacement's due time while
+  already-admitted `stage="running"` polls keep their claim until they return.
+  A stopped scheduler drops out of
   `pulse_scheduler_queued_poll_overdue_seconds` even if a blocked worker has
   not returned yet, so keep checking
   `pulse_scheduler_claimed_poll_overdue_seconds` for that worker. Zero does not
