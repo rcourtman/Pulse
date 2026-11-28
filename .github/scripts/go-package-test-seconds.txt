@@ -1,50 +1,55 @@
-# Median full-package task seconds from four successful full PR runs on
-# 26 November 2026: 45911943897, 45912118332, 45913294212 and 45914027359.
-# Each run observed all 174 ordinary packages. Unseen holdout 45932014391 did
-# not feed these estimates; combined 3-way modeled task-seconds improve from
-# 1497.2/1642.5/1793.7 (spread 296.5s) to 1670.9/1617.1/1645.5 (spread 53.8s),
-# and 2-way from 2434.9/2498.6 (spread 63.7s) to 2461.0/2472.4 (spread 11.4s).
+# Median full-package task seconds from four complete post-#5350/#5355 hosted
+# Build and Test runs on 28 November 2026: 46111828719, 46115225207,
+# 46116465436, and 46119500388. Each run observed all 174 ordinary packages
+# (internal/config fell from 323.0s to 72.3s and internal/api/configapi from
+# 142.8s to 56.5s, while pkg/metrics rose from 260.6s to 324.9s and
+# internal/mock from 96.8s to 126.9s). Under leave-one-out holdout validation
+# across all four runs, combined 3-way PR peak task-seconds drop by -201.9s to
+# -278.0s across all three 3-way PR runs (46111828719, 46116465436, 46119500388)
+# and combined 2-way peak task-seconds drop by -112.5s to -183.2s across all
+# four runs, separating pkg/metrics, cmd/pulse-agent, and internal/notifications
+# one per rest shard.
 # Weights schedule the source-listed inventory. New and small packages use
 # the mean of the medians below 20 seconds. The release queue runs monitoring
-# and installtests whole, so keep their separate whole-package estimates
-# (refreshed 27 Nov 2026 from post-#5239 runs 45940742093, 45942566161,
-# 45942829787 and 45944948230).
-DEFAULT_WEIGHT 4.233
-# With monitoring-test-seconds.txt and installtests-test-seconds.txt
-# refreshed together, the two-way and three-way fixed slices are balanced
-# without artificial pre-assigned offsets. Re-measure after hosted runs if
-# fixed slice costs diverge again. This is scheduling, not a wall-time claim.
+# and installtests whole, so keep their whole-package task-second medians here.
+# monitoring-test-seconds.txt and installtests-test-seconds.txt remain unchanged
+# because leave-one-out validation confirmed both already outperform reweighted
+# alternatives.
+DEFAULT_WEIGHT 4.143
+# Keep both fixed-slice offset vectors zeroed: monitoring and installtests
+# slice weights stay balanced once ordinary package load is balanced across
+# shards. Re-measure after hosted runs if fixed slice costs diverge again.
+# This is scheduling, not a wall-time claim.
 REST_SHARD_FIXED_SECONDS 0 0
 REST_SHARD_FIXED_SECONDS_3 0 0 0
-github.com/rcourtman/pulse-go-rewrite/cmd/pulse-agent 305.940
-github.com/rcourtman/pulse-go-rewrite/internal/agentidentity 29.392
-github.com/rcourtman/pulse-go-rewrite/internal/agentupdate 73.203
-github.com/rcourtman/pulse-go-rewrite/internal/ai 52.610
-github.com/rcourtman/pulse-go-rewrite/internal/ai/chat 24.489
-github.com/rcourtman/pulse-go-rewrite/internal/alerts 232.816
-github.com/rcourtman/pulse-go-rewrite/internal/alerts/eventlog 41.546
-github.com/rcourtman/pulse-go-rewrite/internal/api/alerting 24.057
-github.com/rcourtman/pulse-go-rewrite/internal/api/chartapi 20.123
-github.com/rcourtman/pulse-go-rewrite/internal/api/configapi 142.825
-github.com/rcourtman/pulse-go-rewrite/internal/config 322.996
-github.com/rcourtman/pulse-go-rewrite/internal/dockeragent 104.608
-github.com/rcourtman/pulse-go-rewrite/internal/hostagent 52.153
-github.com/rcourtman/pulse-go-rewrite/internal/kubernetesagent 24.444
-github.com/rcourtman/pulse-go-rewrite/internal/mock 96.831
-github.com/rcourtman/pulse-go-rewrite/internal/monitoring 1081.008
-github.com/rcourtman/pulse-go-rewrite/internal/notifications 341.424
-github.com/rcourtman/pulse-go-rewrite/internal/recovery/store 33.988
-github.com/rcourtman/pulse-go-rewrite/internal/relay 73.048
-github.com/rcourtman/pulse-go-rewrite/internal/telemetry 38.939
-github.com/rcourtman/pulse-go-rewrite/internal/truenas 51.237
-github.com/rcourtman/pulse-go-rewrite/internal/unifiedresources 190.243
-github.com/rcourtman/pulse-go-rewrite/internal/updates 23.723
-github.com/rcourtman/pulse-go-rewrite/internal/websocket 54.477
-github.com/rcourtman/pulse-go-rewrite/pkg/auth 26.592
-github.com/rcourtman/pulse-go-rewrite/pkg/db 34.878
-github.com/rcourtman/pulse-go-rewrite/pkg/metrics 260.591
-github.com/rcourtman/pulse-go-rewrite/pkg/proxmox 37.562
-github.com/rcourtman/pulse-go-rewrite/pkg/pulsecli 39.691
-github.com/rcourtman/pulse-go-rewrite/pkg/server 53.419
-github.com/rcourtman/pulse-go-rewrite/scripts/installtests 880.655
-github.com/rcourtman/pulse-go-rewrite/tests/migration 25.482
+github.com/rcourtman/pulse-go-rewrite/cmd/pulse-agent 241.227
+github.com/rcourtman/pulse-go-rewrite/internal/agentidentity 20.957
+github.com/rcourtman/pulse-go-rewrite/internal/agentupdate 74.418
+github.com/rcourtman/pulse-go-rewrite/internal/ai 47.350
+github.com/rcourtman/pulse-go-rewrite/internal/ai/chat 23.236
+github.com/rcourtman/pulse-go-rewrite/internal/alerts 166.281
+github.com/rcourtman/pulse-go-rewrite/internal/alerts/eventlog 32.604
+github.com/rcourtman/pulse-go-rewrite/internal/api/alerting 26.835
+github.com/rcourtman/pulse-go-rewrite/internal/api/chartapi 21.813
+github.com/rcourtman/pulse-go-rewrite/internal/api/configapi 56.475
+github.com/rcourtman/pulse-go-rewrite/internal/config 72.262
+github.com/rcourtman/pulse-go-rewrite/internal/dockeragent 110.297
+github.com/rcourtman/pulse-go-rewrite/internal/hostagent 59.111
+github.com/rcourtman/pulse-go-rewrite/internal/mock 126.868
+github.com/rcourtman/pulse-go-rewrite/internal/monitoring 1005.473
+github.com/rcourtman/pulse-go-rewrite/internal/notifications 233.322
+github.com/rcourtman/pulse-go-rewrite/internal/recovery/store 28.193
+github.com/rcourtman/pulse-go-rewrite/internal/relay 72.448
+github.com/rcourtman/pulse-go-rewrite/internal/telemetry 43.696
+github.com/rcourtman/pulse-go-rewrite/internal/truenas 51.303
+github.com/rcourtman/pulse-go-rewrite/internal/unifiedresources 183.175
+github.com/rcourtman/pulse-go-rewrite/internal/updates 21.934
+github.com/rcourtman/pulse-go-rewrite/internal/websocket 55.442
+github.com/rcourtman/pulse-go-rewrite/pkg/auth 27.140
+github.com/rcourtman/pulse-go-rewrite/pkg/db 42.956
+github.com/rcourtman/pulse-go-rewrite/pkg/metrics 324.930
+github.com/rcourtman/pulse-go-rewrite/pkg/proxmox 36.597
+github.com/rcourtman/pulse-go-rewrite/pkg/pulsecli 34.722
+github.com/rcourtman/pulse-go-rewrite/pkg/server 44.584
+github.com/rcourtman/pulse-go-rewrite/scripts/installtests 816.981
+github.com/rcourtman/pulse-go-rewrite/tests/migration 28.979
