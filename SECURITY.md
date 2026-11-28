@@ -656,6 +656,19 @@ intended Pulse destination:
   an already registered source. An ordinary reporting token does not authorise
   arbitrary new connections. Installer-issued Proxmox tokens can carry a
   separate, limited bootstrap grant; not every API token is a setup credential.
+  Before an `agent:report` token can update an existing Proxmox VE or PBS
+  connection, Pulse verifies that the matched connection accepts the submitted
+  PVE or PBS token (refusing with HTTP `403` otherwise) and rechecks that the
+  agent token is still valid with the same registration authority before saving.
+  Background agent re-registration never replaces an existing saved TLS
+  certificate pin with a conflicting certificate and never lowers strict TLS
+  verification on a saved connection. To update a changed certificate pin,
+  verify the new fingerprint independently and edit the saved connection as an
+  administrator.
+- **Command-enabled install tokens:** when an API token requests an agent
+  install token with remote commands enabled, Pulse requires `agent:exec` on
+  the calling token in addition to `settings:write`, so a settings-only token
+  cannot mint a command-capable credential.
 
 Manage long-lived tokens in **Settings → API Access**, in the **Security** group,
 using the [API token guidance](docs/CONFIGURATION.md#-api-tokens). The legacy

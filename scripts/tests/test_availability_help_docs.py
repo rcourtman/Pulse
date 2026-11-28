@@ -105,6 +105,43 @@ class AvailabilityHelpDocsTest(unittest.TestCase):
         self.assertIn("httpCertificateRefusal", self.probe_go)
         self.assertIn("does not send them to an untrusted certificate", self.guide)
 
+    def test_https_write_only_secrets_reentry_and_probe_bounds_match_source(self) -> None:
+        handlers_go = (ROOT / "internal/api/availability_handlers.go").read_text(encoding="utf-8")
+        config_go = (ROOT / "internal/config/availability.go").read_text(encoding="utf-8")
+
+        for marker in (
+            "func mergeAvailabilityHTTPSecrets(",
+            "if !sameAvailabilityHTTPOrigin(previous, next)",
+            "if availabilityTargetGainsProbeAgent(previous, target) && availabilityTargetReusesHTTPSecrets(requested, target)",
+            '"http_secrets_reentry_required"',
+        ):
+            self.assertIn(marker, handlers_go)
+
+        for marker in (
+            "HTTP certificate fingerprint must be a SHA-256 value (64 hexadecimal characters)",
+            "if len(contract.Headers) > 16",
+        ):
+            self.assertIn(marker, config_go)
+
+        for marker in (
+            "const httpProbeErrorLimit = 240",
+            "const httpProbeMaxResponseHeaderBytes = 64 << 10",
+        ):
+            self.assertIn(marker, self.probe_go)
+
+        for phrase in (
+            "64-character hexadecimal SHA-256 value",
+            "write-only through the API",
+            "same scheme, host and port",
+            "adding a new observation-location agent",
+            "http_secrets_reentry_required",
+            "at most 16 custom request headers",
+            "at most 64 KiB of response headers",
+            "240 bytes",
+        ):
+            with self.subTest(phrase=phrase):
+                self.assertIn(phrase, self.guide)
+
     def test_build_stage_push_checks_not_mentioned(self) -> None:
         self.assertNotIn("push check", self.guide.lower())
         self.assertNotIn("push checks", self.guide.lower())

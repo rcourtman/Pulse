@@ -433,6 +433,33 @@ class SecurityDocsTest(unittest.TestCase):
         self.assertIn("func TestLoad_500Node_ConcurrentResources(",
                       (ROOT / "internal/api/resourceapi/load_test.go").read_text())
 
+    def test_auto_registration_credential_pin_and_exec_ceiling_match_source(self):
+        source = DOC.read_text(encoding="utf-8")
+        section = source.split("### Auto-Registration Security\n", 1)[1].split("\n### ", 1)[0]
+        guide = " ".join(section.split())
+        setup_go = (ROOT / "internal/api/configapi/config_setup_handlers.go").read_text(encoding="utf-8")
+
+        for marker in (
+            "func defaultVerifyAutoRegisterCredential(",
+            "func refuseAgentAutoRegisterCredential(",
+            "func (h *ConfigHandlers) agentAutoRegisterAuthorityStands(",
+            "config.ProxmoxFingerprintsConflict(instance.Fingerprint,",
+            "if !(agentAuth && !agentAuthority.installGrant) && !instance.VerifySSLExplicit && instance.VerifySSL && instance.Fingerprint == \"\"",
+            "if req.EnableCommands && !apihttp.EnsureScope(w, r, config.ScopeAgentExec)",
+        ):
+            self.assertIn(marker, setup_go)
+
+        for phrase in (
+            "verifies that the matched connection accepts the submitted PVE or PBS token",
+            "refusing with HTTP `403` otherwise",
+            "rechecks that the agent token is still valid with the same registration authority",
+            "never replaces an existing saved TLS certificate pin with a conflicting certificate",
+            "never lowers strict TLS verification on a saved connection",
+            "requires `agent:exec` on the calling token in addition to `settings:write`",
+        ):
+            with self.subTest(phrase=phrase):
+                self.assertIn(phrase, guide)
+
 
 if __name__ == "__main__":
     unittest.main()
