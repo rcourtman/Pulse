@@ -918,6 +918,89 @@ class AIAutonomyHelpDocsTest(unittest.TestCase):
             with self.subTest(doc="SCHEDULER_HEALTH.md", phrase=phrase):
                 self.assertIn(phrase, sched_norm)
 
+    def test_agentexec_session_policy_and_patrol_authority_help_matches_source(
+        self,
+    ) -> None:
+        token_binding = (
+            ROOT / "internal/api/agent_exec_token_binding.go"
+        ).read_text(encoding="utf-8")
+        agentexec_server = (
+            ROOT / "internal/agentexec/server.go"
+        ).read_text(encoding="utf-8")
+        policy_go = (ROOT / "internal/agentexec/policy.go").read_text(encoding="utf-8")
+        policy_args = (ROOT / "internal/agentexec/policy_args.go").read_text(
+            encoding="utf-8"
+        )
+        logread_go = (ROOT / "internal/hostagent/commands_logread.go").read_text(
+            encoding="utf-8"
+        )
+        action_auth = (ROOT / "internal/api/action_authority.go").read_text(
+            encoding="utf-8"
+        )
+        ai_handlers = (ROOT / "internal/api/ai_handlers.go").read_text(
+            encoding="utf-8"
+        )
+
+        self.assertIn("agentExecIdentityHeldByAnotherToken", token_binding)
+        self.assertIn("messageWriteWait      = 10 * time.Second", agentexec_server)
+        self.assertIn("func (p *CommandPolicy) EvaluateForTarget(", policy_go)
+        self.assertIn("var pveshDeniedSegments = []string{", policy_args)
+        self.assertIn("func formatTemplatesSelectFields(", policy_args)
+        self.assertIn("const maxLogReadFiles = 256", logread_go)
+        self.assertIn("func assistantSessionAccessForRequest(", action_auth)
+        self.assertIn(
+            'Changing the "+config.AIProviderDisplayName(provider)+" base URL to a different server requires entering its credential again',
+            ai_handlers,
+        )
+        self.assertIn(
+            'writeErrorResponse(w, http.StatusForbidden, "action_capability_denied", "Writing a dismissal note requires permission to execute actions", nil)',
+            ai_handlers,
+        )
+        self.assertIn("func patrolToolOutputAllowed(", ai_handlers)
+
+        for rel in (
+            "docs/AGENT_SECURITY.md",
+            "docs/AI.md",
+            "docs/ASSISTANT_SAFETY.md",
+        ):
+            self.assertEqual(
+                (ROOT / rel).read_bytes(),
+                (ROOT / "frontend-modern/public" / rel).read_bytes(),
+            )
+
+        agent_sec = " ".join(
+            (ROOT / "docs/AGENT_SECURITY.md").read_text(encoding="utf-8").split()
+        )
+        for phrase in (
+            "First-use install-token bindings, legacy migrations, and ID backfills are refused when another unexpired token in the same organization already holds the live command session, the live host record, or a durable token binding for that agent ID, leaving the refused token unbound.",
+            "enforce a **10-second** write deadline on WebSocket text writes so a stalled agent connection is closed instead of pinning action dispatch.",
+            "Host log reads (`cat`, `head`, `tail`, and `grep`) under `/var/log` are opened directly by the host agent beneath `/var/log` (symlink-safe, up to `256` files per command) and passed to the program through `/dev/fd` descriptors rather than raw path names.",
+            "container and VM log reads require explicit approval rather than auto-approval.",
+            "Auto-approved `pvesh get` commands are limited to listed non-credential API subtrees (`version`, `nodes`, `storage`, `pools`, and selected `cluster/*` read paths) and refuse `file-read`, `file-restore`, `extractconfig`, `cloudinit`, `report`, and `subscription` segments.",
+            "Auto-approved `docker` and `podman` `--format` templates allow only direct field selections (such as `{{.State.Status}}` or `{{json .Mounts}}`) and refuse functions, loops, pipelines, or credential-named fields that could strip output masking.",
+        ):
+            with self.subTest(doc="AGENT_SECURITY.md", phrase=phrase):
+                self.assertIn(phrase, agent_sec)
+
+        ai_doc = " ".join((ROOT / "docs/AI.md").read_text(encoding="utf-8").split())
+        for phrase in (
+            "adding free-text dismissal or resolution notes, or saving a finding note, requires action-execution authority (`HTTP 403`, `action_capability_denied`) because those notes enter Patrol's prompt context on later runs.",
+            "raw host tool outputs in Patrol run history (`?include=tool_calls`), live streams, and investigation transcripts are withheld unless the caller has action-execution authority.",
+            "Changing an OpenAI, Z.ai, or Ollama provider's base URL to a different server origin requires re-entering its saved API key or password so Pulse never replays a write-only credential to another server.",
+        ):
+            with self.subTest(doc="AI.md", phrase=phrase):
+                self.assertIn(phrase, ai_doc)
+
+        safety_doc = " ".join(
+            (ROOT / "docs/ASSISTANT_SAFETY.md").read_text(encoding="utf-8").split()
+        )
+        for phrase in (
+            "Assistant sessions (used by legacy Pulse Mobile chat until 31 March 2027) are scoped to the caller who created them (user identity for interactive sign-ins, or the specific API token ID for token callers) unless the caller holds action-execution authority.",
+            "Patrol tool outputs in run history, live streams, and investigation transcripts, along with prompt-steering finding, dismissal, and resolution notes, follow the same action-execution authority boundary.",
+        ):
+            with self.subTest(doc="ASSISTANT_SAFETY.md", phrase=phrase):
+                self.assertIn(phrase, safety_doc)
+
 
 if __name__ == "__main__":
     unittest.main()

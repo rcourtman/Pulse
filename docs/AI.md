@@ -226,6 +226,15 @@ Findings can be managed via the UI or API:
 
 Dismissed and resolved findings persist across Pulse restarts.
 
+Callers without action-execution authority can still dismiss or resolve
+findings they can see, but adding free-text dismissal or resolution notes, or
+saving a finding note, requires action-execution authority (`HTTP 403`,
+`action_capability_denied`) because those notes enter Patrol's prompt context
+on later runs. Patrol run summaries, findings, and the model's analysis remain
+readable by authorised callers, while raw host tool outputs in Patrol run
+history (`?include=tool_calls`), live streams, and investigation transcripts
+are withheld unless the caller has action-execution authority.
+
 #### Remove a rule created by mistake
 
 **Reopen** undoes an individual finding's dismissal, not a separately created
@@ -591,6 +600,10 @@ Configure providers in the UI: **Settings → Pulse Intelligence → Provider & 
 Legacy Anthropic OAuth fields may still appear in stored settings so existing
 installs can disconnect and clear old tokens, but Anthropic OAuth is not a
 supported runtime authentication method and does not make Anthropic configured.
+
+Changing an OpenAI, Z.ai, or Ollama provider's base URL to a different server
+origin requires re-entering its saved API key or password so Pulse never
+replays a write-only credential to another server.
 
 ### Local subscription-agent routes
 
