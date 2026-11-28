@@ -64,7 +64,7 @@ func TestAdaptiveSchedulerFreshnessReadDoesNotBlockOtherPlans(t *testing.T) {
 	completed := make(chan observation, 1)
 	go func() {
 		prior, ok := scheduler.LastScheduled(fast.Type, fast.Name)
-		after := scheduler.planSuccessor(now, fast, 0)
+		after := scheduler.planSuccessor(now, fast, 0, nil)
 		completed <- observation{prior: prior, hadPrior: ok, after: after}
 	}()
 	select {
@@ -142,7 +142,7 @@ func TestAdaptiveSchedulerSuccessorMatchesSingleEntryPlan(t *testing.T) {
 			}
 			batchRequest, successorRequest = IntervalRequest{}, IntervalRequest{}
 			want := batch.BuildPlan(now, []InstanceDescriptor{desc}, 12)[0]
-			got := successor.planSuccessor(now, desc, 12)
+			got := successor.planSuccessor(now, desc, 12, nil)
 			if got != want || successorRequest != batchRequest {
 				t.Fatalf("successor = %+v with request %+v, want %+v with request %+v", got, successorRequest, want, batchRequest)
 			}
@@ -162,7 +162,7 @@ func BenchmarkAdaptiveSchedulerSuccessor(b *testing.B) {
 			return s.BuildPlan(now, []InstanceDescriptor{desc}, 12)[0]
 		}},
 		{"successor", func(s *AdaptiveScheduler, now time.Time, desc InstanceDescriptor) ScheduledTask {
-			return s.planSuccessor(now, desc, 12)
+			return s.planSuccessor(now, desc, 12, nil)
 		}},
 	} {
 		b.Run(tc.name, func(b *testing.B) {

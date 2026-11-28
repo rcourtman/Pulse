@@ -40,7 +40,6 @@ func (m *Monitor) describeInstancesForScheduler(ctx context.Context) []InstanceD
 			continue
 		}
 		providerType := provider.Type()
-		first := len(descriptors)
 		if batch, ok := provider.(pollPlanningRosterProvider); ok {
 			roster := batch.pollPlanningRoster(m)
 			if ctx.Err() != nil {
@@ -78,20 +77,6 @@ func (m *Monitor) describeInstancesForScheduler(ctx context.Context) []InstanceD
 					desc.FixedInterval = fixedProvider.FixedInstanceInterval(m, name)
 				}
 				descriptors = append(descriptors, desc)
-			}
-		}
-
-		for i := first; i < len(descriptors); i++ {
-			desc := &descriptors[i]
-			// BuildPlan reads the prior slot and interval under its planner
-			// lock. Copying those here could mask a newer worker successor
-			// published while the periodic plan is preparing its inputs.
-			if m.stalenessTracker != nil {
-				if snap, ok := m.stalenessTracker.snapshot(providerType, desc.Name); ok {
-					desc.LastSuccess = snap.LastSuccess
-					desc.LastFailure = snap.LastError
-					desc.Metadata = TaskMetadata{ChangeHash: snap.ChangeHash}
-				}
 			}
 		}
 	}
@@ -135,7 +120,9 @@ func (m *Monitor) schedulePollDescriptors(now time.Time, descriptors []InstanceD
 		return tasks
 	}
 
-	return m.scheduler.BuildPlan(now, descriptors, queueDepth)
+	// The planner reads the prior slot and interval under its own lock.
+	// Staging those earlier could mask a worker's newer successor.
+	return m.scheduler.buildPlan(now, descriptors, queueDepth, m.stalenessTracker)
 }
 
 func (m *Monitor) planScheduledPolls(ctx context.Context, now time.Time) {
@@ -305,15 +292,5 @@ func (m *Monitor) nextScheduledPoll(task ScheduledTask) (ScheduledTask, pollResc
 		LastScheduled: task.NextRun,
 		FixedInterval: fixedInterval,
 	}
-	if m.stalenessTracker != nil {
-		if snap, ok := m.stalenessTracker.snapshot(task.InstanceType, task.InstanceName); ok {
-			desc.LastSuccess = snap.LastSuccess
-			desc.LastFailure = snap.LastError
-			if snap.ChangeHash != "" {
-				desc.Metadata = TaskMetadata{ChangeHash: snap.ChangeHash}
-			}
-		}
-	}
-
-	return m.scheduler.planSuccessor(time.Now(), desc, m.taskQueue.Size()), pollOnCadence
+	return m.scheduler.planSuccessor(time.Now(), desc, m.taskQueue.Size(), m.stalenessTracker), pollOnCadence
 }
