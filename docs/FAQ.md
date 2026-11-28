@@ -446,6 +446,23 @@ does not prove that every reading is fresh. Missing or unavailable is not zero.
   received and may no longer be current.`), labels the health card **Last known
   temperature**, and defers temperature and SMART history charts as last-known
   values until live reporting recovers.
+- **Storage pools** (Proxmox storage pools, Ceph storage pools, and TrueNAS ZFS
+  pools on **Storage** tables) surface source staleness when polling goes quiet
+  or hits a collection error, even when an unrelated availability check stays
+  healthy. Stale clear pools switch to amber **Stale** (leaving **Status:
+  Healthy**, joining **Status: Needs attention** and **Status: Warning**,
+  sorting ahead of fresh healthy pools, and grouping under `stale` when grouped
+  by status). Explicit severe pool states (**Faulted**, **Offline**,
+  **Critical**, **Failed**, **Unavailable**, **Degraded**, and **Warning**) keep
+  their state label and tone, and open alert headlines remain visible. Both show
+  an inline amber **Stale data** cue beneath them on desktop and phones while
+  keeping retained usage bars visible. Storage search matches `stale`,
+  `stale data`, refresh age, and source error text. Expanding a stale pool
+  drawer lists the stale **State** reason under **Worth checking**, frames
+  inline Capacity History as last known
+  (`Retained last-known storage values, not a current reading.`) instead of live
+  readings, and shows total pool capacity rather than a live used figure in the
+  facts strip until live updates resume.
 
 Use the relevant checks for [stale TrueNAS data](TRUENAS.md#stale-truenas-data),
 [stale Kubernetes readings](KUBERNETES.md#stale-kubernetes-readings),

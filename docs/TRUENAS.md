@@ -37,7 +37,7 @@ On your TrueNAS system:
 | Data | Pulse page / tab | Details |
 |---|---|---|
 | System info (hostname, version, uptime) | TrueNAS → Overview | CPU, [memory and ARC cache](#memory-usage-and-arc-cache), health status |
-| ZFS Pools | TrueNAS → Storage | [Total/used/free capacity](#pool-health-without-capacity), pool status (ONLINE/DEGRADED/FAULTED) |
+| ZFS Pools | TrueNAS → Storage | [Total/used/free capacity](#pool-health-without-capacity), pool status (ONLINE/DEGRADED/FAULTED), and stale-source **Stale** / **Stale data** cues when polling is quiet or impaired |
 | ZFS Datasets | TrueNAS → Storage | Used/available space, mount status, read-only flag |
 | Physical Disks | TrueNAS → Storage | Model, serial, size, transport type, rotational flag, temperature, and native SMART failure/counter evidence when TrueNAS reports it |
 | System services | TrueNAS → Services | Service state (SMB, NFS, SSH, SMART, etc.), boot-start warnings (**should be running**), and stale-source **not updated** notices |
@@ -610,6 +610,17 @@ connection is edited, paused, or removed, Pulse retires the old poller
 ownership before closing its transport and cancels in-flight RPC work
 (including a socket blocked in negotiation) without waiting for an appliance
 timeout or replaying interrupted operations.
+
+When TrueNAS polling goes quiet or hits a collection error, clear ZFS pools in
+**TrueNAS → Storage** switch to amber **Stale** (leaving **Status: Healthy**,
+joining **Status: Needs attention** and **Status: Warning**, and sorting ahead
+of fresh healthy pools), while **Degraded**, **Faulted**, **Offline**, and open
+alert headlines remain visible with an inline amber **Stale data** cue and
+retained usage bars. Expanding the pool drawer lists the stale **State** reason
+under **Worth checking**, defers inline Capacity History as a last-known value
+(`Retained last-known storage values, not a current reading.`), and shows total
+pool capacity instead of a live used figure in the facts strip until live
+polling recovers.
 
 **Test connection** is not a complete poll. Some older builds, including Pulse
 6.4.1 and 6.4.5, also let a saved-connection test update `lastAttemptAt` and
