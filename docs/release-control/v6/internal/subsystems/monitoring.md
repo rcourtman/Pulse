@@ -322,6 +322,17 @@ slots occupied before enqueue, verifies that the gauge ages even with an
 empty queue, and checks that a newer successful plan does not clear the
 older marker before it unwinds.
 
+A periodic poll cycle uses its monitor's cancellation context. It does not
+admit a plan if cancellation was observed before or after reading the provider
+roster. If a roster returns after cancellation, its results reach neither
+the adaptive cache nor the queue, and the abandoned cycle does not record
+statistics or reconcile alerts. A cycle also checks cancellation before
+each enqueue and before starting its post-plan updates. These are admission
+checks, not a promise to interrupt a callback or update already in progress.
+`TestCanceledPollPlanDoesNotPublishAfterRosterReturns` holds a roster across
+cancellation in fixed and adaptive modes and checks the queue, adaptive
+cache, cycle count, and alert state after the planner returns.
+
 ### Notification delivery health does not hold the monitoring tick
 
 Periodic notification-health evaluation still starts from the poll tick and
