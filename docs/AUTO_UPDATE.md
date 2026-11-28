@@ -28,22 +28,23 @@ installer in **Settings → Infrastructure → Install on a host**. See
 
 ### When an Update is Available
 
-1. Navigate to **Settings → System → Updates**
-2. If an update is available, you'll see an **"Install Update"** button
-3. Click the button to open the confirmation dialog
+1. Navigate to **Settings → System → Updates** (or use the global update banner at the top of the page)
+2. If an update is available and no readiness check is blocked, you'll see an **"Install Update"** button in Settings (or **"Apply Update"** in the banner)
+3. Click the button to open the **Confirm Update** dialog
 4. Review the update details:
    - Current version → New version
    - Major-version or pre-release warning, when the update carries one
+   - **Upgrade checks** (`Blocked`, `Warning`, and `Pass`), when readiness data is loaded
    - Estimated time and prerequisites, when listed
    - Root-access notice, when the update requires root
    - Automatic backup notice, when rollback is supported
-5. Click **"Start Update"** in the confirmation dialog to begin
+5. Acknowledge the temporary unavailability notice and click **"Start Update"** to begin. When any readiness check is blocked, acknowledgement is disabled and the button shows **"Install blocked"** until the blocked check is resolved.
 
 ### Upgrade checks
 
-When an update is available, **Settings → System → Updates** loads upgrade
-readiness checks from `GET /api/updates/plan` (`ready`, `attention`, or
-`blocked`):
+When an update is available, **Settings → System → Updates**, the global update
+banner, and the **Confirm Update** dialog load upgrade readiness checks from
+`GET /api/updates/plan` (`ready`, `attention`, or `blocked`):
 
 - **Server update path** (`server-update-path`): whether automatic install and
   rollback support are available or manual steps are required.
@@ -59,6 +60,17 @@ readiness checks from `GET /api/updates/plan` (`ready`, `attention`, or
   Docker installs when Pulse's runtime data directory (`/data` or
   `PULSE_DATA_DIR`) is on the container's ephemeral root filesystem instead of
   a mounted volume.
+
+In the collapsed update banner, a blocked readiness check replaces **Apply
+Update** with an **Update blocked** badge and a **Review checks** button.
+Non-blocking warnings show an upgrade-warning button (`1 upgrade warning`,
+`N upgrade warnings`, or `Upgrade checks need review`) that expands the banner.
+Both the expanded banner and the **Confirm Update** dialog show the **Upgrade
+checks** panel ordered **Blocked**, **Warning**, then **Pass** with each
+check's summary and remediation details. When any check is blocked, the
+expanded banner disables **Apply Update Automatically** as **Install blocked**,
+and **Confirm Update** disables the acknowledgement checkbox and **Start
+Update** as **Install blocked**.
 
 Resolve any **blocked** checks before installing an update. Review **warning**
 checks before proceeding, even though they do not disable installation.

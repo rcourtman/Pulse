@@ -2243,10 +2243,12 @@ Query params:
 - `resourceType` (required): `node`, `storage`, `agent`, `disk`, `k8s` (or the Kubernetes kinds `pod`, `k8s-cluster`, `k8s-node`, `k8s-deployment`, which read the same history), `vm`, `system-container`, `oci-container`, `app-container`, `docker-host`
 - `resourceId` (required)
 - `metric` (optional): `cpu`, `memory`, `disk`, etc. Omit for all metrics
-- `range` (optional): Positive whole days (for example `7d`, `90d`) or a duration like `30m` or `24h`. Omitted or blank defaults to `24h`. Maximum `365d` (`8760h`) per request; invalid or longer ranges return `400`.
+- `range` (optional): Positive whole days (for example `7d`, `90d`) or a duration like `30m` or `24h`. Omitted or blank defaults to `24h`. Maximum `365d` (`8760h`) per request. Invalid or longer ranges return `400`.
+- `start`, `end` (optional, mutually exclusive with `range`): Positive integer Unix-millisecond timestamps for an exact custom window. Both must be provided once when either is supplied, `end` must be greater than `start`, the span must be between `1s` and `365d`, and `end` cannot be in the future. Conflicting or invalid values return `400`.
 - `maxPoints` (optional): Downsample to a target number of points
 
 > **Plans**: The same request limit applies on every plan. The answer includes only observations that storage retention still keeps.
+Responses include resolved `start` and `end` Unix-millisecond bounds and set `range` to `"custom"` when queried with `start` and `end`.
 An explicit `metric` returns a `points` array; omitting it returns a `metrics`
 object keyed by metric name. Use the source ID and type from the affected
 chart's request, not its display name or an internal store type. Older

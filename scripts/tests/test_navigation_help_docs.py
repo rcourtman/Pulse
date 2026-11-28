@@ -379,6 +379,144 @@ class NavigationHelpDocsTest(unittest.TestCase):
             with self.subTest(source="resources.go", marker=marker):
                 self.assertIn(marker, resources_go)
 
+    def test_drawer_history_zoom_and_custom_window_help_match_runtime(self):
+        history = doc_text("METRICS_HISTORY.md")
+        api_doc = doc_text("API.md")
+        self.assertEqual(
+            history,
+            (ROOT / "frontend-modern/public/docs/METRICS_HISTORY.md").read_text(encoding="utf-8"),
+        )
+        self.assertEqual(
+            api_doc,
+            (ROOT / "frontend-modern/public/docs/API.md").read_text(encoding="utf-8"),
+        )
+
+        zoom_section = " ".join(
+            history.split("### Zoom and custom time windows\n", 1)[1]
+            .split("\n### ", 1)[0]
+            .replace("**", "")
+            .replace("`", "")
+            .split()
+        )
+        for phrase in (
+            "click and drag horizontally across a drawer chart",
+            "synchronized time selection across every panel",
+            "minimum span of 1 minute",
+            "Press Escape while dragging to cancel without closing the drawer",
+            "Select time window",
+            "Start and End editor",
+            "timezone-offset selector",
+            "even when the current preset has no stored readings",
+            "between 1 minute and 365 days and cannot end in the future",
+            "Reset zoom",
+            "Live 30-second background polling and live fallback readings pause",
+            "Double-click a chart, click Reset zoom, or choose a preset in History range",
+        ):
+            with self.subTest(zoom_phrase=phrase):
+                self.assertIn(phrase, zoom_section)
+
+        history_prose = " ".join(history.replace("**", "").replace("`", "").split())
+        api_prose = " ".join(api_doc.replace("**", "").replace("`", "").split())
+        for label, text in (("METRICS_HISTORY.md", history_prose), ("API.md", api_prose)):
+            for phrase in (
+                "mutually exclusive with range",
+                "Positive integer Unix-millisecond timestamps",
+                "Both must be provided once when either is supplied",
+                "end must be greater than start",
+                "span must be between 1s and 365d",
+                "end cannot be in the future",
+                'range set to "custom"' if label == "METRICS_HISTORY.md" else 'set range to "custom"',
+            ):
+                with self.subTest(doc=label, phrase=phrase):
+                    self.assertIn(phrase, text)
+
+        drawer_tsx = source("components/Workloads/GuestDrawerHistory.tsx")
+        query_ts = source("components/Workloads/guestDrawerHistoryQuery.ts")
+        router_go = (ROOT / "internal/api/router.go").read_text(encoding="utf-8")
+
+        for marker in (
+            "const HISTORY_MIN_ZOOM_SPAN_MS = 60_000;",
+            "Select time window",
+            "Reset zoom",
+            "Select a window of at least 1 minute.",
+            "Window cannot exceed 365 days.",
+            "End time cannot be in the future.",
+            'label="Start timezone offset"',
+            'label="End timezone offset"',
+            "if (props.isZoomed) props.onResetZoom();",
+        ):
+            with self.subTest(source="GuestDrawerHistory.tsx", marker=marker):
+                self.assertIn(marker, drawer_tsx)
+        self.assertIn("source()?.customWindow == null", query_ts)
+        for marker in (
+            "func parseMetricsHistoryCustomWindow(",
+            '"start and end cannot be combined with range"',
+            '"start and end must both be provided once"',
+            '"end must be greater than start"',
+            '"custom window must be between 1s and 365d"',
+            '"end cannot be in the future"',
+            'timeRange = "custom"',
+        ):
+            with self.subTest(source="router.go", marker=marker):
+                self.assertIn(marker, router_go)
+
+    def test_upgrade_readiness_banner_and_modal_help_match_runtime(self):
+        auto_update = doc_text("AUTO_UPDATE.md")
+        self.assertEqual(
+            auto_update,
+            (ROOT / "frontend-modern/public/docs/AUTO_UPDATE.md").read_text(encoding="utf-8"),
+        )
+        section = " ".join(
+            auto_update.split("## Using One-Click Updates\n", 1)[1]
+            .split("\n### Update Process\n", 1)[0]
+            .replace("**", "")
+            .replace("`", "")
+            .split()
+        )
+        for phrase in (
+            "global update banner",
+            "Confirm Update dialog",
+            "Update blocked badge and a Review checks button",
+            "1 upgrade warning",
+            "N upgrade warnings",
+            "Upgrade checks need review",
+            "Upgrade checks panel ordered Blocked, Warning, then Pass",
+            "Apply Update Automatically as Install blocked",
+            "disables the acknowledgement checkbox and Start Update as Install blocked",
+        ):
+            with self.subTest(auto_update_phrase=phrase):
+                self.assertIn(phrase, section)
+
+        banner_tsx = source("components/UpdateBanner.tsx")
+        modal_tsx = source("components/UpdateConfirmationModal.tsx")
+        panel_tsx = source("components/UpdateReadinessChecksPanel.tsx")
+
+        for marker in (
+            "Update blocked",
+            "Review checks",
+            "Upgrade checks need review",
+            "Install blocked",
+            "Apply Update Automatically",
+        ):
+            with self.subTest(source="UpdateBanner.tsx", marker=marker):
+                self.assertIn(marker, banner_tsx)
+        for marker in (
+            "Confirm Update",
+            "Install blocked",
+            "Start Update",
+            "Resolve blocked upgrade checks before starting this update.",
+        ):
+            with self.subTest(source="UpdateConfirmationModal.tsx", marker=marker):
+                self.assertIn(marker, modal_tsx)
+        for marker in (
+            "Upgrade checks",
+            "label: 'Blocked'",
+            "label: 'Warning'",
+            "label: 'Pass'",
+        ):
+            with self.subTest(source="UpdateReadinessChecksPanel.tsx", marker=marker):
+                self.assertIn(marker, panel_tsx)
+
     def test_all_changed_guides_match_their_shipped_copies(self):
         for name in (
             "README.md",
@@ -393,6 +531,8 @@ class NavigationHelpDocsTest(unittest.TestCase):
             "VM_DISK_MONITORING.md",
             "MIGRATION_UNIFIED_NAV.md",
             "RELAY.md",
+            "API.md",
+            "AUTO_UPDATE.md",
         ):
             with self.subTest(guide=name):
                 self.assertEqual(doc_text(name),
