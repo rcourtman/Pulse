@@ -713,7 +713,7 @@ func (r *Router) establishSAMLSession(w http.ResponseWriter, req *http.Request, 
 		Name:   CookieNameCSRF,
 		Value:  csrfToken,
 		Path:   "/",
-		MaxAge: 86400,
+		MaxAge: csrfCookieMaxAge(24 * time.Hour),
 	})
 
 	return nil

@@ -147,6 +147,19 @@ func clearCSRFCookie(w http.ResponseWriter, r *http.Request) {
 	})
 }
 
+// csrfCookieMaxAge bounds the browser pulse_csrf cookie lifetime so it stays
+// within the server-side CSRF token TTL (minus a small grace window) and never
+// outlives the accompanying session duration when one is known.
+func csrfCookieMaxAge(sessionDuration time.Duration) int {
+	maxAge := csrfCookieMaxAgeSeconds
+	if sessionDuration > 0 {
+		if sessionSeconds := int(sessionDuration / time.Second); sessionSeconds > 0 && sessionSeconds < maxAge {
+			maxAge = sessionSeconds
+		}
+	}
+	return maxAge
+}
+
 func issueNewCSRFCookie(w http.ResponseWriter, r *http.Request, sessionID string) string {
 	if w == nil || r == nil {
 		return ""
@@ -162,11 +175,14 @@ func issueNewCSRFCookie(w http.ResponseWriter, r *http.Request, sessionID string
 	}
 
 	newToken := generateCSRFToken(sessionID)
+	if newToken == "" {
+		return ""
+	}
 	getBrowserCookiePolicy(r).setClientReadable(w, &http.Cookie{
 		Name:   CookieNameCSRF,
 		Value:  newToken,
 		Path:   "/",
-		MaxAge: 86400,
+		MaxAge: csrfCookieMaxAge(0),
 	})
 	return newToken
 }
