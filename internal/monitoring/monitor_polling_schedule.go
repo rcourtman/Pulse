@@ -267,19 +267,5 @@ func (m *Monitor) nextScheduledPoll(task ScheduledTask) (ScheduledTask, pollResc
 		}
 	}
 
-	tasks := m.scheduler.BuildPlan(time.Now(), []InstanceDescriptor{desc}, m.taskQueue.Size())
-	if len(tasks) == 0 {
-		next := task
-		nextInterval := task.Interval
-		if nextInterval <= 0 && m.config != nil {
-			nextInterval = m.config.AdaptivePollingBaseInterval
-		}
-		if nextInterval <= 0 {
-			nextInterval = DefaultSchedulerConfig().BaseInterval
-		}
-		next.Interval = nextInterval
-		next.NextRun = time.Now().Add(nextInterval)
-		return next, pollOnCadence
-	}
-	return tasks[0], pollOnCadence
+	return m.scheduler.planSuccessor(time.Now(), desc, m.taskQueue.Size()), pollOnCadence
 }

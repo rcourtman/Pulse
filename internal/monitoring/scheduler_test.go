@@ -63,7 +63,7 @@ func TestAdaptiveSchedulerFreshnessReadDoesNotBlockOtherPlans(t *testing.T) {
 	completed := make(chan observation, 1)
 	go func() {
 		prior, ok := scheduler.LastScheduled(fast.Type, fast.Name)
-		after := scheduler.BuildPlan(now, []InstanceDescriptor{fast}, 0)[0]
+		after := scheduler.planSuccessor(now, fast, 0)
 		completed <- observation{prior: prior, hadPrior: ok, after: after}
 	}()
 	select {
@@ -103,6 +103,78 @@ type testIntervalSelectorFunc func(IntervalRequest) time.Duration
 
 func (f testIntervalSelectorFunc) SelectInterval(req IntervalRequest) time.Duration {
 	return f(req)
+}
+
+func TestAdaptiveSchedulerSuccessorMatchesSingleEntryPlan(t *testing.T) {
+	source := mockStalenessSource{scores: map[string]float64{"pve:cluster": 0.75}}
+	var batchRequest, successorRequest IntervalRequest
+	batch := NewAdaptiveScheduler(DefaultSchedulerConfig(), source, testIntervalSelectorFunc(func(req IntervalRequest) time.Duration {
+		batchRequest = req
+		return 25 * time.Second
+	}), nil)
+	successor := NewAdaptiveScheduler(DefaultSchedulerConfig(), source, testIntervalSelectorFunc(func(req IntervalRequest) time.Duration {
+		successorRequest = req
+		return 25 * time.Second
+	}), nil)
+
+	start := time.Unix(1_700_000_000, 0)
+	instance := InstanceDescriptor{
+		Type: InstanceTypePVE, Name: "cluster", LastSuccess: start.Add(-time.Minute),
+		Metadata: TaskMetadata{ChangeHash: "fixture-change"}, ErrorCount: 2,
+	}
+	for _, tc := range []struct {
+		name           string
+		elapsed        time.Duration
+		fixed, current time.Duration
+	}{
+		{name: "first schedule"},
+		{name: "cached slot", elapsed: 10 * time.Second},
+		{name: "explicit worker slot", elapsed: 30 * time.Second, current: 3 * time.Second},
+		{name: "fixed cadence above adaptive cap", elapsed: 40 * time.Second, fixed: 7 * time.Minute},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			now := start.Add(tc.elapsed)
+			desc := instance
+			desc.FixedInterval = tc.fixed
+			if tc.current != 0 {
+				desc.LastScheduled, desc.LastInterval = now.Add(-tc.current), tc.current
+			}
+			batchRequest, successorRequest = IntervalRequest{}, IntervalRequest{}
+			want := batch.BuildPlan(now, []InstanceDescriptor{desc}, 12)[0]
+			got := successor.planSuccessor(now, desc, 12)
+			if got != want || successorRequest != batchRequest {
+				t.Fatalf("successor = %+v with request %+v, want %+v with request %+v", got, successorRequest, want, batchRequest)
+			}
+			if cached, ok := successor.LastScheduled(desc.Type, desc.Name); !ok || cached != got {
+				t.Fatalf("cached successor = %+v (%t), want %+v", cached, ok, got)
+			}
+		})
+	}
+}
+
+func BenchmarkAdaptiveSchedulerSuccessor(b *testing.B) {
+	for _, tc := range []struct {
+		name string
+		plan func(*AdaptiveScheduler, time.Time, InstanceDescriptor) ScheduledTask
+	}{
+		{"one-entry-plan", func(s *AdaptiveScheduler, now time.Time, desc InstanceDescriptor) ScheduledTask {
+			return s.BuildPlan(now, []InstanceDescriptor{desc}, 12)[0]
+		}},
+		{"successor", func(s *AdaptiveScheduler, now time.Time, desc InstanceDescriptor) ScheduledTask {
+			return s.planSuccessor(now, desc, 12)
+		}},
+	} {
+		b.Run(tc.name, func(b *testing.B) {
+			s := NewAdaptiveScheduler(DefaultSchedulerConfig(), nil, mockIntervalSelector{25 * time.Second}, nil)
+			now := time.Unix(1_700_000_000, 0)
+			desc := InstanceDescriptor{Type: InstanceTypePVE, Name: "cluster", LastScheduled: now, LastInterval: 25 * time.Second}
+			tc.plan(s, now, desc) // Exclude first-use cache population from both paths.
+			b.ReportAllocs()
+			for b.Loop() {
+				tc.plan(s, now, desc)
+			}
+		})
+	}
 }
 
 func TestAdaptiveSchedulerKeepsProviderCadenceAndSelectorKeyForSharedName(t *testing.T) {
