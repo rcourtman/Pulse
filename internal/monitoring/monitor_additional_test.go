@@ -22,6 +22,8 @@ import (
 	"github.com/rcourtman/pulse-go-rewrite/internal/models"
 	unifiedresources "github.com/rcourtman/pulse-go-rewrite/internal/unifiedresources"
 	"github.com/rcourtman/pulse-go-rewrite/pkg/proxmox"
+	"github.com/rs/zerolog"
+	"github.com/rs/zerolog/log"
 )
 
 type fakeDockerChecker struct{}
@@ -3053,6 +3055,85 @@ func withScheduledPollPanicFixture(t *testing.T, processLimit bool, observe func
 		assertClaimedPollOverdue(t, registry, 0, 0)
 		observe(t, m)
 	})
+}
+
+type stalledPollPanicLog struct {
+	entered chan<- struct{}
+	release <-chan struct{}
+}
+
+func (w stalledPollPanicLog) Write(p []byte) (int, error) {
+	if strings.Contains(string(p), "Recovered from panic in scheduled poll task") {
+		close(w.entered)
+		<-w.release
+	}
+	return len(p), nil
+}
+
+func TestScheduledPollPanicLogKeepsWorkerVisible(t *testing.T) {
+	for _, tc := range []struct {
+		name         string
+		processLimit bool
+	}{
+		{name: "fixed-worker"},
+		{name: "process-limited-worker", processLimit: true},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			original := log.Logger
+			defer func() { log.Logger = original }()
+			synctest.Test(t, func(t *testing.T) {
+				// Create the gates within the bubble so the fake clock can
+				// advance while the synchronous recovery log is blocked.
+				entered, release := make(chan struct{}), make(chan struct{})
+				log.Logger = zerolog.New(stalledPollPanicLog{entered: entered, release: release}).Level(zerolog.ErrorLevel)
+				unblock := sync.OnceFunc(func() { close(release) })
+				ctx, cancel := context.WithCancel(t.Context())
+				defer cancel()
+				defer unblock()
+
+				reg := prometheus.NewPedanticRegistry()
+				m := &Monitor{
+					taskQueue: NewTaskQueue(), pollMetrics: newPollMetrics(reg),
+					pollTimeout: 5 * time.Second,
+					pollProviders: map[InstanceType]PollProvider{
+						InstanceTypePBS: testPollProvider{
+							providerType: InstanceTypePBS,
+							buildPollTask: func(string) (PollTask, error) {
+								panic("fixture poll preparation panic")
+							},
+						},
+					},
+				}
+				m.executor = newRealExecutor(m)
+				task := ScheduledTask{InstanceName: "fixture", InstanceType: InstanceTypePBS, NextRun: time.Now()}
+				m.taskQueue.Upsert(task)
+				if tc.processLimit {
+					go m.dispatchTaskWorkers(ctx, newPollTaskWorkerLimiter(1))
+				} else {
+					go m.taskWorker(ctx, 0)
+				}
+
+				synctest.Wait()
+				select {
+				case <-entered:
+				default:
+					t.Fatal("worker did not reach the recovery log")
+				}
+				m.taskQueue.mu.Lock()
+				_, stillClaimed := m.taskQueue.entries[taskQueueKey{task.InstanceType, task.InstanceName}]
+				m.taskQueue.mu.Unlock()
+				if stillClaimed {
+					t.Fatal("queue claim should unwind before recovery logging")
+				}
+				assertClaimedPollOverdue(t, reg, 0, 0)
+				time.Sleep(8 * time.Second)
+				assertClaimedPollOverdue(t, reg, 0, 3)
+				unblock()
+				synctest.Wait()
+				assertClaimedPollOverdue(t, reg, 0, 0)
+			})
+		})
+	}
 }
 
 func TestScheduledPollTaskPanicDoesNotStopWorker(t *testing.T) {
