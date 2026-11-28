@@ -173,6 +173,7 @@ in the same window without changing a rule or sending a test notification.
 | `pulse_scheduler_queue_depth` | Gauge | Tasks still queued at scrape time, by `instance_type`. |
 | `pulse_scheduler_queue_wait_seconds` | Histogram | Wait time between task readiness and execution. |
 | `pulse_scheduler_claimed_poll_overdue_seconds` | Gauge | Seconds past one poll task timeout for the most overdue claimed poll, by stage. Zero if no claimed poll is over that budget. |
+| `pulse_scheduler_poll_planning_age_seconds` | Gauge | Seconds the oldest active poll planning pass has spent reading rosters, building the plan or putting work on the queue. Process-wide, without labels. Zero means no measurable planning wait, not healthy monitoring. |
 | `pulse_scheduler_dead_letter_depth` | Gauge | Terminal poll entries still parked in running schedulers at scrape time, by `instance_type` and `instance`. |
 | `pulse_scheduler_breaker_state` | Gauge | `0`=Closed, `1`=Half-Open, `2`=Open, `-1`=Unknown. |
 | `pulse_scheduler_breaker_failure_count` | Gauge | Consecutive failure count. |

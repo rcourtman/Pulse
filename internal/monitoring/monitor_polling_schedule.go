@@ -119,6 +119,11 @@ func (m *Monitor) buildScheduledTasks(now time.Time) []ScheduledTask {
 }
 
 func (m *Monitor) planScheduledPolls(now time.Time) {
+	if m.pollMetrics != nil {
+		progress := m.pollMetrics.workProgress
+		id := progress.beginPlanning(time.Now())
+		defer progress.finishPlanning(id)
+	}
 	// Bind queue admission to the roster revision before reading providers.
 	// A settings refresh can finish while an older planner is still reading.
 	revision := m.taskQueue.availabilityPlanRevision()
