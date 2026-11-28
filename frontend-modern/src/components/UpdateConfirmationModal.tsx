@@ -9,6 +9,7 @@ import XIcon from 'lucide-solid/icons/x';
 import { ActionIconButton, Button } from '@/components/shared/Button';
 import { CalloutCard } from '@/components/shared/CalloutCard';
 import { Dialog } from '@/components/shared/Dialog';
+import { UpdateReadinessChecksPanel, getUpdateReadinessCounts } from './UpdateReadinessChecksPanel';
 
 interface UpdateConfirmationModalProps {
   isOpen: boolean;
@@ -37,8 +38,11 @@ export function UpdateConfirmationModal(props: UpdateConfirmationModalProps) {
     }
   });
 
+  const readiness = () => props.plan.readiness;
+  const readinessBlocked = () => getUpdateReadinessCounts(readiness()).isBlocked;
+
   const handleConfirm = () => {
-    if (acknowledged() && !props.isApplying) {
+    if (acknowledged() && !props.isApplying && !readinessBlocked()) {
       props.onConfirm();
     }
   };
@@ -100,6 +104,11 @@ export function UpdateConfirmationModal(props: UpdateConfirmationModalProps) {
             />
           </Show>
 
+          {/* Preflight upgrade readiness checks */}
+          <Show when={readiness()}>
+            {(current) => <UpdateReadinessChecksPanel readiness={current()} />}
+          </Show>
+
           {/* Estimated Time */}
           <Show when={props.plan.estimatedTime}>
             <div class="flex items-center gap-2 text-sm text-muted">
@@ -154,19 +163,26 @@ export function UpdateConfirmationModal(props: UpdateConfirmationModalProps) {
 
           {/* Acknowledgement Checkbox */}
           <div class="pt-4 border-t border-border">
-            <label class="flex items-start gap-3 cursor-pointer">
+            <label
+              class={`flex items-start gap-3 ${readinessBlocked() ? 'cursor-not-allowed opacity-60' : 'cursor-pointer'}`}
+            >
               <input
                 type="checkbox"
                 checked={acknowledged()}
                 onChange={(e) => setAcknowledged(e.currentTarget.checked)}
                 class="mt-1 w-4 h-4 text-blue-600 bg-surface-alt rounded-sm focus:ring-blue-500 focus:ring-2"
-                disabled={props.isApplying}
+                disabled={props.isApplying || readinessBlocked()}
               />
               <span class="text-sm text-base-content">
                 I understand that Pulse will be temporarily unavailable during the update process.
                 {props.plan.rollbackSupport && ' A backup will be created automatically.'}
               </span>
             </label>
+            <Show when={readinessBlocked()}>
+              <p class="mt-2 text-xs font-medium text-red-700 dark:text-red-300">
+                Resolve blocked upgrade checks before starting this update.
+              </p>
+            </Show>
           </div>
         </div>
 
@@ -183,13 +199,19 @@ export function UpdateConfirmationModal(props: UpdateConfirmationModalProps) {
           </Button>
           <Button
             onClick={handleConfirm}
-            disabled={!acknowledged() || props.isApplying}
+            disabled={!acknowledged() || props.isApplying || readinessBlocked()}
             isLoading={props.isApplying}
             variant="primary"
             size="md"
             type="button"
           >
-            <span>{props.isApplying ? 'Starting...' : 'Start Update'}</span>
+            <span>
+              {props.isApplying
+                ? 'Starting...'
+                : readinessBlocked()
+                  ? 'Install blocked'
+                  : 'Start Update'}
+            </span>
           </Button>
         </div>
       </div>

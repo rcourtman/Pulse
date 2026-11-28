@@ -1,5 +1,6 @@
-import { cleanup, fireEvent, render, screen } from '@solidjs/testing-library';
+import { cleanup, fireEvent, render, screen, within } from '@solidjs/testing-library';
 import { afterEach, describe, expect, it, vi } from 'vitest';
+import type { UpdatePlan } from '@/api/updates';
 
 // Mutable mock state shared across the hoisted vi.mock factories below.
 const { mock } = vi.hoisted(() => ({
@@ -22,7 +23,7 @@ const { mock } = vi.hoisted(() => ({
       requiresRoot: false,
       rollbackSupport: false,
       instructions: [] as string[],
-    },
+    } as UpdatePlan,
   },
 }));
 
@@ -78,6 +79,7 @@ afterEach(() => {
     requiresRoot: false,
     rollbackSupport: false,
     instructions: [],
+    readiness: undefined,
   };
 });
 
@@ -227,5 +229,140 @@ Infrastructure views stay fast and predictable as your environment grows.
     expect(screen.getByText(/Faster infrastructure views/)).toBeInTheDocument();
     expect(screen.getByText(/Lighter realtime updates/)).toBeInTheDocument();
     expect(screen.queryByText(/Saved API keys/)).not.toBeInTheDocument();
+  });
+});
+
+describe('UpdateBanner upgrade readiness checks', () => {
+  it('blocks in-app apply and surfaces blocked checks when readiness is blocked', async () => {
+    mock.plan = {
+      canAutoUpdate: true,
+      requiresRoot: false,
+      rollbackSupport: true,
+      instructions: [],
+      readiness: {
+        status: 'blocked',
+        summary: 'Resolve 1 blocked upgrade check before installing this update.',
+        checks: [
+          {
+            id: 'server-update-path',
+            status: 'pass',
+            title: 'Server update path',
+            summary: 'Automatic install and rollback support are available for this deployment.',
+          },
+          {
+            id: 'agent-token-scopes',
+            status: 'blocked',
+            title: 'Agent token scopes',
+            summary: 'All loaded agent reporting tokens are expired.',
+            details: [
+              'Create or refresh an agent install token before relying on agent reconnect.',
+            ],
+          },
+        ],
+      },
+    };
+
+    render(() => <UpdateBanner />);
+
+    expect(await screen.findByText('Update blocked')).toBeInTheDocument();
+    expect(screen.queryByRole('button', { name: 'Apply Update' })).not.toBeInTheDocument();
+
+    fireEvent.click(screen.getByRole('button', { name: 'Review checks' }));
+
+    const panel = screen.getByTestId('update-readiness-panel');
+    expect(panel).toHaveAttribute('role', 'alert');
+    expect(
+      within(panel).getByText('Resolve 1 blocked upgrade check before installing this update.'),
+    ).toBeInTheDocument();
+    expect(within(panel).getByText('Agent token scopes')).toBeInTheDocument();
+    expect(
+      within(panel).getByText('All loaded agent reporting tokens are expired.'),
+    ).toBeInTheDocument();
+    expect(
+      within(panel).getByText(
+        'Create or refresh an agent install token before relying on agent reconnect.',
+      ),
+    ).toBeInTheDocument();
+
+    // Blocked checks appear before passing checks so operators see the blocker first.
+    const items = within(panel).getAllByRole('listitem');
+    expect(items[0]).toHaveTextContent('Agent token scopes');
+    expect(items[0]).toHaveTextContent('Blocked');
+
+    const installBlockedButton = screen.getByRole('button', { name: 'Install blocked' });
+    expect(installBlockedButton).toBeDisabled();
+    expect(
+      screen.queryByRole('button', { name: 'Apply Update Automatically' }),
+    ).not.toBeInTheDocument();
+  });
+
+  it('surfaces upgrade warnings in collapsed and expanded banner for manual Docker updates', async () => {
+    mock.deploymentType = 'docker';
+    mock.plan = {
+      canAutoUpdate: false,
+      requiresRoot: false,
+      rollbackSupport: false,
+      instructions: ['docker pull rcourtman/pulse:v6.1.0'],
+      readiness: {
+        status: 'attention',
+        summary: 'Update can proceed, but review 1 upgrade warning before installing.',
+        checks: [
+          {
+            id: 'container-data-persistence',
+            status: 'warning',
+            title: 'Container data persistence',
+            summary: 'Pulse data directory is not mounted on a persistent volume.',
+            details: ['Mount a persistent volume at /data before recreating the container.'],
+          },
+        ],
+      },
+    };
+
+    render(() => <UpdateBanner />);
+
+    const warningButton = await screen.findByRole('button', { name: '1 upgrade warning' });
+    expect(screen.getByText('Manual steps required')).toBeInTheDocument();
+
+    fireEvent.click(warningButton);
+
+    const panel = screen.getByTestId('update-readiness-panel');
+    expect(panel).toHaveAttribute('role', 'region');
+    expect(within(panel).getByText('Container data persistence')).toBeInTheDocument();
+    expect(
+      within(panel).getByText(
+        'Mount a persistent volume at /data before recreating the container.',
+      ),
+    ).toBeInTheDocument();
+    expect(screen.getByText('docker pull rcourtman/pulse:v6.1.0')).toBeInTheDocument();
+  });
+
+  it('keeps the collapsed banner clean when all readiness checks pass', async () => {
+    mock.plan = {
+      canAutoUpdate: true,
+      requiresRoot: false,
+      rollbackSupport: true,
+      instructions: [],
+      readiness: {
+        status: 'ready',
+        summary: 'Upgrade checks passed for this Pulse instance.',
+        checks: [
+          {
+            id: 'server-update-path',
+            status: 'pass',
+            title: 'Server update path',
+            summary: 'Automatic install and rollback support are available for this deployment.',
+          },
+        ],
+      },
+    };
+
+    render(() => <UpdateBanner />);
+
+    expect(await screen.findByRole('button', { name: 'Apply Update' })).toBeInTheDocument();
+    expect(screen.queryByText('Update blocked')).not.toBeInTheDocument();
+    expect(screen.queryByRole('button', { name: /upgrade warning/i })).not.toBeInTheDocument();
+
+    fireEvent.click(screen.getByTitle('Show more'));
+    expect(screen.getByText('Upgrade checks passed for this Pulse instance.')).toBeInTheDocument();
   });
 });

@@ -1,8 +1,10 @@
 import { Show, createSignal, createEffect, createMemo, For, onCleanup } from 'solid-js';
+import CircleAlertIcon from 'lucide-solid/icons/circle-alert';
 import { updateStore } from '@/stores/updates';
 import { runtimeCapabilities } from '@/stores/license';
 import { UpdatesAPI, type UpdatePlan } from '@/api/updates';
 import { UpdateConfirmationModal } from './UpdateConfirmationModal';
+import { UpdateReadinessChecksPanel, getUpdateReadinessCounts } from './UpdateReadinessChecksPanel';
 import { copyToClipboard } from '@/utils/clipboard';
 import { logger } from '@/utils/logger';
 import { buildReleaseNotesUrl, normalizeReleaseVersion } from '@/components/updateVersion';
@@ -76,8 +78,22 @@ export function UpdateBanner() {
   // (business hooks presence), NOT the license tier: a community binary with
   // an active Pro license follows the normal community paths.
   const isProEdition = () => runtimeCapabilities()?.runtime?.build === 'pro';
+  const readiness = () => updatePlan()?.readiness;
+  const readinessCounts = createMemo(() => getUpdateReadinessCounts(readiness()));
+  const readinessBlocked = () => readinessCounts().isBlocked;
+  const readinessWarningLabel = () => {
+    const warnings = readinessCounts().warnings;
+    if (warnings > 0) {
+      return `${warnings} upgrade ${warnings === 1 ? 'warning' : 'warnings'}`;
+    }
+    return 'Upgrade checks need review';
+  };
 
   const handleApplyUpdate = () => {
+    if (readinessBlocked()) {
+      setIsExpanded(true);
+      return;
+    }
     setShowConfirmModal(true);
   };
 
@@ -175,14 +191,41 @@ export function UpdateBanner() {
                   </span>
                 </Show>
 
+                {/* Blocked upgrade checks (all deployments) */}
+                <Show when={readinessBlocked() && !isExpanded()}>
+                  <span class="inline-flex items-center gap-1 rounded-sm bg-red-100 px-2 py-0.5 text-xs font-medium text-red-800 dark:bg-red-900/50 dark:text-red-200">
+                    <CircleAlertIcon class="h-3.5 w-3.5 shrink-0" aria-hidden="true" />
+                    Update blocked
+                  </span>
+                  <button
+                    type="button"
+                    onClick={() => setIsExpanded(true)}
+                    class="rounded-sm border border-red-300 bg-surface px-2.5 py-0.5 text-xs font-medium text-red-800 transition-colors hover:bg-red-100 dark:border-red-700 dark:text-red-200 dark:hover:bg-red-900/40"
+                  >
+                    Review checks
+                  </button>
+                </Show>
+
                 {/* Apply Update Button (automated deployments; Pro applies
                     the private build from the license server broker) */}
-                <Show when={updatePlan()?.canAutoUpdate && !isExpanded()}>
+                <Show when={updatePlan()?.canAutoUpdate && !isExpanded() && !readinessBlocked()}>
                   <button
+                    type="button"
                     onClick={handleApplyUpdate}
                     class="px-3 py-1 text-sm font-medium text-white bg-blue-600 hover:bg-blue-700 rounded-sm transition-colors"
                   >
                     Apply Update
+                  </button>
+                </Show>
+
+                {/* Upgrade warnings indicator (non-blocking attention checks) */}
+                <Show when={!readinessBlocked() && readinessCounts().hasWarnings && !isExpanded()}>
+                  <button
+                    type="button"
+                    onClick={() => setIsExpanded(true)}
+                    class="rounded-sm bg-amber-100 px-2 py-0.5 text-xs font-medium text-amber-900 transition-colors hover:bg-amber-200/80 dark:bg-amber-900/50 dark:text-amber-200 dark:hover:bg-amber-900/75"
+                  >
+                    {readinessWarningLabel()}
                   </button>
                 </Show>
 
@@ -238,9 +281,12 @@ export function UpdateBanner() {
             <div class="flex items-center gap-2">
               {/* Expand/Collapse button */}
               <button
+                type="button"
                 onClick={() => setIsExpanded(!isExpanded())}
                 class="p-1 hover:bg-blue-100 dark:hover:bg-blue-800 rounded-sm transition-colors"
                 title={isExpanded() ? 'Show less' : 'Show more'}
+                aria-label={isExpanded() ? 'Hide update details' : 'Show update details'}
+                aria-expanded={isExpanded()}
               >
                 <svg
                   class={`w-4 h-4 transform transition-transform ${isExpanded() ? 'rotate-180' : ''}`}
@@ -248,6 +294,7 @@ export function UpdateBanner() {
                   fill="none"
                   stroke="currentColor"
                   stroke-width="2"
+                  aria-hidden="true"
                 >
                   <polyline points="6 9 12 15 18 9"></polyline>
                 </svg>
@@ -255,9 +302,11 @@ export function UpdateBanner() {
 
               {/* Dismiss button */}
               <button
+                type="button"
                 onClick={() => updateStore.dismissUpdate()}
                 class="p-1 hover:bg-blue-100 dark:hover:bg-blue-800 rounded-sm transition-colors"
                 title="Dismiss this update"
+                aria-label="Dismiss this update"
               >
                 <svg
                   class="w-4 h-4"
@@ -265,6 +314,7 @@ export function UpdateBanner() {
                   fill="none"
                   stroke="currentColor"
                   stroke-width="2"
+                  aria-hidden="true"
                 >
                   <line x1="18" y1="6" x2="6" y2="18"></line>
                   <line x1="6" y1="6" x2="18" y2="18"></line>
@@ -407,6 +457,11 @@ export function UpdateBanner() {
                   </div>
                 </Show>
 
+                {/* Preflight upgrade readiness checks */}
+                <Show when={readiness()}>
+                  {(current) => <UpdateReadinessChecksPanel readiness={current()} class="mt-2" />}
+                </Show>
+
                 {/* Manual Update Instructions (community deployments; Pro uses the portal block above) */}
                 <Show
                   when={
@@ -416,7 +471,11 @@ export function UpdateBanner() {
                   }
                 >
                   <div class="mt-3 pt-3 border-t border-blue-200 dark:border-blue-800">
-                    <div class="font-medium mb-2">Update Instructions:</div>
+                    <div class="font-medium mb-2">
+                      {readinessBlocked()
+                        ? 'Resolve blocked upgrade checks before installing. Manual steps are listed for reference:'
+                        : 'Update Instructions:'}
+                    </div>
                     <div class="space-y-2">
                       <For each={updatePlan()?.instructions || []}>
                         {(instruction, index) => (
@@ -426,9 +485,11 @@ export function UpdateBanner() {
                                 {instruction}
                               </code>
                               <button
+                                type="button"
                                 onClick={() => handleCopy(instruction, index())}
                                 class="shrink-0 p-1 hover:bg-blue-100 dark:hover:bg-blue-800 rounded-sm transition-colors"
                                 title="Copy to clipboard"
+                                aria-label="Copy instruction to clipboard"
                               >
                                 <Show
                                   when={copiedIndex() === index()}
@@ -438,6 +499,7 @@ export function UpdateBanner() {
                                       fill="none"
                                       stroke="currentColor"
                                       viewBox="0 0 24 24"
+                                      aria-hidden="true"
                                     >
                                       <path
                                         stroke-linecap="round"
@@ -453,6 +515,7 @@ export function UpdateBanner() {
                                     fill="none"
                                     stroke="currentColor"
                                     viewBox="0 0 24 24"
+                                    aria-hidden="true"
                                   >
                                     <path
                                       stroke-linecap="round"
@@ -473,13 +536,31 @@ export function UpdateBanner() {
 
                 {/* Apply Update Button (expanded view for automated deployments) */}
                 <Show when={updatePlan()?.canAutoUpdate}>
-                  <div class="mt-3 pt-3 border-t border-blue-200 dark:border-blue-800">
-                    <button
-                      onClick={handleApplyUpdate}
-                      class="px-4 py-2 text-sm font-medium text-white bg-blue-600 hover:bg-blue-700 rounded-sm transition-colors"
+                  <div class="mt-3 pt-3 border-t border-blue-200 dark:border-blue-800 flex flex-wrap items-center gap-3">
+                    <Show
+                      when={readinessBlocked()}
+                      fallback={
+                        <button
+                          type="button"
+                          onClick={handleApplyUpdate}
+                          class="px-4 py-2 text-sm font-medium text-white bg-blue-600 hover:bg-blue-700 rounded-sm transition-colors"
+                        >
+                          Apply Update Automatically
+                        </button>
+                      }
                     >
-                      Apply Update Automatically
-                    </button>
+                      <button
+                        type="button"
+                        disabled
+                        class="inline-flex cursor-not-allowed items-center gap-1.5 rounded-sm bg-red-200 px-4 py-2 text-sm font-medium text-red-900 dark:bg-red-900/40 dark:text-red-200"
+                      >
+                        <CircleAlertIcon class="h-4 w-4 shrink-0" aria-hidden="true" />
+                        Install blocked
+                      </button>
+                      <span class="text-xs text-red-800 dark:text-red-200">
+                        Resolve blocked upgrade checks before installing.
+                      </span>
+                    </Show>
                   </div>
                 </Show>
 
@@ -493,6 +574,7 @@ export function UpdateBanner() {
                     View release notes
                   </a>
                   <button
+                    type="button"
                     onClick={() => updateStore.dismissUpdate()}
                     class="text-blue-600 dark:text-blue-400 hover:text-blue-700 dark:hover:text-blue-300 text-xs underline"
                   >
