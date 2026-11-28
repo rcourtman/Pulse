@@ -5,6 +5,7 @@ import { getPlatformTableFiniteMetric } from '@/features/platformPage/sharedPlat
 import { isPhysicalDiskTemperatureCurrent } from '@/features/storageBackups/diskTemperaturePresentation';
 import { formatBytes, normalizeDiskArray } from '@/utils/format';
 import { asTrimmedString } from '@/utils/stringUtils';
+import { getStandaloneMachineStaleness } from './standaloneStaleness';
 
 export type AgentMachineColumnId =
   | 'machine'
@@ -802,11 +803,21 @@ export const matchesAgentMachineSearch = (
   search: string,
   getSystemLabel: (machine: Resource) => string,
   getAgentLabel: (machine: Resource) => string,
+  nowMs?: number,
 ): boolean => {
   const needle = search.trim().toLowerCase();
   if (!needle) return true;
 
+  const staleNotice = getStandaloneMachineStaleness(machine, nowMs ?? 0);
   const values: string[] = [];
+  if (staleNotice) {
+    appendSearchValues(values, [
+      staleNotice.badge,
+      staleNotice.compactBadge,
+      staleNotice.detail,
+      staleNotice.error,
+    ]);
+  }
   appendSearchValues(values, [
     machine.name,
     machine.displayName,
@@ -911,119 +922,51 @@ const compareText = (
   return direction === 'asc' ? result : -result;
 };
 
+const NUMERIC_SORT_GETTERS: Partial<
+  Record<AgentMachineSortKey, (machine: Resource) => number | undefined>
+> = {
+  cpu: getAgentMachineCpuPercent,
+  gpu: getAgentMachineGPUUtilizationPercent,
+  memory: getAgentMachineMemoryPercent,
+  disk: getAgentMachineDiskPercent,
+  network: getAgentMachineNetworkTotal,
+  diskio: getAgentMachineDiskIOTotal,
+  uptime: (machine) => machine.uptime ?? machine.agent?.uptimeSeconds,
+  temp: getAgentMachineTemperatureCelsius,
+  lastSeen: (machine) => timestampMillisFrom(machine.lastSeen),
+};
+
+const machineNameKey = (machine: Resource): string =>
+  machine.displayName || machine.name || machine.id;
+
 export const sortAgentMachines = (
   machines: readonly Resource[],
   sortKey: AgentMachineSortKey,
   direction: AgentMachineSortDirection,
   getSystemLabel: (machine: Resource) => string,
   getAgentLabel: (machine: Resource) => string,
-): Resource[] =>
-  [...machines].sort((left, right) => {
-    let result = 0;
-    switch (sortKey) {
-      case 'cpu':
-        result = compareNullableNumber(
-          getAgentMachineCpuPercent(left),
-          getAgentMachineCpuPercent(right),
-          direction,
-        );
-        break;
-      case 'gpu':
-        result = compareNullableNumber(
-          getAgentMachineGPUUtilizationPercent(left),
-          getAgentMachineGPUUtilizationPercent(right),
-          direction,
-        );
-        break;
-      case 'memory':
-        result = compareNullableNumber(
-          getAgentMachineMemoryPercent(left),
-          getAgentMachineMemoryPercent(right),
-          direction,
-        );
-        break;
-      case 'disk':
-        result = compareNullableNumber(
-          getAgentMachineDiskPercent(left),
-          getAgentMachineDiskPercent(right),
-          direction,
-        );
-        break;
-      case 'network':
-        result = compareNullableNumber(
-          getAgentMachineNetworkTotal(left),
-          getAgentMachineNetworkTotal(right),
-          direction,
-        );
-        break;
-      case 'diskio':
-        result = compareNullableNumber(
-          getAgentMachineDiskIOTotal(left),
-          getAgentMachineDiskIOTotal(right),
-          direction,
-        );
-        break;
-      case 'uptime':
-        result = compareNullableNumber(
-          left.uptime ?? left.agent?.uptimeSeconds,
-          right.uptime ?? right.agent?.uptimeSeconds,
-          direction,
-        );
-        break;
-      case 'temp':
-        result = compareNullableNumber(
-          getAgentMachineTemperatureCelsius(left),
-          getAgentMachineTemperatureCelsius(right),
-          direction,
-        );
-        break;
-      case 'lastSeen':
-        result = compareNullableNumber(
-          timestampMillisFrom(left.lastSeen),
-          timestampMillisFrom(right.lastSeen),
-          direction,
-        );
-        break;
-      case 'system':
-        result = compareText(getSystemLabel(left), getSystemLabel(right), direction);
-        break;
-      case 'agent':
-        result = compareText(getAgentLabel(left), getAgentLabel(right), direction);
-        break;
-      case 'ip':
-        result = compareText(
-          getAgentMachinePrimaryIp(left),
-          getAgentMachinePrimaryIp(right),
-          direction,
-        );
-        break;
-      case 'raid':
-        result = compareText(
-          getAgentMachineRaidSummary(left),
-          getAgentMachineRaidSummary(right),
-          direction,
-        );
-        break;
-      case 'arch':
-        result = compareText(left.agent?.architecture, right.agent?.architecture, direction);
-        break;
-      case 'kernel':
-        result = compareText(left.agent?.kernelVersion, right.agent?.kernelVersion, direction);
-        break;
-      case 'name':
-      default:
-        result = compareText(
-          left.displayName || left.name || left.id,
-          right.displayName || right.name || right.id,
-          direction,
-        );
-        break;
-    }
+): Resource[] => {
+  const numericGetter = NUMERIC_SORT_GETTERS[sortKey];
+  const textGetter: ((machine: Resource) => string | undefined) | undefined = numericGetter
+    ? undefined
+    : sortKey === 'system'
+      ? getSystemLabel
+      : sortKey === 'agent'
+        ? getAgentLabel
+        : sortKey === 'ip'
+          ? getAgentMachinePrimaryIp
+          : sortKey === 'raid'
+            ? getAgentMachineRaidSummary
+            : sortKey === 'arch'
+              ? (machine) => machine.agent?.architecture
+              : sortKey === 'kernel'
+                ? (machine) => machine.agent?.kernelVersion
+                : machineNameKey;
 
-    if (result !== 0) return result;
-    return compareText(
-      left.displayName || left.name || left.id,
-      right.displayName || right.name || right.id,
-      'asc',
-    );
+  return [...machines].sort((left, right) => {
+    const result = numericGetter
+      ? compareNullableNumber(numericGetter(left), numericGetter(right), direction)
+      : compareText(textGetter!(left), textGetter!(right), direction);
+    return result !== 0 ? result : compareText(machineNameKey(left), machineNameKey(right), 'asc');
   });
+};

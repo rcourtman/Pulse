@@ -1,6 +1,7 @@
 import { Show, createEffect, createMemo, onCleanup, type Component, type JSX } from 'solid-js';
 import { EnhancedCPUBar } from '@/components/Workloads/EnhancedCPUBar';
 import { MetricBar } from '@/components/Workloads/MetricBar';
+import { InlineNotice } from '@/components/shared/InlineNotice';
 import { StatusDot } from '@/components/shared/StatusDot';
 import { TableCell, TableRow } from '@/components/shared/Table';
 import {
@@ -36,8 +37,14 @@ import {
 import type { Resource } from '@/types/resource';
 import { formatBytes, formatSpeed } from '@/utils/format';
 import { buildMetricKeyForUnifiedResource } from '@/utils/metricsKeys';
+import { useRelativeTimeNow } from '@/utils/relativeTimeClock';
 import { getSimpleStatusIndicator } from '@/utils/status';
 import { asTrimmedString } from '@/utils/stringUtils';
+import {
+  describeStaleStandaloneVMs,
+  getStandaloneVMStaleness,
+  type StandaloneStaleNotice,
+} from './standaloneStaleness';
 import {
   STANDALONE_VM_SORT_KEYS,
   filterStandaloneVMs,
@@ -48,10 +55,10 @@ import {
   getStandaloneVMStateLabel,
   getStandaloneVMTotalDiskIORate,
   getStandaloneVMTotalNetIORate,
-  isStandaloneVMSourceImpaired,
   mapStandaloneVMStatus,
   matchesStandaloneVMHostScope,
   resolveStandaloneVMHostName,
+  resolveStandaloneVMHostResource,
   type StandaloneVMSortKey,
   type StandaloneVMStatusFilter,
 } from './standaloneVmTableModel';
@@ -63,16 +70,31 @@ const STANDALONE_VM_STATUS_OPTIONS: PlatformTableFilterOption<StandaloneVMStatus
   { value: 'stopped', label: 'Stopped', tone: 'danger' },
 ];
 
-type VMStateNote = { short: string | null; full: string; tone: 'danger' | 'warning' };
+type VMStateNote = {
+  short: string | null;
+  compactShort?: string | null;
+  full: string;
+  tone: 'danger' | 'warning';
+};
 
-const vmStateNote = (resource: Resource): VMStateNote | null => {
-  if (mapStandaloneVMStatus(resource) !== 'attention') return null;
-  if (isStandaloneVMSourceImpaired(resource)) {
-    return { short: 'stale', full: 'Host agent has not reported recently', tone: 'warning' };
-  }
+const vmStateNote = (
+  resource: Resource,
+  parentHost: Resource | undefined,
+  stale: StandaloneStaleNotice | null,
+  nowMs: number,
+): VMStateNote | null => {
+  if (mapStandaloneVMStatus(resource, parentHost, nowMs) !== 'attention') return null;
   const state = (asTrimmedString(resource.virtualMachine?.runtimeState) ?? '').toLowerCase();
   if (state === 'crashed') {
     return { short: null, full: 'Hypervisor reports this VM crashed', tone: 'danger' };
+  }
+  if (stale) {
+    return {
+      short: stale.badge,
+      compactShort: stale.compactBadge,
+      full: stale.detail,
+      tone: 'warning',
+    };
   }
   return {
     short: null,
@@ -96,6 +118,7 @@ export const StandaloneVirtualMachinesTable: Component<{
   onExternalStatusChange?: (status: StandaloneVMStatusFilter) => void;
   onResetFilters?: () => void;
 }> = (props) => {
+  const now = useRelativeTimeNow();
   const machinesById = createMemo(() => {
     const map = new Map<string, Resource>();
     for (const machine of props.machines) map.set(machine.id, machine);
@@ -132,11 +155,35 @@ export const StandaloneVirtualMachinesTable: Component<{
     }
     return scope;
   });
+  const staleVmsBanner = createMemo(() => {
+    const nowMs = now();
+    const entries: { name: string; age: string | null }[] = [];
+    for (const vm of hostScopedVms()) {
+      const parentHost = resolveStandaloneVMHostResource(vm, machinesById(), machinesByName());
+      const stale = getStandaloneVMStaleness(vm, parentHost, nowMs);
+      if (stale) {
+        const hostLabel = resolveStandaloneVMHostName(vm, machinesById(), machinesByName());
+        entries.push({
+          name: hostLabel !== '—' ? hostLabel : getStandaloneVMName(vm),
+          age: stale.age,
+        });
+      }
+    }
+    return describeStaleStandaloneVMs(entries);
+  });
   const tableState = createPlatformTableFilterState({
     resources: hostScopedVms,
     initialStatus: 'all' as StandaloneVMStatusFilter,
     filter: (resources, search, status) =>
-      filterStandaloneVMs(resources, search, status, machinesById(), machinesByName()),
+      filterStandaloneVMs(
+        resources,
+        search,
+        status,
+        machinesById(),
+        machinesByName(),
+        undefined,
+        now(),
+      ),
     externalSearch: props.externalSearch,
     onExternalSearchChange: props.onExternalSearchChange,
     externalStatus: props.externalStatus,
@@ -226,6 +273,13 @@ export const StandaloneVirtualMachinesTable: Component<{
       }
     >
       <div class="space-y-3" data-testid="standalone-vms-table">
+        <Show when={staleVmsBanner()}>
+          {(message) => (
+            <InlineNotice tone="warning" role="status" data-testid="standalone-vms-stale-banner">
+              {message()}
+            </InlineNotice>
+          )}
+        </Show>
         <PlatformTableToolbar
           search={tableState.search}
           onSearchChange={tableState.setSearch}
@@ -348,14 +402,21 @@ export const StandaloneVirtualMachinesTable: Component<{
                 <PlatformWindowedRows items={sortedRows} estimatedRowHeight={32}>
                   {(vm) => {
                     const name = () => getStandaloneVMName(vm);
+                    const parentHost = () =>
+                      resolveStandaloneVMHostResource(vm, machinesById(), machinesByName());
                     const hostName = () =>
                       resolveStandaloneVMHostName(vm, machinesById(), machinesByName());
                     const hypervisor = () => getStandaloneVMHypervisorLabel(vm);
-                    const statusBucket = () => mapStandaloneVMStatus(vm);
+                    const staleNotice = () => getStandaloneVMStaleness(vm, parentHost(), now());
+                    const statusBucket = () => mapStandaloneVMStatus(vm, parentHost(), now());
                     const indicator = () =>
-                      getSimpleStatusIndicator(getStandaloneVMDisplayStatus(vm));
+                      getSimpleStatusIndicator(
+                        getStandaloneVMDisplayStatus(vm, parentHost(), now()),
+                      );
                     const stateLabel = () => getStandaloneVMStateLabel(vm);
-                    const note = () => vmStateNote(vm);
+                    const dotLabel = () =>
+                      staleNotice() ? `${stateLabel()} · Stale` : stateLabel();
+                    const note = () => vmStateNote(vm, parentHost(), staleNotice(), now());
                     const isStopped = () => statusBucket() === 'stopped';
                     const cpuPercent = () => getPlatformTableFiniteMetric(vm.cpu?.current);
                     const vcpus = () => {
@@ -421,8 +482,8 @@ export const StandaloneVirtualMachinesTable: Component<{
                               <StatusDot
                                 size="sm"
                                 variant={indicator().variant}
-                                title={stateLabel()}
-                                ariaLabel={stateLabel()}
+                                title={dotLabel()}
+                                ariaLabel={dotLabel()}
                               />
                               <div class="flex min-w-0 flex-1 items-center gap-1.5">
                                 <div
@@ -443,7 +504,9 @@ export const StandaloneVirtualMachinesTable: Component<{
                                   data-standalone-vm-state-phone={note() ? note()!.tone : 'none'}
                                 >
                                   <span class="whitespace-nowrap">
-                                    {[stateLabel(), note()?.short].filter(Boolean).join(' · ')}
+                                    {[stateLabel(), note()?.compactShort ?? note()?.short]
+                                      .filter(Boolean)
+                                      .join(' · ')}
                                   </span>
                                 </span>
                               </div>
@@ -563,6 +626,20 @@ export const StandaloneVirtualMachinesTable: Component<{
                           detailRowId={detailRowId()}
                           colSpan={7}
                           resolveResourceLabel={resolveResourceLabel}
+                          context={
+                            <Show when={staleNotice()}>
+                              {(notice) => (
+                                <InlineNotice
+                                  tone="warning"
+                                  role="status"
+                                  class="mb-3"
+                                  data-testid="standalone-vm-stale-notice"
+                                >
+                                  {notice().detail}
+                                </InlineNotice>
+                              )}
+                            </Show>
+                          }
                           onClose={() => drawer.close(vm)}
                         />
                       </>

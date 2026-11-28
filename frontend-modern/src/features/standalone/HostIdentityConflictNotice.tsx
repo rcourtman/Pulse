@@ -1,5 +1,5 @@
 import { Show, createMemo } from 'solid-js';
-import { AlertTriangle } from 'lucide-solid';
+import AlertTriangle from 'lucide-solid/icons/alert-triangle';
 import { InlineNotice } from '@/components/shared/InlineNotice';
 import type { HostIdentityConflictHost } from './hostIdentityConflict';
 
