@@ -102,6 +102,15 @@ On **Machines** (`/standalone/machines`), Pulse keeps a host's last known metric
 - **Table banner and row cue:** A table-level warning banner lists affected hosts and ages (`Telemetry is stale for <host> (<age>). CPU, memory, disk, and sensor readings shown are last known values until their agents report again.`). Each affected row displays an always-visible compact amber cue beneath the machine name (`Stale · <age>` or `Stale data` on desktop, and `Stale` on narrow screens).
 - **Expanded details, search, and fallbacks:** Expanding a stale machine displays an amber warning notice (`Agent has stopped reporting.`, the last report age, `Showing last known readings.`, and `Last error:` when recorded). Machine search matches stale labels, detail text, and recorded source errors. Retained RAID summaries are labelled `RAID Arrays (last known)`, and retained temperatures stay muted as last-known values.
 
+### Stale workload telemetry
+
+Workload tables and drawers (VMs, system containers, and container workloads across Proxmox, VMware vSphere, Docker, and Kubernetes) project canonical resource staleness and primary provider `sourceStatus` directly onto each workload row:
+
+- **Primary provider scope:** Staleness tracks the workload's primary hypervisor or container provider (`Proxmox`, `vCenter`, `Docker`, or `Kubernetes`). On hybrid workloads (such as a Proxmox VM with an optional Pulse agent), fresh hypervisor readings stay unflagged when only the linked agent goes silent; agent-sourced fields track agent staleness separately.
+- **Filter routing and status priority:** Stale running and stopped workloads leave **Running** and route into **Attention** so stale workloads do not appear healthy, while explicit `offline`, `error`, and `failed` resource states stay ahead of staleness. If a running workload also has a failed attached availability probe, the header indicator keeps the probe warning alongside the stale label (`Running, not responding to probe · <stale label>`).
+- **Parent node headers and workload rows:** Only a confirmed offline parent node marks its guests **Node offline** and dims them. A stale or degraded parent node displays an amber **Stale data** badge in the node group header (`Node telemetry is stale. Workload readings below reflect the last poll received.`) while keeping last-known guest rows readable. Affected workload rows show an inline amber cue (`Stale · <age>` when report age is available, or `Stale data`) with hover detail while preserving last-known metrics.
+- **Search and workload drawer:** Workload search matches stale labels, stale detail text (`Showing the last values received.`), and recorded source error text. Expanding a stale workload aligns the drawer header status dot to amber and shows an inline **Readings are stale** warning notice with the provider stale detail; both clear reactively as soon as live telemetry resumes.
+
 ## API
 
 ### Primary Endpoint

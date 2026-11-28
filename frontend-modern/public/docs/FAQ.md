@@ -333,6 +333,19 @@ does not prove that every reading is fresh. Missing or unavailable is not zero.
   failed), **Stale · Degraded** (the Proxmox provider is degraded), **Stale**
   (Pulse has no recent Proxmox readings), and **Degraded** (a node warning with
   current Proxmox readings).
+- **Workloads (VMs and containers)** across Proxmox, VMware vSphere, Docker, and
+  Kubernetes surface stale primary provider telemetry without falsely flagging
+  fresh hypervisor readings when only an optional linked Pulse agent goes quiet.
+  Stale running and stopped workloads leave **Running** and join **Attention**
+  (while explicit **Offline**, **Error**, and **Failed** states stay ahead of
+  staleness), stale parent nodes show an amber **Stale data** badge in the node
+  group header (`Node telemetry is stale. Workload readings below reflect the
+  last poll received.`) without dimming guests as **Node offline**, affected
+  workload rows show an inline amber cue (`Stale · <age>` or `Stale data`) while
+  preserving last-known values, workload search matches stale labels, details,
+  and recorded source errors, and expanded workload drawers switch the header
+  indicator to amber and display an inline **Readings are stale** notice that
+  clears automatically when live telemetry recovers.
 - **Proxmox Ceph clusters** (`/proxmox/ceph`) show **Stale data** beneath the
   cluster name on desktop and phones when Proxmox polling goes quiet or hits a
   collection error, moving stale **Healthy** or **Unknown** clusters out of
