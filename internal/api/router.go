@@ -681,6 +681,11 @@ func (r *Router) setupRoutes() {
 		r.connectionsHandlers.SetAgentCommandSessionProvider(r.agentCommandSessionConnected)
 	}
 	if r.resourceHandlers != nil {
+		actionProgress := newActionProgressStore()
+		r.resourceHandlers.SetActionProgressStore(actionProgress)
+		r.agentExecServer.SetActionProgressHandler(func(orgID, _ string, payload agentexec.ActionProgressPayload) {
+			actionProgress.Record(orgID, payload.ActionID, "agent", payload.Phase, payload.Message, payload.Timestamp)
+		})
 		r.resourceHandlers.SetActionExecutor(newRoutedActionExecutor(
 			r.resourceHandlers,
 			newDockerContainerActionExecutor(r.resourceHandlers, r.agentExecServer),

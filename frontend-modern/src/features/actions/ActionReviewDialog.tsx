@@ -1,6 +1,17 @@
-import { Show, createEffect, createMemo, createSignal, onCleanup, type Component } from 'solid-js';
+import {
+  For,
+  Show,
+  createEffect,
+  createMemo,
+  createSignal,
+  onCleanup,
+  type Component,
+} from 'solid-js';
 import XIcon from 'lucide-solid/icons/x';
 import ArrowUpRightIcon from 'lucide-solid/icons/arrow-up-right';
+import CheckIcon from 'lucide-solid/icons/check';
+import Loader2Icon from 'lucide-solid/icons/loader-2';
+import TerminalIcon from 'lucide-solid/icons/terminal';
 import { ResourceActionsAPI } from '@/api/resourceActions';
 import { SecurityAPI } from '@/api/security';
 import { Button, ButtonLink } from '@/components/shared/Button';
@@ -9,7 +20,7 @@ import { FormTextarea } from '@/components/shared/FormTextarea';
 import { MetadataBadge } from '@/components/shared/MetadataBadge';
 import { notificationStore } from '@/stores/notifications';
 import { presentationPolicyIsReadOnly } from '@/stores/sessionPresentationPolicy';
-import type { ActionDetailResponse } from '@/types/actionAudit';
+import type { ActionDetailResponse, ActionProgressEntry } from '@/types/actionAudit';
 import { buildResourcePagePath } from '@/features/platformNavigation/resourcePagePath';
 import { useResolvedResource } from '@/features/platformNavigation/useResolvedResource';
 import { ActionDecisionPacket } from './ActionDecisionPacket';
@@ -24,6 +35,26 @@ import { getAPTActionPresentation } from './aptActionPresentation';
 // The server's bounded reconciliation window is one hour. This is only a
 // presentation threshold: the server remains the authority for every write.
 const RECEIPT_WAIT_RECOVERY_AGE_MS = 60 * 60 * 1000;
+const LIVE_PROGRESS_INITIAL_DELAY_MS = 400;
+const LIVE_PROGRESS_POLL_INTERVAL_MS = 1000;
+
+const formatElapsedDuration = (ms: number): string => {
+  const totalSeconds = Math.max(0, Math.floor(ms / 1000));
+  const minutes = Math.floor(totalSeconds / 60);
+  const seconds = totalSeconds % 60;
+  return `${minutes}:${String(seconds).padStart(2, '0')}`;
+};
+
+const formatProgressTimestamp = (iso: string): string => {
+  const date = new Date(iso);
+  if (Number.isNaN(date.valueOf())) return '';
+  return date.toLocaleTimeString([], {
+    hour: '2-digit',
+    minute: '2-digit',
+    second: '2-digit',
+    hour12: false,
+  });
+};
 
 const agedReceiptPending = (detail: ActionDetailResponse | null, now: number): boolean => {
   if (detail?.audit.state !== 'executing' || detail.attempt?.state !== 'receipt_pending') {
@@ -51,9 +82,15 @@ export const ActionReviewDialog: Component<{
   showResourceLink?: boolean;
 }> = (props) => {
   const [busy, setBusy] = createSignal(false);
+  const [executingStage, setExecutingStage] = createSignal<'idle' | 'approving' | 'running'>(
+    'idle',
+  );
+  const [executionStartedAt, setExecutionStartedAt] = createSignal<number | null>(null);
+  const [liveProgress, setLiveProgress] = createSignal<ActionProgressEntry[]>([]);
   const [error, setError] = createSignal('');
   const [receiptRefreshError, setReceiptRefreshError] = createSignal('');
   const [clock, setClock] = createSignal(Date.now());
+  let liveLogContainer: HTMLDivElement | undefined;
   const [canForceFail, setCanForceFail] = createSignal(false);
   const [recoveryOpen, setRecoveryOpen] = createSignal(false);
   const [recoveryReason, setRecoveryReason] = createSignal('');
@@ -96,6 +133,117 @@ export const ActionReviewDialog: Component<{
   const canOfferRecovery = createMemo(
     () => !readOnly() && canForceFail() && agedReceiptPending(props.detail, clock()),
   );
+  let trackedActionId: string | undefined;
+  createEffect(() => {
+    const nextActionId = props.detail?.audit.id;
+    if (nextActionId !== trackedActionId) {
+      trackedActionId = nextActionId;
+      setExecutingStage('idle');
+      setExecutionStartedAt(null);
+      setLiveProgress(props.detail?.progress ?? []);
+      setError('');
+    } else if (props.detail?.progress && props.detail.progress.length > liveProgress().length) {
+      setLiveProgress(props.detail.progress);
+    }
+  });
+
+  createEffect(() => {
+    const stage = executingStage();
+    const actionId = audit()?.id;
+    if (stage !== 'running' || !actionId) return;
+
+    let active = true;
+    let pollInFlight = false;
+    let intervalId: number | undefined;
+
+    const pollProgress = async () => {
+      if (!active || pollInFlight) return;
+      pollInFlight = true;
+      try {
+        const latest = await ResourceActionsAPI.getAction(actionId);
+        if (!active) return;
+        if (latest.progress && latest.progress.length > 0) {
+          setLiveProgress(latest.progress);
+        }
+      } catch {
+        // Keep the active run calm if an intermediate progress poll misses.
+      } finally {
+        pollInFlight = false;
+      }
+    };
+
+    const initialTimer = window.setTimeout(() => {
+      void pollProgress();
+      intervalId = window.setInterval(() => {
+        void pollProgress();
+      }, LIVE_PROGRESS_POLL_INTERVAL_MS);
+    }, LIVE_PROGRESS_INITIAL_DELAY_MS);
+
+    onCleanup(() => {
+      active = false;
+      window.clearTimeout(initialTimer);
+      if (intervalId !== undefined) window.clearInterval(intervalId);
+    });
+  });
+
+  createEffect(() => {
+    const count = liveProgress().length;
+    if (count > 0 && liveLogContainer) {
+      liveLogContainer.scrollTop = liveLogContainer.scrollHeight;
+    }
+  });
+
+  const displayedLiveProgress = createMemo<ActionProgressEntry[]>(() => {
+    const serverEntries = liveProgress();
+    if (serverEntries.length > 0) return serverEntries;
+    const stage = executingStage();
+    const started = executionStartedAt();
+    if (stage === 'idle' || started === null) return [];
+    const ts = new Date(started).toISOString();
+    if (stage === 'approving') {
+      return [{ timestamp: ts, source: 'server', message: 'Recording approval...' }];
+    }
+    return [
+      {
+        timestamp: ts,
+        source: 'server',
+        message: 'Dispatching action to agent...',
+      },
+    ];
+  });
+
+  const showLiveExecutionPanel = createMemo(
+    () =>
+      executingStage() !== 'idle' ||
+      (audit()?.state === 'executing' && !receiptWaiting() && displayedLiveProgress().length > 0),
+  );
+
+  const elapsedMs = createMemo(() => {
+    const started = executionStartedAt();
+    if (started === null) return 0;
+    return Math.max(0, clock() - started);
+  });
+
+  const hasAgentProgress = createMemo(() =>
+    displayedLiveProgress().some((entry) => entry.source === 'agent'),
+  );
+
+  const headerBadgePresentation = createMemo(() => {
+    if (executingStage() === 'approving') {
+      return { tone: 'info' as const, label: 'Approving' };
+    }
+    if (executingStage() === 'running') {
+      return { tone: 'info' as const, label: 'Running' };
+    }
+    if (receiptWaiting()) {
+      return { tone: 'warning' as const, label: 'Receipt pending' };
+    }
+    const record = audit();
+    return record
+      ? getActionAuditStatePresentation(record)
+      : { tone: 'neutral' as const, label: '' };
+  });
+
   createEffect(() => {
     const detail = props.detail;
     setReceiptRefreshError('');
@@ -277,7 +425,11 @@ export const ActionReviewDialog: Component<{
   const approveAndRun = async () => {
     const action = audit();
     if (!action || busy()) return;
+    const now = Date.now();
     setBusy(true);
+    setExecutingStage('approving');
+    setExecutionStartedAt(now);
+    setLiveProgress([]);
     setError('');
     try {
       await ResourceActionsAPI.decideAction(
@@ -286,6 +438,7 @@ export const ActionReviewDialog: Component<{
         reviewedPlanHash(),
         'Operator approved from Actions review.',
       );
+      setExecutingStage('running');
       await ResourceActionsAPI.executeAction(
         action.id,
         reviewedPlanHash(),
@@ -303,6 +456,7 @@ export const ActionReviewDialog: Component<{
         /* keep the actionable error; a refresh failure must not mask it */
       }
     } finally {
+      setExecutingStage('idle');
       setBusy(false);
     }
   };
@@ -310,7 +464,11 @@ export const ActionReviewDialog: Component<{
   const execute = async () => {
     const action = audit();
     if (!action || busy()) return;
+    const now = Date.now();
     setBusy(true);
+    setExecutingStage('running');
+    setExecutionStartedAt(now);
+    setLiveProgress([]);
     setError('');
     try {
       await ResourceActionsAPI.executeAction(
@@ -328,6 +486,7 @@ export const ActionReviewDialog: Component<{
         /* keep the actionable execution error */
       }
     } finally {
+      setExecutingStage('idle');
       setBusy(false);
     }
   };
@@ -417,14 +576,8 @@ export const ActionReviewDialog: Component<{
                   <h2 id="action-review-title" class="text-xl font-semibold">
                     {formatActionName(record().request.capabilityName)}
                   </h2>
-                  <MetadataBadge
-                    tone={
-                      receiptWaiting() ? 'warning' : getActionAuditStatePresentation(record()).tone
-                    }
-                  >
-                    {receiptWaiting()
-                      ? 'Receipt pending'
-                      : getActionAuditStatePresentation(record()).label}
+                  <MetadataBadge tone={headerBadgePresentation().tone}>
+                    {headerBadgePresentation().label}
                   </MetadataBadge>
                 </div>
                 <p class="mt-1 text-sm text-muted">
@@ -472,6 +625,96 @@ export const ActionReviewDialog: Component<{
               </Button>
             </header>
             <div class="overflow-y-auto px-5 py-4">
+              <Show when={showLiveExecutionPanel()}>
+                <section
+                  aria-labelledby="action-live-execution-heading"
+                  aria-live="polite"
+                  data-testid="action-live-execution"
+                  class="mb-4 overflow-hidden rounded-lg border border-blue-200 bg-slate-50 dark:border-blue-800/70 dark:bg-slate-950/70"
+                >
+                  <div class="flex flex-wrap items-center justify-between gap-2 border-b border-blue-200/80 bg-blue-50/70 px-3.5 py-2.5 dark:border-blue-900/60 dark:bg-blue-950/30">
+                    <div class="flex min-w-0 items-center gap-2">
+                      <TerminalIcon
+                        class="h-4 w-4 shrink-0 text-blue-600 dark:text-blue-400"
+                        aria-hidden="true"
+                      />
+                      <h3
+                        id="action-live-execution-heading"
+                        class="truncate text-xs font-semibold text-base-content"
+                      >
+                        {executingStage() === 'approving'
+                          ? `Approving ${formatActionName(record().request.capabilityName).toLowerCase()} for ${resource().label}`
+                          : `Running ${formatActionName(record().request.capabilityName).toLowerCase()} on ${resource().label}`}
+                      </h3>
+                    </div>
+                    <Show when={executionStartedAt() !== null}>
+                      <span
+                        data-testid="action-live-elapsed"
+                        class="font-mono text-xs tabular-nums text-muted"
+                      >
+                        {formatElapsedDuration(elapsedMs())}
+                      </span>
+                    </Show>
+                  </div>
+                  <div
+                    ref={liveLogContainer}
+                    data-testid="action-live-log"
+                    class="max-h-56 overflow-y-auto px-3.5 py-2.5 font-mono text-xs leading-relaxed"
+                  >
+                    <ol class="space-y-1.5">
+                      <For each={displayedLiveProgress()}>
+                        {(entry, index) => {
+                          const isLatest = () =>
+                            index() === displayedLiveProgress().length - 1 &&
+                            executingStage() !== 'idle';
+                          return (
+                            <li class="flex items-start gap-2">
+                              <span class="mt-0.5 shrink-0" aria-hidden="true">
+                                <Show
+                                  when={isLatest()}
+                                  fallback={
+                                    <CheckIcon class="h-3.5 w-3.5 text-emerald-600 dark:text-emerald-400" />
+                                  }
+                                >
+                                  <Loader2Icon class="h-3.5 w-3.5 animate-spin text-blue-600 dark:text-blue-400" />
+                                </Show>
+                              </span>
+                              <Show when={formatProgressTimestamp(entry.timestamp)}>
+                                {(time) => (
+                                  <span class="shrink-0 tabular-nums text-muted">{time()}</span>
+                                )}
+                              </Show>
+                              <span
+                                class={
+                                  isLatest()
+                                    ? 'min-w-0 break-words font-medium text-base-content'
+                                    : 'min-w-0 break-words text-muted'
+                                }
+                              >
+                                {entry.message}
+                              </span>
+                            </li>
+                          );
+                        }}
+                      </For>
+                    </ol>
+                    <Show
+                      when={
+                        executingStage() === 'running' && !hasAgentProgress() && elapsedMs() >= 5000
+                      }
+                    >
+                      <p class="mt-2 font-sans text-xs text-muted">
+                        Waiting for the agent to report the next step. Image pulls and container
+                        restarts can take a minute.
+                      </p>
+                    </Show>
+                  </div>
+                  <div class="border-t border-border-subtle px-3.5 py-2 text-xs text-muted">
+                    You can close this dialog safely. The action continues on the server and its
+                    outcome will be recorded in Actions.
+                  </div>
+                </section>
+              </Show>
               <Show when={receiptWaiting()}>
                 <section
                   aria-labelledby="action-receipt-waiting-heading"
@@ -619,13 +862,17 @@ export const ActionReviewDialog: Component<{
                   }
                 >
                   <Button variant="primary" isLoading={busy()} onClick={() => void approveAndRun()}>
-                    Approve and run
+                    {executingStage() === 'approving'
+                      ? 'Approving...'
+                      : executingStage() === 'running'
+                        ? 'Running...'
+                        : 'Approve and run'}
                   </Button>
                 </Show>
               </Show>
               <Show when={canExecute()}>
                 <Button variant="primary" isLoading={busy()} onClick={() => void execute()}>
-                  Run action
+                  {executingStage() === 'running' ? 'Running...' : 'Run action'}
                 </Button>
               </Show>
             </footer>

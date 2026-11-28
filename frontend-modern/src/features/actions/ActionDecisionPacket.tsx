@@ -263,6 +263,37 @@ export const ActionDecisionPacket: Component<{
               <Show when={truth().execution.summary && !apt()}>
                 <p class="mt-2 text-sm">{truth().execution.summary}</p>
               </Show>
+              <Show when={(props.detail?.progress ?? []).length > 0}>
+                <details
+                  data-testid="action-execution-log"
+                  open={truth().execution.status === 'failed'}
+                  class="mt-3 rounded-sm border border-border-subtle p-3 text-xs"
+                >
+                  <summary class="cursor-pointer font-medium">
+                    Execution log ({props.detail!.progress!.length}{' '}
+                    {props.detail!.progress!.length === 1 ? 'step' : 'steps'})
+                  </summary>
+                  <ol class="mt-2 space-y-1 font-mono text-muted">
+                    <For each={props.detail!.progress!}>
+                      {(step) => (
+                        <li class="flex items-start gap-2">
+                          <Show when={step.timestamp}>
+                            <span class="shrink-0 tabular-nums opacity-75">
+                              {new Date(step.timestamp).toLocaleTimeString([], {
+                                hour: '2-digit',
+                                minute: '2-digit',
+                                second: '2-digit',
+                                hour12: false,
+                              })}
+                            </span>
+                          </Show>
+                          <span class="min-w-0 break-words">{step.message}</span>
+                        </li>
+                      )}
+                    </For>
+                  </ol>
+                </details>
+              </Show>
               <Show when={agentDetails()}>
                 <details class="mt-3 rounded-sm border border-border-subtle p-3 text-xs">
                   <summary class="cursor-pointer font-medium">Agent details</summary>

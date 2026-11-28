@@ -256,6 +256,8 @@ func (e dockerContainerActionExecutor) executeDockerContainerUpdate(ctx context.
 	if agentexec.DockerContainerUpdateOperationIdentity(agentID, req) != (operationreceipt.Identity{AttemptID: attempt.ID, ActionID: attempt.ActionID, OperationKind: attempt.OperationKind, OperationVersion: attempt.OperationVersion, RequestDigest: attempt.RequestDigest, AgentID: attempt.AgentID}) {
 		return nil, fmt.Errorf("docker container update dispatch binding drift")
 	}
+	orgID := GetOrgID(ctx)
+	e.resources.recordActionProgress(orgID, record.ID, "server", "dispatch", fmt.Sprintf("Dispatched container update to %s...", dockerHostProgressLabel(resource)), time.Now().UTC())
 	result, err := typedAgents.ExecuteDockerContainerUpdate(agentCommandContext(ctx), agentID, req)
 	if err != nil {
 		return nil, err
@@ -269,6 +271,7 @@ func (e dockerContainerActionExecutor) executeDockerContainerUpdate(ctx context.
 	}
 	var independent *dockerContainerPostconditionObservation
 	if e.observer != nil && result.NewContainerID != "" {
+		e.resources.recordActionProgress(orgID, record.ID, "server", "verify", "Verifying updated container state...", time.Now().UTC())
 		if observation, observeErr := e.observer.ObserveDockerContainer(ctx, record.ID, agentID, runtime, result.NewContainerID); observeErr == nil {
 			independent = &observation
 		}
@@ -840,4 +843,13 @@ func redactActionOutput(output string) string {
 
 func shellQuote(value string) string {
 	return "'" + strings.ReplaceAll(value, "'", "'\"'\"'") + "'"
+}
+
+func dockerHostProgressLabel(resource unified.Resource) string {
+	if resource.Docker != nil {
+		if host := strings.TrimSpace(resource.Docker.Hostname); host != "" {
+			return host
+		}
+	}
+	return "agent"
 }

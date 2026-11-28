@@ -349,11 +349,19 @@ export interface ActionDispatchReceipt {
   receivedAt: string;
 }
 
+export interface ActionProgressEntry {
+  timestamp: string;
+  phase?: string;
+  message: string;
+  source?: 'server' | 'agent';
+}
+
 export interface ActionDetailResponse {
   audit: ActionAuditRecord;
   events: ActionLifecycleEvent[];
   attempt?: ActionDispatchAttempt;
   receipt?: ActionDispatchReceipt;
+  progress?: ActionProgressEntry[];
   readiness: ActionReadiness;
   readOnly?: boolean;
 }

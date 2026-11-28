@@ -284,6 +284,7 @@ const (
 	msgTypeDeployInstall                  messageType = "deploy_install"
 	msgTypeDeployCancel                   messageType = "deploy_cancel"
 	msgTypeDeployProgress                 messageType = "deploy_progress"
+	msgTypeActionProgress                 messageType = "action_progress"
 	msgTypeCancelCmd                      messageType = "cancel_command"
 )
 

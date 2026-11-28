@@ -304,6 +304,7 @@ func (a *Agent) updateContainerWithProgress(ctx context.Context, containerID str
 	}
 
 	// 1. Inspect the current container to get its full configuration
+	reportProgress("Inspecting current container configuration...")
 	inspect, err := dockerCallWithRetry(ctx, dockerUpdateCallTimeout, func(callCtx context.Context) (containertypes.InspectResponse, error) {
 		return a.docker.ContainerInspect(callCtx, containerID)
 	})
@@ -352,7 +353,7 @@ func (a *Agent) updateContainerWithProgress(ctx context.Context, containerID str
 	reportProgress(fmt.Sprintf("Pulling image %s...", imageName))
 	a.logger.Info().Str("image", imageName).Msg("Pulling latest image")
 
-	if err := a.pullUpdateImage(ctx, imageName); err != nil {
+	if err := a.pullUpdateImageWithProgress(ctx, imageName, reportProgress); err != nil {
 		result.Error = fmt.Sprintf("Failed to pull image %s: %v", imageName, annotateDockerConnectionError(err))
 		result.ReasonCode = agentexec.ActionRefusalImagePullFailed
 		a.logger.Error().Err(err).Str("image", imageName).Msg("Failed to pull latest image")
@@ -391,6 +392,7 @@ func (a *Agent) updateContainerWithProgress(ctx context.Context, containerID str
 
 	// 4. Rename the old container for backup
 	backupName := result.ContainerName + backupContainerMarker + nowFn().Format("20060102_150405")
+	reportProgress(fmt.Sprintf("Backing up container %s...", result.ContainerName))
 	_, err = dockerCallWithRetry(ctx, dockerUpdateCallTimeout, func(callCtx context.Context) (struct{}, error) {
 		err := a.docker.ContainerRename(callCtx, containerID, backupName)
 		return struct{}{}, err
@@ -423,6 +425,7 @@ func (a *Agent) updateContainerWithProgress(ctx context.Context, containerID str
 		result.Error = fmt.Sprintf("Failed to create new container: %v", annotateDockerConnectionError(err))
 		a.logger.Error().Err(err).Str("container", result.ContainerName).Msg("Failed to create new container")
 		// Rollback: rename backup back to original name
+		reportProgress(fmt.Sprintf("Container creation failed, rolling back %s...", result.ContainerName))
 		result.RollbackAttempted = true
 		result.RolledBack = a.rollbackRenameAndRestart(ctx, backupName, result.ContainerName, containerID, wasRunning)
 		return result
@@ -460,6 +463,7 @@ func (a *Agent) updateContainerWithProgress(ctx context.Context, containerID str
 			result.Error = fmt.Sprintf("Failed to start new container: %v", annotateDockerConnectionError(err))
 			a.logger.Error().Err(err).Str("container", result.ContainerName).Msg("Failed to start new container")
 			// Rollback: remove new container, rename backup back
+			reportProgress(fmt.Sprintf("Container start failed, rolling back %s...", result.ContainerName))
 			result.RollbackAttempted = true
 			result.RolledBack = a.rollbackRemoveRenameAndRestart(ctx, newContainerID, backupName, result.ContainerName, containerID, wasRunning)
 			return result
@@ -535,6 +539,7 @@ func (a *Agent) updateContainerWithProgress(ctx context.Context, containerID str
 		}
 	})
 
+	reportProgress(fmt.Sprintf("Container %s updated and verified", result.ContainerName))
 	result.Success = true
 	a.logger.Info().
 		Str("container", result.ContainerName).
@@ -613,6 +618,10 @@ func (a *Agent) startOriginalContainer(ctx context.Context, containerID string) 
 // a stream cut off by the timeout ends early without one, so the stream is
 // read to its end and both are treated as a failed pull.
 func (a *Agent) pullUpdateImage(ctx context.Context, imageName string) error {
+	return a.pullUpdateImageWithProgress(ctx, imageName, nil)
+}
+
+func (a *Agent) pullUpdateImageWithProgress(ctx context.Context, imageName string, reportProgress func(string)) error {
 	pullCtx, cancel := context.WithTimeout(ctx, dockerImagePullTimeout)
 	defer cancel()
 	body, err := a.docker.ImagePull(pullCtx, imageName, dockerImagePullOptions{})
@@ -621,10 +630,31 @@ func (a *Agent) pullUpdateImage(ctx context.Context, imageName string) error {
 	}
 	defer body.Close()
 	decoder := json.NewDecoder(body)
+
+	// Track layer milestones so the UI sees concise, terminal-like pull lines
+	// instead of hundreds of raw byte progress ticks.
+	layers := make(map[string]string)
+	lastEmit := time.Time{}
+	lastSummary := ""
+	emitSummary := func(summary string, force bool) {
+		if reportProgress == nil || summary == "" || summary == lastSummary {
+			return
+		}
+		now := time.Now()
+		if !force && !lastEmit.IsZero() && now.Sub(lastEmit) < 1500*time.Millisecond {
+			return
+		}
+		lastSummary = summary
+		lastEmit = now
+		reportProgress(summary)
+	}
+
 	for {
 		// errorDetail is the structured form; the plain error string is the
 		// older field some daemons and API-compatible runtimes send alone.
 		var message struct {
+			Status      string            `json:"status,omitempty"`
+			ID          string            `json:"id,omitempty"`
 			ErrorDetail *jsonstream.Error `json:"errorDetail,omitempty"`
 			Error       string            `json:"error,omitempty"`
 		}
@@ -648,6 +678,43 @@ func (a *Agent) pullUpdateImage(ctx context.Context, imageName string) error {
 				text = "the daemon reported a pull failure"
 			}
 			return errors.New(text)
+		}
+
+		status := strings.TrimSpace(message.Status)
+		layerID := strings.TrimSpace(message.ID)
+		if status == "" || reportProgress == nil {
+			continue
+		}
+		switch {
+		case strings.HasPrefix(status, "Digest: "), strings.HasPrefix(status, "Status: "):
+			emitSummary(status, true)
+		case layerID != "":
+			switch status {
+			case "Pulling fs layer", "Waiting", "Downloading", "Verifying Checksum", "Download complete", "Extracting", "Pull complete", "Already exists":
+				layers[layerID] = status
+				total := len(layers)
+				done := 0
+				extracting := 0
+				downloading := 0
+				for _, st := range layers {
+					switch st {
+					case "Pull complete", "Already exists":
+						done++
+					case "Extracting":
+						extracting++
+					case "Downloading", "Download complete", "Verifying Checksum":
+						downloading++
+					}
+				}
+				switch {
+				case done == total && total > 0:
+					emitSummary(fmt.Sprintf("Pulled %d/%d image layers", done, total), true)
+				case extracting > 0:
+					emitSummary(fmt.Sprintf("Extracting image layers (%d/%d complete)...", done, total), false)
+				case downloading > 0:
+					emitSummary(fmt.Sprintf("Downloading image layers (%d/%d complete)...", done, total), false)
+				}
+			}
 		}
 	}
 }
