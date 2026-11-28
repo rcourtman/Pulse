@@ -26,6 +26,7 @@ import (
 // The ordinary poll must retain accepted scopes after a later child timeout,
 // without renewing unread history or confusing partial collection with safety.
 func TestPBSBudgetPublishesAcceptedListings(t *testing.T) {
+	t.Parallel()
 	exercisePBSBudgetAcceptedListings(t)
 }
 
@@ -154,6 +155,7 @@ func TestBuildPBSProtectionProviderObservationMapsEvidenceQuality(t *testing.T) 
 // of 101 snapshots. A backwards last-backup value must invalidate it even
 // though its retained count still matches and its TTL has not expired.
 func TestPBSOrdinaryPollNewestRemovalInvalidatesCappedCache(t *testing.T) {
+	t.Parallel()
 	for _, kind := range []string{"vm", "ct"} {
 		for _, failure := range []int{0, http.StatusServiceUnavailable, http.StatusForbidden} {
 			t.Run(fmt.Sprintf("%s/refresh-status-%d", kind, failure), func(t *testing.T) {
@@ -495,6 +497,7 @@ func (f *pbsNamespacePollFixture) postures(t *testing.T) []recovery.ProtectionPo
 }
 
 func TestPBSNamespaceDiscoveryFailureRetainsRecoveryHistory(t *testing.T) {
+	t.Parallel()
 	for _, status := range []int{http.StatusServiceUnavailable, http.StatusForbidden, http.StatusOK} {
 		for _, cold := range []bool{false, true} {
 			t.Run(fmt.Sprintf("status-%d/cold-%t", status, cold), func(t *testing.T) {
@@ -572,6 +575,7 @@ func TestPBSNamespaceDiscoveryFailureRetainsRecoveryHistory(t *testing.T) {
 }
 
 func TestPBSNamespaceDiscoveryRecoveryAndScopedRemoval(t *testing.T) {
+	t.Parallel()
 	f := newPBSNamespacePollFixture(t)
 	f.poll(t, "pbs-other")
 	other := f.points(t, "pbs-other")
@@ -615,6 +619,7 @@ func TestPBSNamespaceDiscoveryRecoveryAndScopedRemoval(t *testing.T) {
 // snapshots. Cross the real HTTP client, ordinary poll, mapper and durable
 // asynchronous ingest without changing the store or its evidence semantics.
 func TestPBSFailedRefreshDoesNotRenewCarriedPointEvidence(t *testing.T) {
+	t.Parallel()
 	for _, kind := range []string{"vm", "ct"} {
 		for _, scope := range []string{"snapshot", "datastore"} {
 			for _, failure := range []int{http.StatusServiceUnavailable, http.StatusForbidden} {

@@ -30,6 +30,7 @@ func (c *incompleteFilesystemClient) GetVMFSInfo(context.Context, string, int) (
 }
 
 func TestVMFilesystemIncompleteAlternateClientCannotPublishRemainder(t *testing.T) {
+	t.Parallel()
 	for name, bad := range map[string]proxmox.VMFileSystem{
 		"overused":        {TotalBytes: 9000, UsedBytes: 9001},
 		"signed-overflow": {TotalBytes: uint64(math.MaxInt64) + 1, UsedBytes: 0},
@@ -59,6 +60,7 @@ func TestVMFilesystemIncompleteAlternateClientCannotPublishRemainder(t *testing.
 // Exercise both collectors, canonical previous state, served JSON, History and
 // genuine filesystem alerts. No guest freeze, command bypass or native probe.
 func TestVMFilesystemIncompletePollingPreservesHistoryAndBreach(t *testing.T) {
+	t.Parallel()
 	for _, tc := range []struct{ name, collector, badRow string }{
 		{"cluster", "cluster", `{"mountpoint":"/data","type":"ext4","total-bytes":9000}`},
 		{"node", "node", `{"mountpoint":"/data","type":"ext4","total-bytes":9000}`},
@@ -235,6 +237,7 @@ func TestVMFilesystemIncompletePollingPreservesHistoryAndBreach(t *testing.T) {
 }
 
 func TestVMFilesystemIncompleteColdPollRemainsUnavailable(t *testing.T) {
+	t.Parallel()
 	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		switch {
 		case strings.HasSuffix(r.URL.Path, "/config"):

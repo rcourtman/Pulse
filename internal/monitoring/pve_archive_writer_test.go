@@ -21,6 +21,7 @@ import (
 // Exercise the real task, log and storage clients, then live dates and durable
 // protection. No provider write is needed and the live window stays at 200.
 func TestPVEArchiveWritersOutsideDisplayWindow(t *testing.T) {
+	t.Parallel()
 	for _, kind := range []string{"direct", "scheduled"} {
 		t.Run(kind, func(t *testing.T) {
 			t.Parallel()
@@ -289,6 +290,7 @@ func testPVEArchiveWritersOutsideDisplayWindow(t *testing.T, scheduled bool) {
 }
 
 func TestPVEArchiveWriterWithdrawal(t *testing.T) {
+	t.Parallel()
 	start := time.Now().Add(-time.Hour)
 	writer := models.BackupTask{ID: "site-job-vm101", Instance: "site", Node: "member",
 		VMID: 101, Type: "vzdump", Status: "running", StartTime: start}

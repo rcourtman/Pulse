@@ -184,6 +184,7 @@ func firstCriticalFiring(t *testing.T, r *proofReceiver) alerts.Alert {
 }
 
 func TestRestartWithinCooldownPreservesDeliveredCriticalFiring(t *testing.T) {
+	t.Parallel()
 	receiver := newProofReceiver(t)
 	alertDir, notificationDir := t.TempDir(), t.TempDir()
 
@@ -239,6 +240,7 @@ func TestNativeSubprocessRestartPreservesDeliveredCriticalFiring(t *testing.T) {
 		runRestartProofPhase(t, phase)
 		return
 	}
+	t.Parallel()
 	receiver := newProofReceiver(t)
 	alertDir, notificationDir := t.TempDir(), t.TempDir()
 	run := func(phase string) {

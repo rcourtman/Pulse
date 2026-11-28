@@ -10301,8 +10301,11 @@ func TestInstallSHTrueNASScaleBootTasksRetireBeforeRecoveryErasure(t *testing.T)
 	}, 2*time.Minute)
 }
 
+// TestInstallSHNASBootOwnersQuiesceBeforeRecoveryErasure must stay serial at
+// the top level: AgentNASLiveTeardown reads the real machine-wide process table
+// (ps -ax) and fails closed if any concurrent parallel test runs pulse-agent or
+// a shell command mentioning start-pulse-agent.sh, autorun.sh, or /boot/config/go.
 func TestInstallSHNASBootOwnersQuiesceBeforeRecoveryErasure(t *testing.T) {
-	t.Parallel()
 	if runtime.GOOS == "windows" {
 		t.Skip("Unix NAS shell controls; Windows retains its separate native SCM gate")
 	}

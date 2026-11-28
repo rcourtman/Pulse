@@ -13,6 +13,7 @@ import (
 )
 
 func TestPBSWholeInventoryResponseRetainsEvidence(t *testing.T) {
+	t.Parallel()
 	for _, kind := range []string{"vm", "ct"} {
 		for _, stage := range []string{"namespace", "groups", "snapshots"} {
 			bodies := map[string]string{
@@ -115,6 +116,7 @@ func TestPBSWholeInventoryResponseRetainsEvidence(t *testing.T) {
 }
 
 func TestPBSExplicitZeroGroupCountConfirmsAbsence(t *testing.T) {
+	t.Parallel()
 	for _, kind := range []string{"vm", "ct"} {
 		t.Run(kind, func(t *testing.T) {
 			f := newPBSNamespaceContinuityFixture(t, kind)
@@ -142,6 +144,7 @@ func TestPBSExplicitZeroGroupCountConfirmsAbsence(t *testing.T) {
 // Exercise ordinary polling, raw publication, durable ingestion and posture.
 // Optional export is evidence for the real Backups consumer, not a second path.
 func TestPBSWholeInventoryConsumerLifecycle(t *testing.T) {
+	t.Parallel()
 	for _, kind := range []string{"vm", "ct"} {
 		t.Run(kind, func(t *testing.T) {
 			f := newPBSNamespaceContinuityFixture(t, kind)

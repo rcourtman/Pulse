@@ -120,6 +120,7 @@ func (h *snapshotInventoryHTTPFixture) poll(t *testing.T, instance string) {
 }
 
 func TestPVESnapshotHTTPInvalidResponseRetainsHistory(t *testing.T) {
+	t.Parallel()
 	cases := map[string]string{
 		"missing-data":       `{}`,
 		"null-data":          `{"data":null}`,
@@ -200,6 +201,7 @@ func TestPVESnapshotHTTPInvalidResponseRetainsHistory(t *testing.T) {
 // Opt-in JSON uses the same HTTP reader, poller, queue and public store API as
 // the regression. It is a producer for the production consuming/browser proof.
 func TestPVESnapshotHTTPBrowserProducer(t *testing.T) {
+	t.Parallel()
 	h := newSnapshotInventoryHTTPFixture(t, "qemu")
 	h.poll(t, "other-site")
 	type frame struct {

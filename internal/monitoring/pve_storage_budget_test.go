@@ -120,6 +120,7 @@ func storageBudgetFrame(t *testing.T, f *pveReconciliationFixture) map[string]an
 }
 
 func TestPVEStorageBudgetPublishesAcceptedListings(t *testing.T) {
+	t.Parallel()
 	for _, kind := range []string{"qemu", "lxc"} {
 		for _, phase := range []string{"content/node-a/tail", "storage/node-b", "content/node-b/local", "retry", "assignment"} {
 			for _, cold := range []bool{false, true} {
@@ -243,6 +244,7 @@ func TestPVEStorageBudgetPublishesAcceptedListings(t *testing.T) {
 }
 
 func TestPVEStorageBudgetAcceptedEmptyDoesNotKeepRawRows(t *testing.T) {
+	t.Parallel()
 	f, c := newStorageBudgetFixture(t, "qemu")
 	pollStorageBudget(t, f, c, context.Background())
 	c.phase, c.emptyFirst = "storage/node-b", true
@@ -265,6 +267,7 @@ func TestPVEStorageBudgetAcceptedEmptyDoesNotKeepRawRows(t *testing.T) {
 }
 
 func TestPVEStorageBudgetOwnerWithdrawalStillBlocksPublication(t *testing.T) {
+	t.Parallel()
 	for _, transition := range []string{"client", "runtime", "retire"} {
 		t.Run(transition, func(t *testing.T) {
 			f, c := newStorageBudgetFixture(t, "qemu")
@@ -299,6 +302,7 @@ func TestPVEStorageBudgetOwnerWithdrawalStillBlocksPublication(t *testing.T) {
 }
 
 func TestPVEStorageBudgetUnreadNodeKeepsUnscopedPBSConfirmation(t *testing.T) {
+	t.Parallel()
 	for _, mode := range []string{"deadline", "denied"} {
 		t.Run(mode, func(t *testing.T) {
 			f, c := newStorageBudgetFixture(t, "qemu")
@@ -330,6 +334,7 @@ func TestPVEStorageBudgetUnreadNodeKeepsUnscopedPBSConfirmation(t *testing.T) {
 // failed. Preserve wanted alerts (and a real prior evaluation warning) until
 // an ordinary evaluation runs with a live context.
 func TestPVEStorageBudgetDoesNotInventAlertReadFailure(t *testing.T) {
+	t.Parallel()
 	for _, priorWarning := range []bool{false, true} {
 		t.Run(fmt.Sprintf("prior-warning=%t", priorWarning), func(t *testing.T) {
 			f, c := newStorageBudgetFixture(t, "qemu")

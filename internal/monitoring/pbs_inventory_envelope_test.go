@@ -34,6 +34,7 @@ func (f *pbsNamespaceContinuityFixture) collectInventoryResponse(t *testing.T, s
 }
 
 func TestPBSMissingInventoryArrayRetainsUnreadScope(t *testing.T) {
+	t.Parallel()
 	for _, kind := range []string{"vm", "ct"} {
 		for _, stage := range []string{"namespace", "groups", "snapshots"} {
 			for _, body := range []string{`null`, `{}`, `{"data":null}`} {
@@ -126,6 +127,7 @@ func TestPBSMissingInventoryArrayRetainsUnreadScope(t *testing.T) {
 }
 
 func TestPBSMissingInventoryArrayKeepsOtherConnection(t *testing.T) {
+	t.Parallel()
 	f := newPBSNamespaceContinuityFixture(t, "vm")
 	f.collect(t, true, nil)
 	// Populate a second connection through the same ordinary synthetic reader.
@@ -154,6 +156,7 @@ func TestPBSMissingInventoryArrayKeepsOtherConnection(t *testing.T) {
 // This normal-suite lifecycle can export its actual poll/ingest/posture results
 // for an evidence-only production Backups/API-hook desktop/narrow browser pass.
 func TestPBSMissingInventoryArrayConsumerLifecycle(t *testing.T) {
+	t.Parallel()
 	f := newPBSNamespaceContinuityFixture(t, "vm")
 	frames := map[string]any{}
 	for _, phase := range []string{"observed", "missing-namespaces", "null-groups", "null-snapshots", "recovered", "confirmed-empty"} {

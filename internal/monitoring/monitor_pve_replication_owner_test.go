@@ -22,6 +22,7 @@ func replicationOwner(t *testing.T, m *Monitor) *pveReplicationPoll {
 	return owner
 }
 func TestReplicationLifecycleSingleFlightAndCycleCancellation(t *testing.T) {
+	t.Parallel()
 	started := make(chan struct{})
 	release := make(chan struct{})
 	var calls atomic.Int32
@@ -78,8 +79,10 @@ func TestReplicationLifecycleSingleFlightAndCycleCancellation(t *testing.T) {
 	}
 }
 func TestReplicationLifecycleReplacementRejectsLateCompletion(t *testing.T) {
+	t.Parallel()
 	for _, mode := range []string{"runtime", "client", "retire", "client-empty", "client-error"} {
 		t.Run(mode, func(t *testing.T) {
+			t.Parallel()
 			started := make(chan struct{})
 			release := make(chan struct{})
 			var released bool
@@ -167,6 +170,7 @@ func TestReplicationLifecycleReplacementRejectsLateCompletion(t *testing.T) {
 }
 
 func TestReplicationLifecycleDeadlineAndOrdinaryRecovery(t *testing.T) {
+	t.Parallel()
 	started := make(chan struct{})
 	c := &lifecycleReplicationClient{read: func(ctx context.Context) ([]proxmox.ReplicationJob, error) {
 		close(started)

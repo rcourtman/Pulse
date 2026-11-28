@@ -186,6 +186,7 @@ func continuityFirstCriticalFiring(t *testing.T, r *continuityProofReceiver) ale
 }
 
 func TestNotificationExtendedMonitorRestartKeepsDeliveredCriticalCooldown(t *testing.T) {
+	t.Parallel()
 	receiver := continuityNewProofReceiver(t)
 	alertDir, notificationDir := t.TempDir(), t.TempDir()
 
@@ -241,6 +242,7 @@ func TestNotificationExtendedMonitorNativeRestartKeepsDeliveredCriticalCooldown(
 		continuityRunRestartProofPhase(t, phase)
 		return
 	}
+	t.Parallel()
 	receiver := continuityNewProofReceiver(t)
 	alertDir, notificationDir := t.TempDir(), t.TempDir()
 	run := func(phase string) {

@@ -57,6 +57,7 @@ func pmgPollingReadFixture(unrelated int, scenario string) (*Monitor, *pmgBackup
 }
 
 func TestPMGBackupReadProjectionPreservesPollEvidence(t *testing.T) {
+	t.Parallel()
 	for _, scenario := range []string{"cluster-unread", "all-nodes-unread", "partial", "complete"} {
 		t.Run(scenario, func(t *testing.T) {
 			m, f := pmgPollingReadFixture(10, scenario)
@@ -119,6 +120,7 @@ func pmgPollingReadContext() context.Context {
 
 func TestPMGBackupReadsAvoidUnrelatedFleetCopy(t *testing.T) {
 	if raceEnabled {
+		t.Parallel()
 		// The race runtime randomly discards sync.Pool entries used by the
 		// poll's formatting, JSON and diagnostics. Those unrelated allocations
 		// cannot establish whether inventory copying grew. Keep this exact
