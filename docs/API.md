@@ -1490,10 +1490,12 @@ Returns the new raw token (shown once) and updates stored hashes:
 
 ## 🧾 Audit Log (Pro)
 
-These endpoints require admin access and the `audit:read` scope. On Community (no `audit_logging` license), these endpoints return HTTP 402 Payment Required with `error: "license_required"` and `feature: "audit_logging"` before any events are read.
+These endpoints require admin access, audit-log read permission, and the `audit:read` scope. On Community (no `audit_logging` license), these endpoints return HTTP 402 Payment Required with `error: "license_required"` and `feature: "audit_logging"` before any events are read.
 
 ### List Audit Events
 `GET /api/audit?limit=100&event=login&user=admin&success=true&startTime=2024-01-01T00:00:00Z&endTime=2024-01-31T23:59:59Z`
+
+Query parameters: `limit` (positive integer, default `100`, capped at `1000`), `offset` (non-negative integer, default `0`), `event`, `user`, `success` (`true` or `false`), and RFC3339 `startTime`/`endTime` (`startTime` must be strictly before `endTime`). Malformed query encoding returns HTTP 400 (`invalid_query`), and repeating any query parameter returns HTTP 400 (`ambiguous_query`). When SQLite storage is busy after internal retries, this endpoint returns HTTP 503 (`audit_store_busy`) with `Retry-After: 2`. When persistent audit storage is unavailable, it returns HTTP 503 (`audit_store_unavailable`).
 
 Response:
 ```json
@@ -1519,6 +1521,8 @@ Response:
 ### Verify Audit Event Signature
 `GET /api/audit/<id>/verify`
 
+Event IDs must match `[a-zA-Z0-9_-]` and be at most 64 characters (otherwise HTTP 400 `invalid_id`). Returns HTTP 404 (`not_found`) when the event ID does not exist, HTTP 200 with `"available": false` if persistent audit storage is not active, and HTTP 503 (`audit_store_busy` with `Retry-After: 2` or `audit_store_unavailable`) on storage contention or failure.
+
 Response:
 ```json
 {
@@ -1527,6 +1531,23 @@ Response:
   "message": "Event signature verified"
 }
 ```
+
+### Export Audit Events
+`GET /api/audit/export?format=json&verify=true&event=login&startTime=2024-01-01T00:00:00Z&endTime=2024-01-31T23:59:59Z`
+
+Accepts `event`, `user`, `success`, `startTime`, `endTime`, `format` (`json` default or `csv`), and `verify=true`. Ignores list pagination (`limit`/`offset`). Rejects malformed query encoding (`invalid_query`), repeated query parameters (`ambiguous_query`), invalid filters, or selections above `10000` events (`400 export_too_large`). Returns `Content-Disposition: attachment; filename=audit-log-<timestamp>.<ext>` and `X-Event-Count`. JSON is lossless, while CSV prefixes text fields starting with leading spreadsheet formula or control characters with `'`. Returns HTTP 501 (`export_unavailable`) when persistent audit storage is unavailable.
+
+### Audit Summary
+`GET /api/audit/summary?verify=true&event=login&startTime=2024-01-01T00:00:00Z&endTime=2024-01-31T23:59:59Z`
+
+Accepts `event`, `user`, `startTime`, `endTime`, and `verify=true` (adds `invalid_signature_count` for signed events whose signature fails verification). Ignores `success` and list pagination, enforces the same `10000`-event cap (`400 export_too_large`), and returns HTTP 501 (`summary_unavailable`) when persistent audit storage is unavailable.
+
+### Unified Resource Audit History
+- `GET /api/audit/actions` (optional `resourceId`, `since`/`startTime` RFC3339, `limit` default `100`, cap `1000`): lists canonical unified-resource action audits.
+- `GET /api/audit/actions/{id}/events` (`id` matching `[a-zA-Z0-9_-]`, max 64 chars, optional `since`/`startTime`, `limit` default `100`, cap `1000`): lists lifecycle events for one action.
+- `GET /api/audit/exports` (optional `since`/`startTime`, `limit` default `100`, cap `1000`): lists unified-resource export audit records.
+
+These routes return HTTP 503 (`audit_unavailable`) when the unified resource audit store is unavailable. See [Audit Logging](AUDIT_LOGGING.md) for safe querying, storage paths, and signature recovery.
 
 ### Bootstrap Token Validation (Public)
 `POST /api/security/validate-bootstrap-token`

@@ -67,6 +67,15 @@ Pulse automatically captures the following events:
 | `user_deprovisioned` | User removed and active sessions revoked | Removed user jane and revoked active sessions |
 | `user_deprovision_failed` | Sessions revoked but user removal failed | Revoked sessions but failed to remove user jane |
 | `user_deprovision_self_denied` | Blocked attempt to deprovision own identity | Attempted to deprovision own identity |
+| `config_exported` | Configuration backup export attempts | Configuration exported |
+| `config_imported` | Configuration backup imports, including tenant-limit refusals and reload failures | Configuration imported |
+| `config_auto_import` | Startup auto-import attempts from `PULSE_INIT_CONFIG_*` (global, not tenant-scoped) | `source=file` |
+| `node_added` | Monitoring connection created | Added PVE node `pve1` |
+| `node_updated` | Monitoring connection modified | Updated PVE node `pve1` |
+| `node_deleted` | Monitoring connection removed | Deleted PVE node `pve1` |
+| `websocket_multitenant_access_denied` | Blocked WebSocket connection for a disabled or unlicensed non-default organisation (global, not tenant-scoped) | `org_id=team-a reason=unlicensed` |
+| `websocket_org_access_denied` | Blocked WebSocket connection for an unauthorised organisation (global, not tenant-scoped) | `org_id=team-a` |
+| `audit_cleanup` | Retention cleanup recorded by `system` when expired audit rows are deleted | Deleted 42 events older than 90 days |
 | `agent_config_fetch` | Every failed agent configuration fetch. A successful fetch is normally recorded on the agent's first delivery after Pulse starts, when its token or delivered configuration changes, and otherwise once a day; unchanged minute polls are suppressed while the agent is remembered (see below) | `agent_id=… token_id=… config=sha256:… reason=config_changed` |
 
 Config-fetch suppression remembers up to 4,096 organisation/agent pairs per
@@ -156,12 +165,19 @@ rather than looping, resetting the store or changing a licence to make it pass.
 | `endTime` | RFC3339 | End of date range, strictly after `startTime` |
 
 These parameters describe **the event list**, not every audit endpoint. Its
-response contains an `events` page and `total` matching events; fewer rows than
+response contains an `events` page and `total` matching events. Fewer rows than
 `total` do not establish missing history. Keep the same filters when reading
-another page. New events can shift offsets; a sequence of pages is not a
-consistent archival snapshot. Malformed list filters return HTTP 400, not an
-empty result. URL-encode query values; do not put private usernames or other
-identifiers into a shared command or report.
+another page. New events can shift offsets, so a sequence of pages is not a
+consistent archival snapshot. Malformed query encoding returns HTTP 400
+(`invalid_query`), duplicate query parameters (`event`, `user`, `startTime`,
+`endTime`, `success`, `limit`, `offset`, `format`, `verify`) return HTTP 400
+(`ambiguous_query`), and malformed list filters return HTTP 400 rather than an
+empty result. When SQLite storage stays locked after internal retries (25 ms
+and 75 ms), `GET /api/audit` returns HTTP 503 (`audit_store_busy`) with
+`Retry-After: 2`. When persistent audit storage is unavailable or unreadable,
+`GET /api/audit` returns HTTP 503 (`audit_store_unavailable`). URL-encode query
+values and do not put private usernames or other identifiers into a shared
+command or report.
 
 ---
 
@@ -177,18 +193,34 @@ pulse_api GET '/api/audit/export?event=login&startTime=2026-01-01T00:00:00Z&endT
 
 The new owner-only response file is created in the helper's private directory.
 It does not reuse filters selected in the UI. Export accepts `event`, `user`,
-`success`, `startTime` and `endTime`, but **not list pagination**: adding `limit`
-or `offset` does not bound an export. With no filters it requests the full
+`success`, `startTime`, `endTime`, `format` (`json` by default, or `csv`), and
+`verify=true`, but **not list pagination**: adding `limit`
+or `offset` does not bound an export. The response includes the `X-Event-Count`
+header and downloads as `audit-log-<timestamp>.json` or
+`audit-log-<timestamp>.csv`. JSON is the lossless evidence export. CSV is a
+spreadsheet projection that prefixes text fields starting with leading formula
+or control characters (`=`, `+`, `-`, `@`, their full-width equivalents, tab,
+carriage return, or newline) with a single leading `'` so spreadsheet
+applications treat them as literal text. When `verify=true` is supplied, Pulse
+verifies each signed event against its original stored bytes before rendering
+and includes `signature_valid` in JSON or the `Signature Valid` column in CSV.
+With no filters it requests the full
 available history, subject to the selection limit below. List, export and summary
-reject malformed or empty supplied `startTime`/`endTime` values and ranges whose
-end is not after their start with HTTP 400, before reading events. List and
+reject malformed or empty supplied `startTime`/`endTime` values, ranges whose
+end is not after their start, malformed query encoding (`invalid_query`), and
+repeated query parameters (`ambiguous_query`) with HTTP 400, before reading events. List and
 export also reject a supplied `success`
 other than exactly `true` or `false`, including an empty value. Omit a filter to
-leave it unset; HTTP 200 alone does not establish complete archival coverage.
+leave it unset. HTTP 200 alone does not establish complete archival coverage.
 
-Summary accepts `event`, `user`, `startTime` and `endTime`, not `success` or list
-pagination. These unsupported parameters do not narrow a summary; omit them
-rather than relying on them to bound the read.
+Summary accepts `event`, `user`, `startTime`, `endTime`, and `verify=true`,
+not `success` or list pagination. Passing `verify=true` counts signed events
+whose verification fails in `invalid_signature_count` (unsigned events are not
+counted as invalid signatures). Unsupported parameters do not narrow a summary,
+so omit them rather than relying on them to bound the read. When no persistent
+audit store is active, `GET /api/audit/export` returns HTTP 501
+(`export_unavailable`) and `GET /api/audit/summary` returns HTTP 501
+(`summary_unavailable`).
 
 Exports and summaries accept at most **10,000 matching events**. A larger
 selection returns HTTP 400 with code `export_too_large`, not a partial download
@@ -228,7 +260,11 @@ shape (HTTP 200 alone is not signature verification):
 `verified: true` means the signature matches the verifier's key and supported
 signature format. It does not prove that the history is complete or that no
 events were deleted. `verified: false` means the check failed, not that Pulse
-has established why it failed. Keep that result as evidence.
+has established why it failed. Keep that result as evidence. The verification
+endpoint rejects IDs longer than 64 characters or outside `[a-zA-Z0-9_-]` with
+HTTP 400 (`invalid_id`), returns HTTP 404 (`not_found`) when no stored event
+matches that ID, and returns HTTP 503 (`audit_store_busy` with `Retry-After: 2`
+or `audit_store_unavailable`) if the SQLite store is locked or unavailable.
 
 ### Verification failures and safe recovery
 
@@ -276,7 +312,7 @@ new key or successful check on a different event authenticated that history.
 In multi-tenant deployments, most events are scoped to the active organization:
 
 - Tenant-aware events (logins, role changes, config updates) are stored per-organization.
-- Some auth lifecycle events (e.g., `oidc_token_refresh`) are global and not tenant-scoped.
+- Global events (`oidc_token_refresh`, `config_auto_import`, `websocket_multitenant_access_denied`, and `websocket_org_access_denied`) are written to the global audit logger rather than a tenant-specific database.
 - Switching organizations shows only that organization's tenant-scoped events.
 - The tenant context is determined by `X-Pulse-Org-ID` header or session cookie.
 
@@ -293,14 +329,17 @@ See [Multi-Tenant Organizations](MULTI_TENANT.md) for details.
 | Query/filter API | License-gated (402) | Full access |
 | Signature verification | License-gated (402) | Available |
 | Export | License-gated (402) | Available |
-| `persistentLogging` API flag | `false` | `true` |
+| `persistentLogging` in `GET /api/audit` | License-gated (402) | `true` when persistent storage is active (otherwise HTTP 503 `audit_store_unavailable`) |
 
-Pulse attempts SQLite-backed capture on all plans; failure to initialise the
+Pulse attempts SQLite-backed capture on all plans. Failure to initialise the
 store can leave console-only logging. The query, verify and export endpoints
 also require the `audit_logging` capability and a compatible runtime. A
 licence/runtime gate is not proof that events were never captured. For an
-authorised query, `persistentLogging` describes the active logger, not a count
-of historical events or proof that their signatures are valid.
+authorised `GET /api/audit` query, `persistentLogging` is `true` when the
+persistent SQLite logger is active, and the endpoint returns HTTP 503
+(`audit_store_unavailable`) rather than an empty list when persistent storage
+is unavailable. That flag does not establish a count of historical events or
+proof that their signatures are valid.
 
 ---
 
@@ -316,6 +355,15 @@ matching `.encryption.key` is in the data directory (or the organisation's data
 directory for a non-default organisation). Keep both with the corresponding
 history. A runtime may supply a different audit directory or managed signing
 key; use that deployment's actual configuration rather than guessing a path.
+
+### Retention and cleanup
+
+Persistent SQLite audit stores retain events for **90 days** by default (or
+indefinitely when retention is explicitly configured to `0` days). When
+retention is enabled, cleanup runs **5 minutes after startup** and every
+**24 hours** thereafter. Whenever expired rows are deleted, Pulse records a
+signed `audit_cleanup` event as `system` in the same transaction and reclaims
+free SQLite pages incrementally with a WAL checkpoint.
 
 Data directory locations:
 - systemd: `/etc/pulse/`
