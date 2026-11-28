@@ -428,6 +428,24 @@ does not prove that every reading is fresh. Missing or unavailable is not zero.
   drawers across images, volumes, engine storage usage and networks display the
   same inline Docker stale-readings notice and freshness-aware status indicator
   until live reporting recovers.
+- **Physical disks** (on Storage disk tables, linked storage-pool disk rows, and
+  **Physical Disks & SMART** cards in guest, machine, and host drawers) surface
+  source staleness when a host agent, Proxmox poller, or TrueNAS source stops
+  updating or hits a collection error. Clear stale disks switch from **Healthy**
+  or **Online** to amber **Stale**, leave the **Healthy** filter, join
+  **Attention** and **Warning**, and sort ahead of fresh healthy disks. Worse
+  verdicts (**Replace Now** and **Needs Attention**) stay visible with an inline
+  amber **Stale data** cue beneath the disk name (or beside the health label in
+  guest, machine, and host drawers). Stale temperatures and SSD **Life
+  remaining** percentages render in muted dotted-underline last-known styling
+  and never trigger a live **Running Hot** verdict. Physical disk search matches
+  `stale`, `stale data`, refresh age, and recorded source error text, and
+  expanding a stale disk shows an amber inline notice (`Stale data. Retained
+  last-known disk readings.` with the last refresh age and source error when
+  present, plus `Health, temperature, and SMART readings reflect the last report
+  received and may no longer be current.`), labels the health card **Last known
+  temperature**, and defers temperature and SMART history charts as last-known
+  values until live reporting recovers.
 
 Use the relevant checks for [stale TrueNAS data](TRUENAS.md#stale-truenas-data),
 [stale Kubernetes readings](KUBERNETES.md#stale-kubernetes-readings),
