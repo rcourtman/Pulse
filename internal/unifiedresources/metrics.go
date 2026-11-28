@@ -44,7 +44,7 @@ func metricsFromHost(host models.Host) *ResourceMetrics {
 			memory.Observation.ObservedAt = time.Time{}
 		}
 	}
-	return buildHostMetricPayload(
+	metrics := buildHostMetricPayload(
 		host.CPUUsage,
 		memory,
 		host.Disks,
@@ -54,6 +54,48 @@ func metricsFromHost(host models.Host) *ResourceMetrics {
 		host.DiskWriteRate,
 		SourceAgent,
 	)
+	stampResourceMetricRates(metrics, host.LastSeen)
+	return metrics
+}
+
+func dockerInventoryObservedAt(host models.DockerHost) time.Time {
+	if !host.InventoryObservedAt.IsZero() {
+		return host.InventoryObservedAt
+	}
+	return host.LastSeen
+}
+
+func stampResourceMetricRates(metrics *ResourceMetrics, observedAt time.Time) {
+	if metrics == nil || observedAt.IsZero() {
+		return
+	}
+	utc := observedAt.UTC()
+	if metrics.NetIn != nil && metrics.NetIn.ObservedAt.IsZero() {
+		metrics.NetIn.ObservedAt = utc
+	}
+	if metrics.NetOut != nil && metrics.NetOut.ObservedAt.IsZero() {
+		metrics.NetOut.ObservedAt = utc
+	}
+	if metrics.DiskRead != nil && metrics.DiskRead.ObservedAt.IsZero() {
+		metrics.DiskRead.ObservedAt = utc
+	}
+	if metrics.DiskWrite != nil && metrics.DiskWrite.ObservedAt.IsZero() {
+		metrics.DiskWrite.ObservedAt = utc
+	}
+	populateRateObservedAt(metrics, nil, utc)
+}
+
+func earliestNonZeroTime(a, b time.Time) time.Time {
+	if a.IsZero() {
+		return b
+	}
+	if b.IsZero() {
+		return a
+	}
+	if b.Before(a) {
+		return b
+	}
+	return a
 }
 
 func metricsFromUnraidStorage(host models.Host) *ResourceMetrics {
@@ -84,7 +126,7 @@ func unraidDiskMetric(total, used int64, percent float64) *MetricValue {
 }
 
 func metricsFromDockerHost(host models.DockerHost) *ResourceMetrics {
-	return buildHostMetricPayload(
+	metrics := buildHostMetricPayload(
 		host.CPUUsage,
 		host.Memory,
 		host.Disks,
@@ -94,6 +136,8 @@ func metricsFromDockerHost(host models.DockerHost) *ResourceMetrics {
 		host.DiskWriteRate,
 		SourceDocker,
 	)
+	stampResourceMetricRates(metrics, dockerInventoryObservedAt(host))
+	return metrics
 }
 
 func buildHostMetricPayload(
@@ -335,6 +379,10 @@ func metricsFromKubernetesCluster(cluster models.KubernetesCluster, linkedHosts 
 	var hasNetOut bool
 	var hasDiskRead bool
 	var hasDiskWrite bool
+	var netInObs time.Time
+	var netOutObs time.Time
+	var diskReadObs time.Time
+	var diskWriteObs time.Time
 
 	linkedNodeNames := make(map[string]struct{}, len(linkedHosts)*2)
 	for _, host := range linkedHosts {
@@ -367,18 +415,22 @@ func metricsFromKubernetesCluster(cluster models.KubernetesCluster, linkedHosts 
 		if host.NetInRate > 0 {
 			netIn += host.NetInRate
 			hasNetIn = true
+			netInObs = earliestNonZeroTime(netInObs, host.LastSeen)
 		}
 		if host.NetOutRate > 0 {
 			netOut += host.NetOutRate
 			hasNetOut = true
+			netOutObs = earliestNonZeroTime(netOutObs, host.LastSeen)
 		}
 		if host.DiskReadRate > 0 {
 			diskRead += host.DiskReadRate
 			hasDiskRead = true
+			diskReadObs = earliestNonZeroTime(diskReadObs, host.LastSeen)
 		}
 		if host.DiskWriteRate > 0 {
 			diskWrite += host.DiskWriteRate
 			hasDiskWrite = true
+			diskWriteObs = earliestNonZeroTime(diskWriteObs, host.LastSeen)
 		}
 	}
 
@@ -425,15 +477,31 @@ func metricsFromKubernetesCluster(cluster models.KubernetesCluster, linkedHosts 
 	}
 	if hasNetIn {
 		metrics.NetIn = &MetricValue{Value: netIn, Unit: "bytes/s", Source: SourceAgent}
+		if !netInObs.IsZero() {
+			metrics.NetIn.ObservedAt = netInObs.UTC()
+			metrics.NetInObservedAt = observedAtPtr(netInObs)
+		}
 	}
 	if hasNetOut {
 		metrics.NetOut = &MetricValue{Value: netOut, Unit: "bytes/s", Source: SourceAgent}
+		if !netOutObs.IsZero() {
+			metrics.NetOut.ObservedAt = netOutObs.UTC()
+			metrics.NetOutObservedAt = observedAtPtr(netOutObs)
+		}
 	}
 	if hasDiskRead {
 		metrics.DiskRead = &MetricValue{Value: diskRead, Unit: "bytes/s", Source: SourceAgent}
+		if !diskReadObs.IsZero() {
+			metrics.DiskRead.ObservedAt = diskReadObs.UTC()
+			metrics.DiskReadObservedAt = observedAtPtr(diskReadObs)
+		}
 	}
 	if hasDiskWrite {
 		metrics.DiskWrite = &MetricValue{Value: diskWrite, Unit: "bytes/s", Source: SourceAgent}
+		if !diskWriteObs.IsZero() {
+			metrics.DiskWrite.ObservedAt = diskWriteObs.UTC()
+			metrics.DiskWriteObservedAt = observedAtPtr(diskWriteObs)
+		}
 	}
 	return metrics
 }

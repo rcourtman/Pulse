@@ -631,16 +631,17 @@ describe('InfrastructureMapSurface scale interactions', () => {
 
     const { container } = render(() => <InfrastructureMapSurface />);
 
-    // Open estate-wide Live traffic drawer via summary pill (20 MB/s + 1 MB/s = 21.0 MB/s).
+    // Open estate-wide Live traffic drawer via summary pill (names top mover jellyfin + 1 other).
     const trafficPill = screen.getByTestId('infrastructure-map-traffic-summary');
-    expect(trafficPill).toHaveTextContent('21.0 MB/s');
+    expect(trafficPill).toHaveTextContent('jellyfin');
+    expect(trafficPill).toHaveTextContent('(+1 active)');
     fireEvent.click(trafficPill);
 
     const drawer = screen.getByTestId('infrastructure-map-drawer');
     expect(drawer).toBeInTheDocument();
     expect(screen.getByRole('heading', { name: 'Live traffic' })).toBeInTheDocument();
     expect(drawer.textContent).toContain('2 active resources');
-    expect(drawer.textContent).toContain('21.0 MB/s total');
+    expect(drawer.textContent).toContain('21.0 MB/s net');
 
     const list = screen.getByTestId('infrastructure-map-drawer-list');
     // Traffic sort is default: jellyfin (20 MB/s) before degraded-talker (1 MB/s).

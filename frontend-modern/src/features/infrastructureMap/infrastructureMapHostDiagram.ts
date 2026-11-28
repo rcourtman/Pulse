@@ -96,8 +96,10 @@ const TRAFFIC_TIER_RANK: Record<MapTrafficTier, number> = {
   high: 3,
 };
 
-const SPIKE_ABSOLUTE_BYTES = 5 * 1024 * 1024;
-const SPIKE_RELATIVE_MIN_BYTES = 2 * 1024 * 1024;
+const SPIKE_ABSOLUTE_BYTES = 2 * 1024 * 1024;
+const SPIKE_RELATIVE_MIN_BYTES = 512 * 1024;
+const SPIKE_DISK_ABSOLUTE_BYTES = 2 * 1024 * 1024;
+const SPIKE_DISK_RELATIVE_MIN_BYTES = 1024 * 1024;
 const POOL_LOG_MIN = Math.log10(10 * 1024 ** 3); // 10 GiB
 const POOL_LOG_MAX = Math.log10(100 * 1024 ** 4); // 100 TiB
 
@@ -135,18 +137,117 @@ export const proportionalStorageTrackWidth = (
   return Math.round(lo + t * (hi - lo));
 };
 
-/** True when a workload tile is driving a clear live network burst relative to the estate. */
+/** Highest live activity tier across a tile's network throughput and disk I/O. */
+export const tileActivityTier = (tile: DiagramTile): MapTrafficTier | undefined =>
+  maxTrafficTier(tile.trafficTier, tile.diskTier);
+
+/** True when a workload tile is driving a clear live network or disk burst relative to the estate. */
 export const isSpikingServiceTile = (
   tile: DiagramTile,
   peakServiceBytes: number,
   liveTraffic: boolean,
+  peakDiskBytes = 0,
 ): boolean => {
-  if (!liveTraffic || !tile.trafficTier) return false;
-  const bytes = tile.netTotalBytes ?? 0;
-  if (!(bytes >= SPIKE_RELATIVE_MIN_BYTES)) return false;
-  return (
-    bytes >= SPIKE_ABSOLUTE_BYTES || (peakServiceBytes > 0 && bytes >= peakServiceBytes * 0.75)
-  );
+  if (!liveTraffic) return false;
+  if (tile.trafficTier) {
+    const netBytes = tile.netTotalBytes ?? 0;
+    if (
+      netBytes >= SPIKE_RELATIVE_MIN_BYTES &&
+      (netBytes >= SPIKE_ABSOLUTE_BYTES ||
+        (peakServiceBytes > 0 && netBytes >= peakServiceBytes * 0.7))
+    ) {
+      return true;
+    }
+  }
+  if (tile.diskTier) {
+    const diskBytes = tile.diskTotalBytes ?? 0;
+    if (
+      diskBytes >= SPIKE_DISK_RELATIVE_MIN_BYTES &&
+      (diskBytes >= SPIKE_DISK_ABSOLUTE_BYTES ||
+        (peakDiskBytes > 0 && diskBytes >= peakDiskBytes * 0.7))
+    ) {
+      return true;
+    }
+  }
+  return false;
+};
+
+const formatDirectionalNetPart = (tile: DiagramTile, compact = false): string | undefined => {
+  if (!tile.trafficTier || tile.netTotalBytes === undefined || tile.netTotalBytes <= 0) {
+    return undefined;
+  }
+  const rx = tile.netRxBytes ?? 0;
+  const tx = tile.netTxBytes ?? 0;
+  const suffix = compact ? '' : '/s';
+  const gap = compact ? '' : ' ';
+  if (tx > 0 && (rx <= 0 || tx >= rx * 3)) {
+    return `↑${gap}${formatCompactSpeed(tx)}${suffix}`;
+  }
+  if (rx > 0 && (tx <= 0 || rx >= tx * 3)) {
+    return `↓${gap}${formatCompactSpeed(rx)}${suffix}`;
+  }
+  if (rx > 0 && tx > 0) {
+    return compact
+      ? `↓${formatCompactSpeed(rx)} ↑${formatCompactSpeed(tx)}/s`
+      : `↓${formatCompactSpeed(rx)}/s ↑${formatCompactSpeed(tx)}/s`;
+  }
+  return `${formatCompactSpeed(tile.netTotalBytes)}${suffix}`;
+};
+
+const formatDirectionalDiskPart = (tile: DiagramTile, compact = false): string | undefined => {
+  if (!tile.diskTier || tile.diskTotalBytes === undefined || tile.diskTotalBytes <= 0) {
+    return undefined;
+  }
+  const read = tile.diskReadBytes ?? 0;
+  const write = tile.diskWriteBytes ?? 0;
+  if (read > 0 && (write <= 0 || read >= write * 3)) {
+    return compact ? `R${formatCompactSpeed(read)}/s` : `Read ${formatCompactSpeed(read)}/s`;
+  }
+  if (write > 0 && (read <= 0 || write >= read * 3)) {
+    return compact ? `W${formatCompactSpeed(write)}/s` : `Write ${formatCompactSpeed(write)}/s`;
+  }
+  if (read > 0 && write > 0) {
+    return compact
+      ? `R${formatCompactSpeed(read)} W${formatCompactSpeed(write)}/s`
+      : `R ${formatCompactSpeed(read)}/s W ${formatCompactSpeed(write)}/s`;
+  }
+  return compact
+    ? `IO${formatCompactSpeed(tile.diskTotalBytes)}/s`
+    : `Disk ${formatCompactSpeed(tile.diskTotalBytes)}/s`;
+};
+
+/** Formats concise directional live network and disk activity for an active workload tile. */
+export const formatLiveActivitySubtitle = (
+  tile: DiagramTile,
+  maxWidth: number,
+): string | undefined => {
+  const fullNet = formatDirectionalNetPart(tile, false);
+  const fullDisk = formatDirectionalDiskPart(tile, false);
+  if (!fullNet && !fullDisk) return undefined;
+
+  const fullCombined = [fullNet, fullDisk].filter(Boolean).join(' · ');
+  if (textWidth(fullCombined, 10, 500) <= maxWidth) return fullCombined;
+
+  if (fullNet && fullDisk) {
+    const compactCombined = [
+      formatDirectionalNetPart(tile, true),
+      formatDirectionalDiskPart(tile, true),
+    ]
+      .filter(Boolean)
+      .join(' · ');
+    if (textWidth(compactCombined, 10, 500) <= maxWidth) return compactCombined;
+
+    const dominant = (tile.netTotalBytes ?? 0) >= (tile.diskTotalBytes ?? 0) ? fullNet : fullDisk;
+    if (textWidth(dominant, 10, 500) <= maxWidth) return dominant;
+    return fitMapText(dominant, maxWidth, 10, 500);
+  }
+
+  const single = fullNet ?? fullDisk!;
+  if (textWidth(single, 10, 500) <= maxWidth) return single;
+  const compactSingle =
+    (fullNet ? formatDirectionalNetPart(tile, true) : formatDirectionalDiskPart(tile, true)) ??
+    single;
+  return fitMapText(compactSingle, maxWidth, 10, 500);
 };
 
 /** Maps a reported interface speed (Mbps) to a connector stroke width. */
@@ -294,23 +395,28 @@ const groupTrafficBytes = (group: DiagramGroup | undefined): number | undefined 
   return total > 0 ? total : undefined;
 };
 
-const frameTrafficTier = (frame: DiagramHostFrame): MapTrafficTier | undefined =>
-  maxTrafficTier(
-    frame.trafficTier,
-    frame.host.trafficTier,
-    ...frame.allTiles.map((tile) => tile.trafficTier),
-    ...frame.pools.map((pool) => pool.trafficTier),
-  );
+type FlowDirection = 'in' | 'out' | 'both';
 
-const frameTrafficBytes = (frame: DiagramHostFrame): number | undefined => {
-  const hostBytes = frame.host.netTotalBytes ?? 0;
-  let workloadSum = 0;
-  for (const tile of frame.allTiles) {
-    if (tile.netTotalBytes && tile.netTotalBytes > 0) workloadSum += tile.netTotalBytes;
-  }
-  const best = Math.max(hostBytes, workloadSum);
-  return best > 0 ? best : undefined;
+const resolveFlowDirection = (rx: number, tx: number): FlowDirection => {
+  if (rx > 0 && (tx <= 0 || rx >= tx * 1.5)) return 'in';
+  if (tx > 0 && (rx <= 0 || tx >= rx * 1.5)) return 'out';
+  return 'both';
 };
+
+/**
+ * Only the host's own measured network counters drive its physical uplink connector.
+ * Guest traffic can stay intra-host between VMs/containers even when the host uplink is idle.
+ */
+const hostUplinkTier = (frame: DiagramHostFrame): MapTrafficTier | undefined =>
+  frame.host.trafficTier;
+
+const hostUplinkBytes = (frame: DiagramHostFrame): number | undefined => {
+  const hostBytes = frame.host.netTotalBytes;
+  return hostBytes !== undefined && hostBytes > 0 ? hostBytes : undefined;
+};
+
+const hostUplinkDirection = (frame: DiagramHostFrame): FlowDirection =>
+  resolveFlowDirection(frame.host.netRxBytes ?? 0, frame.host.netTxBytes ?? 0);
 
 const peakServiceTrafficBytes = (diagram: ServiceDiagram): number => {
   let peak = 0;
@@ -321,6 +427,19 @@ const peakServiceTrafficBytes = (diagram: ServiceDiagram): number => {
   }
   for (const tile of diagram.access?.allTiles ?? []) {
     if (tile.netTotalBytes && tile.netTotalBytes > peak) peak = tile.netTotalBytes;
+  }
+  return peak;
+};
+
+const peakServiceDiskBytes = (diagram: ServiceDiagram): number => {
+  let peak = 0;
+  for (const frame of diagram.hostFrames ?? []) {
+    for (const tile of frame.allTiles) {
+      if (tile.diskTotalBytes && tile.diskTotalBytes > peak) peak = tile.diskTotalBytes;
+    }
+  }
+  for (const tile of diagram.access?.allTiles ?? []) {
+    if (tile.diskTotalBytes && tile.diskTotalBytes > peak) peak = tile.diskTotalBytes;
   }
   return peak;
 };
@@ -342,6 +461,7 @@ interface HostPainter {
   liveTraffic: boolean;
   networkCount: number;
   peakServiceBytes: number;
+  peakDiskBytes: number;
 }
 
 const buildHit = (
@@ -391,6 +511,9 @@ const buildHit = (
     ...(tile.vdevLayout ? { vdevLayout: tile.vdevLayout } : {}),
     ...(tile.netRxBytes !== undefined ? { netRxBytes: tile.netRxBytes } : {}),
     ...(tile.netTxBytes !== undefined ? { netTxBytes: tile.netTxBytes } : {}),
+    ...(tile.diskReadBytes !== undefined ? { diskReadBytes: tile.diskReadBytes } : {}),
+    ...(tile.diskWriteBytes !== undefined ? { diskWriteBytes: tile.diskWriteBytes } : {}),
+    ...(tile.isWorkload ? { isWorkload: true } : {}),
     ...(tile.latencyMs !== undefined ? { latencyMs: tile.latencyMs } : {}),
     ...(tile.linkSpeedMbps !== undefined ? { linkSpeedMbps: tile.linkSpeedMbps } : {}),
     ...(tile.linkUtilizationPercent !== undefined
@@ -465,8 +588,14 @@ const drawHorizontalTile = (
       opacity: 0.45,
       stroke: 'border',
     });
-    if (painter.liveTraffic && tile.trafficTier) {
-      const spiking = isSpikingServiceTile(tile, painter.peakServiceBytes, painter.liveTraffic);
+    const activity = tileActivityTier(tile);
+    if (painter.liveTraffic && activity) {
+      const spiking = isSpikingServiceTile(
+        tile,
+        painter.peakServiceBytes,
+        painter.liveTraffic,
+        painter.peakDiskBytes,
+      );
       out.nodes.push({
         kind: 'rect',
         x,
@@ -475,16 +604,20 @@ const drawHorizontalTile = (
         h: ROW_H,
         r: INNER_RADIUS,
         fill: 'none',
-        activity: tile.trafficTier,
+        activity,
         ...(spiking ? { spike: true } : {}),
       });
-      if (
-        tile.netTotalBytes !== undefined &&
-        tile.netTotalBytes > 0 &&
-        painter.peakServiceBytes > 0
-      ) {
+      const netRatio =
+        tile.netTotalBytes !== undefined && tile.netTotalBytes > 0 && painter.peakServiceBytes > 0
+          ? Math.sqrt(Math.min(1, tile.netTotalBytes / painter.peakServiceBytes))
+          : 0;
+      const diskRatio =
+        tile.diskTotalBytes !== undefined && tile.diskTotalBytes > 0 && painter.peakDiskBytes > 0
+          ? Math.sqrt(Math.min(1, tile.diskTotalBytes / painter.peakDiskBytes))
+          : 0;
+      const ratio = Math.max(netRatio, diskRatio);
+      if (ratio > 0) {
         const maxBarW = Math.max(10, w - 12);
-        const ratio = Math.sqrt(Math.min(1, tile.netTotalBytes / painter.peakServiceBytes));
         const barW = Math.max(10, Math.round(maxBarW * ratio));
         out.nodes.push({
           kind: 'rect',
@@ -494,7 +627,7 @@ const drawHorizontalTile = (
           h: 2,
           r: 1,
           fill: 'accent',
-          opacity: spiking ? 0.92 : 0.52,
+          opacity: spiking ? 0.95 : 0.56,
         });
       }
     }
@@ -666,26 +799,26 @@ const drawHorizontalTile = (
   const textMaxW = Math.max(36, rightX - textX - (rightColW > 0 ? rightColW + 6 : 0));
 
   const liveSpeedText =
-    painter.liveTraffic && tile.trafficTier && tile.netTotalBytes !== undefined
-      ? `${formatCompactSpeed(tile.netTotalBytes)}/s`
+    painter.liveTraffic && tileActivityTier(tile)
+      ? formatLiveActivitySubtitle(tile, textMaxW)
       : undefined;
 
   let subText = '';
   let subAccent = false;
   if (tile.hasConnectionCaption) {
     if (liveSpeedText) {
-      const combined = `${tile.caption} · ${liveSpeedText}`;
+      const combined = `${liveSpeedText} · ${tile.caption}`;
       if (textWidth(combined, 10, 500) <= textMaxW) {
         subText = combined;
-        subAccent = true;
       } else {
-        subText = fitMapName(tile.caption, textMaxW, 10, 400);
+        subText = liveSpeedText;
       }
+      subAccent = true;
     } else {
       subText = fitMapName(tile.caption, textMaxW, 10, 400);
     }
   } else if (liveSpeedText) {
-    subText = fitMapText(liveSpeedText, textMaxW, 10, 500);
+    subText = liveSpeedText;
     subAccent = true;
   } else if (tile.probeSummary) {
     const checkSummary = [
@@ -785,8 +918,14 @@ const drawCompactTile = (
       stroke: 'border',
       dashed: true,
     });
-  } else if (painter.liveTraffic && tile.trafficTier) {
-    const spiking = isSpikingServiceTile(tile, painter.peakServiceBytes, painter.liveTraffic);
+  } else if (painter.liveTraffic && tileActivityTier(tile)) {
+    const activity = tileActivityTier(tile)!;
+    const spiking = isSpikingServiceTile(
+      tile,
+      painter.peakServiceBytes,
+      painter.liveTraffic,
+      painter.peakDiskBytes,
+    );
     out.nodes.push({
       kind: 'rect',
       x,
@@ -795,7 +934,7 @@ const drawCompactTile = (
       h: COMPACT_SIZE,
       r: INNER_RADIUS,
       fill: 'none',
-      activity: tile.trafficTier,
+      activity,
       ...(spiking ? { spike: true } : {}),
     });
   }
@@ -2452,6 +2591,7 @@ interface HostDropTarget {
   frame: DiagramHostFrame;
   tier?: MapTrafficTier;
   flowBytes?: number;
+  direction?: FlowDirection;
   clusterLeftRailX?: number;
 }
 
@@ -2609,14 +2749,16 @@ const drawClusterUnit = (
     let cx = x + CLUSTER_PAD + Math.max(0, (bodyW - rowW) / 2);
     for (const entry of row) {
       const childBox = drawHostFrame(painter, entry, cx, curY, true, rowMaxH);
-      const childTier = activeTier(frameTrafficTier(entry.frame));
-      const childFlowBytes = childTier ? frameTrafficBytes(entry.frame) : undefined;
+      const childTier = activeTier(hostUplinkTier(entry.frame));
+      const childFlowBytes = childTier ? hostUplinkBytes(entry.frame) : undefined;
+      const childDirection = childTier ? hostUplinkDirection(entry.frame) : undefined;
       tiers.push(childTier);
       drops.push({
         box: childBox,
         frame: entry.frame,
         tier: childTier,
         ...(childFlowBytes !== undefined ? { flowBytes: childFlowBytes } : {}),
+        ...(childDirection !== undefined ? { direction: childDirection } : {}),
         ...(rowIdx > 0 ? { clusterLeftRailX: x + 5 } : {}),
       });
       cx += entry.w + CLUSTER_GAP;
@@ -2910,6 +3052,7 @@ const addLine = (
     dashed?: boolean;
     activity?: MapTrafficTier;
     flowBytes?: number;
+    bidirectional?: boolean;
     strokeWidth?: number;
   } = {},
 ) => {
@@ -2923,6 +3066,9 @@ const addLine = (
     ...(options.activity && !options.dashed ? { activity: options.activity } : {}),
     ...(options.activity && !options.dashed && options.flowBytes !== undefined
       ? { flowBytes: options.flowBytes }
+      : {}),
+    ...(options.activity && !options.dashed && options.bidirectional
+      ? { bidirectional: true }
       : {}),
   });
 };
@@ -2959,7 +3105,7 @@ const drawHorizontalBus = (
         [feedX, busY],
         [activeMin, busY],
       ],
-      { activity, flowBytes },
+      { activity, flowBytes, bidirectional: true },
     );
   }
   if (feedX < activeMax) {
@@ -2969,7 +3115,7 @@ const drawHorizontalBus = (
         [feedX, busY],
         [activeMax, busY],
       ],
-      { activity, flowBytes },
+      { activity, flowBytes, bidirectional: true },
     );
   }
   if (activeMax < rightX) {
@@ -3189,6 +3335,7 @@ export function layoutHostDiagram(diagram: ServiceDiagram, options: MapLayoutOpt
     liveTraffic ? tier : undefined;
 
   const peakServiceBytes = liveTraffic ? peakServiceTrafficBytes(diagram) : 0;
+  const peakDiskBytes = liveTraffic ? peakServiceDiskBytes(diagram) : 0;
 
   const painter: HostPainter = {
     out,
@@ -3198,6 +3345,7 @@ export function layoutHostDiagram(diagram: ServiceDiagram, options: MapLayoutOpt
     liveTraffic,
     networkCount: diagram.networks.length,
     peakServiceBytes,
+    peakDiskBytes,
   };
 
   let y = drawPosterHeader(out, options.header, margin, width - margin * 2);
@@ -3346,13 +3494,20 @@ export function layoutHostDiagram(diagram: ServiceDiagram, options: MapLayoutOpt
       liveTraffic,
     );
     if (source) {
+      // Ways in combines ingress and egress traffic across Internet and LAN peers;
+      // scale glow/thickness without inventing a one-way directional arrow.
       addLine(
         lines,
         [
           [source.x, source.y],
           [mid, y],
         ],
-        { arrow: true, activity: accessTier, flowBytes: accessBytes },
+        {
+          arrow: !accessTier,
+          activity: accessTier,
+          flowBytes: accessBytes,
+          bidirectional: true,
+        },
       );
       if (besideGatewayBoxes.length > 0) {
         const joinY = source.y + Math.round((y - source.y) / 2);
@@ -3398,8 +3553,9 @@ export function layoutHostDiagram(diagram: ServiceDiagram, options: MapLayoutOpt
         drops.push(...result.drops);
       } else {
         const box = drawHostFrame(painter, entry.sized, x, rowTop, false);
-        const tier = activeTier(frameTrafficTier(entry.sized.frame));
-        const flowBytes = tier ? frameTrafficBytes(entry.sized.frame) : undefined;
+        const tier = activeTier(hostUplinkTier(entry.sized.frame));
+        const flowBytes = tier ? hostUplinkBytes(entry.sized.frame) : undefined;
+        const direction = tier ? hostUplinkDirection(entry.sized.frame) : undefined;
         boxes.push(box);
         tiers.push(tier);
         drops.push({
@@ -3407,6 +3563,7 @@ export function layoutHostDiagram(diagram: ServiceDiagram, options: MapLayoutOpt
           frame: entry.sized.frame,
           tier,
           ...(flowBytes !== undefined ? { flowBytes } : {}),
+          ...(direction !== undefined ? { direction } : {}),
         });
       }
       x += entry.w + GROUP_GAP;
@@ -3434,7 +3591,7 @@ export function layoutHostDiagram(diagram: ServiceDiagram, options: MapLayoutOpt
   })();
 
   const drawHostDrop = (drop: HostDropTarget, busY: number) => {
-    const { box, frame, tier, flowBytes, clusterLeftRailX } = drop;
+    const { box, frame, tier, flowBytes, direction, clusterLeftRailX } = drop;
     const speed = frame.linkSpeedMbps ?? frame.host.linkSpeedMbps;
     const strokeWidth = strokeWidthForLinkSpeed(speed);
     const utilPct = frame.host.linkUtilizationPercent;
@@ -3450,33 +3607,43 @@ export function layoutHostDiagram(diagram: ServiceDiagram, options: MapLayoutOpt
             ? formatMapLinkSpeed(speed)
             : undefined;
     const pillFill: MapTone | MapHealth = saturated ? 'attention' : 'muted';
+    const outbound = Boolean(tier && direction === 'out');
+    const balanced = Boolean(tier && direction === 'both');
 
     if (clusterLeftRailX !== undefined) {
       const turnY = box.y - 12;
-      addLine(
-        lines,
-        [
-          [clusterLeftRailX, busY],
-          [clusterLeftRailX, turnY],
-          [centreX(box), turnY],
-          [centreX(box), box.y],
-        ],
-        { tone, arrow: true, activity: tier, flowBytes, strokeWidth },
-      );
+      const points: Array<[number, number]> = [
+        [clusterLeftRailX, busY],
+        [clusterLeftRailX, turnY],
+        [centreX(box), turnY],
+        [centreX(box), box.y],
+      ];
+      addLine(lines, outbound ? [...points].reverse() : points, {
+        tone,
+        arrow: !balanced,
+        activity: tier,
+        flowBytes,
+        bidirectional: balanced,
+        strokeWidth,
+      });
       if (pillText) {
         connectorLabel(labels, pillText, centreX(box), turnY, 10, pillFill);
       }
       return;
     }
 
-    addLine(
-      lines,
-      [
-        [centreX(box), busY],
-        [centreX(box), box.y],
-      ],
-      { tone, arrow: true, activity: tier, flowBytes, strokeWidth },
-    );
+    const points: Array<[number, number]> = [
+      [centreX(box), busY],
+      [centreX(box), box.y],
+    ];
+    addLine(lines, outbound ? [...points].reverse() : points, {
+      tone,
+      arrow: !balanced,
+      activity: tier,
+      flowBytes,
+      bidirectional: balanced,
+      strokeWidth,
+    });
     if (pillText) {
       connectorLabel(labels, pillText, centreX(box), busY + 13, 10, pillFill);
     }
@@ -3499,7 +3666,7 @@ export function layoutHostDiagram(diagram: ServiceDiagram, options: MapLayoutOpt
           [source.x, source.y],
           [source.x, busY],
         ],
-        { activity: allHostsTier, flowBytes: allHostsBytes },
+        { activity: allHostsTier, flowBytes: allHostsBytes, bidirectional: true },
       );
       const xs = [...dropBusXs(drops), source.x];
       const activeXs = activeDropBusXs(drops);
@@ -3532,7 +3699,7 @@ export function layoutHostDiagram(diagram: ServiceDiagram, options: MapLayoutOpt
           [source.x, source.y],
           [source.x, firstBus],
         ],
-        { activity: allHostsTier, flowBytes: allHostsBytes },
+        { activity: allHostsTier, flowBytes: allHostsBytes, bidirectional: true },
       );
       if (lastActiveRow > 0 && lowerRowsTier) {
         const activeRailBottom = placedUnits[lastActiveRow][0].y - BUS_DROP;
@@ -3542,7 +3709,7 @@ export function layoutHostDiagram(diagram: ServiceDiagram, options: MapLayoutOpt
             [leftRail, firstBus],
             [leftRail, activeRailBottom],
           ],
-          { activity: lowerRowsTier, flowBytes: lowerRowsBytes },
+          { activity: lowerRowsTier, flowBytes: lowerRowsBytes, bidirectional: true },
         );
         if (activeRailBottom < lastBus) {
           addLine(lines, [
@@ -3643,7 +3810,7 @@ export function layoutHostDiagram(diagram: ServiceDiagram, options: MapLayoutOpt
               [centreX(box), bottomOf(box)],
               [centreX(box), collectY],
             ],
-            { activity: anyLowerTier ? tiers[index] : undefined },
+            { activity: anyLowerTier ? tiers[index] : undefined, bidirectional: true },
           ),
         );
         const xs = [...boxes.map(centreX), ...targets.map(centreX)];
@@ -3674,7 +3841,7 @@ export function layoutHostDiagram(diagram: ServiceDiagram, options: MapLayoutOpt
                 [minAct, collectY],
                 [maxAct, collectY],
               ],
-              { activity: bridgeTier },
+              { activity: bridgeTier, bidirectional: true },
             );
           }
           if (maxAct < maxX) {
@@ -3705,7 +3872,7 @@ export function layoutHostDiagram(diagram: ServiceDiagram, options: MapLayoutOpt
               [last.x + last.w, tickY],
               [rightRail, tickY],
             ],
-            { activity: rowActivity },
+            { activity: rowActivity, bidirectional: true },
           );
           railTop = Math.min(railTop, tickY);
         });
@@ -3722,7 +3889,7 @@ export function layoutHostDiagram(diagram: ServiceDiagram, options: MapLayoutOpt
               [rightRail, firstActiveTickY],
               [rightRail, collectY],
             ],
-            { activity: bridgeTier },
+            { activity: bridgeTier, bidirectional: true },
           );
         } else {
           addLine(lines, [
@@ -3752,7 +3919,7 @@ export function layoutHostDiagram(diagram: ServiceDiagram, options: MapLayoutOpt
             [centreX(box), collectY],
             [centreX(box), box.y],
           ],
-          { arrow: true, activity: targetTiers[index] },
+          { arrow: !targetTiers[index], activity: targetTiers[index], bidirectional: true },
         );
         connectorLabel(
           labels,
@@ -3778,7 +3945,7 @@ export function layoutHostDiagram(diagram: ServiceDiagram, options: MapLayoutOpt
               [rightRail, collectY],
               [rightRail, activeReach],
             ],
-            { activity: maxTrafficTier(allHostsTier, wrappedMaxTier) },
+            { activity: maxTrafficTier(allHostsTier, wrappedMaxTier), bidirectional: true },
           );
           if (activeReach < reach) {
             addLine(lines, [
@@ -3802,7 +3969,7 @@ export function layoutHostDiagram(diagram: ServiceDiagram, options: MapLayoutOpt
               [centreX(box), busY],
               [centreX(box), box.y],
             ],
-            { arrow: true, activity: wrappedTiers[index] },
+            { arrow: !wrappedTiers[index], activity: wrappedTiers[index], bidirectional: true },
           );
           connectorLabel(
             labels,

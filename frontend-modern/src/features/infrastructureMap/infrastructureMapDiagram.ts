@@ -1,5 +1,10 @@
 import { estimateTextWidth, formatCompactSpeed } from '@/utils/format';
-import { layoutHostDiagram, strokeWidthForLinkSpeed } from './infrastructureMapHostDiagram';
+import {
+  formatLiveActivitySubtitle,
+  layoutHostDiagram,
+  strokeWidthForLinkSpeed,
+  tileActivityTier,
+} from './infrastructureMapHostDiagram';
 import {
   drawPosterFooter,
   drawPosterHeader,
@@ -232,7 +237,7 @@ const drawTile = (
       stroke: 'border',
       dashed: true,
     });
-  } else if (painter.liveTraffic && tile.trafficTier) {
+  } else if (painter.liveTraffic && tileActivityTier(tile)) {
     out.nodes.push({
       kind: 'rect',
       x,
@@ -241,7 +246,7 @@ const drawTile = (
       h: metrics.tileH,
       r: CARD_RADIUS,
       fill: 'none',
-      activity: tile.trafficTier,
+      activity: tileActivityTier(tile)!,
     });
   }
   const iconY = metrics.named ? y + 7 : y + (metrics.tileH - metrics.icon) / 2;
@@ -286,11 +291,8 @@ const drawTile = (
     });
     if (real || dashed) {
       const liveSpeed =
-        painter.liveTraffic &&
-        tile.trafficTier &&
-        tile.netTotalBytes !== undefined &&
-        !tile.hasConnectionCaption
-          ? fitMapText(`${formatCompactSpeed(tile.netTotalBytes)}/s`, metrics.tileW - 6, 10, 500)
+        painter.liveTraffic && tileActivityTier(tile) && !tile.hasConnectionCaption
+          ? formatLiveActivitySubtitle(tile, metrics.tileW - 6)
           : undefined;
       out.nodes.push({
         kind: 'text',
@@ -376,6 +378,9 @@ const drawTile = (
       ...(tile.vdevLayout ? { vdevLayout: tile.vdevLayout } : {}),
       ...(tile.netRxBytes !== undefined ? { netRxBytes: tile.netRxBytes } : {}),
       ...(tile.netTxBytes !== undefined ? { netTxBytes: tile.netTxBytes } : {}),
+      ...(tile.diskReadBytes !== undefined ? { diskReadBytes: tile.diskReadBytes } : {}),
+      ...(tile.diskWriteBytes !== undefined ? { diskWriteBytes: tile.diskWriteBytes } : {}),
+      ...(tile.isWorkload ? { isWorkload: true } : {}),
       ...(tile.latencyMs !== undefined ? { latencyMs: tile.latencyMs } : {}),
       ...(tile.linkSpeedMbps !== undefined ? { linkSpeedMbps: tile.linkSpeedMbps } : {}),
       ...(tile.linkUtilizationPercent !== undefined
@@ -554,6 +559,7 @@ const line = (
     arrow?: boolean;
     dashed?: boolean;
     activity?: MapTrafficTier;
+    bidirectional?: boolean;
     strokeWidth?: number;
   } = {},
 ) => {
@@ -565,6 +571,9 @@ const line = (
     ...(options.arrow ? { arrow: true } : {}),
     ...(options.dashed ? { dashed: true } : {}),
     ...(options.activity && !options.dashed ? { activity: options.activity } : {}),
+    ...(options.activity && !options.dashed && options.bidirectional
+      ? { bidirectional: true }
+      : {}),
   });
 };
 
@@ -612,7 +621,7 @@ const drawHorizontalBus = (
         [feedX, busY],
         [activeMin, busY],
       ],
-      { activity },
+      { activity, bidirectional: true },
     );
   }
   if (feedX < activeMax) {
@@ -622,7 +631,7 @@ const drawHorizontalBus = (
         [feedX, busY],
         [activeMax, busY],
       ],
-      { activity },
+      { activity, bidirectional: true },
     );
   }
   if (activeMax < rightX) {
@@ -961,8 +970,9 @@ export function layoutServiceDiagram(diagram: ServiceDiagram, options: MapLayout
           [mid, y],
         ],
         {
-          arrow: true,
+          arrow: !accessTier,
           activity: accessTier,
+          bidirectional: true,
           ...(networkStrokeWidth !== undefined ? { strokeWidth: networkStrokeWidth } : {}),
         },
       );
@@ -1002,7 +1012,7 @@ export function layoutServiceDiagram(diagram: ServiceDiagram, options: MapLayout
           [source.x, source.y],
           [source.x, busY],
         ],
-        { activity: allGroupsTier },
+        { activity: allGroupsTier, bidirectional: true },
       );
       const xs = [...boxes.map(centreX), source.x];
       const activeXs = boxes
@@ -1024,7 +1034,7 @@ export function layoutServiceDiagram(diagram: ServiceDiagram, options: MapLayout
             [centreX(box), busY],
             [centreX(box), box.y],
           ],
-          { arrow: true, activity: tiers[index] },
+          { arrow: !tiers[index], activity: tiers[index], bidirectional: true },
         ),
       );
     } else {
@@ -1042,7 +1052,7 @@ export function layoutServiceDiagram(diagram: ServiceDiagram, options: MapLayout
           [source.x, source.y],
           [source.x, firstBus],
         ],
-        { activity: allGroupsTier },
+        { activity: allGroupsTier, bidirectional: true },
       );
       if (lastActiveRow > 0 && lowerRowsTier) {
         const activeRailBottom = placed[lastActiveRow][0].y - BUS_DROP;
@@ -1052,7 +1062,7 @@ export function layoutServiceDiagram(diagram: ServiceDiagram, options: MapLayout
             [leftRail, firstBus],
             [leftRail, activeRailBottom],
           ],
-          { activity: lowerRowsTier },
+          { activity: lowerRowsTier, bidirectional: true },
         );
         if (activeRailBottom < lastBus) {
           line(lines, [
@@ -1103,7 +1113,7 @@ export function layoutServiceDiagram(diagram: ServiceDiagram, options: MapLayout
               [centreX(box), busY],
               [centreX(box), box.y],
             ],
-            { arrow: true, activity: tiers[index] },
+            { arrow: !tiers[index], activity: tiers[index], bidirectional: true },
           ),
         );
       });
@@ -1150,7 +1160,7 @@ export function layoutServiceDiagram(diagram: ServiceDiagram, options: MapLayout
               [centreX(box), bottomOf(box)],
               [centreX(box), collectY],
             ],
-            { activity: anyLowerTier ? tiers[index] : undefined },
+            { activity: anyLowerTier ? tiers[index] : undefined, bidirectional: true },
           ),
         );
         const xs = [...boxes.map(centreX), ...targets.map(centreX)];
@@ -1181,7 +1191,7 @@ export function layoutServiceDiagram(diagram: ServiceDiagram, options: MapLayout
                 [minAct, collectY],
                 [maxAct, collectY],
               ],
-              { activity: bridgeTier },
+              { activity: bridgeTier, bidirectional: true },
             );
           }
           if (maxAct < maxX) {
@@ -1213,7 +1223,7 @@ export function layoutServiceDiagram(diagram: ServiceDiagram, options: MapLayout
               [last.x + last.w, tickY],
               [rightRail, tickY],
             ],
-            { activity: rowActivity },
+            { activity: rowActivity, bidirectional: true },
           );
           railTop = Math.min(railTop, tickY);
         });
@@ -1230,7 +1240,7 @@ export function layoutServiceDiagram(diagram: ServiceDiagram, options: MapLayout
               [rightRail, firstActiveTickY],
               [rightRail, collectY],
             ],
-            { activity: bridgeTier },
+            { activity: bridgeTier, bidirectional: true },
           );
         } else {
           line(lines, [
@@ -1264,8 +1274,9 @@ export function layoutServiceDiagram(diagram: ServiceDiagram, options: MapLayout
             [centreX(box), box.y],
           ],
           {
-            arrow: true,
+            arrow: !targetTiers[index],
             activity: targetTiers[index],
+            bidirectional: true,
             ...(hwSpeed !== undefined ? { strokeWidth: strokeWidthForLinkSpeed(hwSpeed) } : {}),
           },
         );
@@ -1289,7 +1300,7 @@ export function layoutServiceDiagram(diagram: ServiceDiagram, options: MapLayout
               [rightRail, collectY],
               [rightRail, activeReach],
             ],
-            { activity: maxTrafficTier(allGroupsTier, wrappedMaxTier) },
+            { activity: maxTrafficTier(allGroupsTier, wrappedMaxTier), bidirectional: true },
           );
           if (activeReach < reach) {
             line(lines, [
@@ -1319,8 +1330,9 @@ export function layoutServiceDiagram(diagram: ServiceDiagram, options: MapLayout
               [centreX(box), box.y],
             ],
             {
-              arrow: true,
+              arrow: !wrappedTiers[index],
               activity: wrappedTiers[index],
+              bidirectional: true,
               ...(hwSpeed !== undefined ? { strokeWidth: strokeWidthForLinkSpeed(hwSpeed) } : {}),
             },
           );

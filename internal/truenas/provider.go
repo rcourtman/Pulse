@@ -1014,12 +1014,22 @@ func metricsFromTrueNASSystem(system SystemInfo, totalCapacity, totalUsed int64)
 			Unit:   "bytes/s",
 			Source: unifiedresources.SourceTrueNAS,
 		}
+		if !system.NetInObservedAt.IsZero() {
+			obs := system.NetInObservedAt.UTC()
+			metrics.NetIn.ObservedAt = obs
+			metrics.NetInObservedAt = &obs
+		}
 	}
 	if availability.NetOut {
 		metrics.NetOut = &unifiedresources.MetricValue{
 			Value:  system.NetOutRate,
 			Unit:   "bytes/s",
 			Source: unifiedresources.SourceTrueNAS,
+		}
+		if !system.NetOutObservedAt.IsZero() {
+			obs := system.NetOutObservedAt.UTC()
+			metrics.NetOut.ObservedAt = obs
+			metrics.NetOutObservedAt = &obs
 		}
 	}
 	if availability.DiskRead {
@@ -1028,12 +1038,22 @@ func metricsFromTrueNASSystem(system SystemInfo, totalCapacity, totalUsed int64)
 			Unit:   "bytes/s",
 			Source: unifiedresources.SourceTrueNAS,
 		}
+		if !system.DiskReadObservedAt.IsZero() {
+			obs := system.DiskReadObservedAt.UTC()
+			metrics.DiskRead.ObservedAt = obs
+			metrics.DiskReadObservedAt = &obs
+		}
 	}
 	if availability.DiskWrite {
 		metrics.DiskWrite = &unifiedresources.MetricValue{
 			Value:  system.DiskWriteRate,
 			Unit:   "bytes/s",
 			Source: unifiedresources.SourceTrueNAS,
+		}
+		if !system.DiskWriteObservedAt.IsZero() {
+			obs := system.DiskWriteObservedAt.UTC()
+			metrics.DiskWrite.ObservedAt = obs
+			metrics.DiskWriteObservedAt = &obs
 		}
 	}
 

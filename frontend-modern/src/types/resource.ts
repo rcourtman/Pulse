@@ -131,12 +131,18 @@ export interface ResourceMetric {
 export interface ResourceNetwork {
   rxBytes: number; // Inbound rate (bytes/sec)
   txBytes: number; // Outbound rate (bytes/sec)
+  rxObservedAt?: number; // Unix ms when the inbound rate was observed
+  txObservedAt?: number; // Unix ms when the outbound rate was observed
+  observedAt?: number; // Legacy fallback Unix ms when tracked at pair level
 }
 
 // Disk I/O metrics (rates in bytes/sec from backend)
 export interface ResourceDiskIO {
   readRate?: number; // Observed read rate (bytes/sec), including measured zero.
   writeRate?: number; // Absent directions remain unavailable.
+  readObservedAt?: number; // Unix ms when the read rate was observed
+  writeObservedAt?: number; // Unix ms when the write rate was observed
+  observedAt?: number; // Legacy fallback Unix ms when tracked at pair level
 }
 
 // Provider-native incident associated with a unified resource.

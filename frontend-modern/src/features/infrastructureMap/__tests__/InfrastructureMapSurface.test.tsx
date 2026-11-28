@@ -1003,7 +1003,7 @@ describe('InfrastructureMapSurface live traffic and network telemetry', () => {
     const toggle = screen.getByTestId('infrastructure-map-live-traffic');
     expect(toggle).toHaveAttribute('aria-pressed', 'true');
     expect(screen.getByTestId('infrastructure-map-legend-traffic')).toHaveTextContent(
-      'Active traffic',
+      'Live flow: light → heavy',
     );
     expect(vi.mocked(fitServiceDiagram).mock.calls.at(-1)?.[3]).toEqual({
       liveTraffic: true,
@@ -1021,7 +1021,7 @@ describe('InfrastructureMapSurface live traffic and network telemetry', () => {
     fireEvent.click(toggle);
     expect(toggle).toHaveAttribute('aria-pressed', 'true');
     expect(screen.getByTestId('infrastructure-map-legend-traffic')).toHaveTextContent(
-      'Active traffic',
+      'Live flow: light → heavy',
     );
     expect(vi.mocked(fitServiceDiagram).mock.calls.at(-1)?.[3]).toEqual({
       liveTraffic: true,
@@ -1114,9 +1114,15 @@ describe('InfrastructureMapSurface live traffic and network telemetry', () => {
 
     const { container } = render(() => <InfrastructureMapSurface />);
 
-    // Estate traffic pill appears above threshold and opens the Live traffic drawer.
+    // Estate traffic pill names the top active mover above threshold, spotlights on hover, and opens the Live traffic drawer.
     const pill = screen.getByTestId('infrastructure-map-traffic-summary');
-    expect(pill).toHaveTextContent('6.00 MB/s');
+    expect(pill.textContent).toContain('plex');
+    expect(pill.textContent).toContain('↓');
+    fireEvent.mouseEnter(pill);
+    expect(
+      container.querySelectorAll('[data-map-rings] .pulse-map-link-arc').length,
+    ).toBeGreaterThan(0);
+    fireEvent.mouseLeave(pill);
 
     fireEvent.click(pill);
     const drawer = screen.getByTestId('infrastructure-map-drawer');
@@ -1130,17 +1136,15 @@ describe('InfrastructureMapSurface live traffic and network telemetry', () => {
     fireEvent.keyDown(document, { key: 'Escape' });
     expect(screen.queryByTestId('infrastructure-map-drawer')).not.toBeInTheDocument();
 
-    // Hovering a connected tile draws curved connection arcs and live flow overlays.
+    // Hovering a connected tile draws static curved connection arcs without animating unmeasured edges.
     fireEvent.pointerOver(tile(container, 'plex'));
     expect(await screen.findByText(/Docker net: internal-net, media-net \+1/)).toBeInTheDocument();
     expect(
       container.querySelectorAll('[data-map-rings] .pulse-map-link-arc').length,
     ).toBeGreaterThan(0);
-    expect(
-      container.querySelectorAll('[data-map-rings] .pulse-map-link-flow').length,
-    ).toBeGreaterThan(0);
+    expect(container.querySelectorAll('[data-map-rings] .pulse-map-link-flow')).toHaveLength(0);
 
-    // Toggling Live traffic off removes animated arc flow while keeping static curved arcs.
+    // Toggling Live traffic off keeps static curved arcs intact.
     fireEvent.click(screen.getByTestId('infrastructure-map-live-traffic'));
     expect(
       container.querySelectorAll('[data-map-rings] .pulse-map-link-arc').length,
@@ -2112,5 +2116,286 @@ describe('InfrastructureMapSurface persisted preferences, networks summary, keyb
     expect(storageList).toHaveTextContent('DEGRADED');
     expect(storageList).toHaveTextContent('Rebuilding');
     expect(storageList).toHaveTextContent('2 ZFS errors');
+  });
+
+  it('keeps disk-only busy workloads aligned between the Live pill and the Live traffic drawer', () => {
+    resourcesMock.value = [
+      resource({
+        id: 'nas-1',
+        type: 'agent',
+        name: 'nas-1',
+        platformType: 'truenas',
+        status: 'online',
+      }),
+      resource({
+        id: 'app-media',
+        type: 'app-container',
+        name: 'jellyfin',
+        platformType: 'docker',
+        parentId: 'nas-1',
+        status: 'running',
+        diskIO: { readRate: 16 * 1024 * 1024, writeRate: 0 },
+        docker: { image: 'jellyfin/jellyfin:latest' },
+      }),
+      resource({
+        id: 'app-sync',
+        type: 'app-container',
+        name: 'syncthing',
+        platformType: 'docker',
+        parentId: 'nas-1',
+        status: 'running',
+        network: { rxBytes: 2 * 1024 * 1024, txBytes: 0 },
+        docker: { image: 'syncthing/syncthing:latest' },
+      }),
+    ];
+
+    render(() => <InfrastructureMapSurface />);
+
+    const pill = screen.getByTestId('infrastructure-map-traffic-summary');
+    expect(pill).toHaveTextContent('Live: jellyfin');
+    expect(pill).toHaveTextContent('Read 16M/s');
+    expect(pill).toHaveTextContent('(+1 active)');
+
+    fireEvent.click(pill);
+    const list = screen.getByTestId('infrastructure-map-drawer-list');
+    const items = list.querySelectorAll('li');
+    expect(items).toHaveLength(2);
+    expect(items[0]?.textContent).toContain('jellyfin');
+    expect(items[0]?.textContent).toContain('Disk R');
+    expect(items[1]?.textContent).toContain('syncthing');
+    expect(screen.getAllByTestId('infrastructure-map-traffic-bar')).toHaveLength(2);
+  });
+
+  it('pauses live traffic indicators and displays sample age when telemetry samples have expired', () => {
+    const fiveMinutesAgo = Date.now() - 5 * 60 * 1000;
+    resourcesMock.value = [
+      resource({
+        id: 'pve-stale',
+        type: 'agent',
+        name: 'pve-stale',
+        platformType: 'proxmox-pve',
+        status: 'online',
+        lastSeen: fiveMinutesAgo,
+        network: { rxBytes: 40 * 1024 * 1024, txBytes: 0 },
+        agent: {
+          networkInterfaces: [
+            { name: 'eno1', addresses: ['10.10.0.10/24'], speedMbps: 10000, linkUp: true },
+          ],
+        },
+      }),
+      resource({
+        id: 'vm-stale',
+        type: 'vm',
+        name: 'jellyfin',
+        platformType: 'proxmox-pve',
+        parentId: 'pve-stale',
+        status: 'running',
+        lastSeen: fiveMinutesAgo,
+        network: { rxBytes: 30 * 1024 * 1024, txBytes: 0 },
+        diskIO: { readRate: 12 * 1024 * 1024, writeRate: 0 },
+      }),
+    ];
+
+    const { container } = render(() => <InfrastructureMapSurface />);
+
+    expect(screen.queryByTestId('infrastructure-map-traffic-summary')).not.toBeInTheDocument();
+    expect(screen.queryByTestId('infrastructure-map-legend-traffic')).not.toBeInTheDocument();
+    const staleBadge = screen.getByTestId('infrastructure-map-stale-samples');
+    expect(staleBadge).toHaveTextContent(/Last sample 5m ago/);
+    expect(container.querySelectorAll('.pulse-map-flow')).toHaveLength(0);
+    expect(container.querySelectorAll('.pulse-map-packet')).toHaveLength(0);
+  });
+
+  it('clears search text and folded bridge filters when Hide names is enabled and separates speed legend styling', () => {
+    const plugged = (name: string, vlan: number): Resource =>
+      resource({
+        id: `vm-${name}`,
+        type: 'vm',
+        name,
+        platformType: 'proxmox-pve',
+        parentId: 'pve-priv',
+        status: 'running',
+        proxmox: {
+          clusterName: 'private-cluster',
+          networkInterfaces: [
+            { name: 'net0', addresses: [], bridge: 'private-bridge', ...(vlan ? { vlan } : {}) },
+          ],
+        },
+      });
+
+    resourcesMock.value = [
+      resource({
+        id: 'pve-priv',
+        type: 'agent',
+        name: 'secret-pve-host',
+        platformType: 'proxmox-pve',
+        clusterId: 'private-cluster',
+        agent: {
+          networkInterfaces: [
+            { name: 'eno1', addresses: ['10.90.0.10/24'], speedMbps: 10000, linkUp: true },
+          ],
+        },
+      }),
+      plugged('svc-0', 0),
+      plugged('svc-10', 10),
+      plugged('svc-20', 20),
+      plugged('svc-30', 30),
+      plugged('svc-40', 40),
+      plugged('svc-50', 50),
+      plugged('svc-60', 60),
+    ];
+
+    const { container } = render(() => <InfrastructureMapSurface />);
+
+    // Link speed legend uses neutral slate swatches rather than blue live-flow styling.
+    const speedLegend = screen.getByTestId('infrastructure-map-legend-speed');
+    expect(speedLegend.innerHTML).toContain('bg-slate-400');
+    expect(speedLegend.innerHTML).not.toContain('bg-blue-600');
+
+    // Type a private hostname into search and select the folded private bridge filter.
+    const searchInput = screen.getByTestId('infrastructure-map-search') as HTMLInputElement;
+    fireEvent.input(searchInput, { target: { value: 'secret-pve-host' } });
+    expect(searchInput.value).toBe('secret-pve-host');
+
+    const bridgePill = container.querySelector(
+      '[data-map-inspect][aria-label="Inspect network private-bridge"]',
+    );
+    expect(bridgePill).not.toBeNull();
+    fireEvent.click(bridgePill!);
+    fireEvent.click(screen.getByRole('button', { name: 'Filter map' }));
+    expect(screen.getByTestId('infrastructure-map-filter-bar')).toHaveTextContent(
+      'Network: private-bridge',
+    );
+
+    // Enabling Hide names clears both search text and the active folded bridge filter without leaking raw IDs.
+    fireEvent.click(screen.getByRole('button', { name: 'Hide names' }));
+    expect(searchInput.value).toBe('');
+    expect(screen.queryByTestId('infrastructure-map-filter-bar')).not.toBeInTheDocument();
+    expect(container.textContent).not.toContain('private-cluster');
+    expect(container.textContent).not.toContain('private-bridge');
+    expect(container.textContent).not.toContain('secret-pve-host');
+  });
+
+  it('expires mixed-age guests while host keeps reporting, and updates stale age and open hover tooltips during outages', async () => {
+    vi.useFakeTimers();
+    try {
+      const startMs = Date.parse('2026-11-27T22:00:00Z');
+      vi.setSystemTime(startMs);
+
+      const makeSnapshot = (hostSeen: number, guestSeen: number): Resource[] => [
+        resource({
+          id: 'pve-live',
+          type: 'agent',
+          name: 'pve-live',
+          platformType: 'proxmox-pve',
+          status: 'online',
+          lastSeen: hostSeen,
+          agent: {
+            networkInterfaces: [
+              { name: 'eno1', addresses: ['10.80.0.10/24'], speedMbps: 10000, linkUp: true },
+            ],
+          },
+        }),
+        resource({
+          id: 'vm-payroll',
+          type: 'vm',
+          name: 'payroll-internal',
+          platformType: 'proxmox-pve',
+          parentId: 'pve-live',
+          status: 'running',
+          lastSeen: guestSeen,
+          network: { rxBytes: 0, txBytes: 40 * 1024 * 1024 },
+          identity: { ips: ['10.80.0.50'] },
+        }),
+      ];
+
+      const [liveList, setLiveList] = createSignal<Resource[]>(makeSnapshot(startMs, startMs));
+      resourcesMock.read = liveList;
+
+      const { container } = render(() => <InfrastructureMapSurface />);
+      expect(screen.getByTestId('infrastructure-map-traffic-summary')).toHaveTextContent(
+        'payroll-internal',
+      );
+
+      // Hover the active guest so the tooltip is open before its sample expires.
+      fireEvent.pointerOver(tile(container, 'payroll-internal'));
+      expect(screen.getByText(/40\.0 MB\/s/)).toBeInTheDocument();
+
+      // Advance 1 minute: host refreshes, guest does not -> still within 2m freshness window.
+      vi.advanceTimersByTime(60_000);
+      setLiveList(makeSnapshot(Date.now(), startMs));
+      expect(screen.getByTestId('infrastructure-map-traffic-summary')).toHaveTextContent(
+        'payroll-internal',
+      );
+
+      // Advance past 2 minutes while host keeps refreshing -> guest expires and open tooltip drops the stale rate.
+      vi.advanceTimersByTime(65_000);
+      setLiveList(makeSnapshot(Date.now(), startMs));
+      expect(screen.queryByTestId('infrastructure-map-traffic-summary')).not.toBeInTheDocument();
+      expect(screen.queryByText(/40\.0 MB\/s/)).not.toBeInTheDocument();
+
+      // Now stop all reports (complete outage) and advance 10 minutes -> stale badge tracks real elapsed age.
+      const lastHostSeen = Date.now();
+      vi.advanceTimersByTime(10 * 60_000 + 1_000);
+      expect(screen.getByTestId('infrastructure-map-stale-samples')).toHaveTextContent(
+        'Last sample 10m ago',
+      );
+      expect(lastHostSeen).toBeGreaterThan(startMs);
+    } finally {
+      vi.useRealTimers();
+    }
+  });
+
+  it('expires samples at the exact 120s boundary and keeps stale-age ticking across frequent metadata updates', () => {
+    vi.useFakeTimers();
+    try {
+      const now = Date.parse('2026-11-27T22:10:00Z');
+      vi.setSystemTime(now);
+      const exactlyExpired = now - 120_000;
+
+      const makeStale = (tag: string): Resource[] => [
+        resource({
+          id: 'pve-boundary',
+          type: 'agent',
+          name: 'pve-boundary',
+          platformType: 'proxmox-pve',
+          status: 'online',
+          lastSeen: exactlyExpired,
+          tags: [tag],
+        }),
+        resource({
+          id: 'vm-boundary',
+          type: 'vm',
+          name: 'payroll-internal',
+          platformType: 'proxmox-pve',
+          parentId: 'pve-boundary',
+          status: 'running',
+          lastSeen: exactlyExpired,
+          network: { rxBytes: 0, txBytes: 40 * 1024 * 1024 },
+        }),
+      ];
+
+      const [list, setList] = createSignal<Resource[]>(makeStale('v0'));
+      resourcesMock.read = list;
+
+      render(() => <InfrastructureMapSurface />);
+
+      // Exactly 120,000 ms old is already expired on first render (no stuck Live pill).
+      expect(screen.queryByTestId('infrastructure-map-traffic-summary')).not.toBeInTheDocument();
+      expect(screen.getByTestId('infrastructure-map-stale-samples')).toHaveTextContent(
+        'Last sample 2m ago',
+      );
+
+      // Metadata-only updates every 5 seconds for 8 minutes must NOT reset the 15s stale-age interval.
+      for (let i = 1; i <= 96; i += 1) {
+        vi.advanceTimersByTime(5_000);
+        setList(makeStale(`v${i}`));
+      }
+      expect(screen.getByTestId('infrastructure-map-stale-samples')).toHaveTextContent(
+        'Last sample 10m ago',
+      );
+    } finally {
+      vi.useRealTimers();
+    }
   });
 });

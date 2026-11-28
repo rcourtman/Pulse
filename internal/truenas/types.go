@@ -32,12 +32,16 @@ type SystemInfo struct {
 	// ARCSizeBytes is the ZFS ARC cache size. The kernel's MemAvailable does
 	// not count ARC even though it shrinks under memory pressure, so usage
 	// derived from total-available alone reads ~95% on every ZFS system.
-	ARCSizeBytes  int64
-	CPUPercent    float64
-	NetInRate     float64
-	NetOutRate    float64
-	DiskReadRate  float64
-	DiskWriteRate float64
+	ARCSizeBytes        int64
+	CPUPercent          float64
+	NetInRate           float64
+	NetOutRate          float64
+	DiskReadRate        float64
+	DiskWriteRate       float64
+	NetInObservedAt     time.Time
+	NetOutObservedAt    time.Time
+	DiskReadObservedAt  time.Time
+	DiskWriteObservedAt time.Time
 	// Native per-device rates retain their own sample times and presence.
 	// They are not cumulative counters and must never populate PhysicalDisk.IO.
 	DiskReadRates      map[string]TimeSeriesPoint

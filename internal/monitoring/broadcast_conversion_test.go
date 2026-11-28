@@ -128,3 +128,62 @@ func TestBroadcastConversionBorrowedHelpersKeepOutputOwned(t *testing.T) {
 		t.Fatal("converter or output caller mutated source resource")
 	}
 }
+
+func TestBroadcastConversionPropagatesRateObservedAt(t *testing.T) {
+	now := time.Date(2026, 11, 27, 12, 0, 0, 0, time.UTC)
+	rxObs := now.Add(-10 * time.Minute)
+	txObs := now
+	readObs := now.Add(-4 * time.Minute)
+	writeObs := now
+	resource := unifiedresources.Resource{
+		ID:       "agent:pve-stale-rates",
+		Type:     unifiedresources.ResourceTypeAgent,
+		Name:     "pve-stale-rates",
+		LastSeen: now,
+		Sources:  []unifiedresources.DataSource{unifiedresources.SourceProxmox, unifiedresources.SourceAgent},
+		Metrics: &unifiedresources.ResourceMetrics{
+			NetIn:               &unifiedresources.MetricValue{Value: 84_000_000},
+			NetOut:              &unifiedresources.MetricValue{Value: 2_048},
+			NetInObservedAt:     &rxObs,
+			NetOutObservedAt:    &txObs,
+			DiskRead:            &unifiedresources.MetricValue{Value: 12_000_000},
+			DiskWrite:           &unifiedresources.MetricValue{Value: 1_024},
+			DiskReadObservedAt:  &readObs,
+			DiskWriteObservedAt: &writeObs,
+		},
+	}
+
+	projected := models.ConvertResourceToFrontend(monitorResourceToConvertInput(resource))
+	if projected.Network == nil || projected.Network.RXObservedAt != rxObs.UnixMilli() || projected.Network.TXObservedAt != txObs.UnixMilli() {
+		t.Fatalf("expected network rxObservedAt=%d txObservedAt=%d, got %+v", rxObs.UnixMilli(), txObs.UnixMilli(), projected.Network)
+	}
+	if projected.DiskIO == nil || projected.DiskIO.ReadObservedAt != readObs.UnixMilli() || projected.DiskIO.WriteObservedAt != writeObs.UnixMilli() {
+		t.Fatalf("expected diskIO readObservedAt=%d writeObservedAt=%d, got %+v", readObs.UnixMilli(), writeObs.UnixMilli(), projected.DiskIO)
+	}
+}
+
+func TestPreserveDockerInventorySnapshotRetainsInventoryObservedAt(t *testing.T) {
+	oldTime := time.Date(2026, 11, 27, 11, 50, 0, 0, time.UTC)
+	firstHeartbeat := oldTime.Add(5 * time.Minute)
+	secondHeartbeat := oldTime.Add(10 * time.Minute)
+
+	previous := models.DockerHost{
+		ID:        "docker-1",
+		LastSeen:  oldTime,
+		NetInRate: 80_000_000,
+		Containers: []models.DockerContainer{
+			{ID: "ctr-1", Name: "jellyfin", State: "running", NetInRate: 80_000_000},
+		},
+	}
+	first := models.DockerHost{ID: "docker-1", LastSeen: firstHeartbeat}
+	preserveDockerInventorySnapshot(&first, previous)
+	if !first.InventoryObservedAt.Equal(oldTime) {
+		t.Fatalf("expected first preserved InventoryObservedAt=%v, got %v", oldTime, first.InventoryObservedAt)
+	}
+
+	second := models.DockerHost{ID: "docker-1", LastSeen: secondHeartbeat}
+	preserveDockerInventorySnapshot(&second, first)
+	if !second.InventoryObservedAt.Equal(oldTime) {
+		t.Fatalf("expected second preserved InventoryObservedAt=%v, got %v", oldTime, second.InventoryObservedAt)
+	}
+}

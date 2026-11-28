@@ -2485,6 +2485,7 @@ func isZFSStorageType(storageType string) bool {
 
 func resourceFromDockerContainer(ct models.DockerContainer, host models.DockerHost) (Resource, ResourceIdentity) {
 	metrics := metricsFromDockerContainer(ct, host.CPUs)
+	stampResourceMetricRates(metrics, dockerInventoryObservedAt(host))
 	now := time.Now().UTC()
 	runtime := strings.TrimSpace(host.Runtime)
 	if runtime == "" {

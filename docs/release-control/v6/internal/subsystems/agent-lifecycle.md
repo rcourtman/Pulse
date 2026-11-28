@@ -12347,3 +12347,8 @@ from Docker `HostConfig.DeviceRequests`, `HostConfig.Devices`, and device bind
 mounts (`GPU`, `AMD GPU`, `iGPU`, `TPU`, `NPU`). Older agents remain wire
 compatible. Verified by `TestReadActivePeersFrom_FiltersPrivacyAndDetectsDirection`,
 `TestContainerAccelerators`, and `TestApplyHostReportCarriesActivePeers`.
+
+
+### Per-direction rate observation timestamps and Docker inventory retention (27 November 2026)
+
+`models.DockerHost` adds optional `InventoryObservedAt` (`json:"inventoryObservedAt,omitempty"`), stamped on complete inventory reports and preserved across status-only reports in `preserveDockerInventorySnapshot` so carried-forward container and host I/O rates retain their original observation time. `models.ResourceNetworkFrontend` and `models.ResourceDiskIOFrontend` add optional per-direction `rxObservedAt`, `txObservedAt`, `readObservedAt`, and `writeObservedAt` Unix ms timestamps populated by `monitorResourceToConvertInput`. Agent enrollment, identity, credentials, and command lifecycles are unchanged. Verified by `TestPreserveDockerInventorySnapshotRetainsInventoryObservedAt` and `TestBroadcastConversionPropagatesRateObservedAt`.

@@ -233,6 +233,10 @@ type APIResource = {
     netOut?: APIMetricValue;
     diskRead?: APIMetricValue;
     diskWrite?: APIMetricValue;
+    netInObservedAt?: string;
+    netOutObservedAt?: string;
+    diskReadObservedAt?: string;
+    diskWriteObservedAt?: string;
   };
   parentId?: string;
   tags?: string[];
@@ -938,17 +942,37 @@ const toResource = (v2: APIResource): Resource => {
     disk: metricToResourceMetric(v2.metrics?.disk),
     network:
       v2.metrics?.netIn || v2.metrics?.netOut
-        ? {
-            rxBytes: v2.metrics?.netIn?.value ?? 0,
-            txBytes: v2.metrics?.netOut?.value ?? 0,
-          }
+        ? (() => {
+            const rxObservedAt = v2.metrics?.netInObservedAt
+              ? Date.parse(v2.metrics.netInObservedAt)
+              : NaN;
+            const txObservedAt = v2.metrics?.netOutObservedAt
+              ? Date.parse(v2.metrics.netOutObservedAt)
+              : NaN;
+            return {
+              rxBytes: v2.metrics?.netIn?.value ?? 0,
+              txBytes: v2.metrics?.netOut?.value ?? 0,
+              ...(Number.isFinite(rxObservedAt) ? { rxObservedAt } : {}),
+              ...(Number.isFinite(txObservedAt) ? { txObservedAt } : {}),
+            };
+          })()
         : undefined,
     diskIO:
       v2.metrics?.diskRead || v2.metrics?.diskWrite
-        ? {
-            readRate: v2.metrics?.diskRead?.value,
-            writeRate: v2.metrics?.diskWrite?.value,
-          }
+        ? (() => {
+            const readObservedAt = v2.metrics?.diskReadObservedAt
+              ? Date.parse(v2.metrics.diskReadObservedAt)
+              : NaN;
+            const writeObservedAt = v2.metrics?.diskWriteObservedAt
+              ? Date.parse(v2.metrics.diskWriteObservedAt)
+              : NaN;
+            return {
+              readRate: v2.metrics?.diskRead?.value,
+              writeRate: v2.metrics?.diskWrite?.value,
+              ...(Number.isFinite(readObservedAt) ? { readObservedAt } : {}),
+              ...(Number.isFinite(writeObservedAt) ? { writeObservedAt } : {}),
+            };
+          })()
         : undefined,
     uptime:
       v2.agent?.uptimeSeconds ??

@@ -1166,9 +1166,13 @@ type ResourceConvertInput struct {
 	Disk                  *ResourceMetricInput
 	NetworkRX             int64
 	NetworkTX             int64
+	NetworkRXObservedAt   int64
+	NetworkTXObservedAt   int64
 	HasNetwork            bool
 	DiskReadRate          *int64
 	DiskWriteRate         *int64
+	DiskReadObservedAt    int64
+	DiskWriteObservedAt   int64
 	Temperature           *float64
 	Uptime                *int64
 	Tags                  []string
@@ -1337,15 +1341,19 @@ func ConvertResourceToFrontend(input ResourceConvertInput) ResourceFrontend {
 
 	if input.HasNetwork {
 		rf.Network = &ResourceNetworkFrontend{
-			RXBytes: input.NetworkRX,
-			TXBytes: input.NetworkTX,
+			RXBytes:      input.NetworkRX,
+			TXBytes:      input.NetworkTX,
+			RXObservedAt: input.NetworkRXObservedAt,
+			TXObservedAt: input.NetworkTXObservedAt,
 		}
 	}
 
 	if input.DiskReadRate != nil || input.DiskWriteRate != nil {
 		rf.DiskIO = &ResourceDiskIOFrontend{
-			ReadRate:  input.DiskReadRate,
-			WriteRate: input.DiskWriteRate,
+			ReadRate:        input.DiskReadRate,
+			WriteRate:       input.DiskWriteRate,
+			ReadObservedAt:  input.DiskReadObservedAt,
+			WriteObservedAt: input.DiskWriteObservedAt,
 		}
 	}
 

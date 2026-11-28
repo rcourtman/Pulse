@@ -63,6 +63,7 @@ import {
   resolveDiagramTileLimit,
   resolveMapPalette,
 } from './infrastructureMapExport';
+import { formatLiveActivitySubtitle, tileActivityTier } from './infrastructureMapHostDiagram';
 import {
   isMapMoveKey,
   MAP_NAMES_ITEM_LIMIT,
@@ -77,7 +78,9 @@ import {
 import {
   anonymizeInfrastructureMapModel,
   buildInfrastructureMapModel,
+  isSampleTimestampExpired,
   MAP_LINK_SATURATED_PERCENT,
+  MAP_LIVE_SAMPLE_MAX_AGE_MS,
   MAP_TRAFFIC_ACTIVE_BYTES,
 } from './infrastructureMapModel';
 import {
@@ -93,10 +96,12 @@ import {
 } from './infrastructureMapRender';
 import {
   buildServiceDiagram,
+  collectActiveTrafficTiles,
   countDiagramResources,
   formatMapLatency,
   formatMapLinkSpeed,
   type DiagramNetwork,
+  type DiagramTile,
   type ServiceDiagramFilter,
 } from './infrastructureMapServices';
 
@@ -209,6 +214,18 @@ const formatNetTelemetry = (rxBytes?: number, txBytes?: number): string => {
   if (total <= 0) return '';
   if (total < 1024) return 'Net <1 KB/s';
   return `Net ↓ ${formatSpeed(rx)} ↑ ${formatSpeed(tx)}`;
+};
+
+const formatDiskTelemetry = (readBytes?: number, writeBytes?: number): string => {
+  if (readBytes === undefined && writeBytes === undefined) return '';
+  const read = readBytes ?? 0;
+  const write = writeBytes ?? 0;
+  const total = read + write;
+  if (total <= 0) return '';
+  if (total < 1024) return 'Disk <1 KB/s';
+  if (read > 0 && write > 0) return `Disk R ${formatSpeed(read)} W ${formatSpeed(write)}`;
+  if (read > 0) return `Disk R ${formatSpeed(read)}`;
+  return `Disk W ${formatSpeed(write)}`;
 };
 
 const formatDockerNetworks = (networks?: string[]): string => {
@@ -365,6 +382,7 @@ const hitLines = (hit: MapHit, density?: MapDensity): string[] =>
       hit.memory !== undefined ? `Memory ${Math.round(hit.memory)}%` : '',
       hit.temperatureC !== undefined ? `${Math.round(hit.temperatureC)}°C` : '',
       formatNetTelemetry(hit.netRxBytes, hit.netTxBytes),
+      formatDiskTelemetry(hit.diskReadBytes, hit.diskWriteBytes),
       formatProbeAndLatency(hit.probeSummary, hit.latencyMs),
       hit.certWarning ?? '',
     ]
@@ -380,6 +398,14 @@ const hitLines = (hit: MapHit, density?: MapDensity): string[] =>
       .filter(Boolean)
       .join(' · '),
   ].filter(Boolean);
+
+const formatSampleAge = (sampleAtMs: number, nowMs: number): string => {
+  const diffSeconds = Math.max(0, Math.floor((nowMs - sampleAtMs) / 1000));
+  if (diffSeconds < 60) return `${diffSeconds}s ago`;
+  if (diffSeconds < 3600) return `${Math.floor(diffSeconds / 60)}m ago`;
+  if (diffSeconds < 86400) return `${Math.floor(diffSeconds / 3600)}h ago`;
+  return `${Math.floor(diffSeconds / 86400)}d ago`;
+};
 
 export function InfrastructureMapSurface() {
   const { resources, loading, error, refetch } = useResources();
@@ -409,7 +435,7 @@ export function InfrastructureMapSurface() {
   const [pan, setPan] = createSignal({ x: 0, y: 0 });
   const [dragging, setDragging] = createSignal(false);
   const [hover, setHover] = createSignal<{
-    hit: MapHit;
+    hitId: string;
     x: number;
     y: number;
     direction: 'up' | 'down';
@@ -420,6 +446,7 @@ export function InfrastructureMapSurface() {
     y: number;
     direction: 'up' | 'down';
   } | null>(null);
+  const [pillSpotlightId, setPillSpotlightId] = createSignal<string | null>(null);
   // The tile a tap on a touch screen is showing, by its id.
   const [armed, setArmed] = createSignal<string | null>(null);
   // Whether the card on show was reached with the keyboard, and whether an
@@ -451,13 +478,108 @@ export function InfrastructureMapSurface() {
   // Counted once per browser session. Nothing on the map is sent.
   onMount(recordInfrastructureMapOpen);
 
+  const [freshnessNowMs, setFreshnessNowMs] = createSignal(Date.now());
+  const nextExpiryDeadlineMs = createMemo<number | undefined>(() => {
+    const now = freshnessNowMs();
+    let earliest: number | undefined;
+    const considerRateSample = (sampleAtMs: number | undefined) => {
+      if (
+        typeof sampleAtMs !== 'number' ||
+        !Number.isFinite(sampleAtMs) ||
+        sampleAtMs < 1_000_000_000_000
+      ) {
+        return;
+      }
+      if (isSampleTimestampExpired(sampleAtMs, now)) return;
+      const deadline = sampleAtMs + MAP_LIVE_SAMPLE_MAX_AGE_MS;
+      if (earliest === undefined || deadline < earliest) {
+        earliest = deadline;
+      }
+    };
+    for (const resource of resources()) {
+      if (resource.network !== undefined) {
+        if ((resource.network.rxBytes ?? 0) > 0) {
+          considerRateSample(
+            resource.network.rxObservedAt ?? resource.network.observedAt ?? resource.lastSeen,
+          );
+        }
+        if ((resource.network.txBytes ?? 0) > 0) {
+          considerRateSample(
+            resource.network.txObservedAt ?? resource.network.observedAt ?? resource.lastSeen,
+          );
+        }
+      }
+      if (resource.diskIO !== undefined) {
+        if ((resource.diskIO.readRate ?? 0) > 0) {
+          considerRateSample(
+            resource.diskIO.readObservedAt ?? resource.diskIO.observedAt ?? resource.lastSeen,
+          );
+        }
+        if ((resource.diskIO.writeRate ?? 0) > 0) {
+          considerRateSample(
+            resource.diskIO.writeObservedAt ?? resource.diskIO.observedAt ?? resource.lastSeen,
+          );
+        }
+      }
+    }
+    if (earliest !== undefined) return earliest;
+    // Even if no resource currently carries a positive rate, schedule the estate-wide
+    // stale-sample indicator for when the newest real sample ages out.
+    let newest: number | undefined;
+    for (const resource of resources()) {
+      if (
+        typeof resource.lastSeen === 'number' &&
+        Number.isFinite(resource.lastSeen) &&
+        resource.lastSeen >= 1_000_000_000_000 &&
+        (newest === undefined || resource.lastSeen > newest)
+      ) {
+        newest = resource.lastSeen;
+      }
+    }
+    if (newest === undefined || isSampleTimestampExpired(newest, now)) return undefined;
+    return newest + MAP_LIVE_SAMPLE_MAX_AGE_MS;
+  });
+
   const resourceById = createMemo(
     () => new Map(resources().map((resource) => [resource.id, resource] as const)),
   );
-  const liveModel = createMemo(() => buildInfrastructureMapModel(resources()));
+  const liveModel = createMemo(() =>
+    buildInfrastructureMapModel(resources(), { nowMs: freshnessNowMs() }),
+  );
   const model = createMemo(() =>
     namesHidden() ? anonymizeInfrastructureMapModel(liveModel()) : liveModel(),
   );
+  const isEstateStale = createMemo(() => Boolean(liveModel().liveSamplesExpired));
+  // Schedule the next single-shot expiry transition only when the earliest unexpired deadline changes.
+  createEffect(() => {
+    const deadline = nextExpiryDeadlineMs();
+    if (deadline === undefined) return;
+    const delay = Math.max(50, deadline - Date.now() + 50);
+    const timer = setTimeout(() => setFreshnessNowMs(Date.now()), delay);
+    onCleanup(() => clearTimeout(timer));
+  });
+  // Keep the stale-sample age badge ticking undisturbed across metadata updates while the estate stays stale.
+  createEffect(() => {
+    if (!isEstateStale()) return;
+    const interval = setInterval(() => setFreshnessNowMs(Date.now()), 15_000);
+    onCleanup(() => clearInterval(interval));
+  });
+  const toggleNamesHidden = () => {
+    const next = !namesHidden();
+    setNamesHidden(next);
+    if (next) {
+      // Clear search terms and active network filters so hostnames or folded
+      // bridge IDs cannot remain visible after redaction.
+      setSearchQuery('');
+      setNetworkFilter(null);
+      setHoveredNetwork(null);
+      setHover(null);
+      setArmed(null);
+      if (drawerTarget()?.kind === 'network') {
+        setDrawerTarget(null);
+      }
+    }
+  };
   // On the page every colour is a reference to the theme's own variable.
   const palette = createMemo(() => (darkMode() ? MAP_PAGE_PALETTES.dark : MAP_PAGE_PALETTES.light));
 
@@ -555,7 +677,7 @@ export function InfrastructureMapSurface() {
     const room = space();
     if (!room || model().isEmpty) return null;
     const filter = activeFilter();
-    const traffic = liveTraffic();
+    const traffic = liveTraffic() && !model().liveSamplesExpired;
     const mode = layoutMode();
     const fit = (chosen: MapDensity) => {
       const diagram = buildServiceDiagram(model(), {
@@ -607,6 +729,27 @@ export function InfrastructureMapSurface() {
     });
   });
   const estateTrafficBytes = createMemo(() => fullDiagram()?.estateTrafficBytes ?? 0);
+  const topActiveMover = createMemo<{
+    tile: DiagramTile;
+    otherCount: number;
+    metricText: string;
+  } | null>(() => {
+    const diagram = fullDiagram();
+    if (!diagram || model().liveSamplesExpired) return null;
+    // Share the exact active-resource ordering used by the Live traffic drawer so
+    // the headline workload always appears in the drawer it opens.
+    const activeWorkloads = collectActiveTrafficTiles(diagram)
+      .map(({ tile }) => tile)
+      .filter((tile) => tile.isWorkload && tileActivityTier(tile) !== undefined);
+    if (activeWorkloads.length === 0) return null;
+    const top = activeWorkloads[0];
+    const topNet = top.netTotalBytes ?? 0;
+    const topDisk = top.diskTotalBytes ?? 0;
+    if (topNet < 100 * 1024 && topDisk < 256 * 1024) return null;
+    const metricText = formatLiveActivitySubtitle(top, 160) ?? '';
+    if (!metricText) return null;
+    return { tile: top, otherCount: activeWorkloads.length - 1, metricText };
+  });
   const exposedCount = createMemo(() => fullDiagram()?.exposed.length ?? 0);
   const networkCount = createMemo(() => fullDiagram()?.networks.length ?? 0);
   const matchedResourceCount = createMemo(() => {
@@ -626,7 +769,7 @@ export function InfrastructureMapSurface() {
     const id = networkFilter();
     if (!id) return null;
     const list = fullDiagram()?.networks ?? activeDiagram()?.networks ?? [];
-    return list.find((network) => network.id === id)?.label ?? id;
+    return list.find((network) => network.id === id)?.label ?? 'Selected network';
   });
 
   const hasVisibleMatches = createMemo(() => {
@@ -668,6 +811,19 @@ export function InfrastructureMapSurface() {
     return current ? renderMapSceneBody(current, palette(), hrefForHit) : '';
   });
 
+  const hoveredHit = createMemo<{
+    hit: MapHit;
+    x: number;
+    y: number;
+    direction: 'up' | 'down';
+  } | null>(() => {
+    const current = hover();
+    if (!current) return null;
+    const hit = hits().find((candidate) => candidate.id === current.hitId);
+    if (!hit) return null;
+    return { hit, x: current.x, y: current.y, direction: current.direction };
+  });
+
   const hoveredNetworkInfo = createMemo<DiagramNetwork | null>(() => {
     const hovered = hoveredNetwork();
     if (!hovered) return null;
@@ -678,12 +834,12 @@ export function InfrastructureMapSurface() {
   // Hoisted memos for TooltipPortal props so Solid never compiles an inline
   // memo() inside requestAnimationFrame (which triggers a createRoot warning).
   const showHoverTooltip = createMemo(
-    () => armed() === null && (hover() !== null || hoveredNetworkInfo() !== null),
+    () => armed() === null && (hoveredHit() !== null || hoveredNetworkInfo() !== null),
   );
-  const tooltipX = createMemo(() => hover()?.x ?? hoveredNetwork()?.x ?? 0);
-  const tooltipY = createMemo(() => hover()?.y ?? hoveredNetwork()?.y ?? 0);
+  const tooltipX = createMemo(() => hoveredHit()?.x ?? hoveredNetwork()?.x ?? 0);
+  const tooltipY = createMemo(() => hoveredHit()?.y ?? hoveredNetwork()?.y ?? 0);
   const tooltipDirection = createMemo<'up' | 'down'>(
-    () => hover()?.direction ?? hoveredNetwork()?.direction ?? 'up',
+    () => hoveredHit()?.direction ?? hoveredNetwork()?.direction ?? 'up',
   );
 
   const clampPan = (next: { x: number; y: number }, scaleValue: number) => {
@@ -832,9 +988,9 @@ export function InfrastructureMapSurface() {
   createEffect(() => {
     body();
     const current = scene();
-    const shown = hover();
+    const shown = hoveredHit();
     const hoveredNet = hoveredNetworkInfo();
-    const showLiveTraffic = liveTraffic();
+    const pillId = pillSpotlightId();
     const svg = svgElement();
     const layer = svg?.querySelector(`[${MAP_RINGS_ATTRIBUTE}]`);
     if (!layer) {
@@ -851,7 +1007,7 @@ export function InfrastructureMapSurface() {
       // tile the card is about.
       layer.innerHTML =
         (armed() === null ? '' : renderMapTappedTile(current, shown.hit, palette())) +
-        renderMapLinkRings(current, shown.hit, palette(), { liveTraffic: showLiveTraffic });
+        renderMapLinkRings(current, shown.hit, palette());
       if (shown.hit.linked?.length) {
         applyMapSpotlight(svg, new Set([shown.hit.id, ...shown.hit.linked]));
       } else {
@@ -870,6 +1026,14 @@ export function InfrastructureMapSurface() {
       }
       applyMapSpotlight(svg, highlighted.size > 0 ? highlighted : null);
       return;
+    }
+    if (pillId) {
+      const pillHit = hits().find((hit) => hit.id === pillId);
+      if (pillHit) {
+        layer.innerHTML = renderMapLinkRings(current, pillHit, palette());
+        applyMapSpotlight(svg, new Set([pillHit.id, ...(pillHit.linked ?? [])]));
+        return;
+      }
     }
     layer.innerHTML = '';
     applyMapSpotlight(svg, null);
@@ -906,7 +1070,7 @@ export function InfrastructureMapSurface() {
   const point = (found: { hit: MapHit; element: Element }) => {
     setHoveredNetwork(null);
     setHover({
-      hit: found.hit,
+      hitId: found.hit.id,
       ...tooltipAnchor(found.element),
     });
   };
@@ -1109,12 +1273,12 @@ export function InfrastructureMapSurface() {
       const within = event.target;
       if (within instanceof Element && frameRef && !within.contains(frameRef)) return;
       if (hoveredNetwork() !== null) setHoveredNetwork(null);
-      const shown = hover();
+      const shown = hoveredHit();
       const focused = document.activeElement?.closest?.(`[${MAP_HIT_ATTRIBUTE}]`);
       const held = focused ? hits()[Number(focused.getAttribute(MAP_HIT_ATTRIBUTE))] : undefined;
       if (!focused || !held || (shown ? shown.hit.id !== held.id : scrolledAway !== held.id)) {
         scrolledAway = null;
-        if (shown) setHover(null);
+        if (hover()) setHover(null);
         return;
       }
       const box = focused.getBoundingClientRect();
@@ -1230,17 +1394,52 @@ export function InfrastructureMapSurface() {
             </Show>
           </button>
         </Show>
-        <Show when={estateTrafficBytes() >= MAP_TRAFFIC_ACTIVE_BYTES}>
+        <Show when={estateTrafficBytes() >= MAP_TRAFFIC_ACTIVE_BYTES || topActiveMover() !== null}>
           <button
             type="button"
-            title="Inspect active network traffic across the estate"
+            title={
+              topActiveMover()
+                ? `Top active workload: ${topActiveMover()!.tile.name} (${topActiveMover()!.metricText}). Hover to spotlight, click to inspect live traffic.`
+                : 'Inspect active network and disk activity across the estate'
+            }
             data-testid="infrastructure-map-traffic-summary"
             class="inline-flex items-center gap-1.5 rounded-full border border-blue-300 bg-blue-50 px-2.5 py-0.5 text-xs font-medium whitespace-nowrap text-blue-700 tabular-nums transition-colors hover:bg-blue-100 focus-visible:outline-solid focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-blue-500 dark:border-blue-700/80 dark:bg-blue-950/50 dark:text-blue-300 dark:hover:bg-blue-900/50"
             onClick={() => openDrawer({ kind: 'traffic' })}
+            onMouseEnter={() => setPillSpotlightId(topActiveMover()?.tile.id ?? null)}
+            onMouseLeave={() => setPillSpotlightId(null)}
+            onFocus={() => setPillSpotlightId(topActiveMover()?.tile.id ?? null)}
+            onBlur={() => setPillSpotlightId(null)}
           >
             <ActivityIcon class="h-3.5 w-3.5 shrink-0" aria-hidden="true" />
-            <span>{formatSpeed(estateTrafficBytes())}</span>
+            <span>
+              {topActiveMover()
+                ? `Live: ${topActiveMover()!.tile.name} · ${topActiveMover()!.metricText}${
+                    topActiveMover()!.otherCount > 0
+                      ? ` (+${topActiveMover()!.otherCount} active)`
+                      : ''
+                  }`
+                : `Live: ${formatSpeed(estateTrafficBytes())}`}
+            </span>
           </button>
+        </Show>
+        <Show
+          when={
+            liveModel().liveSamplesExpired &&
+            liveModel().latestSampleAtMs !== undefined &&
+            estateTrafficBytes() < MAP_TRAFFIC_ACTIVE_BYTES &&
+            topActiveMover() === null
+          }
+        >
+          <span
+            data-testid="infrastructure-map-stale-samples"
+            title="Live traffic indicators are paused because the latest telemetry sample is older than 2 minutes."
+            class="inline-flex items-center gap-1.5 rounded-full border border-border bg-surface-alt px-2.5 py-0.5 text-xs font-medium whitespace-nowrap text-muted tabular-nums"
+          >
+            <ActivityIcon class="h-3.5 w-3.5 shrink-0 opacity-60" aria-hidden="true" />
+            <span>
+              Last sample {formatSampleAge(liveModel().latestSampleAtMs!, freshnessNowMs())}
+            </span>
+          </span>
         </Show>
         <Show when={exposedCount() > 0}>
           <button
@@ -1371,7 +1570,7 @@ export function InfrastructureMapSurface() {
               class="gap-1.5"
               aria-pressed={liveTraffic()}
               data-testid="infrastructure-map-live-traffic"
-              title="Highlight live network traffic on active tiles, networks, and connectors"
+              title="Show live network and disk activity on active workloads and network connectors."
               onClick={() => setLiveTraffic((active) => !active)}
             >
               <ActivityIcon class="h-3.5 w-3.5" aria-hidden="true" />
@@ -1383,7 +1582,7 @@ export function InfrastructureMapSurface() {
               class="gap-1.5"
               aria-pressed={namesHidden()}
               title="Replace every name with what the thing is, so the image is safe to post"
-              onClick={() => setNamesHidden((hidden) => !hidden)}
+              onClick={toggleNamesHidden}
             >
               <EyeOffIcon class="h-3.5 w-3.5" aria-hidden="true" />
               Hide names
@@ -1638,27 +1837,33 @@ export function InfrastructureMapSurface() {
             />
             Off
           </li>
-          <Show when={liveTraffic()}>
+          <Show when={liveTraffic() && !model().liveSamplesExpired}>
             <li
               class="inline-flex items-center gap-1.5"
               data-testid="infrastructure-map-legend-traffic"
+              title="Blue glow, line width, and moving packets scale with live transfer rate on active network links"
             >
-              <span
-                class="inline-block w-4 shrink-0 border-t-2 border-dashed border-blue-600 dark:border-blue-400"
-                aria-hidden="true"
-              />
-              Active traffic
+              <span class="inline-flex items-center gap-1" aria-hidden="true">
+                <span class="inline-block w-3 shrink-0 border-t-[1.5px] border-dashed border-blue-600/50 dark:border-blue-400/50" />
+                <span class="text-[10px]">→</span>
+                <span class="inline-flex items-center">
+                  <span class="inline-block h-[3px] w-3.5 rounded-full bg-blue-600/85 dark:bg-blue-400/90" />
+                  <span class="-ml-1.5 inline-block h-2 w-2 rounded-full bg-blue-600 ring-2 ring-blue-500/35 dark:bg-blue-300 dark:ring-blue-400/40" />
+                </span>
+              </span>
+              Live flow: light → heavy
             </li>
           </Show>
           <Show when={activeDiagram()?.hasLinkSpeeds}>
             <li
               class="inline-flex items-center gap-1.5"
               data-testid="infrastructure-map-legend-speed"
+              title="Base connector line width reflects reported physical NIC speed"
             >
               <span class="inline-flex items-center gap-1" aria-hidden="true">
-                <span class="inline-block h-[3px] w-3.5 rounded-full bg-blue-600 dark:bg-blue-400" />
+                <span class="inline-block h-[3px] w-3.5 rounded-full bg-slate-400 dark:bg-slate-500" />
                 <span class="text-[10px]">10G</span>
-                <span class="inline-block h-[1.5px] w-3.5 rounded-full bg-blue-600 dark:bg-blue-400" />
+                <span class="inline-block h-[1.5px] w-3.5 rounded-full bg-slate-400 dark:bg-slate-500" />
                 <span class="text-[10px]">1G</span>
               </span>
               Link speed
@@ -1694,7 +1899,7 @@ export function InfrastructureMapSurface() {
         direction={tooltipDirection()}
       >
         <Show
-          when={hover()}
+          when={hoveredHit()}
           fallback={
             <Show when={hoveredNetworkInfo()}>
               {(network) => (

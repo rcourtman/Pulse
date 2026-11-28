@@ -206,6 +206,100 @@ const ARROW_HALF_WIDTH = 3.5;
 /** Live throughput threshold (5 MB/s) at which active connectors emit a soft outer glow. */
 export const MAP_FLOW_GLOW_MIN_BYTES = 5 * 1024 * 1024;
 
+export type MapFlowIntensity = 'trickle' | 'stream' | 'heavy' | 'massive';
+
+export interface MapFlowVisualProfile {
+  intensity: MapFlowIntensity;
+  flowWidth: number;
+  flowOpacity: number;
+  dashArray: string;
+  dashDuration: number;
+  glowExtraWidth: number;
+  glowOpacity: number;
+  packetCount: number;
+  packetRadius: number;
+  packetSpeedPxPerSec: number;
+}
+
+/**
+ * Resolves line width, glow, dash cadence, and traveling packet parameters from
+ * live bytes/sec so light background chatter stays quiet while heavy and massive
+ * transfers visibly thicken, brighten, and race along the path.
+ */
+export const resolveFlowVisualProfile = (
+  bytesPerSec?: number,
+  fallbackTier?: MapTrafficTier,
+): MapFlowVisualProfile => {
+  const bytes =
+    bytesPerSec !== undefined && Number.isFinite(bytesPerSec) && bytesPerSec > 0
+      ? bytesPerSec
+      : fallbackTier === 'high'
+        ? 30 * 1024 * 1024
+        : fallbackTier === 'medium'
+          ? 3 * 1024 * 1024
+          : 50 * 1024;
+
+  if (bytes >= 50 * 1024 * 1024) {
+    return {
+      intensity: 'massive',
+      flowWidth: 4.4,
+      flowOpacity: 1,
+      dashArray: '10 9',
+      dashDuration: 0.55,
+      glowExtraWidth: 6.5,
+      glowOpacity: 0.34,
+      packetCount: 3,
+      packetRadius: 3.9,
+      packetSpeedPxPerSec: 255,
+    };
+  }
+  if (bytes >= 10 * 1024 * 1024) {
+    return {
+      intensity: 'heavy',
+      flowWidth: 3.4,
+      flowOpacity: 0.94,
+      dashArray: '8 10',
+      dashDuration: 0.92,
+      glowExtraWidth: 4.8,
+      glowOpacity: 0.26,
+      packetCount: 2,
+      packetRadius: 3.2,
+      packetSpeedPxPerSec: 165,
+    };
+  }
+  if (bytes >= 512 * 1024) {
+    const t = Math.min(
+      1,
+      (Math.log10(bytes) - Math.log10(512 * 1024)) /
+        (Math.log10(10 * 1024 * 1024) - Math.log10(512 * 1024)),
+    );
+    return {
+      intensity: 'stream',
+      flowWidth: Number((2.2 + t * 0.6).toFixed(2)),
+      flowOpacity: Number((0.72 + t * 0.14).toFixed(2)),
+      dashArray: '6 11',
+      dashDuration: Number((2.1 - t * 0.65).toFixed(2)),
+      glowExtraWidth: bytes >= MAP_FLOW_GLOW_MIN_BYTES ? 3.4 : 0,
+      glowOpacity: bytes >= MAP_FLOW_GLOW_MIN_BYTES ? 0.2 : 0,
+      packetCount: bytes >= 2 * 1024 * 1024 ? 2 : 1,
+      packetRadius: Number((2.3 + t * 0.5).toFixed(2)),
+      packetSpeedPxPerSec: Math.round(62 + t * 48),
+    };
+  }
+  return {
+    intensity: 'trickle',
+    flowWidth: 1.5,
+    flowOpacity: 0.42,
+    dashArray: '3 14',
+    dashDuration: 3.6,
+    glowExtraWidth: 0,
+    glowOpacity: 0,
+    packetCount: 0,
+    packetRadius: 0,
+    packetSpeedPxPerSec: 0,
+  };
+};
+
 /** Maps live throughput (bytes/sec) smoothly onto a CSS dash animation duration in seconds. */
 export const flowDurationForBytes = (bytesPerSec?: number): number | undefined => {
   if (bytesPerSec === undefined || !Number.isFinite(bytesPerSec) || bytesPerSec < 10_000) {
@@ -213,6 +307,46 @@ export const flowDurationForBytes = (bytesPerSec?: number): number | undefined =
   }
   const normalized = Math.max(0, Math.min(1, (Math.log10(bytesPerSec) - 4) / 4));
   return Math.round((3.4 - normalized * 2.95) * 100) / 100;
+};
+
+const renderTravelingPackets = (
+  d: string,
+  pathLength: number,
+  colour: string,
+  coreColour: string,
+  profile: MapFlowVisualProfile,
+): string => {
+  if (profile.packetCount <= 0 || profile.packetSpeedPxPerSec <= 0 || pathLength < 24) {
+    return '';
+  }
+  // Cap packet density on short paths so dots stay cleanly separated.
+  const maxForLength = Math.max(1, Math.floor(pathLength / 55));
+  const count = Math.min(profile.packetCount, maxForLength);
+  const dur = Math.max(0.35, Math.min(5.5, pathLength / profile.packetSpeedPxPerSec));
+  const r = profile.packetRadius;
+  const haloR = r + 1.8;
+  const coreR = Math.max(1.1, r * 0.46);
+  const parts: string[] = [];
+  for (let i = 0; i < count; i += 1) {
+    const begin = -((i / count) * dur);
+    parts.push(
+      `<g class="pulse-map-packet pulse-map-packet-${profile.intensity}">` +
+        `<animateMotion path="${d}" dur="${n(dur)}s" begin="${n(begin)}s" repeatCount="indefinite"/>` +
+        `<circle r="${n(haloR)}" fill="${colour}" fill-opacity="0.28"/>` +
+        `<circle r="${n(r)}" fill="${colour}" fill-opacity="0.96"/>` +
+        `<circle r="${n(coreR)}" fill="${coreColour}" fill-opacity="0.92"/>` +
+        `</g>`,
+    );
+  }
+  return parts.join('');
+};
+
+const polylineLength = (points: Array<[number, number]>): number => {
+  let total = 0;
+  for (let i = 1; i < points.length; i += 1) {
+    total += Math.hypot(points[i][0] - points[i - 1][0], points[i][1] - points[i - 1][1]);
+  }
+  return total;
 };
 
 const ACTIVITY_FILL_OPACITY: Record<MapTrafficTier, string> = {
@@ -238,26 +372,32 @@ const lineToSvg = (
     .map(([x, y], index) => `${index === 0 ? 'M' : 'L'}${n(x)} ${n(y)}`)
     .join('');
   const strokeWidth = node.strokeWidth ?? 1.5;
-  const flowWidth = Math.max(2, strokeWidth + 0.5);
+  const profile =
+    live && node.activity && !node.dashed
+      ? resolveFlowVisualProfile(node.flowBytes, node.activity)
+      : undefined;
+  const flowWidth = profile ? Math.max(strokeWidth + 0.25, profile.flowWidth) : strokeWidth;
   const duration = flowDurationForBytes(node.flowBytes);
   const glow =
-    live &&
-    node.activity &&
-    !node.dashed &&
-    node.flowBytes !== undefined &&
-    node.flowBytes >= MAP_FLOW_GLOW_MIN_BYTES
-      ? `<path d="${d}" fill="none" stroke="${colour}" stroke-width="${n(flowWidth + 3)}" stroke-opacity="0.22" stroke-linecap="round" stroke-linejoin="round" class="pulse-map-flow-glow"/>`
+    profile && profile.glowExtraWidth > 0
+      ? `<path d="${d}" fill="none" stroke="${colour}" stroke-width="${n(flowWidth + profile.glowExtraWidth)}" stroke-opacity="${n(profile.glowOpacity)}" stroke-linecap="round" stroke-linejoin="round" class="pulse-map-flow-glow"/>`
       : '';
-  const path = `<path d="${d}" fill="none" stroke="${colour}" stroke-width="${n(strokeWidth)}" stroke-linejoin="round"${
+  const pathWidth =
+    profile && node.bidirectional
+      ? Math.max(strokeWidth, Math.min(flowWidth, strokeWidth + 1.5))
+      : strokeWidth;
+  const path = `<path d="${d}" fill="none" stroke="${colour}" stroke-width="${n(pathWidth)}" stroke-linejoin="round"${
     node.dashed ? ' stroke-dasharray="5 4"' : ''
   }/>`;
   const flow =
-    live && node.activity && !node.dashed
-      ? `<path d="${d}" fill="none" stroke="${colour}" stroke-width="${n(flowWidth)}" stroke-dasharray="5 10" stroke-linecap="round" stroke-linejoin="round" class="pulse-map-flow pulse-map-flow-${node.activity}"${
-          duration !== undefined ? ` style="animation-duration:${n(duration)}s"` : ''
-        }/>`
+    profile && node.activity && !node.bidirectional
+      ? `<path d="${d}" fill="none" stroke="${colour}" stroke-width="${n(flowWidth)}" stroke-opacity="${n(profile.flowOpacity)}" stroke-dasharray="${profile.dashArray}" stroke-linecap="round" stroke-linejoin="round" class="pulse-map-flow pulse-map-flow-${node.activity} pulse-map-flow-${profile.intensity}" style="animation-duration:${n(duration ?? profile.dashDuration)}s"/>`
       : '';
-  if (!node.arrow) return glow + path + flow;
+  const packets =
+    profile && !node.bidirectional
+      ? renderTravelingPackets(d, polylineLength(node.points), colour, palette.surface, profile)
+      : '';
+  if (!node.arrow) return glow + path + flow + packets;
   const [tipX, tipY] = node.points[node.points.length - 1];
   const [fromX, fromY] = node.points[node.points.length - 2];
   const length = Math.hypot(tipX - fromX, tipY - fromY) || 1;
@@ -266,7 +406,7 @@ const lineToSvg = (
   const baseX = tipX - ux * ARROW_LENGTH;
   const baseY = tipY - uy * ARROW_LENGTH;
   const head = `<path d="M${n(tipX)} ${n(tipY)}L${n(baseX - uy * ARROW_HALF_WIDTH)} ${n(baseY + ux * ARROW_HALF_WIDTH)}L${n(baseX + uy * ARROW_HALF_WIDTH)} ${n(baseY - ux * ARROW_HALF_WIDTH)}z" fill="${colour}"/>`;
-  return glow + path + flow + head;
+  return glow + path + flow + packets + head;
 };
 
 const nodeToSvg = (node: SceneNode, palette: MapPalette, live: boolean): string => {
@@ -280,11 +420,14 @@ const nodeToSvg = (node: SceneNode, palette: MapPalette, live: boolean): string 
             node.stroke ? ` stroke="${palette[node.stroke]}"` : ''
           }${node.dashed ? ' stroke-dasharray="4 3"' : ''}/>`;
         }
-        const fillOpacity = node.spike ? '0.18' : ACTIVITY_FILL_OPACITY[node.activity];
-        const strokeOpacity = node.spike ? '0.92' : ACTIVITY_STROKE_OPACITY[node.activity];
-        const strokeW = node.spike ? '1.75' : '1.25';
+        const fillOpacity = node.spike ? '0.22' : ACTIVITY_FILL_OPACITY[node.activity];
+        const strokeOpacity = node.spike ? '0.96' : ACTIVITY_STROKE_OPACITY[node.activity];
+        const strokeW = node.spike ? '2' : '1.25';
         const spikeClass = node.spike ? ' pulse-map-spike' : '';
-        return `<rect x="${n(node.x)}" y="${n(node.y)}" width="${n(node.w)}" height="${n(node.h)}" rx="${n(node.r)}" fill="${palette.accent}" fill-opacity="${fillOpacity}" stroke="${palette.accent}" stroke-opacity="${strokeOpacity}" stroke-width="${strokeW}" class="pulse-map-active pulse-map-active-${node.activity}${spikeClass}"${attr}/>`;
+        const halo = node.spike
+          ? `<rect x="${n(node.x - 1.5)}" y="${n(node.y - 1.5)}" width="${n(node.w + 3)}" height="${n(node.h + 3)}" rx="${n(node.r + 1.5)}" fill="none" stroke="${palette.accent}" stroke-opacity="0.34" stroke-width="3" class="pulse-map-spike-halo"/>`
+          : '';
+        return `${halo}<rect x="${n(node.x)}" y="${n(node.y)}" width="${n(node.w)}" height="${n(node.h)}" rx="${n(node.r)}" fill="${palette.accent}" fill-opacity="${fillOpacity}" stroke="${palette.accent}" stroke-opacity="${strokeOpacity}" stroke-width="${strokeW}" class="pulse-map-active pulse-map-active-${node.activity}${spikeClass}"${attr}/>`;
       }
       return `<rect x="${n(node.x)}" y="${n(node.y)}" width="${n(node.w)}" height="${n(node.h)}" rx="${n(node.r)}" fill="${palette[node.fill]}"${
         node.opacity !== undefined ? ` fill-opacity="${n(node.opacity)}"` : ''
@@ -408,16 +551,13 @@ type HitSceneNode = Extract<SceneNode, { kind: 'hit' }>;
 
 /**
  * A ring round every tile that a connection joins to the given one, paired with
- * curved arcs from the hovered or focused tile to its linked peers (capped at
- * MAP_MAX_LINK_ARCS so busy hosts stay legible). Shown only interactively while
- * a tile is pointed at or focused, never in static exports.
+ * static curved arcs from the hovered or focused tile to its linked peers
+ * (capped at MAP_MAX_LINK_ARCS so busy hosts stay legible). Configured
+ * relationships are always drawn as static lines because per-edge throughput is
+ * not measured separately from each resource's own counters. Shown only
+ * interactively while a tile is pointed at or focused, never in static exports.
  */
-export function renderMapLinkRings(
-  scene: MapScene,
-  of: MapHit,
-  palette: MapPalette,
-  options?: { liveTraffic?: boolean },
-): string {
+export function renderMapLinkRings(scene: MapScene, of: MapHit, palette: MapPalette): string {
   const linked = new Set(of.linked ?? []);
   if (linked.size === 0) return '';
   let source: HitSceneNode | undefined;
@@ -429,7 +569,6 @@ export function renderMapLinkRings(
   }
   if (targets.length === 0) return '';
 
-  const liveTraffic = Boolean(options?.liveTraffic);
   const halos: string[] = [];
   const arcs: string[] = [];
   const dots: string[] = [];
@@ -468,11 +607,6 @@ export function renderMapLinkRings(
       arcs.push(
         `<path d="${d}" fill="none" stroke="${palette.accent}" stroke-width="1.5" stroke-opacity="0.65" class="pulse-map-link-arc"/>`,
       );
-      if (liveTraffic) {
-        arcs.push(
-          `<path d="${d}" fill="none" stroke="${palette.accent}" stroke-width="2" stroke-dasharray="4 10" stroke-linecap="round" class="pulse-map-link-flow"/>`,
-        );
-      }
       dots.push(
         `<circle cx="${n(tx)}" cy="${n(ty)}" r="2.5" fill="${palette.accent}" fill-opacity="0.85"/>`,
       );

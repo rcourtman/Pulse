@@ -5337,6 +5337,273 @@ func TestMergeMetric_FreshHigherPriorityStillWins(t *testing.T) {
 	}
 }
 
+func TestMergeMetrics_TracksRateObservedAtAcrossHeartbeatsAndPresentationCoalesce(t *testing.T) {
+	now := time.Now().UTC().Truncate(time.Second)
+	oldTime := now.Add(-10 * time.Minute)
+
+	// Case 1: Same-source CPU-only heartbeat retains Net/Disk values with their original old ObservedAt,
+	// never advancing per-direction observedAt timestamps to the newer heartbeat timestamp.
+	sameSourceExisting := &ResourceMetrics{
+		CPU:      &MetricValue{Value: 12, Percent: 12, Source: SourceAgent},
+		NetIn:    &MetricValue{Value: 40_000_000, Unit: "bytes/s", Source: SourceAgent, ObservedAt: oldTime},
+		NetOut:   &MetricValue{Value: 2_000_000, Unit: "bytes/s", Source: SourceAgent, ObservedAt: oldTime},
+		DiskRead: &MetricValue{Value: 16_000_000, Unit: "bytes/s", Source: SourceAgent, ObservedAt: oldTime},
+	}
+	sameStatus := map[DataSource]SourceStatus{
+		SourceAgent: {Status: "online", LastSeen: now},
+	}
+	gotSame := mergeMetrics(&Resource{Type: ResourceTypeAgent}, sameSourceExisting, &ResourceMetrics{
+		CPU: &MetricValue{Value: 18, Percent: 18, Source: SourceAgent},
+	}, SourceAgent, now, sameStatus, nil)
+	if gotSame.NetInObservedAt == nil || !gotSame.NetInObservedAt.Equal(oldTime) {
+		t.Fatalf("expected NetInObservedAt=%v to stay pinned on CPU-only heartbeat, got %+v", oldTime, gotSame.NetInObservedAt)
+	}
+	if gotSame.NetOutObservedAt == nil || !gotSame.NetOutObservedAt.Equal(oldTime) {
+		t.Fatalf("expected NetOutObservedAt=%v to stay pinned on CPU-only heartbeat, got %+v", oldTime, gotSame.NetOutObservedAt)
+	}
+	if gotSame.DiskReadObservedAt == nil || !gotSame.DiskReadObservedAt.Equal(oldTime) {
+		t.Fatalf("expected DiskReadObservedAt=%v to stay pinned on CPU-only heartbeat, got %+v", oldTime, gotSame.DiskReadObservedAt)
+	}
+
+	// Case 2: A fresh TX/Write sample does NOT revive expired RX/Read timestamps.
+	gotSplitDir := mergeMetrics(&Resource{Type: ResourceTypeAgent}, &ResourceMetrics{
+		NetIn:    &MetricValue{Value: 80_000_000, Unit: "bytes/s", Source: SourceAgent, ObservedAt: oldTime},
+		DiskRead: &MetricValue{Value: 50_000_000, Unit: "bytes/s", Source: SourceAgent, ObservedAt: oldTime},
+	}, &ResourceMetrics{
+		NetOut:    &MetricValue{Value: 2_048, Unit: "bytes/s", Source: SourceAgent, ObservedAt: now},
+		DiskWrite: &MetricValue{Value: 4_096, Unit: "bytes/s", Source: SourceAgent, ObservedAt: now},
+	}, SourceAgent, now, sameStatus, nil)
+	if gotSplitDir.NetInObservedAt == nil || !gotSplitDir.NetInObservedAt.Equal(oldTime) {
+		t.Fatalf("expected expired NetInObservedAt=%v to remain expired when TX is fresh, got %+v", oldTime, gotSplitDir.NetInObservedAt)
+	}
+	if gotSplitDir.NetOutObservedAt == nil || !gotSplitDir.NetOutObservedAt.Equal(now) {
+		t.Fatalf("expected fresh NetOutObservedAt=%v, got %+v", now, gotSplitDir.NetOutObservedAt)
+	}
+	if gotSplitDir.DiskReadObservedAt == nil || !gotSplitDir.DiskReadObservedAt.Equal(oldTime) {
+		t.Fatalf("expected expired DiskReadObservedAt=%v to remain expired when Write is fresh, got %+v", oldTime, gotSplitDir.DiskReadObservedAt)
+	}
+	if gotSplitDir.DiskWriteObservedAt == nil || !gotSplitDir.DiskWriteObservedAt.Equal(now) {
+		t.Fatalf("expected fresh DiskWriteObservedAt=%v, got %+v", now, gotSplitDir.DiskWriteObservedAt)
+	}
+
+	// Case 3: Incoming rate with explicit expired ObservedAt preserves that exact ObservedAt.
+	gotExpiredObserved := mergeMetrics(&Resource{Type: ResourceTypeAgent}, &ResourceMetrics{
+		CPU: &MetricValue{Value: 15, Percent: 15, Source: SourceAgent},
+	}, &ResourceMetrics{
+		NetOut: &MetricValue{Value: 40_000_000, Unit: "bytes/s", Source: SourceAgent, ObservedAt: oldTime},
+	}, SourceAgent, now, sameStatus, nil)
+	if gotExpiredObserved.NetOutObservedAt == nil || !gotExpiredObserved.NetOutObservedAt.Equal(oldTime) {
+		t.Fatalf("expected explicit expired ObservedAt=%v on NetOutObservedAt, got %+v", oldTime, gotExpiredObserved.NetOutObservedAt)
+	}
+
+	// Case 4: IngestSnapshot with current Proxmox node + 10m-stale linked agent carries the agent's 10m-old
+	// NetOutObservedAt and DiskWriteObservedAt even though the merged host's LastSeen is now.
+	reg := NewRegistry(NewMemoryStore())
+	reg.IngestSnapshot(models.StateSnapshot{
+		Nodes: []models.Node{{
+			ID:            "pve-node-1",
+			Name:          "pve-node-1",
+			Instance:      "pve-inst",
+			Status:        "online",
+			CPU:           0.2,
+			LastSeen:      now,
+			LinkedAgentID: "agent-host-1",
+		}},
+		Hosts: []models.Host{{
+			ID:            "agent-host-1",
+			Hostname:      "pve-node-1",
+			Status:        "online",
+			LastSeen:      oldTime,
+			LinkedNodeID:  "pve-node-1",
+			NetOutRate:    40 * 1024 * 1024,
+			DiskWriteRate: 8 * 1024 * 1024,
+		}},
+	})
+	presentation := reg.ListForPresentation()
+	if len(presentation) != 1 {
+		t.Fatalf("expected 1 merged host in presentation, got %d", len(presentation))
+	}
+	if presentation[0].Metrics == nil || presentation[0].Metrics.NetOutObservedAt == nil || !presentation[0].Metrics.NetOutObservedAt.Equal(oldTime) {
+		t.Fatalf("expected NetOutObservedAt=%v from stale linked agent, got %+v", oldTime, presentation[0].Metrics)
+	}
+	if presentation[0].Metrics.DiskWriteObservedAt == nil || !presentation[0].Metrics.DiskWriteObservedAt.Equal(oldTime) {
+		t.Fatalf("expected DiskWriteObservedAt=%v from stale linked agent, got %+v", oldTime, presentation[0].Metrics)
+	}
+
+	// Case 5: Presentation coalesce of separate stale agent + fresh Proxmox rows keeps per-rate ObservedAt pinned to the agent's old sighting.
+	coalesced := mergePresentationHostResources(
+		Resource{
+			ID:       "host:agent-1",
+			Type:     ResourceTypeAgent,
+			Sources:  []DataSource{SourceAgent},
+			LastSeen: oldTime,
+			SourceStatus: map[DataSource]SourceStatus{
+				SourceAgent: {Status: "stale", LastSeen: oldTime},
+			},
+			Metrics: &ResourceMetrics{
+				NetOut: &MetricValue{Value: 40 * 1024 * 1024, Unit: "bytes/s", Source: SourceAgent},
+			},
+		},
+		Resource{
+			ID:       "pve:node-1",
+			Type:     ResourceTypeAgent,
+			Sources:  []DataSource{SourceProxmox},
+			LastSeen: now,
+			SourceStatus: map[DataSource]SourceStatus{
+				SourceProxmox: {Status: "online", LastSeen: now},
+			},
+			Metrics: &ResourceMetrics{
+				CPU: &MetricValue{Value: 20, Percent: 20, Source: SourceProxmox},
+			},
+		},
+		nil,
+	)
+	if coalesced.Metrics == nil || coalesced.Metrics.NetOutObservedAt == nil || !coalesced.Metrics.NetOutObservedAt.Equal(oldTime) {
+		t.Fatalf("expected coalesced NetOutObservedAt=%v from stale agent row, got %+v", oldTime, coalesced.Metrics)
+	}
+
+	// Case 6: Docker status-only report carrying forward previous InventoryObservedAt does not refresh container or host rate timestamps.
+	dockerReg := NewRegistry(NewMemoryStore())
+	dockerReg.IngestSnapshot(models.StateSnapshot{
+		DockerHosts: []models.DockerHost{{
+			ID:                  "docker-host-1",
+			Hostname:            "dock-node",
+			Status:              "online",
+			LastSeen:            now,
+			InventoryObservedAt: oldTime,
+			NetInRate:           80_000_000,
+			Containers: []models.DockerContainer{{
+				ID:        "ctr-1",
+				Name:      "jellyfin",
+				State:     "running",
+				NetInRate: 80_000_000,
+			}},
+		}},
+	})
+	for _, r := range dockerReg.List() {
+		if r.Metrics == nil || r.Metrics.NetIn == nil {
+			continue
+		}
+		if r.Metrics.NetInObservedAt == nil || !r.Metrics.NetInObservedAt.Equal(oldTime) {
+			t.Fatalf("expected docker resource %s (%s) NetInObservedAt=%v, got %+v", r.Name, r.Type, oldTime, r.Metrics.NetInObservedAt)
+		}
+	}
+
+	// Case 7: Fresh Kubernetes cluster report with a 10m-stale linked host preserves the linked host's old NetInObservedAt on cluster & node.
+	k8sReg := NewRegistry(NewMemoryStore())
+	k8sReg.IngestSnapshot(models.StateSnapshot{
+		Hosts: []models.Host{{
+			ID:        "k8s-host-1",
+			Hostname:  "k8s-worker-1",
+			Status:    "online",
+			LastSeen:  oldTime,
+			NetInRate: 80_000_000,
+		}},
+		KubernetesClusters: []models.KubernetesCluster{{
+			ID:       "k8s-cluster-1",
+			Name:     "prod-k8s",
+			Status:   "online",
+			LastSeen: now,
+			Nodes: []models.KubernetesNode{{
+				UID:   "node-uid-1",
+				Name:  "k8s-worker-1",
+				Ready: true,
+			}},
+		}},
+	})
+	clusters := k8sReg.ListByType(ResourceTypeK8sCluster)
+	if len(clusters) != 1 || clusters[0].Metrics == nil || clusters[0].Metrics.NetInObservedAt == nil || !clusters[0].Metrics.NetInObservedAt.Equal(oldTime) {
+		t.Fatalf("expected k8s cluster NetInObservedAt=%v from stale linked host, got %+v", oldTime, clusters)
+	}
+
+	// Case 8: JSON serialization -> IngestResources rehydration -> fresh CPU-only update preserves NetInObservedAt.
+	srcReg := NewRegistry(NewMemoryStore())
+	srcReg.IngestSnapshot(models.StateSnapshot{
+		Hosts: []models.Host{{
+			ID:        "rehydrate-host-1",
+			Hostname:  "rehydrate-host",
+			Status:    "online",
+			LastSeen:  oldTime,
+			NetInRate: 80_000_000,
+		}},
+	})
+	rawJSON, err := json.Marshal(srcReg.List())
+	if err != nil {
+		t.Fatalf("marshal: %v", err)
+	}
+	var rehydratedRows []Resource
+	if err := json.Unmarshal(rawJSON, &rehydratedRows); err != nil {
+		t.Fatalf("unmarshal: %v", err)
+	}
+	reReg := NewRegistry(NewMemoryStore())
+	reReg.IngestResources(rehydratedRows)
+	reReg.IngestSnapshot(models.StateSnapshot{
+		Hosts: []models.Host{{
+			ID:       "rehydrate-host-1",
+			Hostname: "rehydrate-host",
+			Status:   "online",
+			LastSeen: now,
+			CPUUsage: 25,
+		}},
+	})
+	reHosts := reReg.ListByType(ResourceTypeAgent)
+	if len(reHosts) != 1 || reHosts[0].Metrics == nil || reHosts[0].Metrics.NetInObservedAt == nil || !reHosts[0].Metrics.NetInObservedAt.Equal(oldTime) {
+		t.Fatalf("expected rehydrated host NetInObservedAt=%v after CPU-only heartbeat, got %+v", oldTime, reHosts)
+	}
+
+	// Case 9: Merge-excluded Docker host sharing a MachineID stamps initial rate observations so a later rate-free heartbeat preserves old NetInObservedAt.
+	probeReg := NewRegistry(NewMemoryStore())
+	probeReg.IngestSnapshot(models.StateSnapshot{
+		Hosts: []models.Host{{
+			ID:        "agent-shared-1",
+			MachineID: "shared-machine-id",
+			Hostname:  "shared-host",
+			Status:    "online",
+			LastSeen:  oldTime,
+		}},
+	})
+	existingHostID := probeReg.ListByType(ResourceTypeAgent)[0].ID
+	dockerCandID := SourceSpecificID(ResourceTypeAgent, SourceDocker, "docker-shared-1")
+	exclStore := NewMemoryStore()
+	if err := exclStore.AddExclusion(ResourceExclusion{ResourceA: existingHostID, ResourceB: dockerCandID}); err != nil {
+		t.Fatalf("add exclusion: %v", err)
+	}
+	exclReg := NewRegistry(exclStore)
+	exclReg.IngestSnapshot(models.StateSnapshot{
+		Hosts: []models.Host{{
+			ID:        "agent-shared-1",
+			MachineID: "shared-machine-id",
+			Hostname:  "shared-host",
+			Status:    "online",
+			LastSeen:  oldTime,
+		}},
+	})
+	exclReg.IngestSnapshot(models.StateSnapshot{
+		DockerHosts: []models.DockerHost{{
+			ID:        "docker-shared-1",
+			MachineID: "shared-machine-id",
+			Hostname:  "shared-host",
+			Status:    "online",
+			LastSeen:  oldTime,
+			NetInRate: 80_000_000,
+		}},
+	})
+	exclReg.IngestSnapshot(models.StateSnapshot{
+		DockerHosts: []models.DockerHost{{
+			ID:        "docker-shared-1",
+			MachineID: "shared-machine-id",
+			Hostname:  "shared-host",
+			Status:    "online",
+			LastSeen:  now,
+			CPUUsage:  14,
+		}},
+	})
+	gotDocker, ok := exclReg.Get(dockerCandID)
+	if !ok || gotDocker.Metrics == nil || gotDocker.Metrics.NetInObservedAt == nil || !gotDocker.Metrics.NetInObservedAt.Equal(oldTime) {
+		t.Fatalf("expected excluded docker host NetInObservedAt=%v after rate-free heartbeat, got ok=%v res=%+v", oldTime, ok, gotDocker)
+	}
+}
+
 // Issue #1597: an agent inside an LXC measures through the shared kernel and
 // reports the node's CPU, not the container's. On a hypervisor-managed guest
 // the platform metric must survive an agent merge even though the agent

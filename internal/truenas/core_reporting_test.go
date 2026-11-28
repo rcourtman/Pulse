@@ -674,3 +674,73 @@ func TestCOREHistoryWindowKeepsFirstCompatibilityGraph(t *testing.T) {
 		t.Fatalf("legitimate sibling lost its paired read and observed zero write: %+v", history)
 	}
 }
+
+func TestCOREMixedAgeReportingGraphPreservesPerDirectionRateObservedAt(t *testing.T) {
+	nowAt := time.Unix(1789000180, 0).UTC()
+	oldAt := nowAt.Add(-120 * time.Second)
+	responses := []trueNASReportingGetDataResponse{
+		{
+			Name:       "interface",
+			Identifier: "ix0",
+			Legend:     []string{"time", "received", "sent"},
+			Start:      oldAt.Unix(),
+			End:        nowAt.Unix(),
+			Step:       60,
+			Data: []any{
+				[]any{float64(oldAt.Unix()), 80_000_000., nil},
+				[]any{float64(oldAt.Add(60 * time.Second).Unix()), nil, nil},
+				[]any{float64(nowAt.Unix()), nil, 2_048.},
+			},
+		},
+		{
+			Name:       "disk",
+			Identifier: "ada0",
+			Legend:     []string{"time", "disk_octets_read", "disk_octets_write"},
+			Start:      oldAt.Unix(),
+			End:        nowAt.Unix(),
+			Step:       60,
+			Data: []any{
+				[]any{float64(oldAt.Unix()), 50_000_000., nil},
+				[]any{float64(oldAt.Add(60 * time.Second).Unix()), nil, nil},
+				[]any{float64(nowAt.Unix()), nil, 4_096.},
+			},
+		},
+	}
+
+	history := parseSystemMetricHistory(responses)
+	if history == nil {
+		t.Fatal("expected parsed TrueNAS CORE metric history")
+	}
+	telemetry := systemInfoFromMetricHistory(history)
+	system := SystemInfo{
+		Hostname:  "truenas-core",
+		MachineID: "truenas-core-mid",
+		Healthy:   true,
+	}
+	mergeSystemTelemetry(&system, telemetry)
+
+	records := truenasRecordsFromSnapshot(&FixtureSnapshot{
+		CollectedAt: nowAt,
+		System:      system,
+	}, "truenas-conn-1", func() time.Time { return nowAt })
+
+	reg := unifiedresources.NewRegistry(unifiedresources.NewMemoryStore())
+	reg.IngestRecords(unifiedresources.SourceTrueNAS, records)
+	hosts := reg.ListByType(unifiedresources.ResourceTypeAgent)
+	if len(hosts) != 1 || hosts[0].Metrics == nil {
+		t.Fatalf("expected 1 TrueNAS host resource with metrics, got %+v", hosts)
+	}
+	m := hosts[0].Metrics
+	if m.NetInObservedAt == nil || !m.NetInObservedAt.Equal(oldAt) {
+		t.Fatalf("expected NetInObservedAt=%v, got %+v", oldAt, m.NetInObservedAt)
+	}
+	if m.NetOutObservedAt == nil || !m.NetOutObservedAt.Equal(nowAt) {
+		t.Fatalf("expected NetOutObservedAt=%v, got %+v", nowAt, m.NetOutObservedAt)
+	}
+	if m.DiskReadObservedAt == nil || !m.DiskReadObservedAt.Equal(oldAt) {
+		t.Fatalf("expected DiskReadObservedAt=%v, got %+v", oldAt, m.DiskReadObservedAt)
+	}
+	if m.DiskWriteObservedAt == nil || !m.DiskWriteObservedAt.Equal(nowAt) {
+		t.Fatalf("expected DiskWriteObservedAt=%v, got %+v", nowAt, m.DiskWriteObservedAt)
+	}
+}

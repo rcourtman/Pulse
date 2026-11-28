@@ -158,6 +158,10 @@ func cloneResourceMetrics(in *ResourceMetrics) *ResourceMetrics {
 	out.NetOut = cloneMetricValue(in.NetOut)
 	out.DiskRead = cloneMetricValue(in.DiskRead)
 	out.DiskWrite = cloneMetricValue(in.DiskWrite)
+	out.NetInObservedAt = cloneTimePtr(in.NetInObservedAt)
+	out.NetOutObservedAt = cloneTimePtr(in.NetOutObservedAt)
+	out.DiskReadObservedAt = cloneTimePtr(in.DiskReadObservedAt)
+	out.DiskWriteObservedAt = cloneTimePtr(in.DiskWriteObservedAt)
 	return &out
 }
 
