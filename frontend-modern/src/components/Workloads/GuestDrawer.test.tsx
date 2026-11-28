@@ -1294,6 +1294,36 @@ describe('GuestDrawer', () => {
       ));
       expect(screen.getByTestId('guest-drawer-facts')).not.toHaveTextContent('RAM');
     });
+
+    it('states only the disk size for a retained reading and omits it when unavailable', () => {
+      const GiB = 1024 ** 3;
+      solidRender(() => (
+        <GuestDrawer
+          guest={makeGuest({
+            type: 'qemu',
+            disk: { total: 100 * GiB, used: 25 * GiB, free: 75 * GiB, usage: 25 },
+            diskStatusReason: 'prev-vm-locked',
+          })}
+          onClose={vi.fn()}
+        />
+      ));
+      const retainedFacts = screen.getByTestId('guest-drawer-facts');
+      expect(retainedFacts).toHaveTextContent('100 GB disk');
+      expect(retainedFacts).not.toHaveTextContent(/of 100 GB disk/);
+
+      cleanup();
+      solidRender(() => (
+        <GuestDrawer
+          guest={makeGuest({
+            type: 'qemu',
+            disk: { total: 100 * GiB, used: 25 * GiB, free: 75 * GiB, usage: 25 },
+            diskStatusReason: 'agent-not-running',
+          })}
+          onClose={vi.fn()}
+        />
+      ));
+      expect(screen.getByTestId('guest-drawer-facts')).not.toHaveTextContent('disk');
+    });
   });
 
   // ── Tags card ──

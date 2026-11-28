@@ -408,19 +408,25 @@ export function GuestDrawerOverview(props: GuestDrawerOverviewProps) {
   };
   const diskFact = () => {
     const disk = props.guest.disk;
+    const hasReading =
+      typeof props.currentMetrics?.disk === 'number' ||
+      typeof props.deferredMetrics?.disk?.lastKnownValue === 'number';
     if (
       !disk ||
+      !hasReading ||
       typeof disk.total !== 'number' ||
       !Number.isFinite(disk.total) ||
-      disk.total <= 0 ||
-      typeof disk.used !== 'number' ||
-      !Number.isFinite(disk.used) ||
-      disk.used < 0 ||
-      typeof props.currentMetrics?.disk !== 'number'
+      disk.total <= 0
     ) {
       return '';
     }
-    return `${formatBytes(disk.used ?? 0)} of ${formatBytes(disk.total ?? 0)} disk`;
+    // A retained or stale reading is qualified in the chart; here it states
+    // the size only, so no used amount reads as current.
+    if (props.deferredMetrics?.disk) return `${formatBytes(disk.total)} disk`;
+    if (typeof disk.used !== 'number' || !Number.isFinite(disk.used) || disk.used < 0) {
+      return '';
+    }
+    return `${formatBytes(disk.used)} of ${formatBytes(disk.total)} disk`;
   };
   const chartAlerts = createMemo(() =>
     getDrawerChartAlerts(props.alerts, GUEST_DRAWER_CHARTED_METRICS),
