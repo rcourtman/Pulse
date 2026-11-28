@@ -2,7 +2,6 @@ package monitoring
 
 import (
 	stdErrors "errors"
-	"maps"
 	"strings"
 	"sync"
 	"time"
@@ -236,30 +235,30 @@ func (c *pollFreshnessCollector) Describe(ch chan<- *prometheus.Desc) {
 
 func (c *pollFreshnessCollector) Collect(ch chan<- prometheus.Metric) {
 	c.metrics.mu.RLock()
-	connections := copyPollFreshnessSamples(c.metrics.lastSuccessByKey)
-	nodes := copyPollFreshnessSamples(c.metrics.nodeLastSuccessByKey)
+	connections := copyPollMetricSamples(c.metrics.lastSuccessByKey)
+	nodes := copyPollMetricSamples(c.metrics.nodeLastSuccessByKey)
 	c.metrics.mu.RUnlock()
 
 	now := time.Now()
 	for _, sample := range connections {
-		emitPollFreshness(ch, c.connectionAge, c.connectionTime, now, sample.last, sample.key.instanceType, sample.key.instance)
+		emitPollFreshness(ch, c.connectionAge, c.connectionTime, now, sample.value, sample.key.instanceType, sample.key.instance)
 	}
 	for _, sample := range nodes {
-		emitPollFreshness(ch, c.nodeAge, c.nodeTime, now, sample.last, sample.key.instanceType, sample.key.instance, sample.key.node)
+		emitPollFreshness(ch, c.nodeAge, c.nodeTime, now, sample.value, sample.key.instanceType, sample.key.instance, sample.key.node)
 	}
 }
 
-type pollFreshnessSample[K comparable] struct {
-	key  K
-	last time.Time
+type pollMetricSample[K comparable, V any] struct {
+	key   K
+	value V
 }
 
 // Scrapes iterate the snapshot once and never look up a key. Copy just the
-// samples, without the hash tables, and keep emission outside the poll lock.
-func copyPollFreshnessSamples[K comparable](lastSuccess map[K]time.Time) []pollFreshnessSample[K] {
-	samples := make([]pollFreshnessSample[K], 0, len(lastSuccess))
-	for key, last := range lastSuccess {
-		samples = append(samples, pollFreshnessSample[K]{key: key, last: last})
+// samples, without the hash tables. Callers synchronize access to the map.
+func copyPollMetricSamples[K comparable, V any](values map[K]V) []pollMetricSample[K, V] {
+	samples := make([]pollMetricSample[K, V], 0, len(values))
+	for key, value := range values {
+		samples = append(samples, pollMetricSample[K, V]{key: key, value: value})
 	}
 	return samples
 }
@@ -331,13 +330,17 @@ func (c *pollBreakerCollector) Describe(ch chan<- *prometheus.Desc) {
 	ch <- c.retrySeconds
 }
 
-func (c *pollBreakerCollector) Collect(ch chan<- prometheus.Metric) {
+func (c *pollBreakerCollector) snapshot() []pollMetricSample[metricKey, breakerMetricObservation] {
 	c.mu.RLock()
-	observations := maps.Clone(c.observations)
-	c.mu.RUnlock()
+	defer c.mu.RUnlock()
+	return copyPollMetricSamples(c.observations)
+}
 
+func (c *pollBreakerCollector) Collect(ch chan<- prometheus.Metric) {
+	observations := c.snapshot()
 	now := time.Now()
-	for key, sample := range observations {
+	for _, observation := range observations {
+		key, sample := observation.key, observation.value
 		seconds := 0.0
 		if !sample.retryAt.IsZero() {
 			seconds = max(sample.retryAt.Sub(now).Seconds(), 0)

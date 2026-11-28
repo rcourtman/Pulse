@@ -12,7 +12,66 @@ import (
 
 	"github.com/prometheus/client_golang/prometheus"
 	"github.com/prometheus/client_golang/prometheus/promhttp"
+	dto "github.com/prometheus/client_model/go"
 )
+
+func TestSchedulerBreakerScrapeKeepsOneSnapshotWhilePollsComplete(t *testing.T) {
+	synctest.Test(t, func(t *testing.T) {
+		collector := newPollBreakerCollector()
+		key := makeMetricKey("pve", "fixture")
+		now := time.Now()
+		collector.record(key, breakerMetricObservation{state: 2, failures: 3, retryAt: now.Add(time.Minute)})
+
+		samples := make(chan prometheus.Metric)
+		go func() {
+			defer close(samples)
+			collector.Collect(samples)
+		}()
+		// The scraper is blocked emitting its first sample. The poll must
+		// be able to publish both updates before the reader resumes.
+		synctest.Wait()
+		written := make(chan struct{})
+		go func() {
+			collector.record(key, breakerMetricObservation{})
+			collector.record(makeMetricKey("pbs", "fixture"), breakerMetricObservation{state: 1})
+			close(written)
+		}()
+		synctest.Wait()
+		select {
+		case <-written:
+		default:
+			t.Error("slow metrics reader blocked poll completion")
+		}
+
+		want := map[*prometheus.Desc]float64{
+			collector.state: 2, collector.failures: 3, collector.retrySeconds: 60,
+		}
+		for sample := range samples {
+			expected, ok := want[sample.Desc()]
+			if !ok {
+				t.Errorf("unexpected or duplicate sample: %s", sample.Desc())
+				continue
+			}
+			delete(want, sample.Desc())
+			var metric dto.Metric
+			if err := sample.Write(&metric); err != nil {
+				t.Errorf("write sample: %v", err)
+				continue
+			}
+			labels := make(map[string]string)
+			for _, label := range metric.GetLabel() {
+				labels[label.GetName()] = label.GetValue()
+			}
+			if got := metric.GetGauge().GetValue(); got != expected || labels["instance_type"] != "pve" || labels["instance"] != "fixture" {
+				t.Errorf("old snapshot sample %s: got %v %v, want %v for pve/fixture", sample.Desc(), labels, got, expected)
+			}
+		}
+		<-written
+		if len(want) != 0 {
+			t.Errorf("missing %d samples from old snapshot", len(want))
+		}
+	})
+}
 
 func TestSchedulerBreakerRetryCountdownWithoutNewResults(t *testing.T) {
 	synctest.Test(t, func(t *testing.T) {
