@@ -144,5 +144,11 @@ func (m *Monitor) executeAndRescheduleTask(ctx context.Context, task ScheduledTa
 		return
 	}
 	m.executeScheduledTask(ctx, task)
+	// A retired poll keeps its claim and slot until the admitted read returns,
+	// but must not open another provider read to calculate a successor.
+	// completeClaim still owns any explicit replacement.
+	if ctx.Err() != nil || !m.taskQueue.canStartClaim(task) {
+		return
+	}
 	next, reschedule = m.nextScheduledPoll(task)
 }
