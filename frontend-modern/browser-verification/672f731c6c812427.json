@@ -1,0 +1,43 @@
+{
+  "version": 1,
+  "base_sha": "b363773edc651e0a3352b84b4b1d9c362a70846c",
+  "verified_at": "2026-11-28T15:03:56Z",
+  "result": "passed",
+  "changed_paths": [
+    "frontend-modern/src/features/actions/ActionDecisionPacket.tsx",
+    "frontend-modern/src/features/actions/ActionReviewDialog.tsx",
+    "frontend-modern/src/types/actionAudit.ts"
+  ],
+  "content_sha256": {
+    "frontend-modern/src/features/actions/ActionDecisionPacket.tsx": "0cffbb1812520343a51fc6cca44233533d74422fddd264ad9c0ee349556edda0",
+    "frontend-modern/src/features/actions/ActionReviewDialog.tsx": "e422ece72ad55cd6195ddb2cc942d7ab1cd2a265506123adc80845816f33d333",
+    "frontend-modern/src/types/actionAudit.ts": "dcaeb6e3a1a371d14c98ab2c70f41a073c5934e5283206298e6575c7d5731acc"
+  },
+  "routes": [
+    "/actions?action=act-live-gluetun",
+    "/actions/history?action=act-failed-gluetun"
+  ],
+  "viewports": [
+    {
+      "width": 1280,
+      "height": 800
+    },
+    {
+      "width": 390,
+      "height": 844
+    }
+  ],
+  "states": [
+    "Pending approval dialog before clicking Approve and run",
+    "Live running state with Running header badge, elapsed timer, and streaming terminal steps in dark mode (1280x800 and 390x844) and light mode (1280x800)",
+    "Completed action dialog with recorded Execution log collapsed by default and expanded on summary click",
+    "Failed action dialog with recorded Execution log expanded automatically on open"
+  ],
+  "interactions": [
+    "Clicked Approve and run to transition dialog immediately to live execution feed and poll /api/actions/{id} for progress steps",
+    "Verified zero horizontal overflow on live terminal feed and document across 1280x800 desktop and 390x844 mobile viewports",
+    "Switched dark and light themes to verify contrast and alignment",
+    "Clicked Execution log summary on completed action to reveal all 7 recorded steps",
+    "Pressed Escape to dismiss dialog cleanly and verified focus and detachment"
+  ]
+}

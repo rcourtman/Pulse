@@ -53,7 +53,7 @@ func (c *CommandClient) handleDockerContainerUpdate(ctx context.Context, conn *w
 	defer c.finishCancellableRequest(conn, payload.RequestID, state)
 	defer cancel()
 
-	result := c.runDockerContainerUpdate(operationCtx, payload)
+	result := c.runDockerContainerUpdateWithConn(operationCtx, conn, payload)
 	encoded, err := json.Marshal(result)
 	if err != nil {
 		return
@@ -66,6 +66,10 @@ func (c *CommandClient) handleDockerContainerUpdate(ctx context.Context, conn *w
 }
 
 func (c *CommandClient) runDockerContainerUpdate(ctx context.Context, payload agentexec.DockerContainerUpdatePayload) agentexec.DockerContainerUpdateResultPayload {
+	return c.runDockerContainerUpdateWithConn(ctx, nil, payload)
+}
+
+func (c *CommandClient) runDockerContainerUpdateWithConn(ctx context.Context, conn *websocket.Conn, payload agentexec.DockerContainerUpdatePayload) agentexec.DockerContainerUpdateResultPayload {
 	started := time.Now()
 	result := agentexec.DockerContainerUpdateResultPayload{
 		RequestID: payload.RequestID, ActionID: payload.ActionID, Operation: payload.Operation,
@@ -91,8 +95,14 @@ func (c *CommandClient) runDockerContainerUpdate(ctx context.Context, payload ag
 		return result
 	}
 	progress := func(step string) {
-		c.logger.Info().Str("request_id", payload.RequestID).Str("container_id", payload.ContainerID).Msg(strings.TrimSpace(step))
+		trimmed := strings.TrimSpace(step)
+		if trimmed == "" {
+			return
+		}
+		c.logger.Info().Str("request_id", payload.RequestID).Str("container_id", payload.ContainerID).Msg(trimmed)
+		c.sendActionProgress(conn, payload.RequestID, payload.ActionID, "", trimmed)
 	}
+	progress("Checking container state on host...")
 	var outcome agentexec.DockerContainerUpdateOutcome
 	var err error
 	if payload.Compose != nil {
@@ -102,6 +112,7 @@ func (c *CommandClient) runDockerContainerUpdate(ctx context.Context, payload ag
 			result.Error = "agent does not support registered Compose sources"
 			return result
 		}
+		progress("Applying Compose service update on host...")
 		outcome, err = updater.TypedComposeUpdate(ctx, payload)
 	} else {
 		outcome, err = c.dockerUpdater.TypedContainerUpdate(ctx, payload.Runtime, payload.ContainerID, payload.ExpectedImageDigest, progress)
@@ -166,6 +177,36 @@ func boundDockerUpdateError(message string) string {
 		message = message[:1024]
 	}
 	return message
+}
+
+func (c *CommandClient) sendActionProgress(conn *websocket.Conn, requestID, actionID, phase, message string) {
+	if conn == nil || strings.TrimSpace(requestID) == "" || strings.TrimSpace(actionID) == "" {
+		return
+	}
+	trimmed := strings.TrimSpace(message)
+	if trimmed == "" {
+		return
+	}
+	if len(trimmed) > 512 {
+		trimmed = trimmed[:512]
+	}
+	encoded, err := json.Marshal(agentexec.ActionProgressPayload{
+		RequestID: requestID,
+		ActionID:  actionID,
+		Phase:     strings.TrimSpace(phase),
+		Message:   trimmed,
+		Timestamp: time.Now().UTC(),
+	})
+	if err != nil {
+		return
+	}
+	msg := wsMessage{Type: msgTypeActionProgress, ID: requestID, Timestamp: time.Now().UTC(), Payload: encoded}
+	c.connMu.Lock()
+	err = conn.WriteJSON(msg)
+	c.connMu.Unlock()
+	if err != nil {
+		c.logger.Debug().Err(err).Str("request_id", requestID).Msg("Failed to send action progress")
+	}
 }
 
 func (c *CommandClient) sendDockerContainerUpdateResult(conn *websocket.Conn, result agentexec.DockerContainerUpdateResultPayload) {

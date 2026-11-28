@@ -36,6 +36,7 @@ type ResourceHandlers struct {
 	actionRefreshPlanner      actionlifecycle.RefreshPlanner
 	operatorStateChanged      func(orgID, resourceID string)
 	operatorStateRemediation  func(*http.Request) bool
+	actionProgress            *actionProgressStore
 }
 
 type SupplementalRecordsProvider = resourceapi.SupplementalRecordsProvider

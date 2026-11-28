@@ -126,8 +126,30 @@ type actionDetailResponse struct {
 	Events    []unified.ActionLifecycleEvent  `json:"events"`
 	Attempt   *unified.ActionDispatchAttempt  `json:"attempt,omitempty"`
 	Receipt   *unified.ActionDispatchReceipt  `json:"receipt,omitempty"`
+	Progress  []ActionProgressEntry           `json:"progress,omitempty"`
 	Readiness actionlifecycle.ActionReadiness `json:"readiness"`
 	ReadOnly  bool                            `json:"readOnly"`
+}
+
+func (h *ResourceHandlers) SetActionProgressStore(store *actionProgressStore) {
+	if h == nil {
+		return
+	}
+	h.actionProgress = store
+}
+
+func (h *ResourceHandlers) recordActionProgress(orgID, actionID, source, phase, message string, at time.Time) {
+	if h == nil || h.actionProgress == nil {
+		return
+	}
+	h.actionProgress.Record(orgID, actionID, source, phase, message, at)
+}
+
+func (h *ResourceHandlers) actionProgressEntries(orgID, actionID string) []ActionProgressEntry {
+	if h == nil || h.actionProgress == nil {
+		return nil
+	}
+	return h.actionProgress.List(orgID, actionID)
 }
 
 // ActionLifecycle returns the shared transport-independent action lifecycle
@@ -379,6 +401,7 @@ func (h *ResourceHandlers) HandleGetAction(w http.ResponseWriter, r *http.Reques
 		Events:    detail.Events,
 		Attempt:   detail.Attempt,
 		Receipt:   detail.Receipt,
+		Progress:  h.actionProgressEntries(orgID, detail.Audit.ID),
 		Readiness: h.ActionLifecycle().AssessCurrentReadiness(r.Context(), orgID, detail.Audit, viewer),
 	}); err != nil {
 		writeJSONError(w, http.StatusInternalServerError, agentcapabilities.AgentErrCodeActionDetailEncodeFailed, "Failed to encode action detail")
@@ -739,12 +762,19 @@ func (h *ResourceHandlers) HandleExecuteAction(w http.ResponseWriter, r *http.Re
 	// finish, and a cancelled request context would abandon the committed
 	// dispatch mid-flight and strand the action in executing. The transport
 	// wait stays bounded by the per-operation timeout and server shutdown.
+	h.recordActionProgress(orgID, actionID, "server", "dispatch", "Starting governed action execution...", time.Now().UTC())
 	completed, err := h.ActionLifecycle().Execute(context.WithoutCancel(withLiveActionCredential(h.cfg, r)), orgID, actionID, actor, execution.Reason)
 	if err != nil {
+		h.recordActionProgress(orgID, actionID, "server", "complete", "Action execution did not complete.", time.Now().UTC())
 		writeActionLifecycleReadError(w, err, func() {
 			writeActionExecuteError(w, err)
 		})
 		return
+	}
+	if completed.State == unified.ActionStateCompleted {
+		h.recordActionProgress(orgID, actionID, "server", "complete", "Action completed.", time.Now().UTC())
+	} else {
+		h.recordActionProgress(orgID, actionID, "server", "complete", "Action finished with errors.", time.Now().UTC())
 	}
 
 	w.Header().Set("Content-Type", "application/json")

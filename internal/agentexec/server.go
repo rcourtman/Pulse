@@ -111,6 +111,7 @@ type Server struct {
 	newCommandApprovalGrant            func([]byte, string, ExecuteCommandPayload, time.Time, time.Duration) (*CommandApprovalGrant, error)
 	now                                func() time.Time
 	agentRegisteredNotifier            func(AgentAdmission)
+	actionProgressHandler              func(orgID, agentID string, payload ActionProgressPayload)
 	actionRunnerAdmissionTombstones    map[string]time.Time
 }
 
@@ -450,6 +451,68 @@ func (s *Server) SetAgentRegisteredNotifier(notify func(agentID string)) {
 	s.agentRegisteredNotifier = func(admission AgentAdmission) {
 		notify(admission.AgentID)
 	}
+}
+
+// SetActionProgressHandler installs a callback invoked whenever an active,
+// authenticated agent reports live progress for an in-flight governed action
+// owned by that connection.
+func (s *Server) SetActionProgressHandler(handler func(orgID, agentID string, payload ActionProgressPayload)) {
+	if s == nil {
+		return
+	}
+	s.mu.Lock()
+	s.actionProgressHandler = handler
+	s.mu.Unlock()
+}
+
+func (s *Server) hasPendingActionRequestLocked(authorityKey, requestID string) bool {
+	key := pendingRequestKey(authorityKey, requestID)
+	if _, ok := s.pendingDockerContainerUpdates[key]; ok {
+		return true
+	}
+	if _, ok := s.pendingDockerContainerLifecycles[key]; ok {
+		return true
+	}
+	if _, ok := s.pendingHostUpdates[key]; ok {
+		return true
+	}
+	if _, ok := s.pendingHostStorageCleanups[key]; ok {
+		return true
+	}
+	if _, ok := s.pendingProxmoxGuestLifecycles[key]; ok {
+		return true
+	}
+	if _, ok := s.pendingReqs[key]; ok {
+		return true
+	}
+	return false
+}
+
+func sanitizeActionProgressText(value string, maxLen int) string {
+	var b strings.Builder
+	b.Grow(len(value))
+	prevSpace := false
+	for _, r := range value {
+		if r == '\n' || r == '\r' || r == '\t' {
+			r = ' '
+		}
+		if r < 0x20 || r == 0x7f {
+			continue
+		}
+		if r == ' ' {
+			if prevSpace || b.Len() == 0 {
+				continue
+			}
+			prevSpace = true
+		} else {
+			prevSpace = false
+		}
+		if maxLen > 0 && b.Len() >= maxLen {
+			break
+		}
+		b.WriteRune(r)
+	}
+	return strings.TrimSpace(b.String())
 }
 
 // SetAgentAdmissionNotifier installs the tenant-aware registration callback.
@@ -1913,6 +1976,35 @@ func (s *Server) readLoop(ac *agentConn) {
 				}
 			}
 			s.mu.RUnlock()
+		case MsgTypeActionProgress:
+			var progress ActionProgressPayload
+			if err := msg.DecodePayload(&progress); err != nil {
+				log.Debug().Err(err).Str("agent_id", ac.agent.AgentID).Msg("Failed to parse action progress")
+				continue
+			}
+			progress.RequestID = strings.TrimSpace(progress.RequestID)
+			progress.ActionID = strings.TrimSpace(progress.ActionID)
+			progress.Phase = sanitizeActionProgressText(progress.Phase, 64)
+			progress.Message = sanitizeActionProgressText(progress.Message, 512)
+			if progress.RequestID == "" || progress.ActionID == "" || progress.Message == "" {
+				continue
+			}
+			if progress.Timestamp.IsZero() {
+				progress.Timestamp = s.currentTime()
+			} else {
+				progress.Timestamp = progress.Timestamp.UTC()
+			}
+			authorityKey := connectionAuthorityKey(ac)
+			s.mu.RLock()
+			allowed := s.activeConnectionLocked(ac) && s.hasPendingActionRequestLocked(authorityKey, progress.RequestID)
+			handler := s.actionProgressHandler
+			orgID := normalizeOrganizationID(ac.admission.OrganizationID)
+			agentID := ac.agent.AgentID
+			s.mu.RUnlock()
+			if allowed && handler != nil {
+				handler(orgID, agentID, progress)
+			}
+
 		case MsgTypeDeployProgress:
 			var progress DeployProgressPayload
 			if err := msg.DecodePayload(&progress); err != nil {

@@ -433,8 +433,22 @@ func TestDockerContainerUpdateTerminalReceiptReplaysAfterAgentReconnect(t *testi
 
 		client.handleDockerContainerUpdate(context.Background(), serverConn, payload)
 		var message wsMessage
-		if readErr := remote.ReadJSON(&message); readErr != nil {
-			t.Fatalf("attempt %d read result: %v", attempt+1, readErr)
+		progressFrames := 0
+		for {
+			if readErr := remote.ReadJSON(&message); readErr != nil {
+				t.Fatalf("attempt %d read result: %v", attempt+1, readErr)
+			}
+			if message.Type == msgTypeActionProgress {
+				progressFrames++
+				continue
+			}
+			break
+		}
+		if attempt == 0 && progressFrames == 0 {
+			t.Fatalf("attempt 1 expected live action_progress frame before terminal result")
+		}
+		if attempt == 1 && progressFrames != 0 {
+			t.Fatalf("attempt 2 replay should not emit new progress frames, got %d", progressFrames)
 		}
 		if message.Type != msgTypeDockerContainerUpdateResult {
 			t.Fatalf("attempt %d message type = %q", attempt+1, message.Type)

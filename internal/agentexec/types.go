@@ -50,6 +50,9 @@ const (
 
 	// Agent -> Server messages (deploy)
 	MsgTypeDeployProgress MessageType = "deploy_progress"
+
+	// Agent -> Server messages (live governed action progress)
+	MsgTypeActionProgress MessageType = "action_progress"
 )
 
 // Message is the envelope for all WebSocket messages
@@ -782,4 +785,14 @@ type PreflightResultData struct {
 type InstallResultData struct {
 	ExitCode int    `json:"exit_code"`
 	Output   string `json:"output,omitempty"`
+}
+
+// ActionProgressPayload reports a live, bounded execution step from an agent
+// back to Pulse while a governed action is running.
+type ActionProgressPayload struct {
+	RequestID string    `json:"request_id"`
+	ActionID  string    `json:"action_id"`
+	Phase     string    `json:"phase,omitempty"`
+	Message   string    `json:"message"`
+	Timestamp time.Time `json:"timestamp,omitempty"`
 }

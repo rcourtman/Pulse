@@ -684,4 +684,136 @@ describe('ActionReviewDialog trust gates', () => {
     expect(screen.queryByRole('button', { name: 'Approve' })).toBeNull();
     expect(screen.queryByRole('button', { name: 'Run action' })).toBeNull();
   });
+
+  it('shows live progress steps while Approve and run is in flight and preserves them on the outcome', async () => {
+    vi.useFakeTimers();
+    try {
+      const audit = makeAudit('resolved', '2099-01-01T00:00:00Z');
+      audit.capabilityAutoAuthorization = 'low_risk';
+      audit.request.capabilityName = 'update';
+      audit.resource = { id: audit.request.resourceId, name: 'gluetun', type: 'app-container' };
+
+      let resolveExecute!: (value: {
+        actionId: string;
+        state: 'completed';
+        audit: ActionAuditRecord;
+      }) => void;
+      const executePromise = new Promise<{
+        actionId: string;
+        state: 'completed';
+        audit: ActionAuditRecord;
+      }>((resolve) => {
+        resolveExecute = resolve;
+      });
+
+      const liveSteps = [
+        {
+          timestamp: '2026-11-28T14:22:16Z',
+          source: 'server' as const,
+          phase: 'dispatch',
+          message: 'Dispatched container update to Tower...',
+        },
+        {
+          timestamp: '2026-11-28T14:22:18Z',
+          source: 'agent' as const,
+          message: 'Pulling image qmcgaw/gluetun:latest...',
+        },
+        {
+          timestamp: '2026-11-28T14:22:22Z',
+          source: 'agent' as const,
+          message: 'Downloading image layers (2/5 complete)...',
+        },
+      ];
+
+      vi.mocked(ResourceActionsAPI.decideAction).mockResolvedValueOnce({
+        actionId: audit.id,
+        state: 'approved',
+        approval: {
+          actor: 'operator',
+          method: 'api',
+          timestamp: audit.updatedAt,
+          outcome: 'approved',
+        },
+        audit: { ...audit, state: 'approved' },
+      });
+      vi.mocked(ResourceActionsAPI.executeAction).mockReturnValueOnce(executePromise);
+
+      const completedAudit: ActionAuditRecord = {
+        ...audit,
+        state: 'completed',
+        result: {
+          success: true,
+          actionResultV2: {
+            version: 2,
+            execution: { status: 'succeeded', summary: 'Updated container gluetun.' },
+            verification: {
+              status: 'confirmed',
+              evidenceClass: 'independent',
+              summary: 'Replacement container is running.',
+            },
+            compensation: { support: 'declared', status: 'not_needed' },
+          },
+        },
+      };
+      const completedDetail: ActionDetailResponse = {
+        ...detail(completedAudit),
+        progress: [
+          ...liveSteps,
+          {
+            timestamp: '2026-11-28T14:22:30Z',
+            source: 'server',
+            phase: 'complete',
+            message: 'Action completed.',
+          },
+        ],
+      };
+
+      vi.mocked(ResourceActionsAPI.getAction)
+        .mockResolvedValueOnce({
+          ...detail({ ...audit, state: 'executing' }),
+          progress: liveSteps,
+        })
+        .mockResolvedValueOnce(completedDetail);
+
+      const [selected, setSelected] = createSignal(detail(audit));
+      render(() => (
+        <ActionReviewDialog detail={selected()} onClose={vi.fn()} onChanged={setSelected} />
+      ));
+
+      fireEvent.click(screen.getByRole('button', { name: 'Approve and run' }));
+
+      // Allow decideAction microtask to settle and transition into the running stage.
+      await Promise.resolve();
+      await Promise.resolve();
+
+      const livePanel = screen.getByTestId('action-live-execution');
+      expect(livePanel).toBeInTheDocument();
+      expect(screen.getByText('Running', { exact: true })).toBeVisible();
+      expect(livePanel.textContent).not.toContain('—');
+      expect(livePanel.textContent).not.toContain(';');
+
+      // Advance past the initial 400ms poll delay to receive live agent progress steps.
+      await vi.advanceTimersByTimeAsync(500);
+
+      expect(screen.getByTestId('action-live-log')).toHaveTextContent(
+        'Pulling image qmcgaw/gluetun:latest...',
+      );
+      expect(screen.getByTestId('action-live-log')).toHaveTextContent(
+        'Downloading image layers (2/5 complete)...',
+      );
+
+      // Finish execution and verify the recorded execution log stays accessible on the outcome.
+      resolveExecute({ actionId: audit.id, state: 'completed', audit: completedAudit });
+      await vi.runOnlyPendingTimersAsync();
+      await Promise.resolve();
+      await Promise.resolve();
+
+      expect(screen.queryByTestId('action-live-execution')).toBeNull();
+      const recordedLog = screen.getByTestId('action-execution-log');
+      expect(recordedLog).toHaveTextContent('Execution log (4 steps)');
+      expect(recordedLog).toHaveTextContent('Downloading image layers (2/5 complete)...');
+    } finally {
+      vi.useRealTimers();
+    }
+  });
 });
