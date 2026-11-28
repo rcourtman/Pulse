@@ -35,6 +35,14 @@ type InstanceInfoPollProvider interface {
 	DescribeInstances(m *Monitor) []PollProviderInstanceInfo
 }
 
+// completeInstanceInfoPollProvider opts out of the ListInstances fallback.
+// Its descriptions already cover the entire Scheduler Health roster, which
+// can include more than the locally schedulable instances.
+type completeInstanceInfoPollProvider interface {
+	InstanceInfoPollProvider
+	describesCompleteHealthRoster()
+}
+
 // ConnectionStatusPollProvider is an optional PollProvider extension that
 // publishes connection status entries keyed by external node ID (for example:
 // "pve-node-a", "pbs-backup-1", "xcp-cluster-1").
@@ -719,6 +727,9 @@ func (m *Monitor) providerInstanceInfos() map[string]*instanceInfo {
 		if describer, ok := provider.(InstanceInfoPollProvider); ok {
 			for _, info := range describer.DescribeInstances(m) {
 				addInfo(info.Name, info.DisplayName, info.Connection, info.Metadata)
+			}
+			if _, complete := describer.(completeInstanceInfoPollProvider); complete {
+				continue
 			}
 		}
 

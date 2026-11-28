@@ -165,6 +165,15 @@ saved API delete and Scheduler Health read. `TestAvailabilityRetirementRejectsOl
 and `TestAvailabilityRefreshPreservesQueueWhenRosterUnreadable` cover a held
 plan, a returning claim, the peer poll, and a failed catalog read.
 
+The Availability roster in Scheduler Health comes from one saved catalog
+read. It describes all enabled checks, including remote-only checks, without
+separately reading the subset due to run locally. A subsequent request still
+reads the current catalog; a failed read supplies no new roster and does not
+change the queue. Providers that supply only partial instance descriptions
+still get the fallback to their instance list.
+`TestSchedulerHealthReadsAvailabilityRosterOnce` checks catalog read count,
+roster contents after edits and read failure, and the partial-provider fallback.
+
 Local availability probes (`pollAvailabilityTarget`) drop results when caller
 context cancellation aborts the probe so shutdown or reload never fabricates
 `unreachable` failures or history. Before publishing a completed local probe or
