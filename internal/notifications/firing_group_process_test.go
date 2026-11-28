@@ -208,6 +208,7 @@ func TestGroupedWarningGracefulProcessRestartAndReload(t *testing.T) {
 		cooldown int
 	}{{"restart", 0}, {"restart_after_window", 0}, {"reload", 5}} {
 		t.Run(tc.mode, func(t *testing.T) {
+			t.Parallel()
 			type delivery struct {
 				At      time.Time
 				Path    string

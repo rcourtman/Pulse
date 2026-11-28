@@ -567,6 +567,7 @@ func TestRetainedUnaggregatedQueryAvoidsMetricSort(t *testing.T) {
 func TestRetainedResourceNumbersPreserveScopeAndOrderedSeries(t *testing.T) {
 	for _, clustered := range []bool{false, true} {
 		t.Run(fmt.Sprintf("clustered_%t", clustered), func(t *testing.T) {
+			t.Parallel()
 			db := newPlanTestDB(t)
 			if clustered {
 				if _, err := db.Exec(`DROP TABLE metrics; CREATE TABLE metrics (` + metricsTableColumns + `) WITHOUT ROWID;

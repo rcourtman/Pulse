@@ -150,8 +150,17 @@ func steadyStateWALFrames(t *testing.T, layout string) int64 {
 // the time-major layout over 30 polls of 480 series.
 func TestMetricsIdentityIndexSteadyStateWrites(t *testing.T) {
 	suppressTestLogs(t)
-	metricMajor := steadyStateWALFrames(t, "metric-major")
-	timeMajor := steadyStateWALFrames(t, "")
+	var metricMajor, timeMajor int64
+	t.Run("measure", func(t *testing.T) {
+		t.Run("metric-major", func(t *testing.T) {
+			t.Parallel()
+			metricMajor = steadyStateWALFrames(t, "metric-major")
+		})
+		t.Run("time-major", func(t *testing.T) {
+			t.Parallel()
+			timeMajor = steadyStateWALFrames(t, "")
+		})
+	})
 	t.Logf("WAL frames over %d polls: metric-major=%d time-major=%d", steadyStateTicks, metricMajor, timeMajor)
 	if timeMajor*100 > metricMajor*35 {
 		t.Fatalf(

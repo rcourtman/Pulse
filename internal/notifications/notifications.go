@@ -199,51 +199,52 @@ func (l *notificationLifecycle) close() {
 
 // NotificationManager handles sending notifications
 type NotificationManager struct {
-	mu                  sync.RWMutex
-	destinationMu       sync.Mutex // Serialize destination generations without holding mu across storage.
-	destinationRevision uint64
-	stopOnce            sync.Once
-	cleanupWG           sync.WaitGroup
-	lifecycle           notificationLifecycle // Admission and shutdown ownership of queue and direct delivery work
-	emailConfig         EmailConfig
-	emailManager        *EnhancedEmailManager // Shared email manager for rate limiting
-	webhooks            []WebhookConfig
-	appriseConfig       AppriseConfig
-	enabled             bool
-	configurationError  error // Sticky bootstrap hold; restore files and reconstruct the owner.
-	cooldown            time.Duration
-	deliveryCooldown    map[string]notificationRecord
-	initialTarget       notificationDeliveryTarget
-	notifyOnResolve     bool
+	mu                    sync.RWMutex
+	destinationMu         sync.Mutex // Serialize destination generations without holding mu across storage.
+	destinationRevision   uint64
+	stopOnce              sync.Once
+	cleanupWG             sync.WaitGroup
+	lifecycle             notificationLifecycle // Admission and shutdown ownership of queue and direct delivery work
+	emailConfig           EmailConfig
+	emailManager          *EnhancedEmailManager // Shared email manager for rate limiting
+	testEmailRetryDelay   *int                  // Optional test-only RetryDelay override; nil preserves production default
+	webhooks              []WebhookConfig
+	appriseConfig         AppriseConfig
+	enabled               bool
+	configurationError    error // Sticky bootstrap hold; restore files and reconstruct the owner.
+	cooldown              time.Duration
+	deliveryCooldown      map[string]notificationRecord
+	initialTarget         notificationDeliveryTarget
+	notifyOnResolve       bool
 	lastNotified          map[string]notificationRecord
 	deliveryReceipts      map[string]struct{}
 	deliveryReceiptLevels map[string]alerts.AlertLevel
-	groupWindow         time.Duration
-	groupingEnabled     bool
-	pendingAlerts       []*alerts.Alert
-	pendingAlertIndex   map[pendingFiringOccurrence]int
-	groupTimer          *time.Timer
-	groupDeadline       time.Time // First admission fixes this window; shutdown must not restart or shorten it
-	pendingResolved     []*alerts.Alert
-	resolvedGroupTimer  *time.Timer
-	groupByNode         bool
-	publicURL           string // Full URL to access Pulse
-	groupByGuest        bool
-	webhookHistory      []WebhookDelivery            // Keep last 100 webhook deliveries for debugging
-	webhookRateLimits   map[string]*webhookRateLimit // Track rate limits per webhook URL
-	webhookRateMu       sync.Mutex                   // Separate mutex for webhook rate limiting
-	webhookRateCleanup  time.Time                    // Last cleanup time for webhook rate limit entries
-	appriseExec         appriseExecFunc
-	queue               *NotificationQueue                              // Persistent notification queue
-	tenantID            string                                          // Tenant identity stamped into webhook payloads (env default)
-	tenantName          string                                          // Tenant display name stamped into webhook payloads (env default)
-	tenantResolver      func() (id string, name string)                 // Org-backed tenant identity override (multi-tenant)
-	webhookClient       *http.Client                                    // Shared HTTP client for webhooks
-	stopCleanup         chan struct{}                                   // Signal to stop cleanup goroutine
-	cleanupDone         chan struct{}                                   // Signals cleanup goroutine exit during shutdown
-	allowedPrivateNets  []*net.IPNet                                    // Parsed CIDR ranges allowed for private webhook targets
-	allowedPrivateMu    sync.RWMutex                                    // Protects allowedPrivateNets
-	resolveWebhookIPs   func(context.Context, string) ([]net.IP, error) // Test seam; nil uses the context-aware default resolver
+	groupWindow           time.Duration
+	groupingEnabled       bool
+	pendingAlerts         []*alerts.Alert
+	pendingAlertIndex     map[pendingFiringOccurrence]int
+	groupTimer            *time.Timer
+	groupDeadline         time.Time // First admission fixes this window; shutdown must not restart or shorten it
+	pendingResolved       []*alerts.Alert
+	resolvedGroupTimer    *time.Timer
+	groupByNode           bool
+	publicURL             string // Full URL to access Pulse
+	groupByGuest          bool
+	webhookHistory        []WebhookDelivery            // Keep last 100 webhook deliveries for debugging
+	webhookRateLimits     map[string]*webhookRateLimit // Track rate limits per webhook URL
+	webhookRateMu         sync.Mutex                   // Separate mutex for webhook rate limiting
+	webhookRateCleanup    time.Time                    // Last cleanup time for webhook rate limit entries
+	appriseExec           appriseExecFunc
+	queue                 *NotificationQueue                              // Persistent notification queue
+	tenantID              string                                          // Tenant identity stamped into webhook payloads (env default)
+	tenantName            string                                          // Tenant display name stamped into webhook payloads (env default)
+	tenantResolver        func() (id string, name string)                 // Org-backed tenant identity override (multi-tenant)
+	webhookClient         *http.Client                                    // Shared HTTP client for webhooks
+	stopCleanup           chan struct{}                                   // Signal to stop cleanup goroutine
+	cleanupDone           chan struct{}                                   // Signals cleanup goroutine exit during shutdown
+	allowedPrivateNets    []*net.IPNet                                    // Parsed CIDR ranges allowed for private webhook targets
+	allowedPrivateMu      sync.RWMutex                                    // Protects allowedPrivateNets
+	resolveWebhookIPs     func(context.Context, string) ([]net.IP, error) // Test seam; nil uses the context-aware default resolver
 }
 
 type webhookHTTPResult struct {
@@ -311,14 +312,14 @@ func newNotificationManagerWithDataDir(publicURL string, dataDir string, deferQu
 	}
 
 	nm := &NotificationManager{
-		enabled:          true,
-		cooldown:         5 * time.Minute,
-		initialTarget:    notificationDeliveryTargetAll,
-		notifyOnResolve:  true,
+		enabled:               true,
+		cooldown:              5 * time.Minute,
+		initialTarget:         notificationDeliveryTargetAll,
+		notifyOnResolve:       true,
 		lastNotified:          make(map[string]notificationRecord),
 		deliveryReceipts:      make(map[string]struct{}),
 		deliveryReceiptLevels: make(map[string]alerts.AlertLevel),
-		webhooks:         []WebhookConfig{},
+		webhooks:              []WebhookConfig{},
 		appriseConfig: AppriseConfig{
 			Enabled:        false,
 			Mode:           AppriseModeCLI,

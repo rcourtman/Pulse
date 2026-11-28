@@ -278,6 +278,7 @@ func TestCheckpointRoutesOnlySelectedDestinations(t *testing.T) {
 func TestCheckpointReplayRechecksCurrentPolicy(t *testing.T) {
 	for _, policy := range []string{"allowed", "resolved", "paused", "destination-disabled", "removed", "new-quiet-hours"} {
 		t.Run(policy, func(t *testing.T) {
+			t.Parallel()
 			var received atomic.Int32
 			server := newIPv4HTTPServer(t, http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) { received.Add(1); w.WriteHeader(http.StatusOK) }))
 			t.Cleanup(server.Close)
