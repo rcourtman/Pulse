@@ -1,0 +1,39 @@
+{
+  "version": 1,
+  "base_sha": "2d6256cb69b966d73a5429e514ffb4023dbad419",
+  "verified_at": "2026-11-28T12:33:48Z",
+  "result": "passed",
+  "changed_paths": [
+    "frontend-modern/src/components/UpdateBanner.tsx",
+    "frontend-modern/src/components/UpdateConfirmationModal.tsx",
+    "frontend-modern/src/components/UpdateReadinessChecksPanel.tsx"
+  ],
+  "content_sha256": {
+    "frontend-modern/src/components/UpdateBanner.tsx": "832745c7a03706efbf02015dc4e48020e2763f9e4b162cf3bd77e0ead27e7bdd",
+    "frontend-modern/src/components/UpdateConfirmationModal.tsx": "03348aa74ddb359128702567b4cc5dd2fdb00756984be193d0c649b7841b6702",
+    "frontend-modern/src/components/UpdateReadinessChecksPanel.tsx": "9e06af968552190c08bdfb2689d38f930930a562781095a57c8b19eae206a470"
+  },
+  "routes": [
+    "/proxmox/overview"
+  ],
+  "viewports": [
+    {
+      "width": 1440,
+      "height": 940
+    },
+    {
+      "width": 360,
+      "height": 820
+    }
+  ],
+  "states": [
+    "Paired production Vite builds of untouched main (2d6256cb69) and patched HEAD served locally via pulse-worker-browser over identical /api/version, /api/updates/check, and /api/updates/plan payloads in desktop Chromium (1440x940 light theme, en-GB, UTC) and touch phone WebKit (360x820 dark theme, en-GB, UTC).",
+    "Blocked update plan (expired agent reporting tokens + stale agent): collapsed banner replaces active Apply Update with Update blocked badge and Review checks button; expanding via Review checks displays the Upgrade checks alert panel ordered Blocked -> Warning -> Pass with remediation details and disables the expanded action as Install blocked.",
+    "Attention update plan (stale agent + v5 agent migration security warnings): collapsed banner displays 2 upgrade warnings alongside Apply Update; clicking Apply Update opens Confirm Update dialog showing the amber Upgrade checks panel with both warnings and details above prerequisites and the acknowledgement checkbox, keeping Start Update disabled until acknowledged.",
+    "Zero console errors, zero page errors, zero HTTP >= 400 responses, and 0px horizontal overflow across every desktop and phone state; all 12 paired before/after worker-owned PNG captures were visually inspected."
+  ],
+  "interactions": [
+    "Loaded /proxmox/overview with blocked UpdatePlan readiness on desktop Chromium (1440x940 light) and touch phone WebKit (360x820 dark), verified Apply Update hidden, clicked Review checks to expand the banner, and verified Upgrade checks alert panel and disabled Install blocked button.",
+    "Loaded /proxmox/overview with attention UpdatePlan readiness on both viewports, verified 2 upgrade warnings button, clicked Apply Update to open Confirm Update modal, verified amber Upgrade checks panel, confirmed Start Update disabled before acknowledgement, ticked acknowledgement checkbox, and confirmed Start Update enabled."
+  ]
+}
