@@ -539,21 +539,35 @@ valid evidence; see [safe evidence collection](TROUBLESHOOTING.md#collect-diagno
 
 A merged host agent or an attached availability check can keep a node or cluster
 online in Pulse even after Kubernetes reporting stops. When Kubernetes readings
-go stale, Pulse marks affected clusters, nodes, pods, Deployments and
-controllers with **Stale data** instead of presenting retained healthy states as
-current.
+go stale or hit a collection error, Pulse marks affected clusters, nodes, pods,
+Deployments, controllers, and the remaining inventory tables (**Autoscaling**,
+**Services**, **Networking**, **Storage**, **Configuration**, **Policy**, and
+**Events**), along with **Active Alerts** on **Kubernetes → Overview**, with
+**Stale data** instead of presenting retained healthy states as current.
 
 - **Worse states stay first.** Failure and attention states such as **Offline**,
   **NotReady**, **Unschedulable**, **Failed**, **CrashLoopBackOff** and replica
-  shortfalls remain visible ahead of **Stale data**.
-- **Filters and overview placement.** Stale Kubernetes resources leave
+  shortfalls remain visible ahead of **Stale data**. Across inventory tables,
+  stale online or unknown rows read as amber **Stale data** while worse
+  **Offline** and **Degraded** verdicts stay first. On **Events**, rows keep
+  their **Warning** and **Normal** severity dots and add an amber **Stale data**
+  cue beneath the event name. On **Active Alerts**, rows keep their
+  **Critical**, **Warning** and **Info** severity indicators and add an amber
+  **Stale data** cue beneath the affected resource name.
+- **Filters, search and overview placement.** Stale Kubernetes resources leave
   **Healthy** and appear under **Degraded**. Stale nodes also appear in
-  **Nodes needing attention** on **Kubernetes → Overview**.
-- **Inline drawer context.** Expanding a stale Kubernetes row shows a
-  **Stale data** notice
-  (`Showing the last Kubernetes report — no fresh update received recently.`,
-  followed by `Last error:` when Pulse recorded a source error) while keeping
-  the last reported metrics and counts visible.
+  **Nodes needing attention** on **Kubernetes → Overview**. Inventory table
+  search matches the **Stale data** label and recorded Kubernetes source error
+  text.
+- **Inline drawer context.** Expanding a stale Kubernetes resource, inline
+  record drawer (ConfigMaps, Secrets, ServiceAccounts, RBAC, Policy and Events),
+  or **Active Alerts** row shows an amber **Stale data** notice
+  (`Showing the last Kubernetes report — no fresh update received recently.` or
+  `No Kubernetes report for <age> — showing the last values received.`, followed
+  by `Last error:` when Pulse recorded a source error, plus `This alert reflects
+  the last report received and may no longer be current.` in alert drawers)
+  while keeping the last reported metrics, counts and record fields visible
+  until live reporting recovers.
 
 Check the existing agent pod status, recent agent logs and the Pulse connection
 error before changing configuration. Do not restart pods, reapply the Secret or

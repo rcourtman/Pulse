@@ -232,6 +232,115 @@ class StaleReadingAndAgentHelpDocsTest(unittest.TestCase):
         self.assertIn('data-testid="kubernetes-stale-readings-notice"', k8s_detail)
         self.assertIn('title="Nodes needing attention"', k8s_surface)
 
+    def test_help_documents_kubernetes_inventory_record_drawers_and_events_staleness(
+        self,
+    ):
+        k8s_doc = doc_text("docs/KUBERNETES.md")
+        k8s_section = norm(k8s_doc.split("### Stale Kubernetes readings\n", 1)[1])
+        for phrase in (
+            "**Autoscaling**, **Services**, **Networking**, **Storage**, **Configuration**, **Policy**, and **Events**",
+            "**Active Alerts** on **Kubernetes → Overview**",
+            "**Events**, rows keep their **Warning** and **Normal** severity dots",
+            "Inventory table search matches the **Stale data** label and recorded Kubernetes source error text",
+            "inline record drawer (ConfigMaps, Secrets, ServiceAccounts, RBAC, Policy and Events)",
+            "`No Kubernetes report for <age> — showing the last values received.`",
+            "`This alert reflects the last report received and may no longer be current.`",
+        ):
+            with self.subTest(doc="KUBERNETES.md", phrase=phrase):
+                self.assertIn(phrase, k8s_section)
+
+        faq = doc_text("docs/FAQ.md")
+        faq_section = norm(
+            faq.split("### No data showing?\n", 1)[1].split("\n### ", 1)[0]
+        )
+        for phrase in (
+            "**Autoscaling**, **Services**, **Networking**, **Storage**, **Configuration**, **Policy** and **Events**",
+            "**Events** rows keep their **Warning** and **Normal** severity dots alongside the **Stale data** cue",
+            "inventory search matches **Stale data** and recorded source errors",
+            "expanded object and record drawers (including ConfigMaps, Secrets, ServiceAccounts, RBAC, Policy and Events)",
+        ):
+            with self.subTest(doc="FAQ.md", phrase=phrase):
+                self.assertIn(phrase, faq_section)
+
+        k8s_model = doc_text("frontend-modern/src/features/kubernetes/kubernetesPageModel.ts")
+        k8s_detail = doc_text("frontend-modern/src/features/kubernetes/KubernetesRecordDetail.tsx")
+        k8s_events = doc_text("frontend-modern/src/features/kubernetes/KubernetesEventsTable.tsx")
+        for marker in (
+            "export function mapKubernetesInventoryStatus(resource: Resource): StatusIndicator",
+            "hasStaleKubernetesReadings(resource) ? KUBERNETES_STALE_READINGS_LABEL : undefined",
+            "hasStaleKubernetesReadings(resource) ? getKubernetesSourceError(resource) : undefined",
+        ):
+            self.assertIn(marker, k8s_model)
+        self.assertIn("<KubernetesStaleReadingsNotice resource={props.resource} />", k8s_detail)
+        self.assertIn('staleScope="event"', k8s_events)
+        for rel in (
+            "frontend-modern/src/features/kubernetes/KubernetesAutoscalingTable.tsx",
+            "frontend-modern/src/features/kubernetes/KubernetesServicesTable.tsx",
+            "frontend-modern/src/features/kubernetes/KubernetesNetworkingTable.tsx",
+            "frontend-modern/src/features/kubernetes/KubernetesStorageTable.tsx",
+            "frontend-modern/src/features/kubernetes/KubernetesConfigTable.tsx",
+            "frontend-modern/src/features/kubernetes/KubernetesPolicyTable.tsx",
+        ):
+            with self.subTest(source=rel):
+                self.assertIn("mapKubernetesInventoryStatus", doc_text(rel))
+
+    def test_help_documents_platform_alerts_and_vsphere_activity_staleness(self):
+        faq = doc_text("docs/FAQ.md")
+        faq_section = norm(
+            faq.split("### No data showing?\n", 1)[1].split("\n### ", 1)[0]
+        )
+        for phrase in (
+            "**vSphere Activity** (`/vmware/activity`) and **platform alert tables**",
+            "**Health Signals** on **VMware → Overview** and **VMware → Health**",
+            "**Health Alerts** on **TrueNAS → Overview**",
+            "**Active Alerts** on **Docker → Overview** and **Kubernetes → Overview**",
+            "`This alert reflects the last report received and may no longer be current.`",
+            "`Activity records reflect the last report received and newer vCenter tasks or events may be missing.`",
+            "search matches stale labels and collection errors on vSphere, TrueNAS and Docker alert/activity tables",
+        ):
+            with self.subTest(doc="FAQ.md", phrase=phrase):
+                self.assertIn(phrase, faq_section)
+
+        truenas = norm(doc_text("docs/TRUENAS.md"))
+        for phrase in (
+            "**Health Alerts** on **TrueNAS → Overview** (`/truenas/overview`)",
+            "**Critical**, **Warning**, and **Info** severity indicators",
+            "show an amber **Stale data** cue beneath the affected resource name",
+            "match stale labels and collection-error text in search",
+            "`This alert reflects the last report received and may no longer be current.`",
+        ):
+            with self.subTest(doc="TRUENAS.md", phrase=phrase):
+                self.assertIn(phrase, truenas)
+
+        alerts_table = doc_text("frontend-modern/src/features/platformPage/PlatformAlertsTable.tsx")
+        staleness = doc_text("frontend-modern/src/features/platformPage/resourceStaleness.ts")
+        activity = doc_text("frontend-modern/src/features/vmware/VsphereActivityTable.tsx")
+        for marker in (
+            "getPlatformResourceStaleNotice(props.platform, incident.resource)",
+            "data-platform-alert-stale={props.attrPrefix}",
+            "This alert",
+            "reflects the last report received and may no longer be",
+            "current.",
+        ):
+            self.assertIn(marker, alerts_table)
+        self.assertIn("export const getPlatformResourceStaleNotice =", staleness)
+        for marker in (
+            'data-vsphere-activity-stale="true"',
+            'data-testid="vsphere-activity-stale-readings-notice"',
+            "Activity records reflect the last report",
+            "received and newer vCenter tasks or events may be missing.",
+        ):
+            self.assertIn(marker, activity)
+        for rel in (
+            "frontend-modern/src/features/docker/dockerPageModel.ts",
+            "frontend-modern/src/features/truenas/truenasPageModel.ts",
+            "frontend-modern/src/features/vmware/vmwarePageModel.ts",
+        ):
+            with self.subTest(source=rel):
+                src = doc_text(rel)
+                self.assertIn("staleNotice?.label", src)
+                self.assertIn("staleNotice?.detail", src)
+
     def test_faq_documents_docker_compose_and_swarm_stale_readings(self):
         faq = doc_text("docs/FAQ.md")
         faq_section = norm(

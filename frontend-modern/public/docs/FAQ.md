@@ -370,13 +370,33 @@ does not prove that every reading is fresh. Missing or unavailable is not zero.
   inline host History defers live metrics with `vCenter has not updated this
   host recently.` while keeping last-known values visible until live polling
   recovers.
-- **Kubernetes clusters, nodes, pods, Deployments and controllers** show
-  **Stale data** when Kubernetes reporting goes quiet, even if a merged host
-  agent or attached availability check keeps the host online. Worse states such
-  as **Offline**, **NotReady**, **Unschedulable**, **Failed**,
-  **CrashLoopBackOff** and replica shortfalls stay ahead of staleness. Stale
-  resources move out of **Healthy** into **Degraded** and **Nodes needing
-  attention**, and expanded object drawers show
+- **vSphere Activity** (`/vmware/activity`) and **platform alert tables**
+  (**Health Signals** on **VMware → Overview** and **VMware → Health**,
+  **Health Alerts** on **TrueNAS → Overview**, and **Active Alerts** on
+  **Docker → Overview** and **Kubernetes → Overview**) surface an amber
+  **Stale data** cue beneath affected resource names when their provider or
+  agent stops reporting fresh data or hits a collection error, while preserving
+  **Critical**, **Warning**, **Info**, **Success**, **Running**, and **Failed**
+  severity or state indicators. Expanded alert drawers show an amber inline
+  notice (`This alert reflects the last report received and may no longer be
+  current.`), expanded vSphere activity drawers show `Activity records reflect
+  the last report received and newer vCenter tasks or events may be missing.`,
+  search matches stale labels and collection errors on vSphere, TrueNAS and
+  Docker alert/activity tables, and stale notices clear automatically when live
+  updates resume.
+- **Kubernetes clusters, nodes, pods, Deployments and controllers**, together
+  with the remaining Kubernetes inventory tables (**Autoscaling**, **Services**,
+  **Networking**, **Storage**, **Configuration**, **Policy** and **Events**),
+  show **Stale data** when Kubernetes reporting goes quiet or hits a collection
+  error, even if a merged host agent or attached availability check keeps the
+  host online. Worse states such as **Offline**, **NotReady**,
+  **Unschedulable**, **Failed**, **CrashLoopBackOff** and replica shortfalls
+  stay ahead of staleness, and **Events** rows keep their **Warning** and
+  **Normal** severity dots alongside the **Stale data** cue. Stale resources
+  move out of **Healthy** into **Degraded** and **Nodes needing attention**,
+  inventory search matches **Stale data** and recorded source errors, and
+  expanded object and record drawers (including ConfigMaps, Secrets,
+  ServiceAccounts, RBAC, Policy and Events) show
   `Showing the last Kubernetes report — no fresh update received recently.`
   without hiding retained metrics or counts.
 - **Docker Compose applications and Swarm** (`/docker/applications` and
