@@ -109,13 +109,18 @@ func (c *pollQueueCollector) Collect(ch chan<- prometheus.Metric) {
 	var oldestOverdue float64
 	byType := make(map[string]int)
 	counted := make(map[*TaskQueue]struct{}, len(runtimes))
+	// Reuse one small buffer across this scrape's queues. Provider types
+	// beyond the inline capacity can grow it without losing any counts.
+	var inline [8]queuedTypeCount
+	typeCounts := inline[:0]
 	for _, runtime := range runtimes {
 		if _, ok := counted[runtime.queue]; ok || !runtime.active() {
 			continue
 		}
 		// Snapshot counts only heap entries, at the time of the read.
 		// Do not hold the registry lock while acquiring a queue lock.
-		snapshot := runtime.queue.Snapshot()
+		var snapshot QueueSnapshot
+		snapshot, typeCounts = runtime.queue.snapshotWithTypeCounts(typeCounts)
 		if !runtime.active() {
 			continue // The scheduler stopped while we read its queue.
 		}
@@ -123,8 +128,8 @@ func (c *pollQueueCollector) Collect(ch chan<- prometheus.Metric) {
 		depth += snapshot.Depth
 		due += snapshot.DueWithinSeconds
 		oldestOverdue = max(oldestOverdue, snapshot.OldestOverdueSeconds)
-		for name, count := range snapshot.PerType {
-			byType[normalizeLabel(name)] += count
+		for _, sample := range typeCounts {
+			byType[normalizeLabel(sample.kind)] += sample.count
 		}
 	}
 
