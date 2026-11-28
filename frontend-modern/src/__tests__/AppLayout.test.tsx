@@ -740,10 +740,25 @@ describe('AppLayout map entry', () => {
     window.sessionStorage.clear();
   });
 
-  it('offers one labeled map button in the top-left header slot, not on the edge or among the tabs', () => {
-    renderLayout([], '/settings/infrastructure');
+  it('places Map as the leftmost desktop tab before platform tabs and keeps the header button only below lg', () => {
+    renderLayout(
+      [makeResource({ id: 'pve-node-1', type: 'agent', platformType: 'proxmox-pve' })],
+      '/proxmox/overview',
+    );
 
     expect(screen.queryByTestId('infrastructure-map-edge-tab')).toBeNull();
+
+    const tabs = screen.getByRole('navigation', { name: 'Primary navigation' });
+    const navTab = within(tabs).getByTestId('infrastructure-map-nav-tab');
+    const proxmoxTab = within(tabs).getByRole('link', { name: 'Proxmox' });
+    expect(navTab).toHaveAttribute('href', '/map');
+    expect(navTab).toHaveAccessibleName('Map');
+    expect(navTab).toHaveTextContent('Map');
+    expect(navTab).not.toHaveAttribute('aria-current');
+    expect(
+      Boolean(navTab.compareDocumentPosition(proxmoxTab) & Node.DOCUMENT_POSITION_FOLLOWING),
+    ).toBe(true);
+    expect(within(tabs).getByTestId('infrastructure-map-nav-divider')).toBeInTheDocument();
 
     const button = screen.getByTestId('infrastructure-map-header-button');
     expect(button).toHaveAttribute('href', '/map');
@@ -751,34 +766,54 @@ describe('AppLayout map entry', () => {
     expect(button).toHaveTextContent('Map');
     expect(button).not.toHaveAttribute('aria-current');
     expect(button.closest('.header-controls')).toBeNull();
+    expect(button.parentElement).toHaveClass('lg:hidden');
 
     const brand = screen.getByTestId('pulse-brand-lockup');
     expect(Boolean(button.compareDocumentPosition(brand) & Node.DOCUMENT_POSITION_FOLLOWING)).toBe(
       true,
     );
 
-    const tabs = screen.getByRole('navigation', { name: 'Primary navigation' });
-    expect(within(tabs).queryByRole('link', { name: 'Map' })).toBeNull();
+    const mobileNav = screen.getByRole('navigation', { name: 'Mobile navigation' });
+    expect(within(mobileNav).queryByRole('link', { name: 'Map' })).toBeNull();
   });
 
-  it('marks the header map button as the current page when on /map and preloads on hover/focus', () => {
-    preloadRouteModuleMock.mockReset();
-    preloadRouteModuleMock.mockResolvedValue(undefined);
+  it('still renders the desktop Map tab without a trailing divider when no platform tabs are visible', () => {
+    renderLayout([], '/settings/infrastructure');
+
+    const tabs = screen.getByRole('navigation', { name: 'Primary navigation' });
+    const navTab = within(tabs).getByTestId('infrastructure-map-nav-tab');
+    expect(navTab).toHaveAttribute('href', '/map');
+    expect(within(tabs).queryByTestId('infrastructure-map-nav-divider')).toBeNull();
+  });
+
+  it('marks both desktop Map tab and narrow header button as the current page on /map and preloads on hover/focus', () => {
     renderLayout([], '/map');
 
+    const navTab = screen.getByTestId('infrastructure-map-nav-tab');
     const button = screen.getByTestId('infrastructure-map-header-button');
+    expect(navTab).toHaveAttribute('aria-current', 'page');
     expect(button).toHaveAttribute('aria-current', 'page');
 
-    fireEvent.mouseEnter(button);
-    fireEvent.focus(button);
-    expect(preloadRouteModuleMock).toHaveBeenCalledWith('/map');
+    for (const trigger of [
+      () => fireEvent.mouseEnter(navTab),
+      () => fireEvent.focus(navTab),
+      () => fireEvent.mouseEnter(button),
+      () => fireEvent.focus(button),
+    ]) {
+      preloadRouteModuleMock.mockReset();
+      preloadRouteModuleMock.mockResolvedValue(undefined);
+      trigger();
+      expect(preloadRouteModuleMock).toHaveBeenCalledTimes(1);
+      expect(preloadRouteModuleMock).toHaveBeenCalledWith('/map');
+    }
   });
 
-  it('hides the map entry with the rest of the navigation in kiosk mode', () => {
+  it('hides both map entries with the rest of the navigation in kiosk mode', () => {
     setKioskMode(true);
     renderLayout([], '/settings/infrastructure');
 
     expect(screen.queryByTestId('infrastructure-map-edge-tab')).toBeNull();
+    expect(screen.queryByTestId('infrastructure-map-nav-tab')).toBeNull();
     expect(screen.queryByTestId('infrastructure-map-header-button')).toBeNull();
   });
 
