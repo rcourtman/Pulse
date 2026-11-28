@@ -38,6 +38,13 @@ authority refusal rather than host-command access. The model cannot grant itself
 permission by describing a change as safe or by performing an unrelated read
 first.
 
+Assistant sessions (used by legacy Pulse Mobile chat until 31 March 2027) are
+scoped to the caller who created them (user identity for interactive sign-ins,
+or the specific API token ID for token callers) unless the caller holds
+action-execution authority. Patrol tool outputs in run history, live streams,
+and investigation transcripts, along with prompt-steering finding, dismissal,
+and resolution notes, follow the same action-execution authority boundary.
+
 Turn, evidence and cost budgets remain explicit bounds. Scheduling, tenant and
 actor identity, idempotency and execution verification belong to their owning
 services. They do not infer the quality or completeness of a diagnosis.

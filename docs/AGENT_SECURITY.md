@@ -126,7 +126,37 @@ mints them before the installer knows the final hostname, Pulse binds them to
 the first command agent that registers with that token. Those tokens also carry
 the operator's command-policy choice into the first accepted report so a stale
 policy from an earlier installation cannot immediately disable the replacement
-agent. Generic unbound `agent:exec` tokens still fail closed.
+agent. Generic unbound `agent:exec` tokens still fail closed. First-use
+install-token bindings, legacy migrations, and ID backfills are refused when
+another unexpired token in the same organization already holds the live command
+session, the live host record, or a durable token binding for that agent ID,
+leaving the refused token unbound. Command sessions are scoped to a single
+organization (default or the token's single bound organization), reject control
+characters in agent IDs, and enforce a **10-second** write deadline on
+WebSocket text writes so a stalled agent connection is closed instead of
+pinning action dispatch.
+
+On command-capable hosts, default read-only auto-approval also confines log and
+inspection arguments:
+
+- Host log reads (`cat`, `head`, `tail`, and `grep`) under `/var/log` are
+  opened directly by the host agent beneath `/var/log` (symlink-safe, up to
+  `256` files per command) and passed to the program through `/dev/fd`
+  descriptors rather than raw path names. Because guest commands run inside
+  `pct exec` or `qm guest exec` where host `/var/log` confinement does not
+  apply, container and VM log reads require explicit approval rather than
+  auto-approval.
+- Auto-approved `pvesh get` commands are limited to listed non-credential API
+  subtrees (`version`, `nodes`, `storage`, `pools`, and selected `cluster/*`
+  read paths) and refuse `file-read`, `file-restore`, `extractconfig`,
+  `cloudinit`, `report`, and `subscription` segments.
+- Auto-approved `docker` and `podman` `--format` templates allow only direct
+  field selections (such as `{{.State.Status}}` or `{{json .Mounts}}`) and
+  refuse functions, loops, pipelines, or credential-named fields that could
+  strip output masking. Other read-only inspection commands similarly require
+  approval when passed state-changing or arbitrary-file-reading options (such
+  as `lsblk --sysroot`, `ss -K`, `-D`, or `-F`, or `journalctl --vacuum-*`,
+  `--file`, or `--root`).
 
 ## Proxmox Deployment Choices
 
