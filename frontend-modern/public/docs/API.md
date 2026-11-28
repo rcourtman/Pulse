@@ -1639,9 +1639,14 @@ poll interval:
   change this monitor's score.
 
 This endpoint covers scheduled polling only. Zero overdue queued tasks or
-advancing `lastSuccess` does not prove that a poll claimed by a worker finished,
-that host or Docker agent reports arrived, that WebSocket state reached the
-browser or that alert rules ran. Check those paths separately with
+advancing `lastSuccess` does not prove that poll planning finished, that a poll
+claimed by a worker finished, that host or Docker agent reports arrived, that
+WebSocket state reached the browser or that alert rules ran. When Prometheus
+scraping is enabled, check `pulse_scheduler_poll_planning_age_seconds` for
+unfinished planning passes and `pulse_scheduler_claimed_poll_overdue_seconds`
+(`waiting_for_slot` and `running`, which stays active while a worker is
+occupied in panic recovery logging after releasing its queue claim) for held
+workers. Check the other paths separately with
 [System Health](#system-health), [Active alerts](#active-alerts),
 [missing-data checks](FAQ.md#no-data-showing) and
 [outage detection](ALERTING.md#detect-an-outage-of-pulse-itself). Do not

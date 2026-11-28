@@ -418,6 +418,16 @@ class SchedulerPollingDocsTest(unittest.TestCase):
 
     def test_adaptive_polling_guide_matches_metrics_env_and_local_freshness_runtime(self):
         adaptive = " ".join((ROOT / "docs/monitoring/ADAPTIVE_POLLING.md").read_text().split())
+        rollout = " ".join(ROLLOUT.read_text().split())
+        work_progress = (ROOT / "internal/monitoring/poll_work_progress.go").read_text()
+        task_workers = (ROOT / "internal/monitoring/poll_task_workers.go").read_text()
+
+        self.assertIn('"pulse_scheduler_poll_planning_age_seconds"', work_progress)
+        self.assertIn("func (p *pollWorkProgress) beginPlanning(", work_progress)
+        self.assertIn("func (p *pollWorkProgress) finishPlanning(", work_progress)
+        self.assertIn("defer progress.finish(work)", task_workers)
+        self.assertIn("Recovered from panic in scheduled poll task", task_workers)
+
         for expected in (
             "`PULSE_METRICS_PORT`",
             "legacy `METRICS_PORT`",
@@ -425,14 +435,25 @@ class SchedulerPollingDocsTest(unittest.TestCase):
             "`PULSE_METRICS_TOKEN`",
             "`pulse_monitor_poll_last_success_timestamp`",
             "`pulse_scheduler_queued_poll_overdue_seconds`",
+            "`pulse_scheduler_poll_planning_age_seconds`",
             "`pulse_scheduler_claimed_poll_overdue_seconds`",
             "`pulse_scheduler_dead_letter_depth`",
+            "active poll planning pass has not finished",
+            "synchronous panic recovery logging after releasing its queue claim",
             "from its own local timestamp rather than the process-wide Prometheus series",
             "Stopped or replaced schedulers drop out of the live queue and dead-letter gauges",
+            "unfinished planning pass remains visible in `pulse_scheduler_poll_planning_age_seconds` until it completes",
             "report zero for up to five minutes, then expire from the scrape",
             "without moving the latest completion timestamp or staleness age backwards",
         ):
             self.assertIn(expected, adaptive)
+
+        for expected in (
+            "`pulse_scheduler_poll_planning_age_seconds`",
+            "`pulse_scheduler_claimed_poll_overdue_seconds`",
+            "panic recovery logging",
+        ):
+            self.assertIn(expected, rollout)
 
 
 if __name__ == "__main__":
