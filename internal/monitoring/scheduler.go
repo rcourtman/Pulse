@@ -164,12 +164,17 @@ func NewAdaptiveScheduler(cfg SchedulerConfig, staleness StalenessSource, interv
 
 // BuildPlan produces an ordered set of scheduled tasks for the supplied inventory.
 func (s *AdaptiveScheduler) BuildPlan(now time.Time, inventory []InstanceDescriptor, queueDepth int) []ScheduledTask {
+	return s.buildPlan(now, inventory, queueDepth, nil)
+}
+
+// With monitorFreshness, inventory is a private roster that planning may enrich.
+func (s *AdaptiveScheduler) buildPlan(now time.Time, inventory []InstanceDescriptor, queueDepth int, monitorFreshness *StalenessTracker) []ScheduledTask {
 	if len(inventory) == 0 {
 		return nil
 	}
 
 	tasks := make([]ScheduledTask, len(inventory))
-	s.buildUnsortedPlan(now, inventory, queueDepth, tasks)
+	s.buildUnsortedPlan(now, inventory, queueDepth, tasks, monitorFreshness)
 	// Order the private slice without holding the shared planner lock.
 	if len(tasks) > 1 {
 		sort.Sort(pollPlanOrder(tasks))
@@ -198,19 +203,44 @@ func (p pollPlanOrder) Swap(i, j int) { p[i], p[j] = p[j], p[i] }
 
 // planSuccessor takes the same planning path as the inventory scan, but
 // returns a task value so the poll worker does not allocate a result slice.
-func (s *AdaptiveScheduler) planSuccessor(now time.Time, instance InstanceDescriptor, queueDepth int) ScheduledTask {
+func (s *AdaptiveScheduler) planSuccessor(now time.Time, instance InstanceDescriptor, queueDepth int, monitorFreshness *StalenessTracker) ScheduledTask {
 	var task [1]ScheduledTask
-	s.buildUnsortedPlan(now, []InstanceDescriptor{instance}, queueDepth, task[:])
+	s.buildUnsortedPlan(now, []InstanceDescriptor{instance}, queueDepth, task[:], monitorFreshness)
 	return task[0]
 }
 
 // buildUnsortedPlan fills a zeroed destination with one slot per instance.
-func (s *AdaptiveScheduler) buildUnsortedPlan(now time.Time, inventory []InstanceDescriptor, queueDepth int, tasks []ScheduledTask) {
+func (s *AdaptiveScheduler) buildUnsortedPlan(now time.Time, inventory []InstanceDescriptor, queueDepth int, tasks []ScheduledTask, monitorFreshness *StalenessTracker) {
 	// Read freshness before locking the shared planner. Waiting on the
 	// tracker for a full inventory must not block a cached plan read or a
 	// poll worker that already has the freshness it needs to reschedule.
 	// Stage the scores in the result slice to avoid a second allocation.
-	for i, inst := range inventory {
+	// In production the monitor and the adaptive scheduler share the same
+	// tracker. Derive metadata and priority from the same observation, using
+	// one lookup per target and one scoring clock per plan. A custom scoring
+	// source still supplies its own priorities.
+	tracker, _ := s.staleness.(*StalenessTracker)
+	sharedTracker := monitorFreshness != nil && tracker == monitorFreshness
+	var scoreAt time.Time
+	if sharedTracker {
+		scoreAt = time.Now()
+	}
+	for i := range inventory {
+		inst := &inventory[i]
+		if monitorFreshness != nil {
+			snap, maxStale, ok := monitorFreshness.snapshotWithBounds(inst.Type, inst.Name)
+			if ok {
+				inst.LastSuccess = snap.LastSuccess
+				inst.LastFailure = snap.LastError
+				inst.Metadata.ChangeHash = snap.ChangeHash
+				if sharedTracker {
+					tasks[i].Priority = stalenessAt(scoreAt, snap.LastSuccess, maxStale)
+				}
+			}
+			if sharedTracker {
+				continue
+			}
+		}
 		if score, ok := s.staleness.StalenessScore(inst.Type, inst.Name); ok {
 			tasks[i].Priority = score
 		}

@@ -132,10 +132,7 @@ func (t *StalenessTracker) StalenessScore(instanceType InstanceType, instance st
 		return 0, false
 	}
 
-	t.mu.RLock()
-	snap, ok := t.entries[freshnessTarget{instanceType, instance}]
-	maxStale := t.maxStale
-	t.mu.RUnlock()
+	snap, maxStale, ok := t.snapshotWithBounds(instanceType, instance)
 	if !ok {
 		return 0, false
 	}
@@ -193,10 +190,15 @@ func (t *StalenessTracker) mergeSnapshot(snapshot FreshnessSnapshot) {
 }
 
 func (t *StalenessTracker) snapshot(instanceType InstanceType, instance string) (FreshnessSnapshot, bool) {
+	snap, _, ok := t.snapshotWithBounds(instanceType, instance)
+	return snap, ok
+}
+
+func (t *StalenessTracker) snapshotWithBounds(instanceType InstanceType, instance string) (FreshnessSnapshot, time.Duration, bool) {
 	t.mu.RLock()
 	defer t.mu.RUnlock()
 	snap, ok := t.entries[freshnessTarget{instanceType, instance}]
-	return snap, ok
+	return snap, t.maxStale, ok
 }
 
 // StalenessSnapshot represents staleness data for a single instance.

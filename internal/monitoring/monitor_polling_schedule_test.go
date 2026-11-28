@@ -2,6 +2,7 @@ package monitoring
 
 import (
 	"context"
+	"fmt"
 	"slices"
 	"sync/atomic"
 	"testing"
@@ -74,6 +75,99 @@ func TestPlanningPreservesBuiltinTargetOrderAndFirstDueTime(t *testing.T) {
 	}
 	if got := m.buildScheduledTasks(now); !slices.Equal(got, want) {
 		t.Fatalf("scheduled polls = %+v, want %+v", got, want)
+	}
+}
+
+func TestMonitorAdaptivePlanUsesTrackedFreshnessForInventoryAndSuccessor(t *testing.T) {
+	for _, name := range []string{"shared-tracker", "custom-scoring"} {
+		t.Run(name, func(t *testing.T) {
+			synctest.Test(t, func(t *testing.T) {
+				kind := InstanceTypePVE
+				now := time.Now()
+				tracker := NewStalenessTracker(nil)
+				tracker.SetBounds(10*time.Second, time.Minute)
+				tracker.setSnapshot(FreshnessSnapshot{
+					InstanceType: kind, Instance: "alpha",
+					LastSuccess: now.Add(-25 * time.Second), ChangeHash: "known",
+				})
+				tracker.setSnapshot(FreshnessSnapshot{
+					InstanceType: kind, Instance: "zeta", LastError: now,
+				})
+				var source StalenessSource = tracker
+				knownPriority, neverSucceededPriority := 25.0/60, 1.0
+				if name == "custom-scoring" {
+					source = mockStalenessSource{scores: map[string]float64{"pve:alpha": 0.6, "pve:zeta": 0.8}}
+					knownPriority, neverSucceededPriority = 0.6, 0.8
+				}
+				observed := make(map[string]IntervalRequest)
+				const cadence = 20 * time.Second
+				m := &Monitor{
+					pveClients:       map[string]PVEClientInterface{"alpha": nil, "unseen": nil, "zeta": nil},
+					stalenessTracker: tracker,
+					taskQueue:        NewTaskQueue(),
+					scheduler: NewAdaptiveScheduler(DefaultSchedulerConfig(), source, testIntervalSelectorFunc(func(req IntervalRequest) time.Duration {
+						observed[req.InstanceKey] = req
+						return cadence
+					}), nil),
+				}
+				// All three targets are due now, so priority breaks the tie.
+				tasks := m.buildScheduledTasks(now)
+				want := []ScheduledTask{
+					{InstanceName: "zeta", InstanceType: kind, NextRun: now, Interval: cadence, Priority: neverSucceededPriority},
+					{InstanceName: "alpha", InstanceType: kind, NextRun: now, Interval: cadence, Priority: knownPriority, Metadata: TaskMetadata{ChangeHash: "known"}},
+					{InstanceName: "unseen", InstanceType: kind, NextRun: now, Interval: cadence},
+				}
+				if !slices.Equal(tasks, want) {
+					t.Fatalf("inventory plan = %+v, want %+v", tasks, want)
+				}
+				key := schedulerKey(kind, "alpha")
+				assertFreshness := func() {
+					t.Helper()
+					req, ok := observed[key]
+					if !ok || !req.LastSuccess.Equal(now.Add(-25*time.Second)) || req.StalenessScore != knownPriority {
+						t.Fatalf("interval selector received %+v (%t) for alpha", req, ok)
+					}
+				}
+				assertFreshness()
+				delete(observed, key)
+				next, decision := m.nextScheduledPoll(want[1])
+				wantNext := want[1]
+				wantNext.NextRun = now.Add(cadence)
+				if next != wantNext || decision != pollOnCadence {
+					t.Fatalf("successor = %+v (decision %v), want %+v on cadence", next, decision, wantNext)
+				}
+				assertFreshness()
+			})
+		})
+	}
+}
+
+func BenchmarkMonitorAdaptivePlanFreshness(b *testing.B) {
+	for _, size := range []int{256, 4096} {
+		b.Run(fmt.Sprint(size), func(b *testing.B) {
+			now := time.Now()
+			tracker := NewStalenessTracker(nil)
+			m := &Monitor{
+				pveClients:       make(map[string]PVEClientInterface, size),
+				stalenessTracker: tracker,
+				scheduler: NewAdaptiveScheduler(DefaultSchedulerConfig(), tracker,
+					mockIntervalSelector{30 * time.Second}, nil),
+			}
+			for i := range size {
+				name := fmt.Sprintf("site-%04d", i)
+				m.pveClients[name] = nil
+				tracker.setSnapshot(FreshnessSnapshot{
+					InstanceType: InstanceTypePVE, Instance: name,
+					LastSuccess: now.Add(-time.Duration(i%900) * 250 * time.Millisecond),
+					ChangeHash:  "synthetic",
+				})
+			}
+			m.buildScheduledTasks(now)
+			b.ReportAllocs()
+			for b.Loop() {
+				m.buildScheduledTasks(now)
+			}
+		})
 	}
 }
 
