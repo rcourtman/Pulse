@@ -1267,6 +1267,9 @@ it, use the snooze and unsnooze endpoints below.
 - `PUT /api/alerts/config` — replaces only the top-level keys the body
   carries; a key left out keeps its stored value, and the merged config is
   normalized as before. The body must be a JSON object.
+  Request bodies are limited to 1 MiB, and updates carrying more than 500
+  `customRules`, more than 100 `filterConditions.filters` on a custom rule, or
+  more than 100 `schedule.escalation.levels` are rejected with `400`.
 - `GET /api/alerts/intent-policies` (`monitoring:read`)
 - `PUT /api/alerts/intent-policies` (`monitoring:write`)
 - `POST /api/alerts/intent-policies/preview` (`monitoring:read`)
@@ -1295,9 +1298,9 @@ it, use the snooze and unsnooze endpoints below.
 - `GET /api/alerts/history` — each entry carries at most one `evidence` envelope, the newest; `operationalRecord.evidenceIds` keeps the full list, and `GET /api/alerts/active` returns an open alert's full evidence
 - `DELETE /api/alerts/history`
 - `GET /api/alerts/incidents`
-- `POST /api/alerts/incidents/note`
-- `POST /api/alerts/bulk/acknowledge`
-- `POST /api/alerts/bulk/clear`
+- `POST /api/alerts/incidents/note` (up to 8 KiB JSON body: `{ "alertIdentifier": "alert-id", "incident_id": "incident-id", "note": "..." }`, requiring `alertIdentifier` or `incident_id` and a non-empty `note`)
+- `POST /api/alerts/bulk/acknowledge` (up to 1 MiB JSON body: `{ "alertIdentifiers": ["alert-id-1", ...] }`, up to 16,384 identifiers). Returns `400` if empty or over the cap. Uses the authenticated caller and ignores any client-supplied `user` field. Unknown identifiers fail per item with `"alert not found"` without repeating unknown IDs in the error text.
+- `POST /api/alerts/bulk/clear` (up to 1 MiB JSON body: `{ "alertIdentifiers": ["alert-id-1", ...] }`, up to 16,384 identifiers). Returns `400` if empty or over the cap. Unknown identifiers fail per item with `"alert not found"`.
 - `POST /api/alerts/acknowledge` (body: `{ "alertIdentifier": "alert-id" }`)
 - `POST /api/alerts/unacknowledge` (body: `{ "alertIdentifier": "alert-id" }`)
 - `POST /api/alerts/snooze` (body: `{ "alertIdentifier": "alert-id", "until": "RFC3339 timestamp" }`; pauses delivery and escalation for up to 30 days while monitoring continues)

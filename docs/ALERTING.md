@@ -84,6 +84,10 @@ check requires entering the Apprise API key again for both saving and testing.
 A blank SMTP server host is refused as a configuration error instead of dialing
 loopback.
 
+When using Apprise CLI mode, Pulse passes the alert body over standard input
+with NUL bytes removed and truncates the CLI title argument to one line (at
+most 1024 bytes) so unusual resource names cannot break grouped deliveries.
+
 Across queued email, webhook, and Apprise destinations, when a later live alert
 or recovery succeeds for the exact same saved destination configuration, Pulse
 automatically re-queues up to 25 recent (24-hour) retryable retained failures
@@ -353,9 +357,13 @@ separated by the normal poll or agent report interval for that rule.
 
 `metricStatus` is live in-memory state and is omitted from durable checkpoints,
 so it is absent immediately after a Pulse restart until the next evaluation.
-Non-threshold alerts and older builds can also omit it. A missing field,
-missing alert, unchanged timestamp, or failed request does not establish
-progress or prove a stall on its own. Checking one open rule does not prove
-other rules ran or that any destination accepted a notification. Keep the full
-response private, and do not lower thresholds or force a test alert just to
-run this check.
+Active-alert recovery checkpoints and degraded recovery markers are capped at
+16 MiB. If active alerts exceed that limit, Pulse leaves the largest records
+out of the checkpoint file and marks degraded markers incomplete so startup
+restores from the SQLite alert projection and journal tail without deleting
+omitted active alerts. Non-threshold alerts and older builds can also omit
+`metricStatus`. A missing field, missing alert, unchanged timestamp, or failed
+request does not establish progress or prove a stall on its own. Checking one
+open rule does not prove other rules ran or that any destination accepted a
+notification. Keep the full response private, and do not lower thresholds or
+force a test alert just to run this check.
