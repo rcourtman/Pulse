@@ -424,9 +424,7 @@ func TestTokenStreamWriterInterruptsStalledTransport(t *testing.T) {
 // proxy reads (no token, no periodic recheck) must both end promptly.
 func TestUpdateStreamChainRequestCancellationInterruptsBlockedWrites(t *testing.T) {
 	for _, credential := range []string{"token", "proxy"} {
-		credential := credential
 		t.Run(credential+"/frame", func(t *testing.T) {
-			t.Parallel()
 			s := newShutdownStreamServer(t)
 			s.dialStreamAs(credential, true)
 			probe, done := s.stream(0)
@@ -442,7 +440,6 @@ func TestUpdateStreamChainRequestCancellationInterruptsBlockedWrites(t *testing.
 		})
 
 		t.Run(credential+"/preamble", func(t *testing.T) {
-			t.Parallel()
 			s := newShutdownStreamServer(t)
 			s.broadcaster().Broadcast(heldProgress())
 			deadline := time.Now().Add(shutdownStreamTimeout)
