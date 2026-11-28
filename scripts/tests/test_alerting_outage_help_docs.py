@@ -382,6 +382,68 @@ class AlertingOutageHelpDocsTest(unittest.TestCase):
             with self.subTest(phrase=phrase):
                 self.assertIn(phrase, text)
 
+    def test_platform_alert_table_staleness_and_metrics_data_flow_match_source(self):
+        section = " ".join(outage_section().split())
+        platform_table = (
+            ROOT / "frontend-modern/src/features/platformPage/PlatformAlertsTable.tsx"
+        ).read_text(encoding="utf-8")
+        staleness = (
+            ROOT / "frontend-modern/src/features/platformPage/resourceStaleness.ts"
+        ).read_text(encoding="utf-8")
+        docker_alerts = (
+            ROOT / "frontend-modern/src/features/docker/DockerAlertsTable.tsx"
+        ).read_text(encoding="utf-8")
+        k8s_alerts = (
+            ROOT / "frontend-modern/src/features/kubernetes/KubernetesAlertsTable.tsx"
+        ).read_text(encoding="utf-8")
+        truenas_alerts = (
+            ROOT / "frontend-modern/src/features/truenas/TrueNASAlertsTable.tsx"
+        ).read_text(encoding="utf-8")
+        vsphere_alerts = (
+            ROOT / "frontend-modern/src/features/vmware/VsphereAlertsTable.tsx"
+        ).read_text(encoding="utf-8")
+
+        self.assertIn("getPlatformResourceStaleNotice(", platform_table)
+        self.assertIn("reflects the last report received and may no longer be", platform_table)
+        self.assertIn("label: 'Stale data'", staleness)
+        self.assertIn("Last error:", staleness)
+        self.assertIn('shellTitle="Active Alerts"', docker_alerts)
+        self.assertIn('shellTitle="Active Alerts"', k8s_alerts)
+        self.assertIn('shellTitle="Health Alerts"', truenas_alerts)
+        self.assertIn('shellTitle="Health Signals"', vsphere_alerts)
+
+        for phrase in (
+            "**Platform alert tables:**",
+            "Docker (**Active Alerts**)",
+            "Kubernetes (**Active Alerts**)",
+            "TrueNAS (**Health Alerts**)",
+            "VMware (**Health Signals**)",
+            "amber **Stale data** cue beneath the resource name",
+            "keeping their **Critical**, **Warning**, or **Info** severity indicator visible",
+            "reflects the last report received and may no longer be current",
+            "clears automatically once live reporting resumes",
+            "acknowledging an alert does not restore collection",
+        ):
+            with self.subTest(alerting_phrase=phrase):
+                self.assertIn(phrase, section)
+
+        flow_doc = " ".join(
+            (ROOT / "docs/monitoring/METRICS_DATA_FLOW.md")
+            .read_text(encoding="utf-8")
+            .split()
+        )
+        for phrase in (
+            "**Bars** and live status rows across platform tables",
+            "Proxmox (including Ceph and replication)",
+            "Docker (including images, storage, networks, Compose, Swarm, and Active Alerts)",
+            "TrueNAS (including protection and Health Alerts)",
+            "Kubernetes (including inventory, record drawers, and Active Alerts)",
+            "VMware (including Health Signals and Activity)",
+            "amber **Stale data** cue and expanded-drawer notice while preserving worse Offline, Degraded, or alert severity states",
+        ):
+            with self.subTest(flow_phrase=phrase):
+                self.assertIn(phrase, flow_doc)
+
 
 if __name__ == "__main__":
     unittest.main()

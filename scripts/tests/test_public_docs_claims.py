@@ -627,6 +627,49 @@ class AIAutonomyHelpDocsTest(unittest.TestCase):
             with self.subTest(doc="docs/API.md", phrase=phrase):
                 self.assertIn(phrase, api_norm)
 
+    def test_assistant_safety_help_matches_retired_prompts_and_fail_closed_classification(
+        self,
+    ) -> None:
+        tool_call_go = (ROOT / "internal/agentcapabilities/tool_call.go").read_text(
+            encoding="utf-8"
+        )
+        manifest_go = (ROOT / "internal/agentcapabilities/manifest.go").read_text(
+            encoding="utf-8"
+        )
+        errors_go = (ROOT / "internal/agentcapabilities/errors.go").read_text(
+            encoding="utf-8"
+        )
+        ai_handlers_go = (ROOT / "internal/api/ai_handlers.go").read_text(
+            encoding="utf-8"
+        )
+
+        self.assertIn("return ToolCallKindWrite", tool_call_go)
+        self.assertIn("HostCommandAuthorityRequiredMessage", tool_call_go)
+        self.assertIn("pulse_question since the web chat window was retired", manifest_go)
+        self.assertIn('AgentErrCodeRawCommandRetired          = "raw_command_retired"', errors_go)
+        self.assertIn(
+            "http.StatusGone, agentcapabilities.AgentErrCodeRawCommandRetired",
+            ai_handlers_go,
+        )
+
+        doc = (ROOT / "docs/ASSISTANT_SAFETY.md").read_text(encoding="utf-8")
+        mirror = (ROOT / "frontend-modern/public/docs/ASSISTANT_SAFETY.md").read_text(
+            encoding="utf-8"
+        )
+        self.assertEqual(doc, mirror)
+        norm = " ".join(doc.split())
+        self.assertNotIn("Interactive tools that ask you something", norm)
+        self.assertNotIn("The model chooses when to read, ask, plan or conclude", norm)
+        for phrase in (
+            "Retired interactive prompt classification (`pulse_question` is no longer offered by any profile and is refused if called)",
+            "unknown tool names default to `write` so newly introduced tools cannot bypass governed-action checks accidentally",
+            "Raw command execution is retired (`raw_command_retired`, HTTP `410`) in favor of advertised typed resource actions",
+            "callers whose Pulse role cannot run actions receive a host-command authority refusal rather than host-command access",
+            "Interactive `pulse_question` prompts are retired alongside the in-app web chat window.",
+        ):
+            with self.subTest(phrase=phrase):
+                self.assertIn(phrase, norm)
+
 
 if __name__ == "__main__":
     unittest.main()

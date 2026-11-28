@@ -6,7 +6,7 @@ polling or storage. Keep the same connection, resource and metric in each view.
 
 | Where you see it | Where the readings come from |
 | --- | --- |
-| **Bars** in the Proxmox node or workload table | The latest resource state delivered to the page, not a query for stored points. Keep any stale, last-known or unavailable indication with the value. |
+| **Bars** and live status rows across platform tables | The latest resource state delivered to the page, not a query for stored points. When a provider or agent stops updating, cached rows across Proxmox (including Ceph and replication), Docker (including images, storage, networks, Compose, Swarm, and Active Alerts), TrueNAS (including protection and Health Alerts), Kubernetes (including inventory, record drawers, and Active Alerts), and VMware (including Health Signals and Activity) show an amber **Stale data** cue and expanded-drawer notice while preserving worse Offline, Degraded, or alert severity states. Keep any stale, last-known, or unavailable indication with the value. |
 | **Trends** in a workload or Proxmox node table | A separate server chart read. Workload summaries use `/api/charts/workloads` and node summaries use `/api/charts/infrastructure`. Some row previews read history for just that resource. The browser can retain an earlier result for the same selection while it refreshes. |
 | **Overview** charts in a resource drawer (or **History** on older layouts) | A read of `/api/metrics-store/history` for the selected resource and range. Check the chart's source label and observation time. A current or recent-only fallback is not stored coverage, and an empty range is not measured zero. |
 
