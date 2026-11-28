@@ -59,7 +59,6 @@ import {
 } from '@/features/platformPage/sharedPlatformPage';
 import { ProxmoxBackupsTable, type BackupResourceReadIssue } from './ProxmoxBackupsTable';
 import { ProxmoxBackupJobsSection } from './ProxmoxBackupJobsCard';
-import { ProxmoxCephTable } from './ProxmoxCephTable';
 import { ProxmoxNodesTable } from './ProxmoxNodesTable';
 import { ProxmoxReplicationTable, fetchReplicationJobs } from './ProxmoxReplicationTable';
 import { createNonSuspendingQuery } from '@/hooks/createNonSuspendingQuery';
@@ -105,6 +104,12 @@ const PROXMOX_WORKLOAD_STATUS_OPTIONS: readonly WorkloadsStatusOption[] = [
   { value: 'degraded', label: 'Attention' },
   { value: 'stopped', label: 'Stopped' },
 ];
+
+const ProxmoxCephTable = lazy(() =>
+  import('./ProxmoxCephTable').then(({ ProxmoxCephTable }) => ({
+    default: ProxmoxCephTable,
+  })),
+);
 
 const ProxmoxMailGatewayTable = lazy(() =>
   import('./ProxmoxMailGatewayTable').then(({ ProxmoxMailGatewayTable }) => ({
@@ -522,12 +527,14 @@ export function ProxmoxPageSurface() {
               />
             </Show>
             <Show when={activeTab() === 'ceph'}>
-              <ProxmoxCephTable
-                resources={model().ceph.filter((resource) => resource.type === 'ceph')}
-                emptyIcon={<ProxmoxIcon class="h-6 w-6 text-slate-400" />}
-                emptyTitle="No Ceph clusters"
-                emptyDescription="Ceph clusters appear here once a Proxmox VE node reports cluster topology."
-              />
+              <Suspense>
+                <ProxmoxCephTable
+                  resources={model().ceph.filter((resource) => resource.type === 'ceph')}
+                  emptyIcon={<ProxmoxIcon class="h-6 w-6 text-slate-400" />}
+                  emptyTitle="No Ceph clusters"
+                  emptyDescription="Ceph clusters appear here once a Proxmox VE node reports cluster topology."
+                />
+              </Suspense>
             </Show>
             <Show when={activeTab() === 'mail'}>
               <Suspense>

@@ -11,6 +11,7 @@ import type {
   BackupVerdictTone,
 } from './proxmoxBackupVerdict';
 import type { DatastoreJobFailureGroup } from './proxmoxBackupServerJobs';
+import { BackupStaleHeaderCue } from './proxmoxBackupsTableShared';
 
 // The Backup health card answers "is everything backed up?" the way the
 // Proxmox overview tables do: the protected count sits in the header strip,
@@ -33,6 +34,9 @@ export interface CoverageStripProps {
   // guest, so they never count against the protected verdict.
   datastoreProblems?: readonly DatastoreJobFailureGroup[];
   onSelectDatastoreProblem?: () => void;
+  // Stale PVE/PBS polling notice; keeps protected counts visible while
+  // preventing a reassuring green verdict dot when backup sources stopped reporting.
+  staleNotice?: string | null;
 }
 
 const TONE_DOT_CLASS: Record<BackupVerdictTone, string> = {
@@ -154,6 +158,8 @@ export const ProxmoxBackupsCoverageStrip: Component<CoverageStripProps> = (props
       props.verdict.notEvaluated > 0 ? `${props.verdict.notEvaluated} not evaluated` : null,
     ].filter(Boolean) as string[];
   const rated = () => props.verdict.rated;
+  const effectiveTone = (): BackupVerdictTone =>
+    props.staleNotice && props.verdict.tone === 'protected' ? 'attention' : props.verdict.tone;
 
   return (
     <TableCard data-coverage-strip>
@@ -163,13 +169,17 @@ export const ProxmoxBackupsCoverageStrip: Component<CoverageStripProps> = (props
             <span class="whitespace-nowrap">{props.title}</span>
             <span
               class="inline-flex min-w-0 items-center gap-1.5 normal-case tracking-normal"
-              data-backup-verdict={props.verdict.tone}
+              data-backup-verdict={effectiveTone()}
             >
               <span
-                class={`h-2 w-2 shrink-0 rounded-full ${TONE_DOT_CLASS[props.verdict.tone]}`}
+                class={`h-2 w-2 shrink-0 rounded-full ${TONE_DOT_CLASS[effectiveTone()]}`}
                 aria-hidden="true"
               />
-              <span class="sr-only">{props.verdict.headline}</span>
+              <span class="sr-only">
+                {props.staleNotice
+                  ? `${props.verdict.headline} (stale data)`
+                  : props.verdict.headline}
+              </span>
               <Show
                 when={rated() > 0}
                 fallback={
@@ -188,6 +198,7 @@ export const ProxmoxBackupsCoverageStrip: Component<CoverageStripProps> = (props
                 </span>
               </Show>
             </span>
+            <BackupStaleHeaderCue notice={props.staleNotice} attr="verdict" />
             {/* These targets are outside the protected ratio. Keep their
                 counts visible on phones too, without widening the card. */}
             <For each={asides()}>

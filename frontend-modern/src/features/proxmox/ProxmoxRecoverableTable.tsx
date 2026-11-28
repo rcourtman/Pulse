@@ -34,7 +34,11 @@ import type { RecoverableSortKey } from './proxmoxBackupsTableModel';
 import {
   ArtifactSourceIdentity,
   ArtifactStateBadge,
+  BackupStaleDrawerNotice,
+  BackupStaleRowCue,
+  NO_USABLE_SIZE_NOTE,
   PROXMOX_BACKUP_COLUMN_LABELS,
+  SIZE_IN_PROGRESS_NOTE,
   ProxmoxBackupAgeText,
   ProxmoxBackupWorkloadTypeBadge,
   RowMetricBar,
@@ -56,6 +60,7 @@ import {
 } from './proxmoxBackupsTablePresentation';
 import { getProxmoxBackupSourcePresentation } from './proxmoxBackupSourcePresentation';
 import { proxmoxBackupWorkloadSubject } from './proxmoxBackupWorkloadSubject';
+import type { BackupStaleNotice } from './proxmoxBackupStaleness';
 import { PlatformWindowedRows } from '@/features/platformPage/PlatformWindowedRows';
 
 // Flat recoverable-artifact table. Parent state owns filtering, sorting, and
@@ -172,9 +177,7 @@ const buildRecoverableDetailSections = (artifact: RecoverableArtifact): DetailSe
       footerContent: (
         <Show when={!hasSize}>
           <p class="whitespace-normal text-[11px] leading-snug text-muted wrap-anywhere">
-            {artifact.running
-              ? 'Size will be reported after the backup finishes.'
-              : 'No usable size was reported. Unknown does not mean this restore point is empty.'}
+            {artifact.running ? SIZE_IN_PROGRESS_NOTE : NO_USABLE_SIZE_NOTE}
           </p>
         </Show>
       ),
@@ -232,20 +235,35 @@ const buildRecoverableDetailSections = (artifact: RecoverableArtifact): DetailSe
 
 const RecoverableArtifactDetail = (props: {
   artifact: RecoverableArtifact;
+  staleNotice?: BackupStaleNotice | null;
   onClose: () => void;
 }): JSX.Element => {
   const source = () => getProxmoxBackupSourcePresentation(props.artifact.sourceKind);
+  const status = (): StatusIndicator => {
+    const base = artifactStateIndicator(props.artifact);
+    if (!props.staleNotice) return base;
+    return {
+      variant: base.variant === 'danger' ? 'danger' : 'warning',
+      label: `${base.label} · ${props.staleNotice.badge}`,
+    };
+  };
   return (
     <InlineDetailPanel
       testId="proxmox-recoverable-detail"
       detailFor={props.artifact.id}
       title={props.artifact.workload.name || props.artifact.workload.label}
-      status={artifactStateIndicator(props.artifact)}
+      status={status()}
       summary={[source().detailFallbackLabel, props.artifact.location].filter(Boolean).join(' in ')}
       actions={<RecordOwnerLink subject={proxmoxBackupWorkloadSubject(props.artifact.workload)} />}
       sections={buildRecoverableDetailSections(props.artifact)}
       onClose={props.onClose}
-    />
+    >
+      <BackupStaleDrawerNotice
+        notice={props.staleNotice}
+        lead="Source telemetry is stale."
+        attr="recoverable"
+      />
+    </InlineDetailPanel>
   );
 };
 
@@ -270,6 +288,8 @@ export function ProxmoxRecoverableTable(props: {
   showSourceConnection?: boolean;
   /** Register focus retention with each row/detail's own cleanup owner. */
   retainInspectionFocus?: (content: HTMLElement) => void;
+  /** Backend-authoritative stale PVE/PBS notice affecting this restore point. */
+  staleNoticeForArtifact?: (artifact: RecoverableArtifact) => BackupStaleNotice | null;
 }) {
   let table: HTMLDivElement | undefined;
   const observedWidth = useObservedElementWidth();
@@ -320,137 +340,159 @@ export function ProxmoxRecoverableTable(props: {
   });
   const drawer = createPlatformResourceDetailState({ idPrefix: 'proxmox-recoverable-detail' });
 
-  const renderRow = (artifact: RecoverableArtifact): JSX.Element => (
-    <>
-      <TableRow
-        ref={(row) => props.retainInspectionFocus?.(row)}
-        {...getPlatformResourceDetailRowInteractionProps({
-          expanded: drawer.isExpanded(artifact),
-          onToggle: () => drawer.toggle(artifact),
-          class: 'hover:bg-surface-hover',
-        })}
-        data-proxmox-backup-row="recoverable"
-      >
-        <TableCell class={`${getPlatformTableCellClassForKind('name')} text-base-content`}>
-          {/* One line at every width: source, connection and location live in
-              their own columns or the drawer, never stacked under the name. */}
-          <div class="flex min-w-0 items-center gap-2">
-            <PlatformResourceDetailToggleButton
-              expanded={drawer.isExpanded(artifact)}
-              resourceLabel={artifactDisclosureLabel(artifact)}
-              controlsId={drawer.detailRowId(artifact)}
-              hideWhenRowTappableOnMobile={false}
-              class="my-0"
-              onToggle={() => drawer.toggle(artifact)}
-            />
-            <div class="flex min-w-0 flex-1 items-baseline gap-1.5">
-              <span
-                class={
-                  showWorkloadConnection() && getBackupWorkloadPVEConnection(artifact.workload)
-                    ? 'max-w-[72%] shrink-0 truncate font-semibold'
-                    : 'truncate font-semibold'
-                }
-                title={artifact.workload.label}
-              >
-                {artifact.workload.name || artifact.workload.label}
-              </span>
-              <Show when={!columnVisible('targetId') && artifact.workload.vmid}>
-                <span class="shrink-0 text-[10px] text-muted">
-                  {artifact.workload.typeLabel} {artifact.workload.vmid}
-                </span>
-              </Show>
-              <Show
-                when={showWorkloadConnection() && getBackupWorkloadPVEConnection(artifact.workload)}
-              >
-                {(connection) => (
-                  <span
-                    class="min-w-0 truncate text-[10px] text-muted"
-                    title={`PVE connection: ${connection()}`}
-                    data-backup-workload-connection
-                  >
-                    <span class="sr-only">PVE: </span>
-                    {connection()}
-                  </span>
-                )}
-              </Show>
-            </div>
-          </div>
-        </TableCell>
-        <Show when={columnVisible('type')}>
-          <TableCell class={`${getPlatformTableCellClassForKind('text')} text-base-content`}>
-            <ProxmoxBackupWorkloadTypeBadge
-              type={artifact.workload.type}
-              label={artifact.workload.typeLabel}
-            />
-          </TableCell>
-        </Show>
-        <Show when={columnVisible('targetId')}>
-          <TableCell
-            class={`${getPlatformTableCellClassForKind('text')} text-muted font-mono text-[11px] tabular-nums`}
-          >
-            {artifact.workload.vmid || '—'}
-          </TableCell>
-        </Show>
-        <Show when={columnVisible('source')}>
-          <TableCell class={`${getPlatformTableCellClassForKind('text')} text-base-content`}>
-            <ArtifactSourceIdentity artifact={artifact} showConnection={showSourceConnection()} />
-          </TableCell>
-        </Show>
-        <Show when={columnVisible('location')}>
-          <TableCell class={`${getPlatformTableCellClassForKind('text')} text-base-content`}>
-            <span class="block truncate" title={artifact.location}>
-              {artifact.location}
-            </span>
-          </TableCell>
-        </Show>
-        <TableCell class={`${getPlatformTableCellClassForKind('numeric-value')} text-base-content`}>
-          <ProxmoxBackupAgeText artifact={artifact} compact={layoutMode() === 'compact'} />
-        </TableCell>
-        <Show when={columnVisible('size')}>
-          <TableCell class={`${getPlatformTableCellClassForKind('metric-bar')} text-base-content`}>
-            <Show
-              when={artifact.size && artifact.size > 0}
-              fallback={
-                <span class="text-muted">{artifact.running ? 'In progress' : 'Unknown size'}</span>
-              }
-            >
-              <RowMetricBar
-                valuePct={
-                  props.sizeMaxBytes > 0 && artifact.size
-                    ? (artifact.size / props.sizeMaxBytes) * 100
-                    : 0
-                }
-                fillClass="bg-blue-500/40 dark:bg-blue-500/40"
-                label={formatPlatformTableBytesValue(artifact.size)}
-                tooltip={`${formatPlatformTableBytesValue(artifact.size)} (relative to largest artifact in view)`}
-              />
-            </Show>
-          </TableCell>
-        </Show>
-        <TableCell class={`${getPlatformTableCellClassForKind('text')} text-base-content`}>
-          <ArtifactStateBadge artifact={artifact} label={artifactStateLabel(artifact)} />
-        </TableCell>
-        <Show when={columnVisible('details')}>
-          <TableCell class={`${getPlatformTableCellClassForKind('text')} text-base-content`}>
-            <span class="block truncate" title={artifact.detailTitle ?? artifact.detail}>
-              {artifact.detail || '—'}
-            </span>
-          </TableCell>
-        </Show>
-      </TableRow>
-      <Show when={drawer.isExpanded(artifact)}>
-        <InlineDetailTableRow
+  const renderRow = (artifact: RecoverableArtifact): JSX.Element => {
+    const staleNotice = () => props.staleNoticeForArtifact?.(artifact) ?? null;
+    return (
+      <>
+        <TableRow
           ref={(row) => props.retainInspectionFocus?.(row)}
-          cellId={drawer.detailRowId(artifact)}
-          class=""
-          colspan={visibleColumns().length}
-          data-inline-detail-for={artifact.id}
+          {...getPlatformResourceDetailRowInteractionProps({
+            expanded: drawer.isExpanded(artifact),
+            onToggle: () => drawer.toggle(artifact),
+            class: 'hover:bg-surface-hover',
+          })}
+          data-proxmox-backup-row="recoverable"
         >
-          <RecoverableArtifactDetail artifact={artifact} onClose={() => drawer.close(artifact)} />
-        </InlineDetailTableRow>
-      </Show>
-    </>
-  );
+          <TableCell class={`${getPlatformTableCellClassForKind('name')} text-base-content`}>
+            {/* One line at every width: source, connection and location live in
+              their own columns or the drawer, never stacked under the name. */}
+            <div class="flex min-w-0 items-center gap-2">
+              <PlatformResourceDetailToggleButton
+                expanded={drawer.isExpanded(artifact)}
+                resourceLabel={artifactDisclosureLabel(artifact)}
+                controlsId={drawer.detailRowId(artifact)}
+                hideWhenRowTappableOnMobile={false}
+                class="my-0"
+                onToggle={() => drawer.toggle(artifact)}
+              />
+              <div class="flex min-w-0 flex-1 items-baseline gap-1.5">
+                <span
+                  class={
+                    showWorkloadConnection() && getBackupWorkloadPVEConnection(artifact.workload)
+                      ? 'max-w-[72%] shrink-0 truncate font-semibold'
+                      : 'truncate font-semibold'
+                  }
+                  title={artifact.workload.label}
+                >
+                  {artifact.workload.name || artifact.workload.label}
+                </span>
+                <Show when={!columnVisible('targetId') && artifact.workload.vmid}>
+                  <span class="shrink-0 text-[10px] text-muted">
+                    {artifact.workload.typeLabel} {artifact.workload.vmid}
+                  </span>
+                </Show>
+                <Show
+                  when={
+                    showWorkloadConnection() && getBackupWorkloadPVEConnection(artifact.workload)
+                  }
+                >
+                  {(connection) => (
+                    <span
+                      class="min-w-0 truncate text-[10px] text-muted"
+                      title={`PVE connection: ${connection()}`}
+                      data-backup-workload-connection
+                    >
+                      <span class="sr-only">PVE: </span>
+                      {connection()}
+                    </span>
+                  )}
+                </Show>
+              </div>
+            </div>
+          </TableCell>
+          <Show when={columnVisible('type')}>
+            <TableCell class={`${getPlatformTableCellClassForKind('text')} text-base-content`}>
+              <ProxmoxBackupWorkloadTypeBadge
+                type={artifact.workload.type}
+                label={artifact.workload.typeLabel}
+              />
+            </TableCell>
+          </Show>
+          <Show when={columnVisible('targetId')}>
+            <TableCell
+              class={`${getPlatformTableCellClassForKind('text')} text-muted font-mono text-[11px] tabular-nums`}
+            >
+              {artifact.workload.vmid || '—'}
+            </TableCell>
+          </Show>
+          <Show when={columnVisible('source')}>
+            <TableCell class={`${getPlatformTableCellClassForKind('text')} text-base-content`}>
+              <ArtifactSourceIdentity artifact={artifact} showConnection={showSourceConnection()} />
+            </TableCell>
+          </Show>
+          <Show when={columnVisible('location')}>
+            <TableCell class={`${getPlatformTableCellClassForKind('text')} text-base-content`}>
+              <span class="block truncate" title={artifact.location}>
+                {artifact.location}
+              </span>
+            </TableCell>
+          </Show>
+          <TableCell
+            class={`${getPlatformTableCellClassForKind('numeric-value')} text-base-content`}
+          >
+            <ProxmoxBackupAgeText artifact={artifact} compact={layoutMode() === 'compact'} />
+          </TableCell>
+          <Show when={columnVisible('size')}>
+            <TableCell
+              class={`${getPlatformTableCellClassForKind('metric-bar')} text-base-content`}
+            >
+              <Show
+                when={artifact.size && artifact.size > 0}
+                fallback={
+                  <span class="text-muted">
+                    {artifact.running ? 'In progress' : 'Unknown size'}
+                  </span>
+                }
+              >
+                <RowMetricBar
+                  valuePct={
+                    props.sizeMaxBytes > 0 && artifact.size
+                      ? (artifact.size / props.sizeMaxBytes) * 100
+                      : 0
+                  }
+                  fillClass="bg-blue-500/40 dark:bg-blue-500/40"
+                  label={formatPlatformTableBytesValue(artifact.size)}
+                  tooltip={`${formatPlatformTableBytesValue(artifact.size)} (relative to largest artifact in view)`}
+                />
+              </Show>
+            </TableCell>
+          </Show>
+          <TableCell class={`${getPlatformTableCellClassForKind('text')} text-base-content`}>
+            <div class="min-w-0">
+              <ArtifactStateBadge artifact={artifact} label={artifactStateLabel(artifact)} />
+              <BackupStaleRowCue
+                notice={staleNotice()}
+                compact={layoutMode() === 'compact'}
+                attr="recoverable"
+              />
+            </div>
+          </TableCell>
+          <Show when={columnVisible('details')}>
+            <TableCell class={`${getPlatformTableCellClassForKind('text')} text-base-content`}>
+              <span class="block truncate" title={artifact.detailTitle ?? artifact.detail}>
+                {artifact.detail || '—'}
+              </span>
+            </TableCell>
+          </Show>
+        </TableRow>
+        <Show when={drawer.isExpanded(artifact)}>
+          <InlineDetailTableRow
+            ref={(row) => props.retainInspectionFocus?.(row)}
+            cellId={drawer.detailRowId(artifact)}
+            class=""
+            colspan={visibleColumns().length}
+            data-inline-detail-for={artifact.id}
+          >
+            <RecoverableArtifactDetail
+              artifact={artifact}
+              staleNotice={staleNotice()}
+              onClose={() => drawer.close(artifact)}
+            />
+          </InlineDetailTableRow>
+        </Show>
+      </>
+    );
+  };
 
   return (
     <Show

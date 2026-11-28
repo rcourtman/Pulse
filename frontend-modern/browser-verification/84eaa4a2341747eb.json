@@ -1,0 +1,58 @@
+{
+  "version": 1,
+  "base_sha": "6f3e63e441d71f8f1351a648ea607a6a8d6dd73e",
+  "verified_at": "2026-11-28T05:04:11.785517Z",
+  "result": "passed",
+  "changed_paths": [
+    "frontend-modern/src/features/proxmox/ProxmoxBackupJobsCard.tsx",
+    "frontend-modern/src/features/proxmox/ProxmoxBackupServersTable.tsx",
+    "frontend-modern/src/features/proxmox/ProxmoxBackupsCoverageStrip.tsx",
+    "frontend-modern/src/features/proxmox/ProxmoxBackupsTable.tsx",
+    "frontend-modern/src/features/proxmox/ProxmoxCoverageTable.tsx",
+    "frontend-modern/src/features/proxmox/ProxmoxPageSurface.tsx",
+    "frontend-modern/src/features/proxmox/ProxmoxRecoverableTable.tsx",
+    "frontend-modern/src/features/proxmox/ProxmoxReplicationTable.tsx",
+    "frontend-modern/src/features/proxmox/proxmoxBackupStaleness.ts",
+    "frontend-modern/src/features/proxmox/proxmoxBackupsTableShared.tsx"
+  ],
+  "content_sha256": {
+    "frontend-modern/src/features/proxmox/ProxmoxBackupJobsCard.tsx": "c4d31630925ec4f863706a6028332a94f554cfb82d019d3f519440d65bdd5fae",
+    "frontend-modern/src/features/proxmox/ProxmoxBackupServersTable.tsx": "e34bac13b17462511f5032882f2c55ad43ce6a73d5119e2142d7898b0b4bea6c",
+    "frontend-modern/src/features/proxmox/ProxmoxBackupsCoverageStrip.tsx": "b9da3c1aad60a2b4ce4c4240862d898521826fcb4caabf355eca0cd32dd7e298",
+    "frontend-modern/src/features/proxmox/ProxmoxBackupsTable.tsx": "fd43de07ef53605a5427eb66fced574e120f6ca4fe8d2048541e9428be90a120",
+    "frontend-modern/src/features/proxmox/ProxmoxCoverageTable.tsx": "1d8271842cc277484312324b1ea506aeece01009ef1b8f404328000fa9800d35",
+    "frontend-modern/src/features/proxmox/ProxmoxPageSurface.tsx": "e34d1e4a28038aee0d4aafcd2fc4cc114760f16d851e90c6c51524ce8a7169a3",
+    "frontend-modern/src/features/proxmox/ProxmoxRecoverableTable.tsx": "2e9f3fec1dbb9746b0288d70197a5e3e7f7c09320bed9028a3bfbec6bfcf6de0",
+    "frontend-modern/src/features/proxmox/ProxmoxReplicationTable.tsx": "24db021864fe94ac1111f13035b7066f5e9c6c5cd593ddfa6ce9f4c1135f290b",
+    "frontend-modern/src/features/proxmox/proxmoxBackupStaleness.ts": "033eaaed6fb8bb2fddcd80a7cb3bcc13f02b8298d0a35bcf7ecfea7b529d33e1",
+    "frontend-modern/src/features/proxmox/proxmoxBackupsTableShared.tsx": "0976b2dd53c70ded33f1a64ba675beb7d1b4fbee2fd9371090808131c0d80d22"
+  },
+  "routes": [
+    "/proxmox/backups/coverage",
+    "/proxmox/backups/date"
+  ],
+  "viewports": [
+    {
+      "width": 1440,
+      "height": 940
+    },
+    {
+      "width": 360,
+      "height": 820
+    }
+  ],
+  "states": [
+    "Comparable before (baseline 6f3e63e441) and after production builds exercised through pulse-worker-browser in Desktop Light Chromium (1440x940) and Touch Phone Dark WebKit (360x820) with 0 console errors, 0 page errors, 0 HTTP >= 400 responses, and 0px horizontal overflow; all 14 paired screenshots visually inspected.",
+    "Stale PVE node (pve-stale, 18m, i/o timeout) and stale PBS server (pbs-stale, 22m, connection refused) surface page-level stale banner, downgrade Backup health protected dot to amber with Stale data cue while preserving 3 / 3 protected counts and 100% bar, and show Stale data on Backup jobs while preserving Last 24h 3 ok and 14-day bars.",
+    "Coverage marks only affected workloads (db-primary via pve-stale, app-offsite via pbs-stale) with amber dot and Stale \u00b7 18m / Stale \u00b7 22m (Stale on phone) while preserving Protected label, backup ages, task OK, and keeping unaffected api-fresh green; expanding db-primary renders amber Readings are stale notice with timeout error.",
+    "By date marks only affected restore points with Stale cues while preserving Kept/Verified state badges and all restore-point details; expanding db-primary renders amber Source telemetry is stale notice.",
+    "Live recovery clears the page banner, restores green Backup health verdict dot, clears Backup jobs Stale data, and clears all row and drawer stale cues.",
+    "Synthetic API/WS fixture proof on built frontend; does not replace native Proxmox VE / PBS server polling or installed release proof."
+  ],
+  "interactions": [
+    "Loaded /proxmox/backups/coverage with stale PVE node + stale PBS server + fresh peer node/PBS and inspected Backup health, Backup jobs, Backup servers, and Coverage rows.",
+    "Expanded db-primary Coverage inline drawer via row disclosure button and verified amber Readings are stale notice and preserved restore points.",
+    "Switched to By date via tab link, expanded db-primary restore point inline drawer, and verified Stale cue and Source telemetry is stale notice.",
+    "Switched back to Coverage after live recovery update and verified all stale cues cleared and green 3 / 3 protected verdict returned."
+  ]
+}

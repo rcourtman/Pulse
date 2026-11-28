@@ -421,6 +421,9 @@ class PBSDocsTest(unittest.TestCase):
         table = (
             ROOT / "frontend-modern/src/features/proxmox/ProxmoxBackupServersTable.tsx"
         ).read_text(encoding="utf-8")
+        staleness = (
+            ROOT / "frontend-modern/src/features/proxmox/proxmoxBackupStaleness.ts"
+        ).read_text(encoding="utf-8")
         section = " ".join(
             DOC.read_text(encoding="utf-8")
             .split("### Stale PBS readings and unread datastore capacity\n", 1)[1]
@@ -432,7 +435,7 @@ class PBSDocsTest(unittest.TestCase):
         for source_token in (
             "const PBS_DATA_STALE = 'PBS data stale'",
             "const UNREAD_CAPACITY_NOTE = 'This does not mean the datastore is empty.'",
-            "server.sourceStatus?.pbs?.status === 'stale'",
+            "pollStale: isPBSServerPollStale(server)",
             "Stale. Capacity, forecasts and jobs are last reported values.",
             "Last reading & forecast",
             "Last reading",
@@ -440,6 +443,13 @@ class PBSDocsTest(unittest.TestCase):
         ):
             with self.subTest(source_token=source_token):
                 self.assertIn(source_token, table)
+        for staleness_token in (
+            "export const isPBSServerPollStale = (server: Resource): boolean => {",
+            "getResourceSourceStatus(server, 'pbs')?.status",
+            "srcStatus === 'stale'",
+        ):
+            with self.subTest(staleness_token=staleness_token):
+                self.assertIn(staleness_token, staleness)
         for phrase in (
             "Backup servers",
             "PBS data stale",
