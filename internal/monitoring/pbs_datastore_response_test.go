@@ -15,6 +15,7 @@ import (
 )
 
 func TestPBSDatastoreWholeResponseRetainsEvidence(t *testing.T) {
+	t.Parallel()
 	for _, kind := range []string{"vm", "ct"} {
 		for _, cold := range []bool{false, true} {
 			for _, scenario := range []struct {
@@ -98,6 +99,7 @@ func TestPBSDatastoreWholeResponseRetainsEvidence(t *testing.T) {
 // Export the actual public poll -> worker -> live/store/posture results for
 // consuming-surface evidence. This does not introduce a second production path.
 func TestPBSDatastoreWholeResponseConsumerLifecycle(t *testing.T) {
+	t.Parallel()
 	for _, kind := range []string{"vm", "ct"} {
 		t.Run(kind, func(t *testing.T) {
 			f := newPBSNamespacePollFixture(t, kind)

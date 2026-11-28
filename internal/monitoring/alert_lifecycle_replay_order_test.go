@@ -81,6 +81,7 @@ func (s *interruptingReplayRecorder) RecordChange(change unifiedresources.Resour
 }
 
 func TestInterruptedDisorderedImportReplayResumesEveryOccurrence(t *testing.T) {
+	t.Parallel()
 	for _, tc := range []struct {
 		name          string
 		simulateCrash bool
@@ -275,6 +276,7 @@ func requireEveryOccurrenceProjectedOnce(t *testing.T, canonical *unifiedresourc
 // the legacy cursor records the highest id it reached, above lower-id
 // occurrences that pass never visited.
 func TestUpgradeIgnoresUnsafeLegacyReplayCursorAndBackfillsRetainedEvents(t *testing.T) {
+	t.Parallel()
 	probe := newReplayDeliveryProbe(t)
 	eventDir := t.TempDir()
 	store, err := eventlog.Open(eventDir)

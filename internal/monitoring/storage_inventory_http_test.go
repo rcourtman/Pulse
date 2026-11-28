@@ -125,6 +125,7 @@ func (h *storageInventoryHTTPFixture) poll(t *testing.T, wantReads int) {
 }
 
 func TestPVEStorageHTTPInvalidResponseRetainsHistory(t *testing.T) {
+	t.Parallel()
 	for _, kind := range []string{"catalog", "content"} {
 		row := `{"storage":"archive-node-b","type":"dir","content":"backup","enabled":1,"active":1}`
 		missingDiscriminator := `{"storage":"archive-node-b","type":"dir"}`
@@ -225,6 +226,7 @@ func TestPVEStorageHTTPInvalidResponseRetainsHistory(t *testing.T) {
 }
 
 func TestPVEStorageHTTPAllUnreadCannotClaimEmpty(t *testing.T) {
+	t.Parallel()
 	for _, kind := range []string{"catalog", "content"} {
 		for _, cold := range []bool{false, true} {
 			t.Run(fmt.Sprintf("%s/cold=%t", kind, cold), func(t *testing.T) {

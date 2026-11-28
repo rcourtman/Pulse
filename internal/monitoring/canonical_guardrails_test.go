@@ -2081,6 +2081,7 @@ func TestGuestAgentBackupMonitoringContract(t *testing.T) {
 }
 
 func TestGuestAgentOptionalReadOrderingContract(t *testing.T) {
+	t.Parallel()
 	t.Run("current-status", func(t *testing.T) {
 		t.Parallel()
 		testGuestAgentOptionalReadOrdering(t, false)
@@ -2092,10 +2093,12 @@ func TestGuestAgentOptionalReadOrderingContract(t *testing.T) {
 }
 
 func TestGuestWindowsMeminfoPollingContract(t *testing.T) {
+	t.Parallel()
 	testGuestWindowsMeminfoPolling(t)
 }
 
 func TestGuestWindowsRestartPollingContract(t *testing.T) {
+	t.Parallel()
 	t.Run("cold-and-expired", func(t *testing.T) {
 		t.Parallel()
 		testGuestWindowsBootstrapPolling(t)

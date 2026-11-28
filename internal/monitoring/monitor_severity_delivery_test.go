@@ -17,6 +17,7 @@ import (
 // Issue 1801: exercise actual observation, manager admission, monitor callback,
 // persistent queue, HTTP destination and delivery history, not just callbacks.
 func TestMonitorSeverityDelivery(t *testing.T) {
+	t.Parallel()
 	for _, tc := range []struct {
 		cooldown, group int
 		policy          string

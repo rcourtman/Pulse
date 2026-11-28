@@ -23,6 +23,7 @@ import (
 // through ordinary recovery, including withdrawal of a prior no-writer fact.
 // These fixtures perform no guest or backup operation.
 func TestPBSWriterInventoryDoesNotInventTerminalFailure(t *testing.T) {
+	t.Parallel()
 	for _, kind := range []string{"vm", "ct"} {
 		for _, family := range []string{"backup", "syncjob"} {
 			for _, invalid := range []struct {
