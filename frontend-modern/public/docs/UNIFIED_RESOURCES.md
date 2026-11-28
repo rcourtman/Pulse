@@ -25,6 +25,7 @@ Every monitored entity is a `Resource` with:
 | `name` | Display name |
 | `type` | `agent` (Proxmox node, host agent or other host-class parent; `docker-host` when it carries only Docker data), `vm`, `system-container`, `app-container`, `docker-service`, `storage`, `ceph`, `physical_disk`, `pbs`, `pmg`, `network-share`, `network-endpoint`, `pod`, `k8s-cluster`, `k8s-node`, `k8s-deployment`, plus further `docker-*` and `k8s-*` types |
 | `status` | `online`, `warning`, `offline`, `unknown` (critical severity is reported separately as `critical` in the `health` object's verdict) |
+| `health` | Backend-owned canonical health envelope with a `verdict` (including `stale` and `critical`) and stable `reasons` (`code` such as `telemetry_stale` plus optional detail) |
 | `sources` | Array of contributing data sources (e.g., `["proxmox", "agent"]`) |
 | `sourceStatus` | Per-source health status |
 | `metrics` | CPU, memory, disk, network (when available) |
@@ -93,6 +94,14 @@ The v6 UI keeps platform-shaped top-level navigation. The unified resource model
 
 The unified `/workloads`, `/storage` and `/recovery` routes that briefly shipped in earlier release candidates were reverted in `v6.0.0-rc.6` and do not exist. See [Migration Guide](MIGRATION_UNIFIED_NAV.md) for the platform-shaped equivalents.
 
+### Stale Pulse Agent telemetry on Machines
+
+On **Machines** (`/standalone/machines`), Pulse keeps a host's last known metrics visible when its Pulse Agent stops reporting, but marks the readings clearly so stale hosts do not appear healthy:
+
+- **Status and filter classification:** When backend `health.verdict` is `stale`, `telemetry_stale` is recorded, `sourceStatus.agent` is impaired, `agent.stale` is true, or `lastSeen` is older than 5 minutes, the host leaves **Healthy**, joins **Degraded**, and shows an amber **Stale** status indicator. Explicit **Offline** and awaiting-first-report states remain distinct.
+- **Table banner and row cue:** A table-level warning banner lists affected hosts and ages (`Telemetry is stale for <host> (<age>). CPU, memory, disk, and sensor readings shown are last known values until their agents report again.`). Each affected row displays an always-visible compact amber cue beneath the machine name (`Stale · <age>` or `Stale data` on desktop, and `Stale` on narrow screens).
+- **Expanded details, search, and fallbacks:** Expanding a stale machine displays an amber warning notice (`Agent has stopped reporting.`, the last report age, `Showing last known readings.`, and `Last error:` when recorded). Machine search matches stale labels, detail text, and recorded source errors. Retained RAID summaries are labelled `RAID Arrays (last known)`, and retained temperatures stay muted as last-known values.
+
 ## API
 
 ### Primary Endpoint
@@ -116,12 +125,12 @@ Returns all unified resources. Supports query parameters:
 | `tags` | Filter by resource tag |
 | `page` | 1-based page number (default `1`) |
 | `limit` | Page size (default `50`, maximum `100`) |
-| `sort` | Sort field (default `name`) |
+| `sort` | Sort field: `name` (default), `status`, `type`, or `lastSeen` |
 | `order` | Sort direction (`asc` or `desc`, default `asc`) |
 
 ### Resource Details
 
-Individual resource details are available via the unified state WebSocket connection, which pushes real-time updates to the frontend.
+`GET /api/resources` prunes heavy platform-specific fields (such as PMG domain statistics) to keep list responses compact. Fetch the full payload for one resource with `GET /api/resources/{id}` (URL-encoding the canonical resource ID). Real-time updates are also pushed to the frontend over the unified state WebSocket connection.
 
 ## Frontend Architecture
 

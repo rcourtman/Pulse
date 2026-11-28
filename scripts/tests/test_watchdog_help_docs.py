@@ -209,6 +209,8 @@ class WatchdogHelpDocsTest(unittest.TestCase):
                     'releases its queue claim during panic recovery logging stays visible under stage="running" until logging finishes',
                     "When a monitor is retired during poll planning, Pulse abandons the returned plan once cancellation is observed instead of queuing tasks or running post-plan statistics and alert reconciliation",
                     "keeping any still-running roster read visible in pulse_scheduler_poll_planning_age_seconds until it returns",
+                    "For Availability checks, Scheduler Health describes every enabled check from one catalog snapshot, including remote-only checks run by external agents, without reloading the catalog to look up local-only tasks",
+                    "Once cancellation is observed, the retired planner also stops starting further provider roster or cadence reads between providers without pretending to cancel a callback already in flight",
                 ),
             ),
         )
@@ -217,6 +219,12 @@ class WatchdogHelpDocsTest(unittest.TestCase):
             for phrase in phrases:
                 with self.subTest(doc=rel_path, phrase=phrase):
                     self.assertIn(phrase, text)
+
+        avail_poller = (ROOT / "internal/monitoring/availability_poller.go").read_text(encoding="utf-8")
+        poll_providers = (ROOT / "internal/monitoring/poll_providers.go").read_text(encoding="utf-8")
+        self.assertIn("func (availabilityPollProvider) describesCompleteHealthRoster() {}", avail_poller)
+        self.assertIn("type completeInstanceInfoPollProvider interface {", poll_providers)
+        self.assertIn("func (m *Monitor) describeInstancesForScheduler(ctx context.Context) []InstanceDescriptor {", schedule_src)
 
 
 if __name__ == "__main__":
