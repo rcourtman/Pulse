@@ -105,8 +105,12 @@ match.
 - **Pool health disagrees:** compare the same pool's native health and device
   errors with Pulse's reading and last successful collection time. A retained
   value is not proof of a fresh read; missing health is **unknown**, not
-  `ONLINE`. Keep established native ZFS health checks meanwhile. Do not scrub,
-  export/import, clear errors or replace a device just to investigate a display.
+  `ONLINE`. When a linked physical disk's host agent or Proxmox source goes
+  stale, pool member details keep its retained temperature muted as a last-known
+  reading without triggering live **Running Hot**, and clear the stale cue
+  automatically once live reporting resumes. Keep established native ZFS health
+  checks meanwhile. Do not scrub, export/import, clear errors or replace a
+  device just to investigate a display.
 
 If server logs are needed, use the
 [bounded Pulse log reader](TROUBLESHOOTING.md#inspect-notification-logs) for your

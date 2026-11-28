@@ -361,8 +361,8 @@ For small memory or disk readings, see
 [Proxmox and PBS capacity percentages](#proxmox-and-pbs-capacity-percentages).
 
 Query params:
-- `type`: comma-separated list (e.g., `agent`, `vm`, `system-container`, `app-container`, `docker-service`, `storage`, `pbs`, `pmg`, `k8s-cluster`, `k8s-node`, `pod`, `k8s-deployment`, `physical_disk`, `ceph`)
-- `source`: comma-separated list (e.g., `proxmox`, `agent`, `docker`, `pbs`, `pmg`, `kubernetes`)
+- `type`: comma-separated list (e.g., `agent`, `docker-host`, `vm`, `system-container`, `app-container`, `docker-service`, `storage`, `pbs`, `pmg`, `network-endpoint`, `network-share`, `k8s-cluster`, `k8s-node`, `pod`, `k8s-deployment`, `physical_disk`, `ceph`)
+- `source`: comma-separated list (e.g., `proxmox`, `agent`, `docker`, `pbs`, `pmg`, `kubernetes`, `truenas`, `vmware` or `vmware-vsphere`, `availability`)
 - `excludeSource`: comma-separated list of sources that must not be present on a matching resource
 - `status`: comma-separated list (`online`, `offline`, `warning`, `unknown`)
 - `parent`: parent resource ID
@@ -2398,6 +2398,23 @@ TrueNAS connection management endpoints for adding, testing, and removing TrueNA
 - `PUT /api/truenas/connections/{id}` (admin, `settings:write`) — Update a saved TrueNAS connection. Send only the fields to change in a private JSON file; omitted fields keep their stored values. A masked `apiKey` or `password` returned by a GET response is kept from the stored record, so never send a masked value as a new secret. Saving does not test the connection. Setting `monitorDatasets`, `monitorPools` and `monitorReplication` all to `false` is saved as all enabled. Returns 200 with the redacted connection, 400 `validation_error`, 404 `truenas_not_found`, or 403 `mock_mode_enabled` in mock mode.
 
 TrueNAS resources (pools, datasets, disks, ZFS snapshots, replication tasks, alerts) are surfaced through the unified `/api/resources` endpoint with `source=truenas`.
+
+---
+
+## VMware vSphere (Early Access)
+
+VMware vCenter connection management endpoints for adding, testing, previewing, updating, and removing vCenter connections. When VMware integration is explicitly disabled via `PULSE_FEATURE_VMWARE=false`, these routes return `404` (`vmware_disabled`).
+
+### Connection Management (Admin)
+- `GET /api/vmware/connections` (admin, `settings:read`) - List configured vCenter connections with secrets redacted plus `poll` and `observed` runtime status summaries.
+- `POST /api/vmware/connections` (admin, `settings:write`) - Add a new vCenter connection. Returns `201` with the redacted connection, `400` `validation_error`, or `403` `mock_mode_enabled` in mock mode.
+- `PUT /api/vmware/connections/{id}` (admin, `settings:write`) - Update a saved vCenter connection using a private JSON file. Unchanged masked passwords are preserved from the stored record, so never send a masked placeholder as a new secret. Returns `200` with the redacted connection, `400` `validation_error`, `404` `vmware_not_found`, or `403` `mock_mode_enabled` in mock mode.
+- `DELETE /api/vmware/connections/{id}` (admin, `settings:write`) - Remove a configured vCenter connection. Returns `404` `vmware_not_found` for an unknown ID or `403` `mock_mode_enabled` in mock mode.
+- `POST /api/vmware/connections/test` (admin, `settings:write`) - Test a draft vCenter connection before saving. Returns host, VM, datastore, and network counts, `viRelease`, and any `degraded` or `issues` enrichment diagnostics, or `400` (`vmware_invalid_config` or `vmware_connection_failed`) on failure.
+- `POST /api/vmware/connections/{id}/test` (admin, `settings:write`) - Live-test a saved vCenter connection with its stored credentials. An optional JSON body overrides fields for this test only without saving. When called without override fields, the test updates the connection's runtime test status summary on the VMware poller. Returns `404` (`vmware_not_found`) for an unknown ID and `400` (`vmware_invalid_config` or `vmware_connection_failed`) on failure.
+- `POST /api/vmware/connections/preview` and `POST /api/vmware/connections/{id}/preview` (admin, `settings:write`) - Project the canonical monitored-system impact of adding or editing a vCenter connection without persisting changes.
+
+VMware vSphere resources (ESXi hosts, VMs, datastores, networks, health signals, and activity) are surfaced through the unified `/api/resources` endpoint with `source=vmware` (or its `source=vmware-vsphere` alias).
 
 ---
 

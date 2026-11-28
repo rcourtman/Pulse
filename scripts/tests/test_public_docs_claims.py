@@ -670,6 +670,74 @@ class AIAutonomyHelpDocsTest(unittest.TestCase):
             with self.subTest(phrase=phrase):
                 self.assertIn(phrase, norm)
 
+    def test_pulse_pro_and_api_docs_match_external_probe_entitlement_and_vmware_routes(
+        self,
+    ) -> None:
+        features_go = (ROOT / "pkg/licensing/features.go").read_text(encoding="utf-8")
+        catalog_go = (ROOT / "pkg/licensing/self_hosted_feature_catalog.go").read_text(
+            encoding="utf-8"
+        )
+        resources_go = (ROOT / "internal/api/resourceapi/resources.go").read_text(
+            encoding="utf-8"
+        )
+        routes_go = (ROOT / "internal/api/router_routes_registration.go").read_text(
+            encoding="utf-8"
+        )
+        vmware_go = (ROOT / "internal/api/vmware_handlers.go").read_text(encoding="utf-8")
+
+        self.assertIn('FeatureExternalProbe     = "external_probe"', features_go)
+        self.assertIn("FeatureExternalProbe,", features_go)
+        self.assertIn("TierCloud:      proFeatures,", features_go)
+        self.assertIn('DisplayName:           "External Probes"', catalog_go)
+        self.assertIn('case "vmware", "vmware-vsphere":', resources_go)
+        self.assertIn('case "truenas":', resources_go)
+        self.assertIn('case "availability":', resources_go)
+        self.assertIn('r.mux.HandleFunc("/api/vmware/connections"', routes_go)
+        self.assertIn('r.mux.HandleFunc("/api/vmware/connections/test"', routes_go)
+        self.assertIn('r.mux.HandleFunc("/api/vmware/connections/preview"', routes_go)
+        self.assertIn('"vmware_disabled"', vmware_go)
+        self.assertIn('"vmware_not_found"', vmware_go)
+        self.assertIn('"vmware_invalid_config"', vmware_go)
+        self.assertIn('"vmware_connection_failed"', vmware_go)
+
+        pro_doc = (ROOT / "docs/PULSE_PRO.md").read_text(encoding="utf-8")
+        pro_mirror = (ROOT / "frontend-modern/public/docs/PULSE_PRO.md").read_text(
+            encoding="utf-8"
+        )
+        self.assertEqual(pro_doc, pro_mirror)
+        pro_norm = " ".join(pro_doc.split())
+        for phrase in (
+            "| `FeatureExternalProbe` | `external_probe` | External Probes | N | N | Y | Y |",
+            "Remote availability-check observation locations on connected agents. Local server checks remain included in Community.",
+            "| `FeatureUnlimited` | `unlimited` | Hosted Capacity Policy | N | N | N | Y* |",
+            "External availability-check probes from connected remote agents (`external_probe`).",
+            "`external_probe`, and `multi_tenant`",
+        ):
+            with self.subTest(doc="PULSE_PRO.md", phrase=phrase):
+                self.assertIn(phrase, pro_norm)
+
+        api_doc = (ROOT / "docs/API.md").read_text(encoding="utf-8")
+        api_mirror = (ROOT / "frontend-modern/public/docs/API.md").read_text(
+            encoding="utf-8"
+        )
+        self.assertEqual(api_doc, api_mirror)
+        api_norm = " ".join(api_doc.split())
+        for phrase in (
+            "`truenas`, `vmware` or `vmware-vsphere`, `availability`",
+            "## VMware vSphere (Early Access)",
+            "`PULSE_FEATURE_VMWARE=false`, these routes return `404` (`vmware_disabled`)",
+            "`GET /api/vmware/connections` (admin, `settings:read`)",
+            "`POST /api/vmware/connections` (admin, `settings:write`)",
+            "`PUT /api/vmware/connections/{id}` (admin, `settings:write`)",
+            "`DELETE /api/vmware/connections/{id}` (admin, `settings:write`)",
+            "`POST /api/vmware/connections/test` (admin, `settings:write`)",
+            "`POST /api/vmware/connections/{id}/test` (admin, `settings:write`)",
+            "`POST /api/vmware/connections/preview` and `POST /api/vmware/connections/{id}/preview` (admin, `settings:write`)",
+            "`source=vmware` (or its `source=vmware-vsphere` alias)",
+        ):
+            with self.subTest(doc="API.md", phrase=phrase):
+                self.assertIn(phrase, api_norm)
+
 
 if __name__ == "__main__":
     unittest.main()

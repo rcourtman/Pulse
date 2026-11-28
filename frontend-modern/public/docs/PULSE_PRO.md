@@ -139,7 +139,7 @@ surface upgrade prompts unless the user deliberately enters a commercial path.
 | Existing Pulse Mobile pairing and push continue until 31 March 2027; Relay does not provide remote access to the web UI. | `pkg/licensing/features.go` retains `relay`, `mobile_app`, and `push_notifications` for compatible paid payloads; relay onboarding/settings routes remain license-gated. These keys do not make Relay a plan to buy. | `pkg/licensing/features_test.go`, `pkg/licensing/entitlement_payload_test.go`, `internal/api/relay_sso_license_gating_test.go`, and `frontend-modern/src/components/Settings/__tests__/RelaySettingsPanel.runtime.test.tsx`. |
 | Pro includes Patrol issue investigation and verified fix actions. | `internal/api/ai_handlers.go` gates alert-triggered analysis behind `ai_alerts` and fix/autonomy behavior behind `ai_autofix`; `internal/ai/service.go` enforces the same capabilities in service-level paths. | `pkg/licensing/features_test.go`, `internal/api/router_routes_ai_execute_stream_test.go`, `internal/api/ai_intelligence_handlers_remediation_more_test.go`, and `frontend-modern/src/pages/__tests__/AIIntelligence.test.tsx`. |
 | Metric history is free on every plan. | `pkg/licensing/features.go` includes `long_term_metrics` in Community; `internal/api/router.go` (`handleMetricsHistory`) and `internal/api/availability_history_handlers.go` serve every supported range without a plan check; storage retention alone decides how far back data goes. | `pkg/licensing/upgrade_retirement_test.go`, `internal/api/router_version_tenant_metrics_test.go` (`TestHandleMetricsHistory_EveryPlanServesEveryRange`), and `frontend-modern/src/components/shared/__tests__/useHistoryChartState.test.tsx`. |
-| Pro includes business/admin extras: RBAC, audit logging, reporting, and agent profiles. | Router and settings gates use `rbac`, `audit_logging`, `advanced_reporting`, and `agent_profiles`; audit capture is SQLite-backed in `pkg/server/server.go` and `pkg/audit/sqlite_factory.go`, while query/export remains license-gated. | `internal/api/security_regression_test.go`, `internal/api/rbac_lifecycle_test.go`, `pkg/reporting/catalog_test.go`, and `frontend-modern/src/components/Settings/__tests__/settingsNavigation.integration.test.tsx`. |
+| Pro includes business/admin extras: RBAC, audit logging, reporting, agent profiles, and remote external probes. | Router and settings gates use `rbac`, `audit_logging`, `advanced_reporting`, `agent_profiles`, and `external_probe`. Audit capture is SQLite-backed in `pkg/server/server.go` and `pkg/audit/sqlite_factory.go`, while query/export remains license-gated. | `internal/api/security_regression_test.go`, `internal/api/rbac_lifecycle_test.go`, `pkg/reporting/catalog_test.go`, `pkg/licensing/upgrade_test.go`, `internal/api/contract_test.go`, and `frontend-modern/src/components/Settings/__tests__/settingsNavigation.integration.test.tsx`. |
 
 ## Feature Matrix
 
@@ -167,10 +167,11 @@ keys and old 14-day limit remain in code without changing that policy.
 | `FeatureRBAC` | `rbac` | Role-Based Access Control (RBAC) | N | N | Y | Y | Custom-role and manual user-assignment administration is gated via `RequireLicenseFeature(..., rbac, ...)`. |
 | `FeatureAuditLogging` | `audit_logging` | Audit Logging | N | N | Y | Y | API route gating for audit query, verify, and export endpoints. |
 | `FeatureAdvancedReporting` | `advanced_reporting` | PDF/CSV Reporting | N | N | Y | Y | API route gating via `RequireLicenseFeature(..., advanced_reporting, ...)`. |
+| `FeatureExternalProbe` | `external_probe` | External Probes | N | N | Y | Y | Remote availability-check observation locations on connected agents. Local server checks remain included in Community. |
 | `FeatureLongTermMetrics` | `long_term_metrics` | Metric History | Y | Y | Y | Y | Compatibility key. Metric history is not plan-limited; storage retention settings decide how far back it goes. |
 | `FeatureMultiUser` | `multi_user` | Multi-User Mode | N | N | N | Y* | Enterprise/custom only. |
 | `FeatureMultiTenant` | `multi_tenant` | Multi-Tenant Mode | N | N | N | Y* | Requires both `PULSE_MULTI_TENANT_ENABLED=true` and the `multi_tenant` capability for non-default orgs. |
-| `FeatureUnlimited` | `unlimited` | Hosted Capacity Policy | N | N | N | Y | Hosted/enterprise capacity policy only; not a self-hosted core monitoring gate. |
+| `FeatureUnlimited` | `unlimited` | Hosted Capacity Policy | N | N | N | Y* | MSP and Enterprise capacity policy marker in `pkg/licensing/features.go`. Not part of `TierCloud` defaults or a self-hosted core monitoring gate. |
 | `FeatureWhiteLabel` | `white_label` | White-Label Report Branding | N | N | N | Y* | Gates custom report branding. Provider defaults and per-client overrides render only when this entitlement is active. |
 
 ## Patrol Modes
@@ -204,6 +205,7 @@ Patrol mode decides how far Pulse can go after Patrol finds something that needs
 - Patrol handles safe fixes through Patrol mode.
 - Centralized agent profiles.
 - RBAC, audit logging, and advanced reporting.
+- External availability-check probes from connected remote agents (`external_probe`). Local checks on the Pulse server stay free in Community.
 - Existing Pulse Mobile pairing and push notifications until 31 March 2027.
 
 ### Legacy Pro+
@@ -273,7 +275,7 @@ not a public issue containing account evidence.
 You can inspect active feature gates via:
 - `GET /api/license/features` (authenticated)
 
-This returns a feature map including keys like `relay`, `ai_alerts`, `ai_autofix`, `agent_profiles`, and `multi_tenant` so you can conditionally enable paid workflows safely.
+This returns a feature map including keys like `relay`, `ai_alerts`, `ai_autofix`, `agent_profiles`, `external_probe`, and `multi_tenant` so you can conditionally enable paid workflows safely.
 
 ## Deep Dives
 
