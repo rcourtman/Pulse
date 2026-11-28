@@ -1,0 +1,49 @@
+{
+  "version": 1,
+  "base_sha": "fa26be2e2f35f5daced2024060a26df0ff60bb42",
+  "verified_at": "2026-11-27T20:24:33Z",
+  "result": "passed",
+  "changed_paths": [
+    "frontend-modern/src/components/Storage/DiskDrawerOverview.tsx",
+    "frontend-modern/src/components/Storage/DiskList.tsx",
+    "frontend-modern/src/components/Workloads/GuestPhysicalDisks.tsx",
+    "frontend-modern/src/features/storageBackups/diskDrawerPresentation.ts",
+    "frontend-modern/src/features/storageBackups/diskPresentation.ts",
+    "frontend-modern/src/features/storageBackups/diskTemperaturePresentation.ts",
+    "frontend-modern/src/features/storageBackups/storagePoolDetailPresentation.ts"
+  ],
+  "content_sha256": {
+    "frontend-modern/src/components/Storage/DiskDrawerOverview.tsx": "1a535354a7802e1ebee95965ecba7607373fe31f34e477ccec71d381f36e88bf",
+    "frontend-modern/src/components/Storage/DiskList.tsx": "3e915a4c94eaf3c2dfc75827650a09de8921a155c1b84cff53f97c2b12b7a7b7",
+    "frontend-modern/src/components/Workloads/GuestPhysicalDisks.tsx": "6ea98e64d3942bc866c03c73dcad00e662809df5e6aafb6e0aeb2039b009506d",
+    "frontend-modern/src/features/storageBackups/diskDrawerPresentation.ts": "ab49c24c4007bf31ee4fce308cb68c7cbd22fabd0dcdd8106bfb4eed87826668",
+    "frontend-modern/src/features/storageBackups/diskPresentation.ts": "aeb70f130891f1e09688ed3b23e646e047414987e19a4421b85980dff64975a9",
+    "frontend-modern/src/features/storageBackups/diskTemperaturePresentation.ts": "c4d049ee29ff7139b4f6cd6afb882c4c22e22b2c629d6c44c58351fe1a307b11",
+    "frontend-modern/src/features/storageBackups/storagePoolDetailPresentation.ts": "0e90a4f217bd206850f8987b926031bf9ac1a01d6f18672942277d5d8dae8789"
+  },
+  "routes": [
+    "/proxmox/storage"
+  ],
+  "viewports": [
+    {
+      "width": 1440,
+      "height": 940
+    },
+    {
+      "width": 390,
+      "height": 844
+    }
+  ],
+  "states": [
+    "Paired production builds (before fa26be2e2f35 vs after) verified via pulse-worker-browser (Playwright 1.56.1) on desktop Chromium 141.0.7390.37 (1440x940 light) and touch WebKit phone 26.0 (390x844 dark); all 13 screenshots visually inspected with 0 console errors, 0 page errors, 0 failed/4xx+ requests, 0 off-origin requests, and 0px horizontal overflow (1440/1440 and 390/390).",
+    "Physical Disks table on /proxmox/storage: stale Samsung 870 EVO 2TB (pve-stale, 16m error Proxmox node poll timed out, retained 68C, 94% life) changes from false red Running Hot/Hot + live red 68C + green 94% to amber Stale + muted dotted last-known 68C and 94%; stale failed WDC Red Pro 8TB preserves red Replace Now/Replace while gaining amber Stale data cue beneath disk name and muted dotted last-known 45C; fresh Intel Optane P4800X stays green Healthy + 98% + 36C.",
+    "Expanded Samsung 870 EVO 2TB drawer switches from red dot + Running Hot Worth checking + current latest readings to amber Stale dot + amber Stale data InlineNotice warning banner (including refresh age and poll timeout reason) + last-known deferred metrics + Stale SMART health card with no duplicate Worth checking row.",
+    "Expanded WDC Red Pro 8TB drawer shows both the amber Stale data InlineNotice warning banner and preserved red Replace Now + Reallocated/Pending Sectors in Worth checking, with last-known deferred readings.",
+    "Live RFC 6455 WebSocket rawData recovery while Samsung 870 EVO 2TB drawer stays open reactively clears the Stale data banner, restores green Healthy dot, live 36C temperature, green 94% life, and current latest readings, and removes the Stale data cue from WDC Red Pro 8TB while preserving Replace Now."
+  ],
+  "interactions": [
+    "Navigated to /proxmox/storage and clicked the Physical Disks tab on desktop light (1440x940) and touch phone dark (390x844).",
+    "Expanded Samsung 870 EVO 2TB and WDC Red Pro 8TB inline drawers in both before and after production builds and compared paired pixels.",
+    "Re-opened Samsung 870 EVO 2TB drawer on desktop light and delivered a live WebSocket rawData recovery snapshot verifying reactive clearance without page reload."
+  ]
+}

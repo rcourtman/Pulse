@@ -1,5 +1,7 @@
 import type { HistoryTimeRange, ResourceType as HistoryChartResourceType } from '@/api/charts';
 import {
+  extractPhysicalDiskFreshness,
+  getPhysicalDiskStaleDetail,
   getPhysicalDiskTemperaturePresentation,
   type PhysicalDiskAlertResourceIdResolver,
 } from '@/features/storageBackups/diskPresentation';
@@ -317,11 +319,16 @@ const readDiskTemperature = (disk: Resource): number => {
   return typeof physicalDisk.temperature === 'number' ? physicalDisk.temperature : 0;
 };
 
-const readDiskTemperatureLastKnownTitle = (disk: Resource): string | undefined =>
-  getPhysicalDiskTemperaturePresentation({
+const readDiskTemperatureLastKnownTitle = (disk: Resource): string | undefined => {
+  const freshness = extractPhysicalDiskFreshness(disk);
+  return getPhysicalDiskTemperaturePresentation({
     temperature: readDiskTemperature(disk),
     collection: readPhysicalDisk(disk).collection,
+    freshness: freshness.freshness,
+    freshnessReason:
+      freshness.freshness === 'stale' ? getPhysicalDiskStaleDetail(freshness) : undefined,
   })?.title;
+};
 
 const readDiskType = (disk: Resource): string => {
   const physicalDisk = readPhysicalDisk(disk);

@@ -197,4 +197,49 @@ describe('disk drawer presentation', () => {
       tone: 'default',
     });
   });
+
+  it('defers all chart metrics and mutes retained readings when the disk source is stale', () => {
+    const staleDisk = disk({
+      type: 'nvme',
+      wearout: 92,
+      temperature: 44,
+      freshness: 'stale',
+      freshnessReason: 'Retained last-known disk readings. Last successful refresh 14m ago.',
+      smartAttributes: { percentageUsed: 8, availableSpare: 99 },
+    });
+
+    expect(getPhysicalDiskHealthIndicator(staleDisk)).toEqual({
+      variant: 'warning',
+      label: 'Stale',
+    });
+    expect(getDiskDrawerCurrentMetrics(staleDisk)).toEqual({});
+    expect(getDiskDrawerDeferredMetrics(staleDisk)).toEqual({
+      smart_temp: {
+        lastKnownValue: 44,
+        message:
+          'Last known reading, not current: Retained last-known disk readings. Last successful refresh 14m ago.',
+      },
+      smart_percentage_used: {
+        lastKnownValue: 8,
+        message: 'Retained last-known disk readings. Last successful refresh 14m ago.',
+      },
+      smart_available_spare: {
+        lastKnownValue: 99,
+        message: 'Retained last-known disk readings. Last successful refresh 14m ago.',
+      },
+    });
+    const health = buildDiskDrawerHealthSection(staleDisk);
+    expect(health.rows.find((row) => row.label === 'Health')).toMatchObject({
+      value: 'Stale',
+      tone: 'default',
+    });
+    expect(health.rows.find((row) => row.label === 'Last known temperature')).toMatchObject({
+      value: '44°C',
+      tone: 'muted',
+    });
+    expect(health.rows.find((row) => row.label === 'Life remaining')).toMatchObject({
+      value: '92%',
+      tone: 'muted',
+    });
+  });
 });

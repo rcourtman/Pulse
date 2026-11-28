@@ -82,6 +82,7 @@ import {
   getPhysicalDiskLifeTextClass,
   getPhysicalDiskParentLabel,
   getPhysicalDiskRoleLabel,
+  getPhysicalDiskStaleDetail,
   getPhysicalDiskTableLayoutModeForContainer,
   getPhysicalDiskTemperaturePresentation,
   isPhysicalDiskColumnVisible,
@@ -342,6 +343,11 @@ export const DiskList: Component<DiskListProps> = (props) => {
                 // the row first mounts, so health and identity cannot go stale.
                 const data = createMemo(() => model.getDiskData(disk));
                 const status = createMemo(() => getPhysicalDiskHealthStatus(data()));
+                const isStale = () => data().freshness === 'stale';
+                const staleDetail = createMemo(() =>
+                  isStale() ? getPhysicalDiskStaleDetail(data()) : '',
+                );
+                const showInlineStaleCue = () => isStale() && status().label !== 'Stale';
                 const hostLabel = createMemo(() => model.getDiskHostLabel(disk));
                 const hostTitle = createMemo(() => model.getDiskHostTitle(disk));
                 const healthSummary = createMemo(() => getPhysicalDiskHealthSummary(status()));
@@ -396,12 +402,23 @@ export const DiskList: Component<DiskListProps> = (props) => {
                             onAction={() => model.toggleSelectedDisk(disk)}
                             onPreviewClear={() => props.onHoverChange?.(null)}
                           />
-                          <span
-                            class={PHYSICAL_DISK_NAME_TEXT_CLASS}
-                            title={data().devPath || data().model || disk.name || 'Unknown Disk'}
-                          >
-                            {data().model || 'Unknown Disk'}
-                          </span>
+                          <div class="min-w-0">
+                            <span
+                              class={PHYSICAL_DISK_NAME_TEXT_CLASS}
+                              title={data().devPath || data().model || disk.name || 'Unknown Disk'}
+                            >
+                              {data().model || 'Unknown Disk'}
+                            </span>
+                            <Show when={showInlineStaleCue()}>
+                              <span
+                                class="block truncate text-[10px] font-medium text-amber-800 dark:text-amber-300"
+                                title={staleDetail()}
+                                data-disk-stale-cue
+                              >
+                                Stale data
+                              </span>
+                            </Show>
+                          </div>
                         </div>
                       </TableCell>
 
@@ -511,8 +528,13 @@ export const DiskList: Component<DiskListProps> = (props) => {
                         >
                           <span
                             class={`${PHYSICAL_DISK_LIFE_CLASS} ${getPhysicalDiskLifeTextClass(data())}`}
+                            title={isStale() ? staleDetail() : undefined}
+                            data-life-reading={isStale() ? 'last-known' : 'current'}
                           >
                             {getPhysicalDiskLifeLabel(data())}
+                            <Show when={isStale()}>
+                              <span class="sr-only">, last known</span>
+                            </Show>
                           </span>
                         </Show>
                       </TableCell>

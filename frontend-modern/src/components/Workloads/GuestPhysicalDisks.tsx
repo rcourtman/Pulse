@@ -21,6 +21,7 @@ import { useUnifiedResources } from '@/hooks/useUnifiedResources';
 import {
   extractPhysicalDiskPresentationData,
   getPhysicalDiskHealthStatus,
+  getPhysicalDiskStaleDetail,
 } from '@/features/storageBackups/diskPresentation';
 import {
   PHYSICAL_DISK_TEMPERATURE_LAST_KNOWN_CLASS,
@@ -92,6 +93,15 @@ const GuestPhysicalDiskRow: Component<{
         <span class={health().tone} title={health().summary}>
           {health().label}
         </span>
+        <Show when={data().freshness === 'stale' && health().label !== 'Stale'}>
+          <span
+            class="font-medium text-amber-800 dark:text-amber-300"
+            title={getPhysicalDiskStaleDetail(data())}
+            data-disk-stale-cue
+          >
+            Stale data
+          </span>
+        </Show>
         <Show when={temperature()}>
           {(reading) => (
             <span
