@@ -102,6 +102,7 @@ func TestClientRegister_SessionResumeRejectionClearsCachedSession(t *testing.T) 
 }
 
 func TestRunLoop_SessionResumeRejectionFallsBackToFreshRegister(t *testing.T) {
+	t.Parallel()
 	logger := zerolog.New(zerolog.NewTestWriter(t))
 
 	type registerAttempt struct {

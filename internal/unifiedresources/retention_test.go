@@ -7,6 +7,7 @@ import (
 )
 
 func TestPruneOldRecords_DeletesOldResourceChanges(t *testing.T) {
+	t.Parallel()
 	store := newTestStore(t)
 
 	now := time.Now().UTC()
@@ -48,6 +49,7 @@ func TestPruneOldRecords_DeletesOldResourceChanges(t *testing.T) {
 }
 
 func TestPruneOldRecords_DeletesOldActionAudits(t *testing.T) {
+	t.Parallel()
 	store := newTestStore(t)
 
 	now := time.Now().UTC()
@@ -78,6 +80,7 @@ func TestPruneOldRecords_DeletesOldActionAudits(t *testing.T) {
 }
 
 func TestPruneOldRecords_DeletesOldActionLifecycleEvents(t *testing.T) {
+	t.Parallel()
 	store := newTestStore(t)
 
 	now := time.Now().UTC()
@@ -108,6 +111,7 @@ func TestPruneOldRecords_DeletesOldActionLifecycleEvents(t *testing.T) {
 }
 
 func TestPruneOldRecords_DeletesOldExportAudits(t *testing.T) {
+	t.Parallel()
 	store := newTestStore(t)
 
 	now := time.Now().UTC()
@@ -138,6 +142,7 @@ func TestPruneOldRecords_DeletesOldExportAudits(t *testing.T) {
 }
 
 func TestPruneOldRecords_DeletesOldLoopReports(t *testing.T) {
+	t.Parallel()
 	store := newTestStore(t)
 
 	now := time.Now().UTC()
@@ -168,6 +173,7 @@ func TestPruneOldRecords_DeletesOldLoopReports(t *testing.T) {
 }
 
 func TestMigrateAutoVacuum_SetsIncrementalMode(t *testing.T) {
+	t.Parallel()
 	store := newTestStore(t)
 
 	var mode int
@@ -181,6 +187,7 @@ func TestMigrateAutoVacuum_SetsIncrementalMode(t *testing.T) {
 }
 
 func TestReclaimFreePages_ReducesFreelistAfterPrune(t *testing.T) {
+	t.Parallel()
 	store := newTestStore(t)
 
 	now := time.Now().UTC()
@@ -220,6 +227,7 @@ func TestReclaimFreePages_ReducesFreelistAfterPrune(t *testing.T) {
 }
 
 func TestRetentionLoop_RunsInitialPrune(t *testing.T) {
+	t.Parallel()
 	store := newTestStore(t)
 
 	now := time.Now().UTC()
@@ -261,6 +269,7 @@ func TestRetentionLoop_RunsInitialPrune(t *testing.T) {
 }
 
 func TestPruneOldRecords_NoErrorOnEmptyTables(t *testing.T) {
+	t.Parallel()
 	store := newTestStore(t)
 
 	store.pruneOldRecords()

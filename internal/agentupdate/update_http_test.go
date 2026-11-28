@@ -298,7 +298,15 @@ func TestUpdater_getServerVersion_SetsAuthHeaders(t *testing.T) {
 	}
 }
 
+func skipRetrySleep(t *testing.T) {
+	t.Helper()
+	originalSleep := retrySleepFn
+	retrySleepFn = func(context.Context, time.Duration) error { return nil }
+	t.Cleanup(func() { retrySleepFn = originalSleep })
+}
+
 func TestUpdater_getServerVersion_BadStatus(t *testing.T) {
+	skipRetrySleep(t)
 	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		w.WriteHeader(http.StatusInternalServerError)
 	}))
@@ -325,6 +333,7 @@ func TestUpdater_getServerVersion_BadJSON(t *testing.T) {
 }
 
 func TestUpdater_getServerVersion_RejectsRedirects(t *testing.T) {
+	skipRetrySleep(t)
 	var redirectedHits int32
 	redirectTarget := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		atomic.AddInt32(&redirectedHits, 1)
@@ -721,6 +730,7 @@ func TestUpdater_CheckAndUpdate_RecordsLifecycleStatus(t *testing.T) {
 }
 
 func TestUpdater_performUpdateWithExecPath_RejectsRedirects(t *testing.T) {
+	skipRetrySleep(t)
 	var redirectedHits int32
 	redirectTarget := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		atomic.AddInt32(&redirectedHits, 1)

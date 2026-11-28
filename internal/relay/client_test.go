@@ -649,6 +649,7 @@ func TestClient_DrainTriggersReconnect(t *testing.T) {
 }
 
 func TestClient_SessionTokenReuse(t *testing.T) {
+	t.Parallel()
 	logger := zerolog.New(zerolog.NewTestWriter(t))
 
 	type regCapture struct {

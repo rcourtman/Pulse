@@ -932,8 +932,10 @@ func TestRetiredCanonicalIDReadsWhatTheEndOfItsChainHolds(t *testing.T) {
 // read of either ID that answers "not locked" has walked the chain across a
 // move instead of reading one state.
 func TestRetiredCanonicalIDReadSeesOneStateWhileTheLockMoves(t *testing.T) {
+	t.Parallel()
 	for storeName, newStore := range retiredIDTestStores() {
 		t.Run(storeName, func(t *testing.T) {
+			t.Parallel()
 			store := newStore(t)
 			if err := store.(canonicalIDSuccessor).ApplyCanonicalIDSuccessions([]CanonicalIDSuccession{
 				{OldCanonicalID: "move-a", NewCanonicalID: "move-b"},
