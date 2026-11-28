@@ -285,7 +285,12 @@ running post-plan statistics and alert reconciliation, while keeping any
 still-running roster read visible in `pulse_scheduler_poll_planning_age_seconds`
 until it returns. Once cancellation is observed, the retired planner also stops
 starting further provider roster or cadence reads between providers without
-pretending to cancel a callback already in flight.
+pretending to cancel a callback already in flight. Under `POLL_TASK_WORKERS`,
+a confirmed removal also retires a claim still waiting for a process worker
+slot (`stage="waiting_for_slot"`): the dispatcher releases that claim without
+starting provider setup or changing the concurrency cap and moves on to
+another due target, preserving any explicit replacement's due time while an
+already-admitted `stage="running"` poll keeps its claim until it returns.
 
 If no result advanced, read `retry.after` beside the later snapshot's
 `updatedAt`. For an `open` or `half_open` breaker, `retryAt` is the earliest

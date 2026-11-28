@@ -207,7 +207,12 @@ When expected results stop, check the two claimed-poll stages on successive scra
 
 - `waiting_for_slot`: a due poll left the scheduler queue but is still waiting
   for a process-wide worker slot (`POLL_TASK_WORKERS`). The budget starts at
-  the poll's scheduled time.
+  the poll's scheduled time. If the connection or check is removed while its
+  claim is still waiting for a slot, the dispatcher releases the retired claim
+  without starting provider setup or changing the `POLL_TASK_WORKERS` limit
+  and moves on to another due target. An explicit replacement keeps its own
+  due time, while a poll already admitted to `running` keeps its claim until
+  it returns.
 - `running`: a worker took the poll but has not returned, including task
   preparation, provider calls, rescheduling and recovery logging. A worker
   stays visible in this stage while occupied in panic recovery logging even

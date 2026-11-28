@@ -236,16 +236,25 @@ class SchedulerHealthAPIHelpDocsTest(unittest.TestCase):
             ROOT / "internal/monitoring/poll_task_workers.go"
         ).read_text(encoding="utf-8")
 
+        task_queue = (
+            ROOT / "internal/monitoring/task_queue.go"
+        ).read_text(encoding="utf-8")
+
         self.assertIn('"pulse_scheduler_poll_planning_age_seconds"', work_progress)
         self.assertIn('"pulse_scheduler_claimed_poll_overdue_seconds"', work_progress)
         self.assertIn("defer progress.finish(work)", task_workers)
         self.assertIn("Recovered from panic in scheduled poll task", task_workers)
+        self.assertIn("func (l *pollTaskWorkerLimiter) acquireClaim(", task_workers)
+        self.assertIn("func (q *TaskQueue) watchClaimRetirement(", task_queue)
+        self.assertIn("func (q *TaskQueue) canStartClaim(", task_queue)
 
         for phrase in (
             "does not prove that poll planning finished",
             "`pulse_scheduler_poll_planning_age_seconds`",
             "`pulse_scheduler_claimed_poll_overdue_seconds`",
             "occupied in panic recovery logging after releasing its queue claim",
+            "Under `POLL_TASK_WORKERS`, a confirmed removal releases a claim still waiting in `waiting_for_slot` without starting provider setup or changing the concurrency limit so another due target can proceed",
+            "preserving any explicit replacement's due time while an already-admitted `running` poll keeps its claim until it returns",
         ):
             with self.subTest(phrase=phrase):
                 self.assertIn(phrase, section)
