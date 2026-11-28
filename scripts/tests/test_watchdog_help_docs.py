@@ -141,14 +141,20 @@ class WatchdogHelpDocsTest(unittest.TestCase):
             "func (m *Monitor) planScheduledPolls(ctx context.Context, now time.Time)",
             "id := progress.beginPlanning(time.Now())",
             "defer progress.finishPlanning(id)",
-            "descriptors := m.describeInstancesForScheduler()",
-            "if ctx.Err() != nil {",
             "m.taskQueue.upsertPlan(task, revision)",
             "m.state.UpdatePollStats(",
             "m.syncAlertsToState()",
         ):
             with self.subTest(schedule_token=token):
                 self.assertIn(token, schedule_src)
+
+        # The roster read uses the monitor context but can still return after
+        # cancellation. Check that its result is discarded before publishing.
+        self.assertRegex(
+            schedule_src,
+            r"descriptors := m\.describeInstancesForScheduler\(ctx\)\s*"
+            r"(?://[^\n]*\n\s*)*if ctx\.Err\(\) != nil \{\s*return\s*\}",
+        )
 
         for token in (
             '"pulse_scheduler_poll_planning_age_seconds"',
