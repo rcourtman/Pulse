@@ -168,9 +168,9 @@ func (s *AdaptiveScheduler) BuildPlan(now time.Time, inventory []InstanceDescrip
 		return nil
 	}
 
-	tasks := s.buildUnsortedPlan(now, inventory, queueDepth)
-	// The worker's successor plan has one task. A full plan must still be
-	// ordered, but its private slice doesn't need the shared planner lock.
+	tasks := make([]ScheduledTask, len(inventory))
+	s.buildUnsortedPlan(now, inventory, queueDepth, tasks)
+	// Order the private slice without holding the shared planner lock.
 	if len(tasks) > 1 {
 		sort.Slice(tasks, func(i, j int) bool {
 			if tasks[i].NextRun.Equal(tasks[j].NextRun) {
@@ -185,12 +185,20 @@ func (s *AdaptiveScheduler) BuildPlan(now time.Time, inventory []InstanceDescrip
 	return tasks
 }
 
-func (s *AdaptiveScheduler) buildUnsortedPlan(now time.Time, inventory []InstanceDescriptor, queueDepth int) []ScheduledTask {
+// planSuccessor takes the same planning path as the inventory scan, but
+// returns a task value so the poll worker does not allocate a result slice.
+func (s *AdaptiveScheduler) planSuccessor(now time.Time, instance InstanceDescriptor, queueDepth int) ScheduledTask {
+	var task [1]ScheduledTask
+	s.buildUnsortedPlan(now, []InstanceDescriptor{instance}, queueDepth, task[:])
+	return task[0]
+}
+
+// buildUnsortedPlan fills a zeroed destination with one slot per instance.
+func (s *AdaptiveScheduler) buildUnsortedPlan(now time.Time, inventory []InstanceDescriptor, queueDepth int, tasks []ScheduledTask) {
 	// Read freshness before locking the shared planner. Waiting on the
 	// tracker for a full inventory must not block a cached plan read or a
 	// poll worker that already has the freshness it needs to reschedule.
 	// Stage the scores in the result slice to avoid a second allocation.
-	tasks := make([]ScheduledTask, len(inventory))
 	for i, inst := range inventory {
 		if score, ok := s.staleness.StalenessScore(inst.Type, inst.Name); ok {
 			tasks[i].Priority = score
@@ -284,8 +292,6 @@ func (s *AdaptiveScheduler) buildUnsortedPlan(now time.Time, inventory []Instanc
 		s.lastPlan[key] = cached
 		tasks[i] = task
 	}
-
-	return tasks
 }
 
 // FilterDue returns tasks whose NextRun is at or before now.
