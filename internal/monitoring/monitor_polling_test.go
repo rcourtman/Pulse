@@ -1829,7 +1829,7 @@ func TestDescribeInstancesForScheduler_NoClients(t *testing.T) {
 		pmgClients: make(map[string]*pmg.Client),
 	}
 
-	descriptors := m.describeInstancesForScheduler()
+	descriptors := m.describeInstancesForScheduler(t.Context())
 	if descriptors != nil {
 		t.Errorf("expected nil for empty clients, got %v", descriptors)
 	}
@@ -1842,7 +1842,7 @@ func TestDescribeInstancesForScheduler_PVEOnly(t *testing.T) {
 		pmgClients: make(map[string]*pmg.Client),
 	}
 
-	descriptors := m.describeInstancesForScheduler()
+	descriptors := m.describeInstancesForScheduler(t.Context())
 	if len(descriptors) != 2 {
 		t.Fatalf("expected 2 descriptors, got %d", len(descriptors))
 	}
@@ -1866,7 +1866,7 @@ func TestDescribeInstancesForScheduler_PBSOnly(t *testing.T) {
 		pmgClients: make(map[string]*pmg.Client),
 	}
 
-	descriptors := m.describeInstancesForScheduler()
+	descriptors := m.describeInstancesForScheduler(t.Context())
 	if len(descriptors) != 1 {
 		t.Fatalf("expected 1 descriptor, got %d", len(descriptors))
 	}
@@ -1886,7 +1886,7 @@ func TestDescribeInstancesForScheduler_PMGOnly(t *testing.T) {
 		pmgClients: map[string]*pmg.Client{"pmg-mail": nil},
 	}
 
-	descriptors := m.describeInstancesForScheduler()
+	descriptors := m.describeInstancesForScheduler(t.Context())
 	if len(descriptors) != 1 {
 		t.Fatalf("expected 1 descriptor, got %d", len(descriptors))
 	}
@@ -1906,7 +1906,7 @@ func TestDescribeInstancesForScheduler_AllTypes(t *testing.T) {
 		pmgClients: map[string]*pmg.Client{"pmg-1": nil},
 	}
 
-	descriptors := m.describeInstancesForScheduler()
+	descriptors := m.describeInstancesForScheduler(t.Context())
 	if len(descriptors) != 3 {
 		t.Fatalf("expected 3 descriptors, got %d", len(descriptors))
 	}
@@ -1931,7 +1931,7 @@ func TestDescribeInstancesForScheduler_NilSchedulerAndTracker(t *testing.T) {
 	}
 
 	// Should not panic with nil scheduler and stalenessTracker
-	descriptors := m.describeInstancesForScheduler()
+	descriptors := m.describeInstancesForScheduler(t.Context())
 	if len(descriptors) != 1 {
 		t.Fatalf("expected 1 descriptor, got %d", len(descriptors))
 	}

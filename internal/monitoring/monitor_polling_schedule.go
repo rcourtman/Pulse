@@ -25,9 +25,17 @@ type pollPlanningRosterProvider interface {
 	pollPlanningRoster(m *Monitor) []pollPlanInstance
 }
 
-func (m *Monitor) describeInstancesForScheduler() []InstanceDescriptor {
+// An admitted provider read may outlive cancellation. Check at the roster
+// and cadence boundaries so a retired monitor does not start another read.
+func (m *Monitor) describeInstancesForScheduler(ctx context.Context) []InstanceDescriptor {
+	if ctx.Err() != nil {
+		return nil
+	}
 	var descriptors []InstanceDescriptor
 	for _, provider := range m.pollProviderSnapshotWithBuiltins() {
+		if ctx.Err() != nil {
+			return nil
+		}
 		if provider == nil {
 			continue
 		}
@@ -35,6 +43,9 @@ func (m *Monitor) describeInstancesForScheduler() []InstanceDescriptor {
 		first := len(descriptors)
 		if batch, ok := provider.(pollPlanningRosterProvider); ok {
 			roster := batch.pollPlanningRoster(m)
+			if ctx.Err() != nil {
+				return nil
+			}
 			slices.SortFunc(roster, func(left, right pollPlanInstance) int {
 				return strings.Compare(left.name, right.name)
 			})
@@ -46,6 +57,9 @@ func (m *Monitor) describeInstancesForScheduler() []InstanceDescriptor {
 			}
 		} else {
 			names := provider.ListInstances(m)
+			if ctx.Err() != nil {
+				return nil
+			}
 			// Built-in Proxmox providers already return names in order.
 			// Only clone when we need to sort: another provider may own
 			// and reuse the returned slice.
@@ -58,6 +72,9 @@ func (m *Monitor) describeInstancesForScheduler() []InstanceDescriptor {
 			for _, name := range names {
 				desc := InstanceDescriptor{Name: name, Type: providerType}
 				if fixedProvider != nil {
+					if ctx.Err() != nil {
+						return nil
+					}
 					desc.FixedInterval = fixedProvider.FixedInstanceInterval(m, name)
 				}
 				descriptors = append(descriptors, desc)
@@ -83,7 +100,7 @@ func (m *Monitor) describeInstancesForScheduler() []InstanceDescriptor {
 }
 
 func (m *Monitor) buildScheduledTasks(now time.Time) []ScheduledTask {
-	return m.schedulePollDescriptors(now, m.describeInstancesForScheduler())
+	return m.schedulePollDescriptors(now, m.describeInstancesForScheduler(context.Background()))
 }
 
 func (m *Monitor) schedulePollDescriptors(now time.Time, descriptors []InstanceDescriptor) []ScheduledTask {
@@ -127,13 +144,13 @@ func (m *Monitor) planScheduledPolls(ctx context.Context, now time.Time) {
 		id := progress.beginPlanning(time.Now())
 		defer progress.finishPlanning(id)
 	}
-	// Bind queue admission to the roster revision before reading providers.
-	// A settings refresh can finish while an older planner is still reading.
-	revision := m.taskQueue.availabilityPlanRevision()
 	if ctx.Err() != nil {
 		return
 	}
-	descriptors := m.describeInstancesForScheduler()
+	// Bind queue admission to the roster revision before reading providers.
+	// A settings refresh can finish while an older planner is still reading.
+	revision := m.taskQueue.availabilityPlanRevision()
+	descriptors := m.describeInstancesForScheduler(ctx)
 	// Roster reads can outlive the monitor that started them. Do not write
 	// their results to the adaptive plan cache or queue once retired.
 	if ctx.Err() != nil {

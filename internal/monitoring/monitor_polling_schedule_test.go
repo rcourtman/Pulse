@@ -39,7 +39,7 @@ func TestPlanningListsNonBatchProviderOnceWithoutMutatingRoster(t *testing.T) {
 		providerType: providerType, instances: []string{"zeta", "alpha"},
 	}}
 	m := &Monitor{pollProviders: map[InstanceType]PollProvider{providerType: provider}}
-	got := m.describeInstancesForScheduler()
+	got := m.describeInstancesForScheduler(t.Context())
 	want := []InstanceDescriptor{
 		{Name: "alpha", Type: providerType, FixedInterval: time.Minute},
 		{Name: "zeta", Type: providerType, FixedInterval: 2 * time.Minute},

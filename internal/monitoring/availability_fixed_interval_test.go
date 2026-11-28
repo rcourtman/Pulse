@@ -61,7 +61,7 @@ func TestDescribeInstancesForSchedulerPinsAvailabilityFixedInterval(t *testing.T
 		{ID: "plex", Name: "Plex", Address: "plex.local", Protocol: config.AvailabilityProbeICMP, Enabled: true, PollIntervalSecs: 120},
 	})
 
-	descriptors := monitor.describeInstancesForScheduler()
+	descriptors := monitor.describeInstancesForScheduler(t.Context())
 	var found *InstanceDescriptor
 	for i := range descriptors {
 		if descriptors[i].Type == InstanceTypeAvailability && descriptors[i].Name == "plex" {
