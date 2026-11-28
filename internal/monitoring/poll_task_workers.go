@@ -136,6 +136,13 @@ func (m *Monitor) executeAndRescheduleTask(ctx context.Context, task ScheduledTa
 		next.NextRun = retryAt
 		return
 	}
+	// The claim can retire after dequeue (or after a process slot was
+	// granted). Check at the shared execution boundary before asking the
+	// provider to build a task for an old claim. A saved successor still
+	// belongs to completeClaim, and a running poll keeps its slot.
+	if ctx.Err() != nil || !m.taskQueue.canStartClaim(task) {
+		return
+	}
 	m.executeScheduledTask(ctx, task)
 	next, reschedule = m.nextScheduledPoll(task)
 }

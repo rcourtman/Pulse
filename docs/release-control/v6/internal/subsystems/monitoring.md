@@ -6669,8 +6669,14 @@ dispatcher releases the claim without starting provider setup and can take
 another due target, without changing the process concurrency limit. An
 explicit replacement of the retired target keeps its own due time, and a
 poll already admitted to run still owns its claim until it returns.
+Both local workers and the process dispatcher check again at the execution
+boundary, so retirement after dequeue or slot admission skips provider
+setup and preserves the replacement's own schedule.
 `TestProcessPollDispatcherReleasesRetiredClaim` exercises deletion, a live
 peer and a later same-key replacement with the process slot held.
+`TestRetiredPollClaimDoesNotEnterProvider` exercises retirement between
+dequeue and provider entry, and verifies that the worker can run the live
+peer immediately and the replacement only when due.
 
 ### Configured fixed poll intervals hold on both scheduler paths
 
