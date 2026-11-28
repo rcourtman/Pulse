@@ -1,0 +1,55 @@
+{
+  "version": 1,
+  "base_sha": "27979496dcf988fd2b19aaaadf7625ba0c241825",
+  "verified_at": "2026-11-28T11:49:41Z",
+  "result": "passed",
+  "changed_paths": [
+    "frontend-modern/src/api/charts.ts",
+    "frontend-modern/src/components/Workloads/GuestDrawerHistory.tsx",
+    "frontend-modern/src/components/Workloads/guestDrawerHistoryQuery.ts",
+    "frontend-modern/src/components/Workloads/guestDrawerModel.ts",
+    "frontend-modern/src/components/shared/historyChartModel.ts",
+    "frontend-modern/src/components/shared/useHistoryChartState.ts"
+  ],
+  "content_sha256": {
+    "frontend-modern/src/api/charts.ts": "bfa6d4cdacb24e97fd419a5a8f047c3dd607dae79dd51ff8a86bb408f5ccfcbc",
+    "frontend-modern/src/components/Workloads/GuestDrawerHistory.tsx": "2cee0ee0d05cc10b5517ac8ae5f8012e7cac987c7da456160a80e90235e0efd1",
+    "frontend-modern/src/components/Workloads/guestDrawerHistoryQuery.ts": "fd103efbf3b132a34e4ce2bdab11ecd3731ec3086a00aac218667415b4bce854",
+    "frontend-modern/src/components/Workloads/guestDrawerModel.ts": "8b509c6d0ee7d1b5ed5ba9a655f391bd48303abb9a730cd02d005c395f172d0b",
+    "frontend-modern/src/components/shared/historyChartModel.ts": "4c578f20ca4cb340791da37f91a0b3224ae91dd13a10c46113d5fb1521c6b4aa",
+    "frontend-modern/src/components/shared/useHistoryChartState.ts": "ee156020042db9bc173e3235a212770cc1cf98790885711429ae4f98fe3f23e5"
+  },
+  "routes": [
+    "/proxmox/overview"
+  ],
+  "viewports": [
+    {
+      "width": 1440,
+      "height": 900
+    },
+    {
+      "width": 390,
+      "height": 844
+    }
+  ],
+  "states": [
+    "default 24h guest drawer history charts (CPU, Memory, Disk)",
+    "active shared drag brush preview across all three panels",
+    "zoomed custom window state with Reset zoom button and formatted window summary",
+    "nested zoomed custom window state",
+    "Select time window inline editor open with non-nested labels, FormSelect DST offset support, and fractional seconds",
+    "empty 1h preset retaining Select time window control",
+    "mobile 390x844 zoomed state with 0px horizontal overflow and 0 console/page errors"
+  ],
+  "interactions": [
+    "mouse click-and-drag across CPU chart painting shared brush across all panels without firing requests during drag",
+    "pointer release firing one custom start/end history request and updating all panels",
+    "Escape during active drag cancelling brush while keeping guest drawer open",
+    "nested drag-to-zoom inside an already zoomed window",
+    "double-click on chart resetting custom zoom back to active preset",
+    "pointer drag starting inside SVG and releasing outside SVG clamping and committing zoom",
+    "Select time window with fractional .125/.375 seconds applying exact ms window via keyboard Enter and moving focus to Reset zoom",
+    "keyboard Enter on Reset zoom restoring focus to guest-history-region",
+    "preset range dropdown change clearing active custom zoom"
+  ]
+}

@@ -12,12 +12,16 @@ import {
 
 import { type AggregatedMetricPoint, type HistoryTimeRange } from '@/api/charts';
 import { Button } from '@/components/shared/Button';
+import { FormSelect } from '@/components/shared/FormSelect';
 import { InlineNotice } from '@/components/shared/InlineNotice';
 import { LoadingSpinner } from '@/components/shared/LoadingSpinner';
 import { PhoneChartsToggle } from '@/components/shared/PhoneChartsToggle';
 import {
   formatHistoryChartTooltipValue,
   formatHistoryChartTimeLabel,
+  formatHistoryChartTimeLabelForSpan,
+  formatHistoryWindowEndpointLabel,
+  formatHistoryWindowSummary,
   getHistoryReadoutLabel,
   getHistorySourceNotice,
   type HistoryReadoutSource,
@@ -69,15 +73,29 @@ interface GuestDrawerHistoryProps {
   alerts?: Record<string, GuestDrawerHistoryAlert | undefined>;
 }
 
+interface HistoryBrushPreview {
+  originGroupId: string;
+  startTime: number;
+  endTime: number;
+  tooShort: boolean;
+}
+
 interface GuestDrawerHistoryGroupChartProps {
   alerts?: Record<string, GuestDrawerHistoryAlert | undefined>;
+  brushPreview: HistoryBrushPreview | null;
+  clampWindow: GuestDrawerHistoryTimeBounds | null;
+  enabled: boolean;
   /** Collapsed below the sm breakpoint until the reader asks for more charts. */
   hiddenOnPhone?: boolean;
+  isZoomed: boolean;
   currentMetrics?: Record<string, number | null | undefined>;
   deferredMetrics?: Record<string, GuestDrawerHistoryDeferredMetric | undefined>;
   group: GuestDrawerHistoryGroupConfig;
   loading: boolean;
   metrics: Record<string, AggregatedMetricPoint[] | undefined>;
+  onBrushPreviewChange: (preview: HistoryBrushPreview | null) => void;
+  onCommitZoom: (window: GuestDrawerHistoryTimeBounds) => void;
+  onResetZoom: () => void;
   range: HistoryTimeRange;
   /** Where the reply's readings came from; names the readout's time. */
   source?: HistoryReadoutSource;
@@ -92,6 +110,77 @@ const GUEST_DRAWER_HISTORY_PLOT_LEFT = 34;
 const GUEST_DRAWER_HISTORY_PLOT_RIGHT = 8;
 const GUEST_DRAWER_HISTORY_PLOT_TOP = 8;
 const GUEST_DRAWER_HISTORY_PLOT_BOTTOM = 18;
+const HISTORY_BRUSH_THRESHOLD_PX = 6;
+const HISTORY_MIN_ZOOM_SPAN_MS = 60_000;
+const HISTORY_MAX_ZOOM_SPAN_MS = 365 * 24 * 60 * 60 * 1000;
+const HISTORY_SHORT_SPAN_MS = 15 * 60_000;
+
+const pad2 = (value: number): string => String(value).padStart(2, '0');
+
+const formatUtcOffsetLabel = (timestamp: number): string => {
+  const offsetMinutes = -new Date(timestamp).getTimezoneOffset();
+  const sign = offsetMinutes >= 0 ? '+' : '-';
+  const absMinutes = Math.abs(offsetMinutes);
+  const hours = Math.floor(absMinutes / 60);
+  const mins = absMinutes % 60;
+  return `UTC${sign}${pad2(hours)}:${pad2(mins)}`;
+};
+
+const toDatetimeLocalInputValue = (timestamp: number): string => {
+  const date = new Date(timestamp);
+  if (!Number.isFinite(date.getTime())) return '';
+  return `${date.getFullYear()}-${pad2(date.getMonth() + 1)}-${pad2(date.getDate())}T${pad2(date.getHours())}:${pad2(date.getMinutes())}:${pad2(date.getSeconds())}`;
+};
+
+interface LocalDatetimeCandidate {
+  timestamp: number;
+  offsetLabel: string;
+}
+
+const LOCAL_DATETIME_PATTERN =
+  /^(\d{4})-(\d{2})-(\d{2})T(\d{2}):(\d{2})(?::(\d{2})(?:\.(\d{1,3}))?)?$/;
+const DST_PROBE_OFFSETS_MS = [
+  -7_200_000, -3_600_000, -1_800_000, 0, 1_800_000, 3_600_000, 7_200_000,
+];
+
+const resolveLocalDatetimeCandidates = (raw: string): LocalDatetimeCandidate[] => {
+  const match = LOCAL_DATETIME_PATTERN.exec(raw.trim());
+  if (!match) return [];
+  const year = Number(match[1]);
+  const month = Number(match[2]);
+  const day = Number(match[3]);
+  const hour = Number(match[4]);
+  const minute = Number(match[5]);
+  const second = match[6] ? Number(match[6]) : 0;
+  const millisecond = match[7] ? Number(match[7].padEnd(3, '0')) : 0;
+  const base = new Date(year, month - 1, day, hour, minute, second, millisecond).getTime();
+  if (!Number.isFinite(base)) return [];
+
+  const matchesWallClock = (ms: number): boolean => {
+    const d = new Date(ms);
+    return (
+      d.getFullYear() === year &&
+      d.getMonth() === month - 1 &&
+      d.getDate() === day &&
+      d.getHours() === hour &&
+      d.getMinutes() === minute &&
+      d.getSeconds() === second &&
+      d.getMilliseconds() === millisecond
+    );
+  };
+
+  const unique = new Map<number, LocalDatetimeCandidate>();
+  for (const delta of DST_PROBE_OFFSETS_MS) {
+    const candidate = base + delta;
+    if (candidate > 0 && matchesWallClock(candidate) && !unique.has(candidate)) {
+      unique.set(candidate, {
+        timestamp: candidate,
+        offsetLabel: formatUtcOffsetLabel(candidate),
+      });
+    }
+  }
+  return [...unique.values()].sort((a, b) => a.timestamp - b.timestamp);
+};
 
 // Gridline labels state the scale's actual value at each line, so a reader
 // can tell a KB/s peak from a MB/s one. ("Avg" used to mark the midpoint of
@@ -583,22 +672,50 @@ const GuestDrawerHistoryGroupChart: Component<GuestDrawerHistoryGroupChartProps>
         }),
       ),
   );
+  const crossesMidnight = createMemo(() => {
+    const rangeBounds = bounds();
+    if (!rangeBounds) return false;
+    const startDate = new Date(rangeBounds.startTime);
+    const endDate = new Date(rangeBounds.endTime);
+    return (
+      startDate.getFullYear() !== endDate.getFullYear() ||
+      startDate.getMonth() !== endDate.getMonth() ||
+      startDate.getDate() !== endDate.getDate()
+    );
+  });
+  const formatObservationTime = (timestamp: number): string => {
+    const rangeBounds = bounds();
+    if (props.isZoomed && rangeBounds) {
+      return formatHistoryChartTimeLabelForSpan(
+        timestamp,
+        rangeBounds.endTime - rangeBounds.startTime,
+        crossesMidnight(),
+      );
+    }
+    return formatHistoryChartTimeLabel(timestamp, props.range);
+  };
   const timeReserve = createMemo(() =>
     getReservedTextShapes(
       observationTimes().flatMap((timestamp) => {
-        const time = formatHistoryChartTimeLabel(timestamp, props.range);
+        const time = formatObservationTime(timestamp);
         return [false, true].map(
           (inspected) => `${getHistoryReadoutLabel(props.source, inspected)} · ${time}`,
         );
       }),
     ),
   );
+  const effectiveCurrentMetrics = () => (props.isZoomed ? undefined : props.currentMetrics);
+  const effectiveDeferredMetrics = () => (props.isZoomed ? undefined : props.deferredMetrics);
   const displaySeries = createMemo(() =>
     series().map((item, index) => {
       const timestamp = readoutTimestamp();
       const point = item.points.find((point) => point.timestamp === timestamp);
-      const reading = getLiveReading(item.metric, props.currentMetrics, props.deferredMetrics);
-      const isFallback = timestamp === null && reading.value !== undefined;
+      const reading = getLiveReading(
+        item.metric,
+        effectiveCurrentMetrics(),
+        effectiveDeferredMetrics(),
+      );
+      const isFallback = !props.isZoomed && timestamp === null && reading.value !== undefined;
       const alert = props.alerts?.[item.metric];
       return {
         ...item,
@@ -631,13 +748,98 @@ const GuestDrawerHistoryGroupChart: Component<GuestDrawerHistoryGroupChartProps>
     if (timestamp === null) return null;
     const date = new Date(timestamp);
     return {
-      label: formatHistoryChartTimeLabel(timestamp, props.range),
+      label: formatObservationTime(timestamp),
       dateTime: date.toISOString(),
       fullLabel: date.toLocaleString(),
     };
   });
 
+  const plotRight = GUEST_DRAWER_HISTORY_CHART_WIDTH - GUEST_DRAWER_HISTORY_PLOT_RIGHT;
+  const plotWidth = plotRight - GUEST_DRAWER_HISTORY_PLOT_LEFT;
+  const plotHeight =
+    GUEST_DRAWER_HISTORY_CHART_HEIGHT -
+    GUEST_DRAWER_HISTORY_PLOT_TOP -
+    GUEST_DRAWER_HISTORY_PLOT_BOTTOM;
+
+  interface ActiveBrushDrag {
+    pointerId: number;
+    startClientX: number;
+    startSvgX: number;
+    bounds: GuestDrawerHistoryTimeBounds;
+    clampBounds: GuestDrawerHistoryTimeBounds;
+    active: boolean;
+  }
+
+  let plotSvgRef: SVGSVGElement | undefined;
+  let activeDrag: ActiveBrushDrag | null = null;
+
+  const clientXToSvgX = (clientX: number, rect: DOMRect): number =>
+    ((clientX - rect.left) / rect.width) * GUEST_DRAWER_HISTORY_CHART_WIDTH;
+
+  const svgXToTimestamp = (svgX: number, rangeBounds: GuestDrawerHistoryTimeBounds): number => {
+    const clampedX = clampNumber(svgX, GUEST_DRAWER_HISTORY_PLOT_LEFT, plotRight);
+    const ratio = (clampedX - GUEST_DRAWER_HISTORY_PLOT_LEFT) / Math.max(1, plotWidth);
+    return rangeBounds.startTime + ratio * (rangeBounds.endTime - rangeBounds.startTime);
+  };
+
+  const computeDragSelection = (currentSvgX: number, drag: ActiveBrushDrag) => {
+    const rawA = svgXToTimestamp(drag.startSvgX, drag.bounds);
+    const rawB = svgXToTimestamp(currentSvgX, drag.bounds);
+    const sortedStart = Math.min(rawA, rawB);
+    const sortedEnd = Math.max(rawA, rawB);
+    const startTime = Math.round(
+      clampNumber(sortedStart, drag.clampBounds.startTime, drag.clampBounds.endTime),
+    );
+    const endTime = Math.round(
+      clampNumber(sortedEnd, drag.clampBounds.startTime, drag.clampBounds.endTime),
+    );
+    return {
+      startTime,
+      endTime,
+      tooShort: endTime - startTime < HISTORY_MIN_ZOOM_SPAN_MS,
+    };
+  };
+
+  const handleBrushKeyDown = (event: KeyboardEvent) => {
+    if (event.key !== 'Escape' || !activeDrag) return;
+    event.preventDefault();
+    event.stopPropagation();
+    event.stopImmediatePropagation();
+    cancelDrag();
+  };
+
+  const cancelDrag = () => {
+    if (!activeDrag) return;
+    const pointerId = activeDrag.pointerId;
+    activeDrag = null;
+    window.removeEventListener('keydown', handleBrushKeyDown, true);
+    try {
+      if (plotSvgRef?.hasPointerCapture?.(pointerId)) {
+        plotSvgRef.releasePointerCapture(pointerId);
+      }
+    } catch {
+      // Synthetic pointer events in unit tests do not register a real capture.
+    }
+    if (props.brushPreview?.originGroupId === props.group.id) {
+      props.onBrushPreviewChange(null);
+    }
+  };
+
+  createEffect(
+    on(
+      () => [props.sourceKey, props.enabled, bounds()?.startTime, bounds()?.endTime] as const,
+      () => {
+        // Cancel an in-flight drag if the resource, preset, visibility, or
+        // underlying coordinate bounds shift under the pointer.
+        cancelDrag();
+      },
+      { defer: true },
+    ),
+  );
+  onCleanup(() => cancelDrag());
+
   const handleHoverMove = (event: MouseEvent & { currentTarget: SVGSVGElement }) => {
+    if (activeDrag || props.brushPreview !== null) return;
     if (inspectionTimestamp() !== null) return;
     const rangeBounds = bounds();
     if (!rangeBounds) return;
@@ -645,15 +847,135 @@ const GuestDrawerHistoryGroupChart: Component<GuestDrawerHistoryGroupChartProps>
     const rect = event.currentTarget.getBoundingClientRect();
     if (rect.width <= 0) return;
 
-    const pointerX = ((event.clientX - rect.left) / rect.width) * GUEST_DRAWER_HISTORY_CHART_WIDTH;
-    const plotRight = GUEST_DRAWER_HISTORY_CHART_WIDTH - GUEST_DRAWER_HISTORY_PLOT_RIGHT;
-    const clampedX = clampNumber(pointerX, GUEST_DRAWER_HISTORY_PLOT_LEFT, plotRight);
-    const plotWidth = plotRight - GUEST_DRAWER_HISTORY_PLOT_LEFT;
-    const ratio = (clampedX - GUEST_DRAWER_HISTORY_PLOT_LEFT) / Math.max(1, plotWidth);
-    setHoverTimestamp(
-      rangeBounds.startTime + ratio * (rangeBounds.endTime - rangeBounds.startTime),
-    );
+    const pointerX = clientXToSvgX(event.clientX, rect);
+    setHoverTimestamp(svgXToTimestamp(pointerX, rangeBounds));
   };
+
+  const handlePointerDown = (event: PointerEvent & { currentTarget: SVGSVGElement }) => {
+    if (
+      event.pointerType === 'touch' ||
+      event.button !== 0 ||
+      event.isPrimary === false ||
+      props.loading ||
+      !hasStoredData()
+    ) {
+      return;
+    }
+    const rangeBounds = bounds();
+    if (!rangeBounds) return;
+    const rect = event.currentTarget.getBoundingClientRect();
+    if (rect.width <= 0) return;
+
+    const startSvgX = clientXToSvgX(event.clientX, rect);
+    if (startSvgX < GUEST_DRAWER_HISTORY_PLOT_LEFT || startSvgX > plotRight) return;
+
+    event.preventDefault();
+    cancelDrag();
+    const clampBounds = props.clampWindow
+      ? { startTime: props.clampWindow.startTime, endTime: props.clampWindow.endTime }
+      : { startTime: rangeBounds.startTime, endTime: rangeBounds.endTime };
+    activeDrag = {
+      pointerId: event.pointerId,
+      startClientX: event.clientX,
+      startSvgX,
+      bounds: { startTime: rangeBounds.startTime, endTime: rangeBounds.endTime },
+      clampBounds,
+      active: false,
+    };
+    try {
+      event.currentTarget.setPointerCapture?.(event.pointerId);
+    } catch {
+      // Synthetic pointer events in unit tests do not register a real capture.
+    }
+    window.addEventListener('keydown', handleBrushKeyDown, true);
+  };
+
+  const handlePointerMove = (event: PointerEvent & { currentTarget: SVGSVGElement }) => {
+    if (activeDrag) {
+      if (event.pointerId !== activeDrag.pointerId) return;
+      setHoverTimestamp(null);
+      const rect = event.currentTarget.getBoundingClientRect();
+      if (rect.width <= 0) return;
+      if (
+        !activeDrag.active &&
+        Math.abs(event.clientX - activeDrag.startClientX) >= HISTORY_BRUSH_THRESHOLD_PX
+      ) {
+        activeDrag.active = true;
+      }
+      if (activeDrag.active) {
+        const currentSvgX = clampNumber(
+          clientXToSvgX(event.clientX, rect),
+          GUEST_DRAWER_HISTORY_PLOT_LEFT,
+          plotRight,
+        );
+        const selection = computeDragSelection(currentSvgX, activeDrag);
+        props.onBrushPreviewChange({
+          originGroupId: props.group.id,
+          ...selection,
+        });
+      }
+      return;
+    }
+    handleHoverMove(event);
+  };
+
+  const handlePointerUp = (event: PointerEvent & { currentTarget: SVGSVGElement }) => {
+    if (!activeDrag || event.pointerId !== activeDrag.pointerId) return;
+    const drag = activeDrag;
+    const rect = event.currentTarget.getBoundingClientRect();
+    const selection =
+      drag.active && rect.width > 0
+        ? computeDragSelection(
+            clampNumber(
+              clientXToSvgX(event.clientX, rect),
+              GUEST_DRAWER_HISTORY_PLOT_LEFT,
+              plotRight,
+            ),
+            drag,
+          )
+        : null;
+    cancelDrag();
+    if (
+      selection &&
+      !selection.tooShort &&
+      (selection.startTime !== drag.bounds.startTime || selection.endTime !== drag.bounds.endTime)
+    ) {
+      props.onCommitZoom({
+        startTime: selection.startTime,
+        endTime: selection.endTime,
+      });
+    }
+  };
+
+  const brushBox = createMemo(() => {
+    const preview = props.brushPreview;
+    const rangeBounds = bounds();
+    if (!preview || !rangeBounds) return null;
+    const x1 = clampNumber(
+      getGuestDrawerHistoryX(preview.startTime, rangeBounds.startTime, rangeBounds.endTime),
+      GUEST_DRAWER_HISTORY_PLOT_LEFT,
+      plotRight,
+    );
+    const x2 = clampNumber(
+      getGuestDrawerHistoryX(preview.endTime, rangeBounds.startTime, rangeBounds.endTime),
+      GUEST_DRAWER_HISTORY_PLOT_LEFT,
+      plotRight,
+    );
+    const left = Math.min(x1, x2);
+    const right = Math.max(x1, x2);
+    const centerPct = clampNumber(
+      ((left + right) / 2 / GUEST_DRAWER_HISTORY_CHART_WIDTH) * 100,
+      24,
+      76,
+    );
+    return {
+      left,
+      right,
+      width: Math.max(1, right - left),
+      centerPct,
+      preview,
+    };
+  });
 
   return (
     <section
@@ -763,13 +1085,27 @@ const GuestDrawerHistoryGroupChart: Component<GuestDrawerHistoryGroupChartProps>
           )}
         </For>
         <svg
+          ref={plotSvgRef}
           aria-label={`${props.group.label} history`}
           aria-describedby={`${inspectionId}-description${gapMessage() ? ` ${inspectionId}-gaps` : ''}`}
-          class="absolute inset-0 h-full w-full cursor-crosshair"
+          class="absolute inset-0 h-full w-full cursor-crosshair select-none"
           data-testid="guest-history-plot"
+          onDblClick={() => {
+            if (props.isZoomed) props.onResetZoom();
+          }}
+          onLostPointerCapture={(event) => {
+            if (activeDrag && event.pointerId === activeDrag.pointerId) cancelDrag();
+          }}
           onMouseMove={handleHoverMove}
-          onPointerLeave={() => setHoverTimestamp(null)}
-          onPointerMove={handleHoverMove}
+          onPointerCancel={(event) => {
+            if (activeDrag && event.pointerId === activeDrag.pointerId) cancelDrag();
+          }}
+          onPointerDown={handlePointerDown}
+          onPointerLeave={() => {
+            if (!activeDrag) setHoverTimestamp(null);
+          }}
+          onPointerMove={handlePointerMove}
+          onPointerUp={handlePointerUp}
           preserveAspectRatio="none"
           role="img"
           viewBox={`0 0 ${GUEST_DRAWER_HISTORY_CHART_WIDTH} ${GUEST_DRAWER_HISTORY_CHART_HEIGHT}`}
@@ -878,7 +1214,42 @@ const GuestDrawerHistoryGroupChart: Component<GuestDrawerHistoryGroupChartProps>
               </>
             )}
           </Show>
-          <Show when={hoverX() !== null && hoveredSeries().length > 0}>
+          <Show when={brushBox()}>
+            {(box) => (
+              <g aria-hidden="true" data-history-brush-selection={props.group.id}>
+                <rect
+                  x={box().left}
+                  y={GUEST_DRAWER_HISTORY_PLOT_TOP}
+                  width={box().width}
+                  height={plotHeight}
+                  class={box().preview.tooShort ? 'fill-amber-500/20' : 'fill-blue-500/20'}
+                />
+                <line
+                  x1={box().left}
+                  x2={box().left}
+                  y1={GUEST_DRAWER_HISTORY_PLOT_TOP}
+                  y2={GUEST_DRAWER_HISTORY_PLOT_TOP + plotHeight}
+                  stroke="currentColor"
+                  stroke-width="1.5"
+                  class={box().preview.tooShort ? 'text-amber-500' : 'text-blue-500'}
+                  vector-effect="non-scaling-stroke"
+                />
+                <line
+                  x1={box().right}
+                  x2={box().right}
+                  y1={GUEST_DRAWER_HISTORY_PLOT_TOP}
+                  y2={GUEST_DRAWER_HISTORY_PLOT_TOP + plotHeight}
+                  stroke="currentColor"
+                  stroke-width="1.5"
+                  class={box().preview.tooShort ? 'text-amber-500' : 'text-blue-500'}
+                  vector-effect="non-scaling-stroke"
+                />
+              </g>
+            )}
+          </Show>
+          <Show
+            when={props.brushPreview === null && hoverX() !== null && hoveredSeries().length > 0}
+          >
             <line
               x1={hoverX() ?? 0}
               x2={hoverX() ?? 0}
@@ -903,9 +1274,26 @@ const GuestDrawerHistoryGroupChart: Component<GuestDrawerHistoryGroupChartProps>
             </For>
           </Show>
         </svg>
+        <Show
+          when={
+            brushBox() && brushBox()!.preview.originGroupId === props.group.id ? brushBox() : null
+          }
+        >
+          {(box) => (
+            <span
+              aria-hidden="true"
+              data-testid="guest-history-brush-preview"
+              class="pointer-events-none absolute top-1 z-10 -translate-x-1/2 whitespace-nowrap rounded-xs border border-border bg-surface/95 px-1.5 py-0.5 text-[10px] leading-none tabular-nums text-base-content shadow-xs"
+              style={{ left: `${box().centerPct}%` }}
+            >
+              {formatHistoryWindowSummary(box().preview.startTime, box().preview.endTime)}
+              {box().preview.tooShort ? ' (min 1m)' : ''}
+            </span>
+          )}
+        </Show>
         {/* The slider's value text states each reading's range, so these
             labels are for sighted pointer readers only. */}
-        <For each={peakLabels()}>
+        <For each={props.brushPreview === null ? peakLabels() : []}>
           {(peak) => (
             <span
               aria-hidden="true"
@@ -923,12 +1311,12 @@ const GuestDrawerHistoryGroupChart: Component<GuestDrawerHistoryGroupChartProps>
           )}
         </For>
         <Show when={!hasStoredData() && !props.loading}>
-          <div class="absolute inset-x-8 inset-y-2 flex items-center justify-center rounded-xs text-xs text-muted">
+          <div class="pointer-events-none absolute inset-x-8 inset-y-2 flex items-center justify-center rounded-xs text-xs text-muted">
             No stored history in this range
           </div>
         </Show>
         <Show when={props.loading}>
-          <div class="absolute inset-x-8 inset-y-2 flex items-center justify-center rounded-xs text-xs text-muted">
+          <div class="pointer-events-none absolute inset-x-8 inset-y-2 flex items-center justify-center rounded-xs text-xs text-muted">
             Loading history
           </div>
         </Show>
@@ -951,12 +1339,11 @@ const GuestDrawerHistoryGroupChart: Component<GuestDrawerHistoryGroupChartProps>
                   aria-label={`${endpoint.label}: ${new Date(endpoint.timestamp).toLocaleString()}`}
                   title={new Date(endpoint.timestamp).toLocaleString()}
                 >
-                  {new Date(endpoint.timestamp).toLocaleString([], {
-                    month: 'short',
-                    day: 'numeric',
-                    hour: '2-digit',
-                    minute: '2-digit',
-                  })}
+                  {formatHistoryWindowEndpointLabel(
+                    endpoint.timestamp,
+                    props.isZoomed &&
+                      window().endTime - window().startTime <= HISTORY_SHORT_SPAN_MS,
+                  )}
                 </time>
               )}
             </For>
@@ -1041,12 +1428,43 @@ export const GuestDrawerHistory: Component<GuestDrawerHistoryProps> = (props) =>
   // panel with an active alert, and the rest on request. Wider layouts show
   // every panel; the class only applies below the sm breakpoint.
   const [showAllOnPhone, setShowAllOnPhone] = createSignal(false);
+  const presetScopeKey = createMemo(
+    () => `${props.target?.resourceType ?? ''}:${props.target?.resourceId ?? ''}:${props.range}`,
+  );
+  const [scopedZoom, setScopedZoom] = createSignal<{
+    scopeKey: string;
+    window: GuestDrawerHistoryTimeBounds;
+  } | null>(null);
+  const zoomWindow = createMemo<GuestDrawerHistoryTimeBounds | null>(() => {
+    const current = scopedZoom();
+    return current && current.scopeKey === presetScopeKey() ? current.window : null;
+  });
+  const [brushPreview, setBrushPreview] = createSignal<HistoryBrushPreview | null>(null);
+  const [windowAnnouncement, setWindowAnnouncement] = createSignal('');
+  const [windowEditorOpen, setWindowEditorOpen] = createSignal(false);
+  const [windowDraftStart, setWindowDraftStart] = createSignal('');
+  const [windowDraftEnd, setWindowDraftEnd] = createSignal('');
+  const [windowStartOffset, setWindowStartOffset] = createSignal('');
+  const [windowEndOffset, setWindowEndOffset] = createSignal('');
+  const [windowInitialBounds, setWindowInitialBounds] = createSignal<{
+    startMs: number;
+    endMs: number;
+    startText: string;
+    endText: string;
+    startOffset: string;
+    endOffset: string;
+  } | null>(null);
+  const [windowDraftError, setWindowDraftError] = createSignal<string | null>(null);
   const gridId = `history-groups-${createUniqueId()}`;
+  const windowEditorId = `history-window-editor-${createUniqueId()}`;
+  const windowStartInputId = `history-window-start-${createUniqueId()}`;
+  const windowEndInputId = `history-window-end-${createUniqueId()}`;
   const historySource = createGuestDrawerHistorySource(
     () => props.target,
     () => props.range,
     () => props.enabled !== false,
     () => props.liveReadingsAvailable !== false,
+    zoomWindow,
   );
   const historyQuery = createGuestDrawerHistoryQuery(historySource);
   // A successful retry removes the focused Retry button with the error. Keep
@@ -1056,7 +1474,10 @@ export const GuestDrawerHistory: Component<GuestDrawerHistoryProps> = (props) =>
   // already cleared by the time the error effect runs.
   let regionRef: HTMLDivElement | undefined;
   let retryRef: HTMLButtonElement | undefined;
+  let resetZoomRef: HTMLButtonElement | undefined;
+  let selectWindowRef: HTMLButtonElement | undefined;
   let retryHadFocus = false;
+  let resetZoomHadFocus = false;
   createEffect(
     on(
       () => historyQuery.error(),
@@ -1066,6 +1487,48 @@ export const GuestDrawerHistory: Component<GuestDrawerHistoryProps> = (props) =>
       },
     ),
   );
+  createEffect(
+    on(zoomWindow, (current, previous) => {
+      if (previous && !current && resetZoomHadFocus) regionRef?.focus();
+      resetZoomHadFocus = false;
+    }),
+  );
+  createEffect(
+    on(
+      presetScopeKey,
+      () => {
+        setScopedZoom(null);
+        setBrushPreview(null);
+        setWindowEditorOpen(false);
+        setWindowDraftError(null);
+        setWindowAnnouncement('');
+      },
+      { defer: true },
+    ),
+  );
+
+  const commitZoom = (next: GuestDrawerHistoryTimeBounds) => {
+    const startTime = Math.round(next.startTime);
+    const endTime = Math.round(next.endTime);
+    if (endTime - startTime < HISTORY_MIN_ZOOM_SPAN_MS) return;
+    setScopedZoom({
+      scopeKey: presetScopeKey(),
+      window: { startTime, endTime },
+    });
+    setBrushPreview(null);
+    setWindowEditorOpen(false);
+    setWindowDraftError(null);
+    setWindowAnnouncement(`Zoomed to ${formatHistoryWindowSummary(startTime, endTime)}.`);
+  };
+
+  const resetZoom = () => {
+    if (!zoomWindow()) return;
+    setScopedZoom(null);
+    setBrushPreview(null);
+    setWindowEditorOpen(false);
+    setWindowDraftError(null);
+    setWindowAnnouncement('Zoom reset.');
+  };
 
   const metrics = createMemo(() => historyQuery.value().metrics ?? {});
   const groups = createMemo(() => props.groups ?? GUEST_DRAWER_HISTORY_GROUPS);
@@ -1094,8 +1557,12 @@ export const GuestDrawerHistory: Component<GuestDrawerHistoryProps> = (props) =>
     }
     return hasMemory ? 'This view includes readings from memory.' : undefined;
   };
-  const sourceKey = () =>
-    `${props.target?.resourceType}:${props.target?.resourceId}:${props.range}`;
+  const sourceKey = () => {
+    const zoom = zoomWindow();
+    return zoom
+      ? `${props.target?.resourceType}:${props.target?.resourceId}:${props.range}:custom:${zoom.startTime}:${zoom.endTime}`
+      : `${props.target?.resourceType}:${props.target?.resourceId}:${props.range}`;
+  };
   const normalizedGroups = createMemo(() =>
     groups().map((group) => ({
       id: group.id,
@@ -1104,12 +1571,32 @@ export const GuestDrawerHistory: Component<GuestDrawerHistoryProps> = (props) =>
       })),
     })),
   );
-  const timeBounds = createMemo(() =>
-    getGuestDrawerHistoryRangeBounds(
+  const replyWindow = createMemo<GuestDrawerHistoryTimeBounds | null>(() => {
+    const reply = historyQuery.value();
+    if (
+      Number.isFinite(reply.start) &&
+      Number.isFinite(reply.end) &&
+      reply.end > reply.start &&
+      reply.start > 0
+    ) {
+      return { startTime: reply.start, endTime: reply.end };
+    }
+    return null;
+  });
+  const timeBounds = createMemo(() => {
+    const zoom = zoomWindow();
+    if (zoom) {
+      return getGuestDrawerHistoryRangeBounds(
+        normalizedGroups().flatMap(({ series }) => series),
+        { start: zoom.startTime, end: zoom.endTime },
+        true,
+      );
+    }
+    return getGuestDrawerHistoryRangeBounds(
       normalizedGroups().flatMap(({ series }) => series),
       historyQuery.value(),
-    ),
-  );
+    );
+  });
   const groupsWithPoints = createMemo(
     () =>
       new Set(
@@ -1122,6 +1609,103 @@ export const GuestDrawerHistory: Component<GuestDrawerHistoryProps> = (props) =>
   const liveCurrentMetrics = () =>
     props.liveReadingsAvailable !== false ? props.currentMetrics : undefined;
 
+  const windowStartCandidates = createMemo(() =>
+    resolveLocalDatetimeCandidates(windowDraftStart()),
+  );
+  const windowEndCandidates = createMemo(() => resolveLocalDatetimeCandidates(windowDraftEnd()));
+
+  const resolveEndpointTimestamp = (
+    draftText: string,
+    selectedOffset: string,
+    candidates: readonly LocalDatetimeCandidate[],
+    initialText: string | undefined,
+    initialOffset: string | undefined,
+    initialMs: number | undefined,
+  ): number | null => {
+    if (
+      initialMs !== undefined &&
+      draftText === initialText &&
+      (!selectedOffset || selectedOffset === initialOffset)
+    ) {
+      return initialMs;
+    }
+    if (candidates.length === 0) return null;
+    if (candidates.length === 1) return candidates[0].timestamp;
+    const matched = candidates.find((candidate) => candidate.offsetLabel === selectedOffset);
+    return (matched ?? candidates[0]).timestamp;
+  };
+
+  const openWindowEditor = () => {
+    const activeBounds = zoomWindow() ?? replyWindow() ?? timeBounds();
+    const startMs = activeBounds ? activeBounds.startTime : Date.now() - 3_600_000;
+    const endMs = activeBounds ? activeBounds.endTime : Date.now();
+    const startText = toDatetimeLocalInputValue(startMs);
+    const endText = toDatetimeLocalInputValue(endMs);
+    const startOffset = formatUtcOffsetLabel(startMs);
+    const endOffset = formatUtcOffsetLabel(endMs);
+    setWindowInitialBounds({ startMs, endMs, startText, endText, startOffset, endOffset });
+    setWindowDraftStart(startText);
+    setWindowDraftEnd(endText);
+    setWindowStartOffset(startOffset);
+    setWindowEndOffset(endOffset);
+    setWindowDraftError(null);
+    setWindowEditorOpen(true);
+  };
+
+  const applyWindowEditor = (event: SubmitEvent) => {
+    event.preventDefault();
+    const initial = windowInitialBounds();
+    const startMs = resolveEndpointTimestamp(
+      windowDraftStart(),
+      windowStartOffset(),
+      windowStartCandidates(),
+      initial?.startText,
+      initial?.startOffset,
+      initial?.startMs,
+    );
+    const endMs = resolveEndpointTimestamp(
+      windowDraftEnd(),
+      windowEndOffset(),
+      windowEndCandidates(),
+      initial?.endText,
+      initial?.endOffset,
+      initial?.endMs,
+    );
+    if (startMs === null || endMs === null) {
+      setWindowDraftError('Enter valid start and end times.');
+      return;
+    }
+    if (endMs <= startMs) {
+      setWindowDraftError('End time must be after start time.');
+      return;
+    }
+    const spanMs = endMs - startMs;
+    if (spanMs < HISTORY_MIN_ZOOM_SPAN_MS) {
+      setWindowDraftError('Select a window of at least 1 minute.');
+      return;
+    }
+    if (spanMs > HISTORY_MAX_ZOOM_SPAN_MS) {
+      setWindowDraftError('Window cannot exceed 365 days.');
+      return;
+    }
+    if (endMs > Date.now()) {
+      setWindowDraftError('End time cannot be in the future.');
+      return;
+    }
+    commitZoom({ startTime: startMs, endTime: endMs });
+    // Closing the form removes the focused Apply button. Move keyboard focus
+    // onto Reset zoom (or back to Select time window) rather than document.body.
+    queueMicrotask(() => {
+      if (resetZoomRef?.isConnected) {
+        resetZoomRef.focus();
+      } else if (selectWindowRef?.isConnected) {
+        selectWindowRef.focus();
+      } else {
+        regionRef?.focus();
+      }
+    });
+  };
+
   const inlineDiskActivity = () => {
     const first = groups()[0];
     return props.target?.resourceType === 'disk' && first?.id === 'disk-activity'
@@ -1133,10 +1717,11 @@ export const GuestDrawerHistory: Component<GuestDrawerHistoryProps> = (props) =>
     return Boolean(
       activity &&
       (groupsWithPoints().has(activity.id) ||
-        activity.series.some(({ metric }) => {
-          const reading = getLiveReading(metric, liveCurrentMetrics(), props.deferredMetrics);
-          return reading.value !== undefined || reading.deferred !== undefined;
-        })),
+        (!zoomWindow() &&
+          activity.series.some(({ metric }) => {
+            const reading = getLiveReading(metric, liveCurrentMetrics(), props.deferredMetrics);
+            return reading.value !== undefined || reading.deferred !== undefined;
+          }))),
     );
   });
 
@@ -1147,10 +1732,13 @@ export const GuestDrawerHistory: Component<GuestDrawerHistoryProps> = (props) =>
   const diskPhoneFallback = createMemo<{ key: string; id: string } | undefined>((previous) => {
     if (!inlineDiskActivity()) return;
     const reply = historyQuery.value();
+    const zoom = zoomWindow();
+    const expectedRange = zoom ? 'custom' : props.range;
     if (
       reply.resourceId !== props.target?.resourceId ||
       reply.resourceType !== props.target?.resourceType ||
-      reply.range !== props.range
+      reply.range !== expectedRange ||
+      (zoom !== null && (reply.start !== zoom.startTime || reply.end !== zoom.endTime))
     ) {
       return;
     }
@@ -1185,7 +1773,7 @@ export const GuestDrawerHistory: Component<GuestDrawerHistoryProps> = (props) =>
   // A final 401/403 withdraws the whole History panel, readings included; an
   // outage or a locked range leaves the resource's own readings standing.
   const liveReadings = () => (
-    <Show when={!getAPIReadAccessErrorMessage(historyQuery.error())}>
+    <Show when={!zoomWindow() && !getAPIReadAccessErrorMessage(historyQuery.error())}>
       <GuestDrawerLiveReadings
         groups={groups()}
         currentMetrics={liveCurrentMetrics()}
@@ -1194,7 +1782,16 @@ export const GuestDrawerHistory: Component<GuestDrawerHistoryProps> = (props) =>
     </Show>
   );
 
-  const showToolbar = () => Boolean(props.onRangeChange || historyQuery.error());
+  // Keep Select time window available for any authorized target, including when
+  // the current preset has no stored readings, so users can jump to older windows.
+  const canSelectWindow = createMemo(
+    () => Boolean(props.target) && !getAPIReadAccessErrorMessage(historyQuery.error()),
+  );
+  const isInitialLoading = createMemo(() => historyQuery.loading() && !historyQuery.resolvedOnce());
+  const isEnabled = createMemo(() => props.enabled !== false);
+  const isZoomed = createMemo(() => zoomWindow() !== null);
+  const showToolbar = () =>
+    Boolean(props.onRangeChange || historyQuery.error() || isZoomed() || canSelectWindow());
 
   return (
     <Show
@@ -1212,7 +1809,16 @@ export const GuestDrawerHistory: Component<GuestDrawerHistoryProps> = (props) =>
         }}
       >
         <div
-          class={showToolbar() ? 'mb-3 flex flex-wrap items-start justify-end gap-2' : 'sr-only'}
+          class="sr-only"
+          role="status"
+          aria-label="History window status"
+          aria-live="polite"
+          aria-atomic="true"
+        >
+          {windowAnnouncement()}
+        </div>
+        <div
+          class={showToolbar() ? 'mb-3 flex flex-wrap items-center justify-end gap-2' : 'sr-only'}
         >
           <div
             class="min-w-0 flex-1"
@@ -1230,6 +1836,58 @@ export const GuestDrawerHistory: Component<GuestDrawerHistoryProps> = (props) =>
               </InlineNotice>
             </Show>
           </div>
+          <Show when={zoomWindow()}>
+            {(zoom) => {
+              onCleanup(() => {
+                resetZoomHadFocus =
+                  resetZoomRef !== undefined && document.activeElement === resetZoomRef;
+              });
+              return (
+                <div
+                  class="flex flex-wrap items-center gap-1.5"
+                  data-testid="guest-history-zoom-bar"
+                >
+                  <span
+                    class="rounded-xs border border-border bg-surface-subtle px-2 py-1 text-[11px] tabular-nums text-base-content"
+                    data-testid="guest-history-zoom-label"
+                  >
+                    {formatHistoryWindowSummary(zoom().startTime, zoom().endTime)}
+                  </span>
+                  <Button
+                    ref={resetZoomRef}
+                    size="sm"
+                    variant="secondary"
+                    class="min-h-11 shrink-0 text-[11px] sm:min-h-7 sm:py-0"
+                    data-testid="guest-history-reset-zoom"
+                    onClick={resetZoom}
+                  >
+                    Reset zoom
+                  </Button>
+                </div>
+              );
+            }}
+          </Show>
+          <Show when={canSelectWindow()}>
+            <Button
+              ref={selectWindowRef}
+              size="sm"
+              variant="ghost"
+              class="min-h-11 shrink-0 text-[11px] text-muted hover:text-base-content sm:min-h-7 sm:py-0"
+              aria-expanded={windowEditorOpen()}
+              aria-controls={windowEditorId}
+              data-testid="guest-history-select-window"
+              onClick={() => {
+                if (windowEditorOpen()) {
+                  setWindowEditorOpen(false);
+                  setWindowDraftError(null);
+                } else {
+                  openWindowEditor();
+                }
+              }}
+            >
+              Select time window
+            </Button>
+          </Show>
           <Show when={props.onRangeChange}>
             {(onRangeChange) => (
               <GuestDrawerHistoryRangeSelect range={props.range} onRangeChange={onRangeChange()} />
@@ -1264,6 +1922,150 @@ export const GuestDrawerHistory: Component<GuestDrawerHistoryProps> = (props) =>
             }}
           </Show>
         </div>
+        <Show when={windowEditorOpen()}>
+          <form
+            id={windowEditorId}
+            class="mb-3 rounded-xs border border-border bg-surface p-2.5"
+            data-testid="guest-history-window-editor"
+            onSubmit={applyWindowEditor}
+            onKeyDown={(event) => {
+              if (event.key === 'Escape') {
+                event.preventDefault();
+                event.stopPropagation();
+                setWindowEditorOpen(false);
+                setWindowDraftError(null);
+                selectWindowRef?.focus();
+              }
+            }}
+          >
+            <div class="flex flex-wrap items-end gap-2">
+              <div class="flex min-w-[180px] flex-1 flex-col gap-1">
+                <label for={windowStartInputId} class="text-[11px] text-muted">
+                  Start
+                </label>
+                <input
+                  id={windowStartInputId}
+                  type="datetime-local"
+                  step="any"
+                  required
+                  value={windowDraftStart()}
+                  onInput={(event) => {
+                    const nextValue = event.currentTarget.value;
+                    setWindowDraftStart(nextValue);
+                    const candidates = resolveLocalDatetimeCandidates(nextValue);
+                    if (
+                      candidates.length > 0 &&
+                      !candidates.some((c) => c.offsetLabel === windowStartOffset())
+                    ) {
+                      setWindowStartOffset(candidates[0].offsetLabel);
+                    }
+                    setWindowDraftError(null);
+                  }}
+                  class="min-h-11 rounded-xs border border-border bg-surface px-2 py-1 text-xs tabular-nums text-base-content sm:min-h-7"
+                />
+                <Show when={windowStartCandidates().length > 1}>
+                  <FormSelect
+                    density="compact"
+                    label="Start timezone offset"
+                    labelClass="sr-only"
+                    fieldClass="mt-1"
+                    selectClass="text-[11px] tabular-nums"
+                    value={windowStartOffset()}
+                    onChange={(event) => {
+                      setWindowStartOffset(event.currentTarget.value);
+                      setWindowDraftError(null);
+                    }}
+                  >
+                    <For each={windowStartCandidates()}>
+                      {(candidate) => (
+                        <option value={candidate.offsetLabel}>{candidate.offsetLabel}</option>
+                      )}
+                    </For>
+                  </FormSelect>
+                </Show>
+              </div>
+              <div class="flex min-w-[180px] flex-1 flex-col gap-1">
+                <label for={windowEndInputId} class="text-[11px] text-muted">
+                  End
+                </label>
+                <input
+                  id={windowEndInputId}
+                  type="datetime-local"
+                  step="any"
+                  required
+                  value={windowDraftEnd()}
+                  onInput={(event) => {
+                    const nextValue = event.currentTarget.value;
+                    setWindowDraftEnd(nextValue);
+                    const candidates = resolveLocalDatetimeCandidates(nextValue);
+                    if (
+                      candidates.length > 0 &&
+                      !candidates.some((c) => c.offsetLabel === windowEndOffset())
+                    ) {
+                      setWindowEndOffset(candidates[0].offsetLabel);
+                    }
+                    setWindowDraftError(null);
+                  }}
+                  class="min-h-11 rounded-xs border border-border bg-surface px-2 py-1 text-xs tabular-nums text-base-content sm:min-h-7"
+                />
+                <Show when={windowEndCandidates().length > 1}>
+                  <FormSelect
+                    density="compact"
+                    label="End timezone offset"
+                    labelClass="sr-only"
+                    fieldClass="mt-1"
+                    selectClass="text-[11px] tabular-nums"
+                    value={windowEndOffset()}
+                    onChange={(event) => {
+                      setWindowEndOffset(event.currentTarget.value);
+                      setWindowDraftError(null);
+                    }}
+                  >
+                    <For each={windowEndCandidates()}>
+                      {(candidate) => (
+                        <option value={candidate.offsetLabel}>{candidate.offsetLabel}</option>
+                      )}
+                    </For>
+                  </FormSelect>
+                </Show>
+              </div>
+              <div class="flex items-center gap-1.5">
+                <Button
+                  type="submit"
+                  size="sm"
+                  class="min-h-11 text-[11px] sm:min-h-7 sm:py-0"
+                  data-testid="guest-history-window-apply"
+                >
+                  Apply
+                </Button>
+                <Button
+                  type="button"
+                  size="sm"
+                  variant="ghost"
+                  class="min-h-11 text-[11px] sm:min-h-7 sm:py-0"
+                  onClick={() => {
+                    setWindowEditorOpen(false);
+                    setWindowDraftError(null);
+                    selectWindowRef?.focus();
+                  }}
+                >
+                  Cancel
+                </Button>
+              </div>
+            </div>
+            <Show when={windowDraftError()}>
+              {(message) => (
+                <p
+                  role="alert"
+                  class="mt-2 text-xs text-red-600 dark:text-red-400"
+                  data-testid="guest-history-window-error"
+                >
+                  {message()}
+                </p>
+              )}
+            </Show>
+          </form>
+        </Show>
         <div class="space-y-3">
           <Show when={!historyQuery.error() || hasHistoryPoints()} fallback={liveReadings()}>
             <Show when={hasHistoryPoints() && sourceNotice()}>
@@ -1281,10 +2083,17 @@ export const GuestDrawerHistory: Component<GuestDrawerHistoryProps> = (props) =>
                 {(group) => (
                   <GuestDrawerHistoryGroupChart
                     alerts={props.alerts}
+                    brushPreview={brushPreview()}
+                    clampWindow={replyWindow()}
+                    enabled={isEnabled()}
                     hiddenOnPhone={!showAllOnPhone() && phoneCollapsedGroups().includes(group)}
+                    isZoomed={isZoomed()}
                     group={group}
-                    loading={historyQuery.loading() && !historyQuery.resolvedOnce()}
+                    loading={isInitialLoading()}
                     metrics={metrics()}
+                    onBrushPreviewChange={setBrushPreview}
+                    onCommitZoom={commitZoom}
+                    onResetZoom={resetZoom}
                     currentMetrics={liveCurrentMetrics()}
                     deferredMetrics={props.deferredMetrics}
                     range={props.range}

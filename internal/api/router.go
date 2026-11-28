@@ -6201,8 +6201,59 @@ func (r *Router) handleMetricsStoreStats(w http.ResponseWriter, req *http.Reques
 
 const maxMetricsHistoryDays = 365
 const maxMetricsHistoryDuration = maxMetricsHistoryDays * 24 * time.Hour
+const maxMetricsHistoryWindowMillis int64 = maxMetricsHistoryDays * 24 * 60 * 60 * 1000
+const minMetricsHistoryWindowMillis int64 = 1000
 
 var errInvalidMetricsHistoryRange = errors.New("range must be a positive duration of at most 365d (8760h)")
+
+func parseStrictPositiveUnixMillis(raw string) (int64, error) {
+	if raw == "" {
+		return 0, errors.New("timestamp must be a positive integer Unix millisecond value")
+	}
+	for i := 0; i < len(raw); i++ {
+		if raw[i] < '0' || raw[i] > '9' {
+			return 0, errors.New("timestamp must be a positive integer Unix millisecond value")
+		}
+	}
+	val, err := strconv.ParseInt(raw, 10, 64)
+	if err != nil || val <= 0 {
+		return 0, errors.New("timestamp must be a positive integer Unix millisecond value")
+	}
+	return val, nil
+}
+
+func parseMetricsHistoryCustomWindow(query url.Values, now time.Time) (start time.Time, end time.Time, duration time.Duration, hasCustom bool, err error) {
+	startVals, hasStart := query["start"]
+	endVals, hasEnd := query["end"]
+	if !hasStart && !hasEnd {
+		return time.Time{}, time.Time{}, 0, false, nil
+	}
+	if _, hasRange := query["range"]; hasRange {
+		return time.Time{}, time.Time{}, 0, true, errors.New("start and end cannot be combined with range")
+	}
+	if !hasStart || !hasEnd || len(startVals) != 1 || len(endVals) != 1 {
+		return time.Time{}, time.Time{}, 0, true, errors.New("start and end must both be provided once")
+	}
+	startMs, err := parseStrictPositiveUnixMillis(startVals[0])
+	if err != nil {
+		return time.Time{}, time.Time{}, 0, true, errors.New("start must be a positive integer Unix millisecond timestamp")
+	}
+	endMs, err := parseStrictPositiveUnixMillis(endVals[0])
+	if err != nil {
+		return time.Time{}, time.Time{}, 0, true, errors.New("end must be a positive integer Unix millisecond timestamp")
+	}
+	if endMs <= startMs {
+		return time.Time{}, time.Time{}, 0, true, errors.New("end must be greater than start")
+	}
+	spanMs := endMs - startMs
+	if spanMs < minMetricsHistoryWindowMillis || spanMs > maxMetricsHistoryWindowMillis {
+		return time.Time{}, time.Time{}, 0, true, errors.New("custom window must be between 1s and 365d")
+	}
+	if endMs > now.UnixMilli() {
+		return time.Time{}, time.Time{}, 0, true, errors.New("end cannot be in the future")
+	}
+	return time.UnixMilli(startMs), time.UnixMilli(endMs), time.Duration(spanMs) * time.Millisecond, true, nil
+}
 
 func parseMetricsHistoryDuration(timeRange string) (time.Duration, error) {
 	normalizedRange := strings.ToLower(strings.TrimSpace(timeRange))
@@ -6259,10 +6310,22 @@ func (r *Router) handleMetricsHistory(w http.ResponseWriter, req *http.Request) 
 		http.Error(w, err.Error(), http.StatusBadRequest)
 		return
 	}
-	duration, err := parseMetricsHistoryDuration(timeRange)
+	now := time.Now()
+	start, end, duration, hasCustomWindow, err := parseMetricsHistoryCustomWindow(query, now)
 	if err != nil {
 		http.Error(w, err.Error(), http.StatusBadRequest)
 		return
+	}
+	if hasCustomWindow {
+		timeRange = "custom"
+	} else {
+		duration, err = parseMetricsHistoryDuration(timeRange)
+		if err != nil {
+			http.Error(w, err.Error(), http.StatusBadRequest)
+			return
+		}
+		end = now
+		start = end.Add(-duration)
 	}
 
 	// Reject malformed or oversized windows before consulting any history source.
@@ -6273,39 +6336,62 @@ func (r *Router) handleMetricsHistory(w http.ResponseWriter, req *http.Request) 
 	}
 	resourceID = canonicalizeMetricsHistoryResourceID(runtimeResourceType, resourceID)
 	var stepSecs int64 = 0 // Default to no downsampling (use tier resolution)
+	var requestedMaxPoints int = 0
+	var budgetStepSecs int64 = 0
 
 	// Optional downsampling based on requested max points.
 	// When omitted, we return the native tier resolution.
 	if maxPointsStr := query.Get("maxPoints"); maxPointsStr != "" {
 		if maxPoints, err := strconv.Atoi(maxPointsStr); err == nil && maxPoints > 0 {
-			durationSecs := int64(duration / time.Second)
-			if durationSecs > 0 {
-				stepSecs = 1 + (durationSecs-1)/int64(maxPoints)
-				if stepSecs <= 1 {
-					stepSecs = 0
-				} else {
-					minStep := func(d time.Duration) int64 {
-						switch {
-						case d <= 2*time.Hour:
-							return 5
-						case d <= 24*time.Hour:
-							return 60
-						case d <= 7*24*time.Hour:
-							return 3600
-						default:
-							return 86400
-						}
+			requestedMaxPoints = maxPoints
+			if hasCustomWindow {
+				// Compute the strict display bucket width upfront from the
+				// exact inclusive second bounds so SQLite computes true
+				// sample-weighted averages directly without a second-pass
+				// unweighted re-average over pre-aggregated buckets.
+				startSec := start.Unix()
+				if start.Nanosecond() > 0 {
+					startSec++
+				}
+				endSec := end.Unix()
+				if endSec >= startSec && (endSec-startSec+1) > int64(maxPoints) {
+					b := (endSec-startSec)/int64(maxPoints) + 1
+					if b < 2 {
+						b = 2
 					}
-					if stepSecs < minStep(duration) {
+					for (endSec/b)-(startSec/b)+1 > int64(maxPoints) {
+						b++
+					}
+					stepSecs = b
+					budgetStepSecs = b
+				}
+			} else {
+				durationSecs := int64(duration / time.Second)
+				if durationSecs > 0 {
+					stepSecs = 1 + (durationSecs-1)/int64(maxPoints)
+					if stepSecs <= 1 {
 						stepSecs = 0
+					} else {
+						minStep := func(d time.Duration) int64 {
+							switch {
+							case d <= 2*time.Hour:
+								return 5
+							case d <= 24*time.Hour:
+								return 60
+							case d <= 7*24*time.Hour:
+								return 3600
+							default:
+								return 86400
+							}
+						}
+						if stepSecs < minStep(duration) {
+							stepSecs = 0
+						}
 					}
 				}
 			}
 		}
 	}
-
-	end := time.Now()
-	start := end.Add(-duration)
 
 	const (
 		historySourceStore  = "store"
@@ -6326,9 +6412,57 @@ func (r *Router) handleMetricsHistory(w http.ResponseWriter, req *http.Request) 
 	// whatever data is available (better than showing "Collecting data..." indefinitely).
 	fallbackAllowed := true
 	historyMaxPoints := chartapi.ParseWorkloadMaxPoints(query.Get("maxPoints"))
+	startMs := start.UnixMilli()
+	endMs := end.UnixMilli()
+	strictBudgetBucketSecs := func(firstTs, lastTs, initialBucket int64) int64 {
+		b := initialBucket
+		if b < 2 {
+			b = 2
+		}
+		if requestedMaxPoints <= 0 || lastTs <= firstTs {
+			return b
+		}
+		span := lastTs - firstTs
+		minStep := span/int64(requestedMaxPoints) + 1
+		if minStep > b {
+			b = minStep
+		}
+		for (lastTs/b)-(firstTs/b)+1 > int64(requestedMaxPoints) {
+			b++
+		}
+		return b
+	}
 	buildHistoryPoints := func(points []monitoring.MetricPoint, bucketSecs int64) []map[string]interface{} {
 		if len(points) == 0 {
 			return []map[string]interface{}{}
+		}
+		if hasCustomWindow {
+			within := make([]monitoring.MetricPoint, 0, len(points))
+			for _, p := range points {
+				if !p.Timestamp.Before(start) && !p.Timestamp.After(end) {
+					within = append(within, p)
+				}
+			}
+			points = within
+			if len(points) == 0 {
+				return []map[string]interface{}{}
+			}
+			if requestedMaxPoints > 0 && len(points) > requestedMaxPoints {
+				minTs, maxTs := points[0].Timestamp.Unix(), points[0].Timestamp.Unix()
+				for _, p := range points[1:] {
+					ts := p.Timestamp.Unix()
+					if ts < minTs {
+						minTs = ts
+					}
+					if ts > maxTs {
+						maxTs = ts
+					}
+				}
+				needed := strictBudgetBucketSecs(minTs, maxTs, max(bucketSecs, budgetStepSecs))
+				if needed > bucketSecs {
+					bucketSecs = needed
+				}
+			}
 		}
 		if bucketSecs <= 1 {
 			apiPoints := make([]map[string]interface{}, 0, len(points))
@@ -6356,8 +6490,8 @@ func (r *Router) handleMetricsHistory(w http.ResponseWriter, req *http.Request) 
 			if ts <= 0 {
 				continue
 			}
-			start := (ts / bucketSecs) * bucketSecs
-			b, ok := buckets[start]
+			bucketStart := (ts / bucketSecs) * bucketSecs
+			b, ok := buckets[bucketStart]
 			if !ok {
 				b = &bucket{
 					sum:   p.Value,
@@ -6365,7 +6499,7 @@ func (r *Router) handleMetricsHistory(w http.ResponseWriter, req *http.Request) 
 					min:   p.Value,
 					max:   p.Value,
 				}
-				buckets[start] = b
+				buckets[bucketStart] = b
 				continue
 			}
 			b.sum += p.Value
@@ -6390,9 +6524,16 @@ func (r *Router) handleMetricsHistory(w http.ResponseWriter, req *http.Request) 
 			if b.count == 0 {
 				continue
 			}
-			ts := time.Unix(k+(bucketSecs/2), 0)
+			tsMs := time.Unix(k+(bucketSecs/2), 0).UnixMilli()
+			if hasCustomWindow {
+				if tsMs < startMs {
+					tsMs = startMs
+				} else if tsMs > endMs {
+					tsMs = endMs
+				}
+			}
 			apiPoints = append(apiPoints, map[string]interface{}{
-				"timestamp": ts.UnixMilli(),
+				"timestamp": tsMs,
 				"value":     b.sum / float64(b.count),
 				"min":       b.min,
 				"max":       b.max,
@@ -6400,6 +6541,22 @@ func (r *Router) handleMetricsHistory(w http.ResponseWriter, req *http.Request) 
 		}
 		return apiPoints
 	}
+	buildStoreHistoryPoints := func(points []metricstore.MetricPoint) []map[string]interface{} {
+		if len(points) == 0 {
+			return []map[string]interface{}{}
+		}
+		apiPoints := make([]map[string]interface{}, len(points))
+		for i, p := range points {
+			apiPoints[i] = map[string]interface{}{
+				"timestamp": p.Timestamp.UnixMilli(),
+				"value":     p.Value,
+				"min":       p.Min,
+				"max":       p.Max,
+			}
+		}
+		return apiPoints
+	}
+
 	// Most requests are served from the metrics store. Keep the fallback/read-state
 	// snapshots lazy so store-backed history does not pay an O(fleet-size) copy cost.
 	type storageMetricFallback struct {
@@ -6984,12 +7141,18 @@ func (r *Router) handleMetricsHistory(w http.ResponseWriter, req *http.Request) 
 			inMemoryKey = fmt.Sprintf("dockerHost:%s", resourceID)
 			sqlResourceType = "dockerHost"
 		case "agent":
+			if hasCustomWindow {
+				return monitor.GetGuestMetricsForWindowWithContext(req.Context(), fmt.Sprintf("agent:%s", resourceID), "agent", resourceID, start, end, metricTypes...), true
+			}
 			return monitor.GetGuestMetricsForChartWithContext(req.Context(), fmt.Sprintf("agent:%s", resourceID), "agent", resourceID, duration, metricTypes...), true
 		case "app-container":
 			inMemoryKey = fmt.Sprintf("docker:%s", resourceID)
 			sqlResourceType = "dockerContainer"
 		default:
 			return nil, false
+		}
+		if hasCustomWindow {
+			return monitor.GetGuestMetricsForWindowWithContext(req.Context(), inMemoryKey, sqlResourceType, resourceID, start, end, metricTypes...), true
 		}
 		return monitor.GetGuestMetricsForChart(inMemoryKey, sqlResourceType, resourceID, duration, metricTypes...), true
 	}
@@ -6999,13 +7162,34 @@ func (r *Router) handleMetricsHistory(w http.ResponseWriter, req *http.Request) 
 		}
 		return historySourceMemory
 	}
+	observerEarliest := time.Time{}
+	if hasCustomWindow {
+		observerEarliest = start
+	}
 
 	fallbackSingle := func() ([]map[string]interface{}, string, bool) {
 		if !fallbackAllowed || metricType == "" {
 			return nil, "", false
 		}
+		liveFallback := func() ([]map[string]interface{}, string, bool) {
+			if hasCustomWindow {
+				return nil, "", false
+			}
+			livePoints := liveMetricPoints(runtimeResourceType, resourceID)
+			if live, ok := livePoints[metricType]; ok {
+				return buildHistoryPoints([]monitoring.MetricPoint{live}, 0), historySourceLive, true
+			}
+			return nil, "", false
+		}
 
 		if mock.IsMockEnabled() && runtimeResourceType == "disk" {
+			if hasCustomWindow {
+				series, origin := monitor.GetDiskMetricsForWindowWithSource(resourceID, metricType, start, end)
+				if len(series) > 0 {
+					return buildHistoryPoints(series, stepSecs), origin, true
+				}
+				return nil, "", false
+			}
 			current := 0.0
 			if disk := findDisk(resourceID); disk != nil && disk.PhysicalDisk != nil && metricType == "smart_temp" &&
 				diskinventory.TemperatureCollected(disk.PhysicalDisk.Temperature, disk.PhysicalDisk.Collection) {
@@ -7025,9 +7209,17 @@ func (r *Router) handleMetricsHistory(w http.ResponseWriter, req *http.Request) 
 					return buildHistoryPoints(series, stepSecs), historySourceMock, true
 				}
 			}
+			return nil, "", false
 		}
 
 		if mock.IsMockEnabled() && runtimeResourceType == "storage" && queryMetric == "usage" {
+			if hasCustomWindow {
+				series := monitoring.MockStorageUsageForWindow(resourceID, start, end)
+				if len(series) > 0 {
+					return buildHistoryPoints(series, stepSecs), historySourceMock, true
+				}
+				return nil, "", false
+			}
 			if current, ok := liveMetricPoints(runtimeResourceType, resourceID)["usage"]; ok {
 				series := chartapi.BuildSyntheticMetricHistorySeries(
 					end,
@@ -7049,68 +7241,53 @@ func (r *Router) handleMetricsHistory(w http.ResponseWriter, req *http.Request) 
 			metrics, _ := guestChartMetrics(metricType)
 			points := metrics[metricType]
 			if len(points) == 0 {
-				livePoints := liveMetricPoints(runtimeResourceType, resourceID)
-				if live, ok := livePoints[metricType]; ok {
-					return buildHistoryPoints([]monitoring.MetricPoint{live}, 0), historySourceLive, true
-				}
-				return nil, "", false
+				return liveFallback()
 			}
 			return buildHistoryPoints(points, stepSecs), guestChartSource(), true
 		case "docker-host":
 			metrics, _ := guestChartMetrics(metricType)
 			points := metrics[metricType]
 			if len(points) == 0 {
-				livePoints := liveMetricPoints(runtimeResourceType, resourceID)
-				if live, ok := livePoints[metricType]; ok {
-					return buildHistoryPoints([]monitoring.MetricPoint{live}, 0), historySourceLive, true
-				}
-				return nil, "", false
+				return liveFallback()
 			}
 			return buildHistoryPoints(points, stepSecs), guestChartSource(), true
 		case "agent":
 			metrics, _ := guestChartMetrics(metricType)
 			points := metrics[metricType]
 			if len(points) == 0 {
-				points = monitor.GetNodeMetrics(resourceID, metricType, duration)
+				if hasCustomWindow {
+					points = monitor.GetNodeMetricsInRange(resourceID, metricType, start, end)
+				} else {
+					points = monitor.GetNodeMetrics(resourceID, metricType, duration)
+				}
 			}
 			if len(points) == 0 {
-				livePoints := liveMetricPoints(runtimeResourceType, resourceID)
-				if live, ok := livePoints[metricType]; ok {
-					return buildHistoryPoints([]monitoring.MetricPoint{live}, 0), historySourceLive, true
-				}
-				return nil, "", false
+				return liveFallback()
 			}
 			return buildHistoryPoints(points, stepSecs), guestChartSource(), true
 		case "app-container":
 			metrics, _ := guestChartMetrics(metricType)
 			points := metrics[metricType]
 			if len(points) == 0 {
-				livePoints := liveMetricPoints(runtimeResourceType, resourceID)
-				if live, ok := livePoints[metricType]; ok {
-					return buildHistoryPoints([]monitoring.MetricPoint{live}, 0), historySourceLive, true
-				}
-				return nil, "", false
+				return liveFallback()
 			}
 			return buildHistoryPoints(points, stepSecs), guestChartSource(), true
 		case "k8s":
 			metrics, _ := guestChartMetrics(metricType)
 			points := metrics[metricType]
 			if len(points) == 0 {
-				livePoints := liveMetricPoints(runtimeResourceType, resourceID)
-				if live, ok := livePoints[metricType]; ok {
-					return buildHistoryPoints([]monitoring.MetricPoint{live}, 0), historySourceLive, true
-				}
-				return nil, "", false
+				return liveFallback()
 			}
 			return buildHistoryPoints(points, stepSecs), guestChartSource(), true
 		case "node":
-			points := monitor.GetNodeMetricsForChart(resourceID, metricType, duration)
+			var points []monitoring.MetricPoint
+			if hasCustomWindow {
+				points = monitor.GetNodeMetricsForWindow(resourceID, metricType, start, end)
+			} else {
+				points = monitor.GetNodeMetricsForChart(resourceID, metricType, duration)
+			}
 			if len(points) == 0 {
-				livePoints := liveMetricPoints(runtimeResourceType, resourceID)
-				if live, ok := livePoints[metricType]; ok {
-					return buildHistoryPoints([]monitoring.MetricPoint{live}, 0), historySourceLive, true
-				}
-				return nil, "", false
+				return liveFallback()
 			}
 			source := historySourceMemory
 			if mock.IsMockEnabled() {
@@ -7118,32 +7295,34 @@ func (r *Router) handleMetricsHistory(w http.ResponseWriter, req *http.Request) 
 			}
 			return buildHistoryPoints(points, stepSecs), source, true
 		case "storage":
-			metrics := monitor.GetStorageMetrics(resourceID, duration)
+			var metrics map[string][]monitoring.MetricPoint
+			if hasCustomWindow {
+				metrics = monitor.GetStorageMetricsInRange(resourceID, start, end)
+			} else {
+				metrics = monitor.GetStorageMetrics(resourceID, duration)
+			}
 			points := metrics[queryMetric]
 			if len(points) == 0 {
-				livePoints := liveMetricPoints(runtimeResourceType, resourceID)
-				if live, ok := livePoints[metricType]; ok {
-					return buildHistoryPoints([]monitoring.MetricPoint{live}, 0), historySourceLive, true
-				}
-				return nil, "", false
+				return liveFallback()
 			}
 			return buildHistoryPoints(points, stepSecs), historySourceMemory, true
 		case "disk":
-			points := monitor.GetDiskMetricsForChart(resourceID, queryMetric, duration)
+			var points []monitoring.MetricPoint
+			var origin string
+			if hasCustomWindow {
+				points, origin = monitor.GetDiskMetricsForWindowWithSource(resourceID, queryMetric, start, end)
+			} else {
+				points, origin = monitor.GetDiskMetricsForChartWithSource(resourceID, queryMetric, duration)
+			}
 			if len(points) == 0 {
-				livePoints := liveMetricPoints(runtimeResourceType, resourceID)
-				if live, ok := livePoints[metricType]; ok {
-					return buildHistoryPoints([]monitoring.MetricPoint{live}, 0), historySourceLive, true
-				}
-				return nil, "", false
+				return liveFallback()
 			}
-			return buildHistoryPoints(points, stepSecs), historySourceMemory, true
+			if origin == "" {
+				origin = historySourceMemory
+			}
+			return buildHistoryPoints(points, stepSecs), origin, true
 		default:
-			livePoints := liveMetricPoints(runtimeResourceType, resourceID)
-			if live, ok := livePoints[metricType]; ok {
-				return buildHistoryPoints([]monitoring.MetricPoint{live}, 0), historySourceLive, true
-			}
-			return nil, "", false
+			return liveFallback()
 		}
 	}
 
@@ -7161,19 +7340,40 @@ func (r *Router) handleMetricsHistory(w http.ResponseWriter, req *http.Request) 
 			metrics, guestHistory = guestChartMetrics()
 		case "agent":
 			metrics, guestHistory = guestChartMetrics()
-			if len(metrics) == 0 {
-				metrics = map[string][]monitoring.MetricPoint{
-					"cpu":    monitor.GetNodeMetrics(resourceID, "cpu", duration),
-					"memory": monitor.GetNodeMetrics(resourceID, "memory", duration),
-					"disk":   monitor.GetNodeMetrics(resourceID, "disk", duration),
+			if metrics == nil {
+				metrics = make(map[string][]monitoring.MetricPoint, 7)
+			}
+			agentNodeFallbackMetrics := []string{"cpu", "memory", "disk"}
+			if hasCustomWindow {
+				agentNodeFallbackMetrics = []string{"cpu", "memory", "memoryused", "disk", "netin", "netout", "temperature"}
+			}
+			for _, metricName := range agentNodeFallbackMetrics {
+				if len(metrics[metricName]) > 0 {
+					continue
+				}
+				if hasCustomWindow {
+					if nodePts := monitor.GetNodeMetricsInRange(resourceID, metricName, start, end); len(nodePts) > 0 {
+						metrics[metricName] = nodePts
+					}
+				} else if nodePts := monitor.GetNodeMetrics(resourceID, metricName, duration); len(nodePts) > 0 {
+					metrics[metricName] = nodePts
 				}
 			}
 		case "app-container":
 			metrics, guestHistory = guestChartMetrics()
 		case "storage":
-			metrics = monitor.GetStorageMetrics(resourceID, duration)
+			if hasCustomWindow {
+				metrics = monitor.GetStorageMetricsInRange(resourceID, start, end)
+			} else {
+				metrics = monitor.GetStorageMetrics(resourceID, duration)
+			}
 			if mock.IsMockEnabled() && len(metrics["usage"]) == 0 {
-				if current, ok := liveMetricPoints(runtimeResourceType, resourceID)["usage"]; ok {
+				if hasCustomWindow {
+					if series := monitoring.MockStorageUsageForWindow(resourceID, start, end); len(series) > 0 {
+						metrics = map[string][]monitoring.MetricPoint{"usage": series}
+						source = historySourceMock
+					}
+				} else if current, ok := liveMetricPoints(runtimeResourceType, resourceID)["usage"]; ok {
 					metrics = map[string][]monitoring.MetricPoint{
 						"usage": chartapi.BuildSyntheticMetricHistorySeries(
 							end,
@@ -7194,21 +7394,41 @@ func (r *Router) handleMetricsHistory(w http.ResponseWriter, req *http.Request) 
 				diskSources = make(map[string]string, 4)
 			}
 			for _, metric := range []string{"disk", "diskread", "diskwrite", "smart_temp"} {
-				points, origin := monitor.GetDiskMetricsForChartWithSource(resourceID, metric, duration)
+				var points []monitoring.MetricPoint
+				var origin string
+				if hasCustomWindow {
+					points, origin = monitor.GetDiskMetricsForWindowWithSource(resourceID, metric, start, end)
+				} else {
+					points, origin = monitor.GetDiskMetricsForChartWithSource(resourceID, metric, duration)
+				}
 				metrics[metric] = points
 				if diskSources != nil && len(points) > 0 {
 					diskSources[metric] = origin
 				}
 			}
+			if mock.IsMockEnabled() {
+				source = historySourceMock
+			}
 		default:
 			if runtimeResourceType == "node" {
-				metrics = map[string][]monitoring.MetricPoint{
-					"cpu":         monitor.GetNodeMetricsForChart(resourceID, "cpu", duration),
-					"memory":      monitor.GetNodeMetricsForChart(resourceID, "memory", duration),
-					"disk":        monitor.GetNodeMetricsForChart(resourceID, "disk", duration),
-					"netin":       monitor.GetNodeMetricsForChart(resourceID, "netin", duration),
-					"netout":      monitor.GetNodeMetricsForChart(resourceID, "netout", duration),
-					"temperature": monitor.GetNodeMetricsForChart(resourceID, "temperature", duration),
+				if hasCustomWindow {
+					metrics = map[string][]monitoring.MetricPoint{
+						"cpu":         monitor.GetNodeMetricsForWindow(resourceID, "cpu", start, end),
+						"memory":      monitor.GetNodeMetricsForWindow(resourceID, "memory", start, end),
+						"disk":        monitor.GetNodeMetricsForWindow(resourceID, "disk", start, end),
+						"netin":       monitor.GetNodeMetricsForWindow(resourceID, "netin", start, end),
+						"netout":      monitor.GetNodeMetricsForWindow(resourceID, "netout", start, end),
+						"temperature": monitor.GetNodeMetricsForWindow(resourceID, "temperature", start, end),
+					}
+				} else {
+					metrics = map[string][]monitoring.MetricPoint{
+						"cpu":         monitor.GetNodeMetricsForChart(resourceID, "cpu", duration),
+						"memory":      monitor.GetNodeMetricsForChart(resourceID, "memory", duration),
+						"disk":        monitor.GetNodeMetricsForChart(resourceID, "disk", duration),
+						"netin":       monitor.GetNodeMetricsForChart(resourceID, "netin", duration),
+						"netout":      monitor.GetNodeMetricsForChart(resourceID, "netout", duration),
+						"temperature": monitor.GetNodeMetricsForChart(resourceID, "temperature", duration),
+					}
 				}
 				if mock.IsMockEnabled() {
 					source = historySourceMock
@@ -7226,9 +7446,12 @@ func (r *Router) handleMetricsHistory(w http.ResponseWriter, req *http.Request) 
 			if len(points) == 0 {
 				continue
 			}
-			apiData[metric] = buildHistoryPoints(points, stepSecs)
+			built := buildHistoryPoints(points, stepSecs)
+			if len(built) > 0 {
+				apiData[metric] = built
+			}
 		}
-		if len(apiData) == 0 {
+		if len(apiData) == 0 && !hasCustomWindow {
 			livePoints := liveMetricPoints(runtimeResourceType, resourceID)
 			for metric, point := range livePoints {
 				apiData[metric] = buildHistoryPoints([]monitoring.MetricPoint{point}, 0)
@@ -7299,14 +7522,14 @@ func (r *Router) handleMetricsHistory(w http.ResponseWriter, req *http.Request) 
 				response["points"] = apiPoints
 				response["source"] = source
 				w.Header().Set("Content-Type", "application/json")
-				r.ensureChartService().WriteHistoryJSON(w, req, response, duration)
+				r.ensureChartService().WriteHistoryJSONWithEarliest(w, req, response, duration, observerEarliest)
 				return
 			}
 		} else if apiData, source, _ := fallbackAll(); len(apiData) > 0 {
 			response["metrics"] = apiData
 			response["source"] = source
 			w.Header().Set("Content-Type", "application/json")
-			r.ensureChartService().WriteHistoryJSON(w, req, response, duration)
+			r.ensureChartService().WriteHistoryJSONWithEarliest(w, req, response, duration, observerEarliest)
 			return
 		}
 	}
@@ -7317,7 +7540,13 @@ func (r *Router) handleMetricsHistory(w http.ResponseWriter, req *http.Request) 
 			return nil, runtimeResourceType, nil
 		}
 		for _, storeType := range storeResourceTypes {
-			points, err := store.Query(storeType, resourceID, metric, start, end, stepSecs)
+			var points []metricstore.MetricPoint
+			var err error
+			if hasCustomWindow {
+				points, err = store.QueryExact(storeType, resourceID, metric, start, end, stepSecs)
+			} else {
+				points, err = store.Query(storeType, resourceID, metric, start, end, stepSecs)
+			}
 			if err != nil {
 				return nil, storeType, err
 			}
@@ -7332,7 +7561,13 @@ func (r *Router) handleMetricsHistory(w http.ResponseWriter, req *http.Request) 
 			return nil, runtimeResourceType, nil
 		}
 		for _, storeType := range storeResourceTypes {
-			metricsMap, err := store.QueryAll(storeType, resourceID, start, end, stepSecs)
+			var metricsMap map[string][]metricstore.MetricPoint
+			var err error
+			if hasCustomWindow {
+				metricsMap, err = store.QueryAllExact(storeType, resourceID, start, end, stepSecs)
+			} else {
+				metricsMap, err = store.QueryAll(storeType, resourceID, start, end, stepSecs)
+			}
 			if err != nil {
 				return nil, storeType, err
 			}
@@ -7362,7 +7597,7 @@ func (r *Router) handleMetricsHistory(w http.ResponseWriter, req *http.Request) 
 					"source":       source,
 				}
 				w.Header().Set("Content-Type", "application/json")
-				r.ensureChartService().WriteHistoryJSON(w, req, response, duration)
+				r.ensureChartService().WriteHistoryJSONWithEarliest(w, req, response, duration, observerEarliest)
 				return
 			}
 		} else {
@@ -7373,7 +7608,7 @@ func (r *Router) handleMetricsHistory(w http.ResponseWriter, req *http.Request) 
 					Str("source", source).
 					Msg("Metrics store unavailable; serving history from fallback source")
 				w.Header().Set("Content-Type", "application/json")
-				r.ensureChartService().WriteHistoryJSON(w, req, allHistoryResponse(apiData, source, diskSources), duration)
+				r.ensureChartService().WriteHistoryJSONWithEarliest(w, req, allHistoryResponse(apiData, source, diskSources), duration, observerEarliest)
 				return
 			}
 		}
@@ -7395,7 +7630,13 @@ func (r *Router) handleMetricsHistory(w http.ResponseWriter, req *http.Request) 
 		if !fallbackAllowed || runtimeResourceType != "disk" || mock.IsMockEnabled() {
 			return nil, ""
 		}
-		candidate, source := monitor.GetDiskMetricsForChartWithSource(resourceID, "smart_temp", duration)
+		var candidate []monitoring.MetricPoint
+		var source string
+		if hasCustomWindow {
+			candidate, source = monitor.GetDiskMetricsForWindowWithSource(resourceID, "smart_temp", start, end)
+		} else {
+			candidate, source = monitor.GetDiskMetricsForChartWithSource(resourceID, "smart_temp", duration)
+		}
 		withinWindow := make([]monitoring.MetricPoint, 0, len(candidate))
 		for _, point := range candidate {
 			if !point.Timestamp.Before(start) && !point.Timestamp.After(end) {
@@ -7457,7 +7698,10 @@ func (r *Router) handleMetricsHistory(w http.ResponseWriter, req *http.Request) 
 		}
 
 		if response == nil && len(points) > 0 && metricType == "smart_temp" {
-			if apiPoints, _ := supplementDiskTemperature(points); len(apiPoints) > 0 {
+			if apiPoints, origin := supplementDiskTemperature(points); len(apiPoints) > 0 {
+				if origin == "" {
+					origin = historySourceMemory
+				}
 				response = map[string]interface{}{
 					"resourceType": responseResourceType,
 					"resourceId":   resourceID,
@@ -7466,7 +7710,7 @@ func (r *Router) handleMetricsHistory(w http.ResponseWriter, req *http.Request) 
 					"start":        start.UnixMilli(),
 					"end":          end.UnixMilli(),
 					"points":       apiPoints,
-					"source":       historySourceMemory,
+					"source":       origin,
 				}
 			}
 		}
@@ -7475,39 +7719,44 @@ func (r *Router) handleMetricsHistory(w http.ResponseWriter, req *http.Request) 
 			(metricType == "smart_temp" || metricType == "disk" || metricType == "diskread" || metricType == "diskwrite") {
 			targetPoints := chartapi.TargetMockSeriesPoints(duration, historyMaxPoints)
 			if len(points) > 0 && len(points) < targetPoints {
-				current := points[len(points)-1].Value
-				if metricType == "smart_temp" {
-					// Pad a temperature series to now only with a reading
-					// collected now. Without one (retained, absent, or no
-					// such disk) the stored samples stay as they are.
-					current = 0
-					if disk := findDisk(resourceID); disk != nil && disk.PhysicalDisk != nil &&
-						diskinventory.TemperatureCollected(disk.PhysicalDisk.Temperature, disk.PhysicalDisk.Collection) {
-						current = float64(disk.PhysicalDisk.Temperature)
+				var series []monitoring.MetricPoint
+				if hasCustomWindow {
+					series, _ = monitor.GetDiskMetricsForWindowWithSource(resourceID, metricType, start, end)
+				} else {
+					current := points[len(points)-1].Value
+					if metricType == "smart_temp" {
+						// Pad a temperature series to now only with a reading
+						// collected now. Without one (retained, absent, or no
+						// such disk) the stored samples stay as they are.
+						current = 0
+						if disk := findDisk(resourceID); disk != nil && disk.PhysicalDisk != nil &&
+							diskinventory.TemperatureCollected(disk.PhysicalDisk.Temperature, disk.PhysicalDisk.Collection) {
+							current = float64(disk.PhysicalDisk.Temperature)
+						}
+					}
+					if metricType != "smart_temp" || current > 0 {
+						series = chartapi.BuildSyntheticMetricHistorySeries(
+							end,
+							duration,
+							historyMaxPoints,
+							"disk",
+							resourceID,
+							metricType,
+							current,
+						)
 					}
 				}
-				if metricType != "smart_temp" || current > 0 {
-					series := chartapi.BuildSyntheticMetricHistorySeries(
-						end,
-						duration,
-						historyMaxPoints,
-						"disk",
-						resourceID,
-						metricType,
-						current,
-					)
-					if len(series) > len(points) {
-						source = historySourceMock
-						response = map[string]interface{}{
-							"resourceType": responseResourceType,
-							"resourceId":   resourceID,
-							"metric":       metricType,
-							"range":        timeRange,
-							"start":        start.UnixMilli(),
-							"end":          end.UnixMilli(),
-							"points":       buildHistoryPoints(series, stepSecs),
-							"source":       source,
-						}
+				if len(series) > len(points) {
+					source = historySourceMock
+					response = map[string]interface{}{
+						"resourceType": responseResourceType,
+						"resourceId":   resourceID,
+						"metric":       metricType,
+						"range":        timeRange,
+						"start":        start.UnixMilli(),
+						"end":          end.UnixMilli(),
+						"points":       buildHistoryPoints(series, stepSecs),
+						"source":       source,
 					}
 				}
 			}
@@ -7515,15 +7764,7 @@ func (r *Router) handleMetricsHistory(w http.ResponseWriter, req *http.Request) 
 
 		// Convert to frontend format (timestamps in milliseconds)
 		if response == nil {
-			apiPoints := make([]map[string]interface{}, len(points))
-			for i, p := range points {
-				apiPoints[i] = map[string]interface{}{
-					"timestamp": p.Timestamp.UnixMilli(),
-					"value":     p.Value,
-					"min":       p.Min,
-					"max":       p.Max,
-				}
-			}
+			apiPoints := buildStoreHistoryPoints(points)
 
 			response = map[string]interface{}{
 				"resourceType": responseResourceType,
@@ -7568,16 +7809,7 @@ func (r *Router) handleMetricsHistory(w http.ResponseWriter, req *http.Request) 
 			mixedHostHistory := false
 			var diskSources map[string]string
 			for metric, points := range metricsMap {
-				apiPoints := make([]map[string]interface{}, len(points))
-				for i, p := range points {
-					apiPoints[i] = map[string]interface{}{
-						"timestamp": p.Timestamp.UnixMilli(),
-						"value":     p.Value,
-						"min":       p.Min,
-						"max":       p.Max,
-					}
-				}
-				apiData[metric] = apiPoints
+				apiData[metric] = buildStoreHistoryPoints(points)
 			}
 
 			if runtimeResourceType == "disk" {
@@ -7594,9 +7826,19 @@ func (r *Router) handleMetricsHistory(w http.ResponseWriter, req *http.Request) 
 			// A stored CPU/capacity row does not establish host I/O coverage.
 			// Ask only for missing directions; retain every stored series and
 			// the native parser's complete-member/coincident-time requirement.
+			// For custom windows, supplement all missing host/agent series from
+			// the guest/node ring fallback so all-metrics matches single-metric parity.
 			if runtimeResourceType == "agent" && !mock.IsMockEnabled() {
+				candidateMetrics := []string{"diskread", "diskwrite"}
+				if hasCustomWindow {
+					candidateMetrics = []string{
+						"cpu", "memory", "memoryused", "disk",
+						"diskread", "diskwrite", "netin", "netout",
+						"temperature", "gpu", "gpu_memory", "gpu_temperature",
+					}
+				}
 				var missing []string
-				for _, metric := range []string{"diskread", "diskwrite"} {
+				for _, metric := range candidateMetrics {
 					if len(apiData[metric]) == 0 {
 						missing = append(missing, metric)
 					}
@@ -7604,8 +7846,15 @@ func (r *Router) handleMetricsHistory(w http.ResponseWriter, req *http.Request) 
 				if len(missing) > 0 {
 					fallback, _ := guestChartMetrics(missing...)
 					for _, metric := range missing {
+						points := fallback[metric]
+						if len(points) == 0 && hasCustomWindow {
+							switch metric {
+							case "cpu", "memory", "memoryused", "disk", "netin", "netout", "temperature":
+								points = monitor.GetNodeMetricsInRange(resourceID, metric, start, end)
+							}
+						}
 						var withinWindow []monitoring.MetricPoint
-						for _, point := range fallback[metric] {
+						for _, point := range points {
 							if !point.Timestamp.Before(start) && !point.Timestamp.After(end) {
 								withinWindow = append(withinWindow, point)
 							}
@@ -7654,7 +7903,7 @@ func (r *Router) handleMetricsHistory(w http.ResponseWriter, req *http.Request) 
 	}
 
 	w.Header().Set("Content-Type", "application/json")
-	if err := r.ensureChartService().WriteHistoryJSON(w, req, response, duration); err != nil {
+	if err := r.ensureChartService().WriteHistoryJSONWithEarliest(w, req, response, duration, observerEarliest); err != nil {
 		log.Error().Err(err).Msg("Failed to encode metrics history response")
 		http.Error(w, "Internal server error", http.StatusInternalServerError)
 	}

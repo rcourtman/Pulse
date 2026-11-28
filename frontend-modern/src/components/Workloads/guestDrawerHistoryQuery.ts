@@ -12,6 +12,7 @@ import { createNonSuspendingQuery, STALLED_QUERY_READ_MS } from '@/hooks/createN
 import {
   GUEST_DRAWER_HISTORY_DEFAULT_RANGE,
   type GuestDrawerHistoryTarget,
+  type GuestDrawerHistoryTimeBounds,
 } from './guestDrawerModel';
 
 export const GUEST_DRAWER_HISTORY_MAX_POINTS = 240;
@@ -21,6 +22,7 @@ export interface GuestDrawerHistoryQueryKey {
   resourceType: ResourceType;
   resourceId: string;
   range: HistoryTimeRange;
+  customWindow: GuestDrawerHistoryTimeBounds | null;
   liveReadingsAvailable: boolean;
   pollAfterRead: boolean;
 }
@@ -39,13 +41,25 @@ const normalizeHistoryResponse = (
   result: SingleMetricHistoryResponse | AllMetricsHistoryResponse,
 ): AllMetricsHistoryResponse => {
   if ('metrics' in result) return result;
+  const points = result.points ?? [];
+  if (result.source === 'native') {
+    return {
+      resourceType: result.resourceType,
+      resourceId: result.resourceId,
+      range: result.range,
+      start: result.start,
+      end: result.end,
+      metrics: { [result.metric]: points },
+      ...(points.length > 0 ? { metricSources: { [result.metric]: 'native' } } : {}),
+    };
+  }
   return {
     resourceType: result.resourceType,
     resourceId: result.resourceId,
     range: result.range,
     start: result.start,
     end: result.end,
-    metrics: { [result.metric]: result.points ?? [] },
+    metrics: { [result.metric]: points },
     source: result.source,
   };
 };
@@ -63,13 +77,24 @@ const filterUnavailableLiveReading = (
 const readHistory = async (key: GuestDrawerHistoryQueryKey, signal: AbortSignal) =>
   filterUnavailableLiveReading(
     normalizeHistoryResponse(
-      await ChartsAPI.getMetricsHistory({
-        resourceType: key.resourceType,
-        resourceId: key.resourceId,
-        range: key.range,
-        maxPoints: GUEST_DRAWER_HISTORY_MAX_POINTS,
-        signal,
-      }),
+      await ChartsAPI.getMetricsHistory(
+        key.customWindow
+          ? {
+              resourceType: key.resourceType,
+              resourceId: key.resourceId,
+              start: key.customWindow.startTime,
+              end: key.customWindow.endTime,
+              maxPoints: GUEST_DRAWER_HISTORY_MAX_POINTS,
+              signal,
+            }
+          : {
+              resourceType: key.resourceType,
+              resourceId: key.resourceId,
+              range: key.range,
+              maxPoints: GUEST_DRAWER_HISTORY_MAX_POINTS,
+              signal,
+            },
+      ),
     ),
     key.liveReadingsAvailable,
   );
@@ -105,15 +130,18 @@ export const createGuestDrawerHistorySource = (
   range: Accessor<HistoryTimeRange>,
   enabled: Accessor<boolean>,
   liveReadingsAvailable: Accessor<boolean> = () => true,
+  customWindow: Accessor<GuestDrawerHistoryTimeBounds | null> = () => null,
 ): Accessor<GuestDrawerHistoryQueryKey | null> =>
   createMemo<GuestDrawerHistoryQueryKey | null>(
     () => {
       const current = target();
       if (!current || !enabled()) return null;
+      const window = customWindow();
       return {
         resourceType: current.resourceType,
         resourceId: current.resourceId,
         range: range(),
+        customWindow: window ? { startTime: window.startTime, endTime: window.endTime } : null,
         liveReadingsAvailable: liveReadingsAvailable(),
         pollAfterRead: current.pollAfterRead === true,
       };
@@ -128,6 +156,8 @@ export const createGuestDrawerHistorySource = (
           previous.resourceType === next.resourceType &&
           previous.resourceId === next.resourceId &&
           previous.range === next.range &&
+          previous.customWindow?.startTime === next.customWindow?.startTime &&
+          previous.customWindow?.endTime === next.customWindow?.endTime &&
           previous.liveReadingsAvailable === next.liveReadingsAvailable &&
           previous.pollAfterRead === next.pollAfterRead,
         ),
@@ -144,7 +174,9 @@ export const createGuestDrawerHistoryQuery = (
   const query = createNonSuspendingQuery<AllMetricsHistoryResponse, GuestDrawerHistoryQueryKey>({
     source,
     fetcher: async (key, signal) => {
-      if (!key.pollAfterRead) return readHistory(key, signal);
+      // Custom zoomed windows pause background polling, so every custom read
+      // must carry its own deadline to recover cleanly if the request stalls.
+      if (!key.pollAfterRead && key.customWindow === null) return readHistory(key, signal);
       setPollBlocker(signal);
       try {
         return await readHistoryBeforeDeadline(key, signal);
@@ -154,13 +186,19 @@ export const createGuestDrawerHistoryQuery = (
       }
     },
     initialValue: EMPTY_HISTORY_RESPONSE,
-    cacheKey: (key) => `guest-drawer-history:${key.resourceType}:${key.resourceId}:${key.range}`,
+    cacheKey: (key) =>
+      key.customWindow
+        ? null
+        : `guest-drawer-history:${key.resourceType}:${key.resourceId}:${key.range}`,
     // Former-host or former-range observations are not evidence for this
     // target. Matching cached reads and same-source polling remain retained.
     retainPreviousValueOnSourceChange: false,
-    // For opt-in targets the bounded read owns settlement, not the poll.
-    // Resume the 30s cadence when it finishes, without a catch-up request.
-    pollMs: () => (pollBlocker() === null ? GUEST_DRAWER_HISTORY_POLL_MS : undefined),
+    // Pause polling while zoomed to a pinned historical window or while a
+    // bounded read is in flight; resume the 30s cadence on reset.
+    pollMs: () =>
+      pollBlocker() === null && source()?.customWindow == null
+        ? GUEST_DRAWER_HISTORY_POLL_MS
+        : undefined,
   });
   return {
     ...query,

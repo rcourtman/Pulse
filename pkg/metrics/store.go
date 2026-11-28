@@ -1499,6 +1499,18 @@ func (s *Store) Query(resourceType, resourceID, metricType string, start, end ti
 	return s.QueryCommitted(resourceType, resourceID, metricType, start, end, stepSecs)
 }
 
+// QueryExact retrieves one metric strictly bounded by [start, end], admitting
+// raw observations inside the window and retention rollups whose full source
+// bucket fits inside [start, end].
+func (s *Store) QueryExact(resourceType, resourceID, metricType string, start, end time.Time, stepSecs int64) ([]MetricPoint, error) {
+	s.awaitFreshRead(resourceType, []string{resourceID}, []string{metricType})
+	result, err := queryBatch(s, resourceType, []string{resourceID}, []string{metricType}, start, end, stepSecs, true, retainedMetricPoints)
+	if err != nil {
+		return nil, err
+	}
+	return result[normalizeMetricIdentifier(resourceID)][normalizeMetricType(metricType)], nil
+}
+
 // QueryCommitted is Query without the read-freshness flush: it returns only
 // committed samples and never flushes the write buffer. It is for callers
 // that merge their own fresher in-memory tail, such as alert metric windows,
@@ -1518,6 +1530,22 @@ func (s *Store) QueryCommitted(resourceType, resourceID, metricType string, star
 func (s *Store) QueryAll(resourceType, resourceID string, start, end time.Time, stepSecs int64) (map[string][]MetricPoint, error) {
 	s.awaitFreshRead(resourceType, []string{resourceID}, nil)
 	result, err := s.queryBatch(resourceType, []string{resourceID}, nil, start, end, stepSecs)
+	if err != nil {
+		return nil, err
+	}
+	metrics := result[normalizeMetricIdentifier(resourceID)]
+	if metrics == nil {
+		metrics = make(map[string][]MetricPoint)
+	}
+	return metrics, nil
+}
+
+// QueryAllExact retrieves all metric types strictly bounded by [start, end],
+// admitting raw observations inside the window and retention rollups whose full
+// source bucket fits inside [start, end].
+func (s *Store) QueryAllExact(resourceType, resourceID string, start, end time.Time, stepSecs int64) (map[string][]MetricPoint, error) {
+	s.awaitFreshRead(resourceType, []string{resourceID}, nil)
+	result, err := queryBatch(s, resourceType, []string{resourceID}, nil, start, end, stepSecs, true, retainedMetricPoints)
 	if err != nil {
 		return nil, err
 	}
@@ -1564,7 +1592,7 @@ func (s *Store) QueryMetricTypesBatch(
 // resource. It uses the same tier reconciliation and display buckets as QueryAll.
 func (s *Store) QueryMetricValues(resourceType, resourceID string, start, end time.Time, stepSecs int64) (map[string][]models.MetricPoint, error) {
 	s.awaitFreshRead(resourceType, []string{resourceID}, nil)
-	result, err := queryBatch(s, resourceType, []string{resourceID}, nil, start, end, stepSecs, retainedMetricValues)
+	result, err := queryBatch(s, resourceType, []string{resourceID}, nil, start, end, stepSecs, false, retainedMetricValues)
 	if err != nil {
 		return nil, err
 	}
@@ -1580,7 +1608,7 @@ func (s *Store) QueryMetricValues(resourceType, resourceID string, start, end ti
 // QueryMetricTypesBatch. Callers that need retained extrema use the full reader.
 func (s *Store) QueryMetricValuesBatch(resourceType string, resourceIDs, metricTypes []string, start, end time.Time, stepSecs int64) (map[string]map[string][]models.MetricPoint, error) {
 	s.awaitFreshRead(resourceType, resourceIDs, metricTypes)
-	return queryBatch(s, resourceType, resourceIDs, metricTypes, start, end, stepSecs, retainedMetricValues)
+	return queryBatch(s, resourceType, resourceIDs, metricTypes, start, end, stepSecs, false, retainedMetricValues)
 }
 
 // The projection couples the SQL column shape with the returned point type.
@@ -1690,7 +1718,54 @@ func (s *Store) queryBatch(
 	start, end time.Time,
 	stepSecs int64,
 ) (map[string]map[string][]MetricPoint, error) {
-	return queryBatch(s, resourceType, resourceIDs, metricTypes, start, end, stepSecs, retainedMetricPoints)
+	return queryBatch(s, resourceType, resourceIDs, metricTypes, start, end, stepSecs, false, retainedMetricPoints)
+}
+
+func exactWindowSecondBounds(start, end time.Time) (int64, int64, bool) {
+	if end.Before(start) {
+		return 0, 0, false
+	}
+	startSec := start.Unix()
+	if start.Nanosecond() > 0 {
+		startSec++
+	}
+	endSec := end.Unix()
+	if endSec < startSec {
+		return 0, 0, false
+	}
+	return startSec, endSec, true
+}
+
+func exactWindowTierEndSec(tier Tier, startSec, endSec int64) (int64, bool) {
+	bucket := tierBucketSeconds(tier)
+	if bucket <= 1 {
+		return endSec, endSec >= startSec
+	}
+	tierEnd := endSec - bucket
+	return tierEnd, tierEnd >= startSec
+}
+
+func (s *Store) exactTierFallbacks(duration time.Duration, startSec, endSec int64) []Tier {
+	var order []Tier
+	switch s.selectTier(duration) {
+	case TierRaw:
+		order = []Tier{TierRaw, TierMinute, TierHourly, TierDaily}
+	case TierMinute:
+		order = []Tier{TierMinute, TierRaw, TierHourly, TierDaily}
+	case TierHourly:
+		order = []Tier{TierHourly, TierMinute, TierRaw, TierDaily}
+	case TierDaily:
+		order = []Tier{TierDaily, TierHourly, TierMinute, TierRaw}
+	default:
+		order = []Tier{TierRaw}
+	}
+	eligible := make([]Tier, 0, len(order))
+	for _, tier := range order {
+		if _, ok := exactWindowTierEndSec(tier, startSec, endSec); ok {
+			eligible = append(eligible, tier)
+		}
+	}
+	return eligible
 }
 
 func queryBatch[T any](
@@ -1700,6 +1775,7 @@ func queryBatch[T any](
 	metricTypes []string,
 	start, end time.Time,
 	stepSecs int64,
+	exactWindow bool,
 	projection retainedProjection[T],
 ) (map[string]map[string][]T, error) {
 	resourceType = normalizeMetricResourceType(resourceType)
@@ -1726,12 +1802,21 @@ func queryBatch[T any](
 		}
 	}
 
-	tiers := s.tierFallbacks(end.Sub(start))
+	var tiers []Tier
+	if exactWindow {
+		startSec, endSec, ok := exactWindowSecondBounds(start, end)
+		if !ok {
+			return map[string]map[string][]T{}, nil
+		}
+		tiers = s.exactTierFallbacks(end.Sub(start), startSec, endSec)
+	} else {
+		tiers = s.tierFallbacks(end.Sub(start))
+	}
 	if len(tiers) == 0 {
 		return map[string]map[string][]T{}, nil
 	}
 	if len(unique) <= queryAllBatchChunkSize {
-		return queryRetainedChunk(s, resourceType, unique, normalizedMetricTypes, start, end, stepSecs, tiers, projection)
+		return queryRetainedChunk(s, resourceType, unique, normalizedMetricTypes, start, end, stepSecs, exactWindow, tiers, projection)
 	}
 
 	result := make(map[string]map[string][]T, len(unique))
@@ -1739,7 +1824,7 @@ func queryBatch[T any](
 	// aggregate must not hide another metric or a newer tail in a different tier.
 	for lo := 0; lo < len(unique); lo += queryAllBatchChunkSize {
 		hi := min(lo+queryAllBatchChunkSize, len(unique))
-		chunkResult, err := queryRetainedChunk(s, resourceType, unique[lo:hi], normalizedMetricTypes, start, end, stepSecs, tiers, projection)
+		chunkResult, err := queryRetainedChunk(s, resourceType, unique[lo:hi], normalizedMetricTypes, start, end, stepSecs, exactWindow, tiers, projection)
 		if err != nil {
 			return nil, err
 		}
@@ -1781,9 +1866,19 @@ type retainedQueryShape struct {
 	aggregate, groupSeries bool
 	valuesOnly, clustered  bool
 	packedSeries           bool
+	exactWindow            bool
 }
 
-func retainedQueryParameters(resourceType string, resourceIDs, metricTypes []string, start, end time.Time, stepSecs int64, tiers []Tier) []interface{} {
+func retainedQuerySecondBounds(start, end time.Time, exactWindow bool) (int64, int64) {
+	if exactWindow {
+		if startSec, endSec, ok := exactWindowSecondBounds(start, end); ok {
+			return startSec, endSec
+		}
+	}
+	return start.Unix(), end.Unix()
+}
+
+func retainedQueryParameters(resourceType string, resourceIDs, metricTypes []string, start, end time.Time, stepSecs int64, tiers []Tier, exactWindow bool) []interface{} {
 	params := make([]interface{}, 0, len(resourceIDs)+len(metricTypes)+len(tiers)+4)
 	params = append(params, resourceType)
 	for _, id := range resourceIDs {
@@ -1792,7 +1887,8 @@ func retainedQueryParameters(resourceType string, resourceIDs, metricTypes []str
 	for _, metric := range metricTypes {
 		params = append(params, metric)
 	}
-	params = append(params, start.Unix(), end.Unix())
+	startSec, endSec := retainedQuerySecondBounds(start, end, exactWindow)
+	params = append(params, startSec, endSec)
 	for _, tier := range tiers {
 		params = append(params, string(tier))
 	}
@@ -1808,11 +1904,11 @@ func retainedQueryParameters(resourceType string, resourceIDs, metricTypes []str
 }
 
 func (s *Store) retainedQuerySQL(resourceType string, resourceIDs, metricTypes []string, start, end time.Time, stepSecs int64, tiers []Tier, groupSeries, valuesOnly bool) (string, []interface{}) {
-	return s.retainedQuerySQLForIndex(s.metricsReadIndex(), resourceType, resourceIDs, metricTypes, start, end, stepSecs, tiers, groupSeries, valuesOnly)
+	return s.retainedQuerySQLForIndex(s.metricsReadIndex(), resourceType, resourceIDs, metricTypes, start, end, stepSecs, tiers, groupSeries, valuesOnly, false)
 }
 
-func (s *Store) retainedQuerySQLForIndex(index string, resourceType string, resourceIDs, metricTypes []string, start, end time.Time, stepSecs int64, tiers []Tier, groupSeries, valuesOnly bool) (string, []interface{}) {
-	shape := retainedQueryShape{resources: len(resourceIDs), metrics: len(metricTypes), aggregate: stepSecs > 1, groupSeries: groupSeries, valuesOnly: valuesOnly, clustered: index == clusteredMetricsIndex}
+func (s *Store) retainedQuerySQLForIndex(index string, resourceType string, resourceIDs, metricTypes []string, start, end time.Time, stepSecs int64, tiers []Tier, groupSeries, valuesOnly, exactWindow bool) (string, []interface{}) {
+	shape := retainedQueryShape{resources: len(resourceIDs), metrics: len(metricTypes), aggregate: stepSecs > 1, groupSeries: groupSeries, valuesOnly: valuesOnly, clustered: index == clusteredMetricsIndex, exactWindow: exactWindow}
 	shape.packedSeries = retainedQueryUsesPackedSeries(len(resourceIDs), len(metricTypes), start, end, stepSecs, groupSeries, valuesOnly)
 	cacheable := len(tiers) <= len(shape.tiers)
 	copy(shape.tiers[:], tiers)
@@ -1821,10 +1917,10 @@ func (s *Store) retainedQuerySQLForIndex(index string, resourceType string, reso
 		query := s.readQueryShapes[shape]
 		s.queryMu.Unlock()
 		if query != "" {
-			return query, retainedQueryParameters(resourceType, resourceIDs, metricTypes, start, end, stepSecs, tiers)
+			return query, retainedQueryParameters(resourceType, resourceIDs, metricTypes, start, end, stepSecs, tiers, exactWindow)
 		}
 	}
-	query, params := retainedQuerySQLWithIndex(index, resourceType, resourceIDs, metricTypes, start, end, stepSecs, tiers, groupSeries, valuesOnly)
+	query, params := retainedQuerySQLWithIndex(index, resourceType, resourceIDs, metricTypes, start, end, stepSecs, tiers, groupSeries, valuesOnly, exactWindow)
 	if cacheable {
 		s.queryMu.Lock()
 		if len(s.readQueryShapes) < maxRetainedReadStatements {
@@ -1844,7 +1940,7 @@ func (s *Store) retainedQuerySQLForIndex(index string, resourceType string, reso
 // Presence never establishes continuous collection or per-series coverage.
 // Every probe is restricted to the requested identities and timestamp window.
 func retainedQuerySQL(resourceType string, resourceIDs, metricTypes []string, start, end time.Time, stepSecs int64, tiers []Tier, groupSeries, valuesOnly bool) (string, []interface{}) {
-	return retainedQuerySQLWithIndex(metricsIdentityIndex, resourceType, resourceIDs, metricTypes, start, end, stepSecs, tiers, groupSeries, valuesOnly)
+	return retainedQuerySQLWithIndex(metricsIdentityIndex, resourceType, resourceIDs, metricTypes, start, end, stepSecs, tiers, groupSeries, valuesOnly, false)
 }
 
 // Raw fleet reads return a statement-local resource number instead of decoding
@@ -1873,8 +1969,8 @@ func retainedQueryUsesPackedSeries(resources, metrics int, start, end time.Time,
 		end.Unix() <= (math.MaxInt64-series+1)/series
 }
 
-func retainedQuerySQLWithIndex(index string, resourceType string, resourceIDs, metricTypes []string, start, end time.Time, stepSecs int64, tiers []Tier, groupSeries, valuesOnly bool) (string, []interface{}) {
-	params := retainedQueryParameters(resourceType, resourceIDs, metricTypes, start, end, stepSecs, tiers)
+func retainedQuerySQLWithIndex(index string, resourceType string, resourceIDs, metricTypes []string, start, end time.Time, stepSecs int64, tiers []Tier, groupSeries, valuesOnly, exactWindow bool) (string, []interface{}) {
+	params := retainedQueryParameters(resourceType, resourceIDs, metricTypes, start, end, stepSecs, tiers, exactWindow)
 	resourceOrdinals := retainedQueryUsesResourceOrdinals(len(resourceIDs), stepSecs, groupSeries)
 	seriesOrdinals := resourceOrdinals && len(metricTypes) > 1
 	packedSeries := retainedQueryUsesPackedSeries(len(resourceIDs), len(metricTypes), start, end, stepSecs, groupSeries, valuesOnly)
@@ -1915,6 +2011,14 @@ func retainedQuerySQLWithIndex(index string, resourceType string, resourceIDs, m
 	endParam := startParam + 1
 	tierParam := endParam + 1
 	stepParam := tierParam + len(tiers)
+	tierUpperExpr := func(tier Tier) string {
+		if exactWindow {
+			if bucket := tierBucketSeconds(tier); bucket > 1 {
+				return fmt.Sprintf("(:p%d - %d)", endParam, bucket)
+			}
+		}
+		return fmt.Sprintf(":p%d", endParam)
+	}
 	scope := func(alias string, tierIndex int) string {
 		clause := alias + ".resource_type = :p1 AND " + alias + ".resource_id IN (" + idSlots + ")"
 		if resourceOrdinals && alias == "m" {
@@ -1923,7 +2027,7 @@ func retainedQuerySQLWithIndex(index string, resourceType string, resourceIDs, m
 		if len(metricTypes) > 0 {
 			clause += " AND " + alias + ".metric_type IN (" + metricSlots + ")"
 		}
-		return clause + fmt.Sprintf(" AND %s.tier = :p%d AND %s.timestamp >= :p%d AND %s.timestamp <= :p%d", alias, tierParam+tierIndex, alias, startParam, alias, endParam)
+		return clause + fmt.Sprintf(" AND %s.tier = :p%d AND %s.timestamp >= :p%d AND %s.timestamp <= %s", alias, tierParam+tierIndex, alias, startParam, alias, tierUpperExpr(tiers[tierIndex]))
 	}
 	// Preserve nullable extrema across the row boundary. Materializing the
 	// value again for each missing bound makes SQLite and its driver decode
@@ -1937,6 +2041,9 @@ func retainedQuerySQLWithIndex(index string, resourceType string, resourceIDs, m
 	}
 	directAggregate := stepSecs > 1 && len(tiers) == 1
 	bucketExpression := fmt.Sprintf("(timestamp / :p%d) * :p%d + (:p%d / 2)", stepParam, stepParam, stepParam)
+	if exactWindow {
+		bucketExpression = fmt.Sprintf("MIN(MAX(%s, :p%d), :p%d)", bucketExpression, startParam, endParam)
+	}
 	if directAggregate {
 		projection = identityColumns + bucketExpression + ` AS bucket_ts, AVG(m.value)`
 		if !valuesOnly {
@@ -1966,8 +2073,8 @@ func retainedQuerySQLWithIndex(index string, resourceType string, resourceIDs, m
     WHERE h.resource_type = m.resource_type AND h.resource_id = m.resource_id
     AND h.metric_type = m.metric_type AND h.tier = :p%d
     AND h.timestamp >= MAX(:p%d, (m.timestamp / %d) * %d)
-    AND h.timestamp <= :p%d AND h.timestamp < (m.timestamp / %d) * %d + %d
-   ))`, tierParam+j, startParam, bucket, bucket, endParam, bucket, bucket, bucket)
+    AND h.timestamp <= %s AND h.timestamp < (m.timestamp / %d) * %d + %d
+   ))`, tierParam+j, startParam, bucket, bucket, tierUpperExpr(preferred), bucket, bucket, bucket)
 		}
 		branches = append(branches, branch)
 	}
@@ -2042,17 +2149,18 @@ func (s *Store) retainedReadStatement(query string) (*pdb.InstrumentedStmt, erro
 	return stmt, nil
 }
 
-func queryRetainedChunk[T any](s *Store, resourceType string, resourceIDs []string, metricTypes []string, start, end time.Time, stepSecs int64, tiers []Tier, projection retainedProjection[T]) (map[string]map[string][]T, error) {
-	result, err := queryRetainedChunkAttempt(s, resourceType, resourceIDs, metricTypes, start, end, stepSecs, tiers, projection)
+func queryRetainedChunk[T any](s *Store, resourceType string, resourceIDs []string, metricTypes []string, start, end time.Time, stepSecs int64, exactWindow bool, tiers []Tier, projection retainedProjection[T]) (map[string]map[string][]T, error) {
+	result, err := queryRetainedChunkAttempt(s, resourceType, resourceIDs, metricTypes, start, end, stepSecs, exactWindow, tiers, projection)
 	if err != nil && s.refreshClusteredMetrics(err) {
-		return queryRetainedChunkAttempt(s, resourceType, resourceIDs, metricTypes, start, end, stepSecs, tiers, projection)
+		return queryRetainedChunkAttempt(s, resourceType, resourceIDs, metricTypes, start, end, stepSecs, exactWindow, tiers, projection)
 	}
 	return result, err
 }
 
-func queryRetainedChunkAttempt[T any](s *Store, resourceType string, resourceIDs []string, metricTypes []string, start, end time.Time, stepSecs int64, tiers []Tier, projection retainedProjection[T]) (map[string]map[string][]T, error) {
+func queryRetainedChunkAttempt[T any](s *Store, resourceType string, resourceIDs []string, metricTypes []string, start, end time.Time, stepSecs int64, exactWindow bool, tiers []Tier, projection retainedProjection[T]) (map[string]map[string][]T, error) {
 	// Keep the index selection fixed for this read snapshot across cutover.
 	index := s.metricsReadIndex()
+	startSec, endSec := retainedQuerySecondBounds(start, end, exactWindow)
 	var tx *pdb.InstrumentedTx
 	var err error
 	if stepSecs > 1 {
@@ -2082,7 +2190,13 @@ func queryRetainedChunkAttempt[T any](s *Store, resourceType string, resourceIDs
 			for _, metric := range metricTypes {
 				checkParams = append(checkParams, metric)
 			}
-			checkParams = append(checkParams, string(tier), start.Unix(), end.Unix())
+			tierEnd := endSec
+			if exactWindow {
+				if upper, ok := exactWindowTierEndSec(tier, startSec, endSec); ok {
+					tierEnd = upper
+				}
+			}
+			checkParams = append(checkParams, string(tier), startSec, tierEnd)
 			checkDestinations[i] = &present[i]
 		}
 		presenceQuery := "SELECT " + strings.Join(checks, ", ")
@@ -2127,7 +2241,7 @@ func queryRetainedChunkAttempt[T any](s *Store, resourceType string, resourceIDs
 	if streamBuckets {
 		queryStep = 0
 	}
-	sqlQuery, params := s.retainedQuerySQLForIndex(index, resourceType, resourceIDs, metricTypes, start, end, queryStep, tiers, streamBuckets, projection.valuesOnly)
+	sqlQuery, params := s.retainedQuerySQLForIndex(index, resourceType, resourceIDs, metricTypes, start, end, queryStep, tiers, streamBuckets, projection.valuesOnly, exactWindow)
 	resourceOrdinals := retainedQueryUsesResourceOrdinals(len(resourceIDs), queryStep, streamBuckets)
 	seriesOrdinals := resourceOrdinals && len(metricTypes) > 1
 	packedSeries := retainedQueryUsesPackedSeries(len(resourceIDs), len(metricTypes), start, end, queryStep, streamBuckets, projection.valuesOnly)
@@ -2214,7 +2328,11 @@ func queryRetainedChunkAttempt[T any](s *Store, resourceType string, resourceIDs
 			return
 		}
 		bucketPoint.Value /= float64(bucketCount)
-		bucketPoint.Timestamp = time.Unix(bucketStart+stepSecs/2, 0)
+		bucketTs := bucketStart + stepSecs/2
+		if exactWindow {
+			bucketTs = min(max(bucketTs, startSec), endSec)
+		}
+		bucketPoint.Timestamp = time.Unix(bucketTs, 0)
 		appendPoint(bucketResource, bucketMetric, bucketPoint)
 		bucketCount = 0
 	}

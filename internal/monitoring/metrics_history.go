@@ -558,6 +558,177 @@ func filterMetricsByTime(data []MetricPoint, cutoffTime time.Time) []MetricPoint
 	return filtered
 }
 
+// filterMetricsByWindow returns points whose timestamp lies within [start, end] inclusive.
+func filterMetricsByWindow(data []MetricPoint, start, end time.Time) []MetricPoint {
+	if end.Before(start) || len(data) == 0 {
+		return []MetricPoint{}
+	}
+	count := 0
+	for _, point := range data {
+		if !point.Timestamp.Before(start) && !point.Timestamp.After(end) {
+			count++
+		}
+	}
+	filtered := make([]MetricPoint, count)
+	if count == 0 {
+		return filtered
+	}
+	next := 0
+	for _, point := range data {
+		if !point.Timestamp.Before(start) && !point.Timestamp.After(end) {
+			filtered[next] = point
+			next++
+		}
+	}
+	return filtered
+}
+
+// GetGuestMetricsInRange returns historical metrics for a guest within [start, end] inclusive.
+func (mh *MetricsHistory) GetGuestMetricsInRange(guestID, metricType string, start, end time.Time) []MetricPoint {
+	mh.mu.RLock()
+	defer mh.mu.RUnlock()
+
+	metrics, exists := mh.guestMetrics[guestID]
+	if !exists {
+		return []MetricPoint{}
+	}
+
+	var data []MetricPoint
+	switch metricType {
+	case "cpu":
+		data = metrics.CPU
+	case "memory":
+		data = metrics.Memory
+	case "memoryused":
+		data = metrics.MemoryUsed
+	case "disk":
+		data = metrics.Disk
+	case "gpu":
+		data = metrics.GPU
+	case "gpu_memory":
+		data = metrics.GPUMemory
+	case "gpu_temperature":
+		data = metrics.GPUTemperature
+	case "diskread":
+		data = metrics.DiskRead
+	case "diskwrite":
+		data = metrics.DiskWrite
+	case "netin":
+		data = metrics.NetworkIn
+	case "netout":
+		data = metrics.NetworkOut
+	case "temperature":
+		data = metrics.Temperature
+	default:
+		return []MetricPoint{}
+	}
+
+	return filterMetricsByWindow(data, start, end)
+}
+
+// GetNodeMetricsInRange returns historical metrics for a node within [start, end] inclusive.
+func (mh *MetricsHistory) GetNodeMetricsInRange(nodeID, metricType string, start, end time.Time) []MetricPoint {
+	mh.mu.RLock()
+	defer mh.mu.RUnlock()
+
+	metrics, exists := mh.nodeMetrics[nodeID]
+	if !exists {
+		return []MetricPoint{}
+	}
+
+	var data []MetricPoint
+	switch metricType {
+	case "cpu":
+		data = metrics.CPU
+	case "memory":
+		data = metrics.Memory
+	case "memoryused":
+		data = metrics.MemoryUsed
+	case "disk":
+		data = metrics.Disk
+	case "netin":
+		data = metrics.NetworkIn
+	case "netout":
+		data = metrics.NetworkOut
+	case "temperature":
+		data = metrics.Temperature
+	default:
+		return []MetricPoint{}
+	}
+
+	return filterMetricsByWindow(data, start, end)
+}
+
+// GetAllGuestMetricsInRange returns all metrics for a guest within [start, end] inclusive.
+func (mh *MetricsHistory) GetAllGuestMetricsInRange(guestID string, start, end time.Time) map[string][]MetricPoint {
+	mh.mu.RLock()
+	defer mh.mu.RUnlock()
+
+	result := make(map[string][]MetricPoint)
+	metrics, exists := mh.guestMetrics[guestID]
+	if !exists {
+		return result
+	}
+
+	result["cpu"] = filterMetricsByWindow(metrics.CPU, start, end)
+	result["memory"] = filterMetricsByWindow(metrics.Memory, start, end)
+	result["memoryused"] = filterMetricsByWindow(metrics.MemoryUsed, start, end)
+	result["disk"] = filterMetricsByWindow(metrics.Disk, start, end)
+	result["gpu"] = filterMetricsByWindow(metrics.GPU, start, end)
+	result["gpu_memory"] = filterMetricsByWindow(metrics.GPUMemory, start, end)
+	result["gpu_temperature"] = filterMetricsByWindow(metrics.GPUTemperature, start, end)
+	result["diskread"] = filterMetricsByWindow(metrics.DiskRead, start, end)
+	result["diskwrite"] = filterMetricsByWindow(metrics.DiskWrite, start, end)
+	result["netin"] = filterMetricsByWindow(metrics.NetworkIn, start, end)
+	result["netout"] = filterMetricsByWindow(metrics.NetworkOut, start, end)
+	result["temperature"] = filterMetricsByWindow(metrics.Temperature, start, end)
+
+	return result
+}
+
+// GetAllStorageMetricsInRange returns all metrics for storage within [start, end] inclusive.
+func (mh *MetricsHistory) GetAllStorageMetricsInRange(storageID string, start, end time.Time) map[string][]MetricPoint {
+	mh.mu.RLock()
+	defer mh.mu.RUnlock()
+
+	result := make(map[string][]MetricPoint)
+	metrics, exists := mh.storageMetrics[storageID]
+	if !exists {
+		return result
+	}
+
+	result["usage"] = filterMetricsByWindow(metrics.Usage, start, end)
+	result["used"] = filterMetricsByWindow(metrics.Used, start, end)
+	result["total"] = filterMetricsByWindow(metrics.Total, start, end)
+	result["avail"] = filterMetricsByWindow(metrics.Avail, start, end)
+
+	return result
+}
+
+// GetDiskMetricsInRange returns historical metrics for a physical disk within [start, end] inclusive.
+func (mh *MetricsHistory) GetDiskMetricsInRange(resourceID, metricType string, start, end time.Time) []MetricPoint {
+	mh.mu.RLock()
+	defer mh.mu.RUnlock()
+
+	metrics, exists := mh.diskMetrics[resourceID]
+	if !exists {
+		return []MetricPoint{}
+	}
+
+	switch metricType {
+	case "disk":
+		return filterMetricsByWindow(metrics.Utilization, start, end)
+	case "diskread":
+		return filterMetricsByWindow(metrics.DiskRead, start, end)
+	case "diskwrite":
+		return filterMetricsByWindow(metrics.DiskWrite, start, end)
+	case "smart_temp":
+		return filterMetricsByWindow(metrics.Temperature, start, end)
+	default:
+		return []MetricPoint{}
+	}
+}
+
 func metricsSeriesCoverageSpanAfter(data []MetricPoint, cutoffTime time.Time) time.Duration {
 	if len(data) < 2 {
 		return 0

@@ -26,11 +26,19 @@ func historyDataModeCacheKey(key string) string {
 // WriteHistoryJSON preserves the JSON encoder's newline while sharing the same
 // successful-response observation boundary as cached chart payloads.
 func (r *Service) WriteHistoryJSON(w http.ResponseWriter, req *http.Request, value any, duration time.Duration) error {
+	return r.WriteHistoryJSONWithEarliest(w, req, value, duration, time.Time{})
+}
+
+// WriteHistoryJSONWithEarliest extends WriteHistoryJSON for custom time windows
+// whose duration can be shorter than 7 days while their start lies more than 7
+// days in the past. Actual usage is still recorded only when a returned metric
+// point in the serialized payload is older than 7 days.
+func (r *Service) WriteHistoryJSONWithEarliest(w http.ResponseWriter, req *http.Request, value any, duration time.Duration, earliestTimestamp time.Time) error {
 	payload, err := json.Marshal(value)
 	if err != nil {
 		return err
 	}
-	return r.WriteHistoryPayload(w, req, append(payload, '\n'), duration)
+	return r.WriteHistoryPayloadWithEarliest(w, req, append(payload, '\n'), duration, earliestTimestamp)
 }
 
 // WriteHistoryPayload counts successful GET responses, including cache hits,
@@ -38,7 +46,12 @@ func (r *Service) WriteHistoryJSON(w http.ResponseWriter, req *http.Request, val
 // long range, empty results, HEAD, cancellation, mock data and failed writes
 // cannot create usage. HTTP completion does not prove a person viewed a chart.
 func (r *Service) WriteHistoryPayload(w http.ResponseWriter, req *http.Request, payload []byte, duration time.Duration) error {
+	return r.WriteHistoryPayloadWithEarliest(w, req, payload, duration, time.Time{})
+}
+
+func (r *Service) WriteHistoryPayloadWithEarliest(w http.ResponseWriter, req *http.Request, payload []byte, duration time.Duration, earliestTimestamp time.Time) error {
 	observedAt := time.Now().UTC()
+	isMockMode := mock.IsMockEnabled()
 	n, err := w.Write(payload)
 	if err != nil {
 		return err
@@ -46,17 +59,26 @@ func (r *Service) WriteHistoryPayload(w http.ResponseWriter, req *http.Request, 
 	if n != len(payload) {
 		return io.ErrShortWrite
 	}
-	if req.Method != http.MethodGet || req.Context().Err() != nil || duration <= 7*24*time.Hour || mock.IsMockEnabled() {
+	cutoffTime := observedAt.Add(-7 * 24 * time.Hour)
+	mayContainExtended := duration > 7*24*time.Hour || (!earliestTimestamp.IsZero() && earliestTimestamp.Before(cutoffTime))
+	if req.Method != http.MethodGet || req.Context().Err() != nil || !mayContainExtended || isMockMode || mock.IsMockEnabled() {
 		return nil
 	}
 	observer, ok := r.resolver.(ExtendedHistoryReadObserver)
 	if !ok {
 		return nil
 	}
-	if containsExtendedHistoryPayload(payload, observedAt.Add(-7*24*time.Hour).UnixMilli()) {
+	if !payloadHasSyntheticSource(payload) && containsExtendedHistoryPayload(payload, cutoffTime.UnixMilli()) {
 		observer.RecordSuccessfulExtendedHistoryRead()
 	}
 	return nil
+}
+
+func payloadHasSyntheticSource(payload []byte) bool {
+	var header struct {
+		Source string `json:"source"`
+	}
+	return json.Unmarshal(payload, &header) == nil && header.Source == "mock_synthetic"
 }
 
 func containsExtendedHistoryPayload(payload []byte, cutoff int64) bool {
