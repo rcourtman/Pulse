@@ -10,6 +10,7 @@ import (
 )
 
 func TestInstallSHUnraidBootReplacementPreservesUnrelatedJobs(t *testing.T) {
+	t.Parallel()
 	if runtime.GOOS == "windows" {
 		t.Skip("Unix shell/filesystem fixture; native Unraid acceptance remains separate")
 	}

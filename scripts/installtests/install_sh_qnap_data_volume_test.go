@@ -14,6 +14,7 @@ import (
 // boot, so the installer must stage, install, and run the agent from the
 // data volume instead. Refs #1617.
 func TestInstallSHRelocatesQNAPInstallToDataVolume(t *testing.T) {
+	t.Parallel()
 	content, err := os.ReadFile(repoFile("scripts", "install.sh"))
 	if err != nil {
 		t.Fatalf("read install.sh: %v", err)
@@ -37,6 +38,7 @@ func TestInstallSHRelocatesQNAPInstallToDataVolume(t *testing.T) {
 // With the data-volume layout the stored and runtime binaries are one file;
 // the rendered watchdog must start the agent without a boot-time self-copy.
 func TestRenderedQNAPWatchdogRunsUnifiedStoredRuntimeBinary(t *testing.T) {
+	t.Parallel()
 	content, err := os.ReadFile(repoFile("scripts", "install.sh"))
 	if err != nil {
 		t.Fatalf("read install.sh: %v", err)

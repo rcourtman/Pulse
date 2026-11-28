@@ -19,6 +19,7 @@ import (
 )
 
 func TestAgentInstallerARMv6SavedStateRepairPreflight(t *testing.T) {
+	t.Parallel()
 	var requests []string
 	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		requests = append(requests, r.Method+" "+r.URL.RequestURI())
@@ -76,6 +77,7 @@ func TestAgentInstallerARMv6SavedStateRepairPreflight(t *testing.T) {
 // a release/device qualification boundary. ARM target selection is covered by
 // the full installer preflight above and ARM execution by the updater proof.
 func TestAgentInstallerSavedStateRepairVerifiedReplacement(t *testing.T) {
+	t.Parallel()
 	assets := os.Getenv("PULSE_AGENT_RELEASE_TEST_DIR")
 	if assets == "" {
 		t.Skip("requires canonical native release executable packet")

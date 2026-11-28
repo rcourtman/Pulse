@@ -14,6 +14,7 @@ import (
 // Exercise the generated helper, not a second copy of its channel parser. The
 // transport is local-only, but the installer and sidecar use real SSH signatures.
 func TestManualUpdateChannelAdmission(t *testing.T) {
+	t.Parallel()
 	for _, tool := range []string{"bash", "jq", "ssh-keygen"} {
 		if _, err := exec.LookPath(tool); err != nil {
 			t.Fatalf("manual update proof requires %s: %v", tool, err)
@@ -155,22 +156,24 @@ exit "$MANUAL_UPDATE_EXIT"
 	}
 	for _, tc := range cases {
 		t.Run(tc.name, func(t *testing.T) {
+			t.Parallel()
 			dir := t.TempDir()
 			configDir := filepath.Join(dir, "config")
 			if err := os.Mkdir(configDir, 0700); err != nil {
 				t.Fatal(err)
 			}
 			configPath := filepath.Join(configDir, "system.json")
+			var configErr error
 			switch {
 			case tc.directory:
-				err = os.Mkdir(configPath, 0700)
+				configErr = os.Mkdir(configPath, 0700)
 			case tc.brokenLink:
-				err = os.Symlink(filepath.Join(dir, "absent"), configPath)
+				configErr = os.Symlink(filepath.Join(dir, "absent"), configPath)
 			case !tc.missingConfig:
-				err = os.WriteFile(configPath, []byte(tc.config), 0600)
+				configErr = os.WriteFile(configPath, []byte(tc.config), 0600)
 			}
-			if err != nil {
-				t.Fatal(err)
+			if configErr != nil {
+				t.Fatal(configErr)
 			}
 			if tc.marker != "" {
 				if err := os.WriteFile(filepath.Join(dir, "BUILD_FROM_SOURCE"), []byte(tc.marker), 0600); err != nil {

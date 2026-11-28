@@ -62,6 +62,7 @@ func safeProfileEffectiveSystemdFunctions(t *testing.T) string {
 }
 
 func TestSafeProfileInspectIsReadOnlyAndReportsDifferences(t *testing.T) {
+	t.Parallel()
 	root := t.TempDir()
 	binDir := filepath.Join(root, "bin")
 	unitDir := filepath.Join(root, "systemd")
@@ -121,7 +122,9 @@ safe_profile_inspect
 }
 
 func TestSafeProfileTransactionCommitAndFailureRollback(t *testing.T) {
+	t.Parallel()
 	t.Run("commit", func(t *testing.T) {
+		t.Parallel()
 		root := t.TempDir()
 		harness := safeProfileHarness(t, root, false) + `
 safe_profile_begin_transaction
@@ -139,6 +142,7 @@ test "$SAFE_PROFILE_TRANSACTION_COMMITTED" = true
 	})
 
 	t.Run("failure rollback", func(t *testing.T) {
+		t.Parallel()
 		root := t.TempDir()
 		harness := safeProfileHarness(t, root, true) + `
 printf 'transient-wal\n' > "$STATE_DIR/cache/runtime.db-wal"
@@ -211,6 +215,7 @@ grep -q '^gpasswd -a pulse-agent docker$' "$CALL_LOG"
 // restored service that runs as another account, and must be gone before
 // rollback writes the saved credentials and identity back by name.
 func TestSafeProfileRollbackDiscardsStateOfAnotherAccount(t *testing.T) {
+	t.Parallel()
 	if os.Geteuid() != 0 {
 		t.Skip("handing state to another account requires root")
 	}
@@ -227,6 +232,7 @@ plant_collector_state() {
 }
 `
 	t.Run("root profile", func(t *testing.T) {
+		t.Parallel()
 		harness := safeProfileHarness(t, t.TempDir(), false) + collector + `
 safe_profile_begin_transaction
 plant_collector_state
@@ -258,6 +264,7 @@ test "$(stat -c '%u' "$EXPECTED_DIR/outside-target")" = 0
 	})
 
 	t.Run("same collector account", func(t *testing.T) {
+		t.Parallel()
 		harness := safeProfileHarness(t, t.TempDir(), false) + collector + `
 chown -R "$COLLECTOR_UID:$COLLECTOR_UID" "$STATE_DIR"
 chown 0:0 "$STATE_DIR/connection.env"
@@ -314,6 +321,7 @@ func safeProfileFixtureSnapshot(t *testing.T, root string) map[string]struct {
 }
 
 func TestSafeProfileRefusesUnconfirmedRecoveryStateBeforeSnapshot(t *testing.T) {
+	t.Parallel()
 	for _, unit := range []string{"pulse-agent.service", "pulse-agent-helper.socket"} {
 		for _, fault := range []struct {
 			name, output, diagnostic string
@@ -337,6 +345,7 @@ func TestSafeProfileRefusesUnconfirmedRecoveryStateBeforeSnapshot(t *testing.T) 
 			{name: "static", output: "LoadState=loaded\nActiveState=inactive\nUnitFileState=static\n"},
 		} {
 			t.Run(unit+"/"+fault.name, func(t *testing.T) {
+				t.Parallel()
 				root := t.TempDir()
 				harness := safeProfileHarness(t, root, true)
 				before := safeProfileFixtureSnapshot(t, root)
@@ -375,6 +384,7 @@ grep -E '^(COLLECTOR|HELPER)_(ACTIVE|ENABLED)=' "$SAFE_PROFILE_TRANSACTION_DIR/m
 }
 
 func TestSafeProfileCapturesConfirmedRecoveryFlagsAndRestoresIntent(t *testing.T) {
+	t.Parallel()
 	for _, state := range []struct {
 		name, active, enabled, wantActive, wantEnabled string
 	}{
@@ -435,6 +445,7 @@ safe_profile_restore_transaction "$SAFE_PROFILE_TRANSACTION_DIR" recovery-contro
 }
 
 func TestSafeProfileRefusesMissingInstalledCollector(t *testing.T) {
+	t.Parallel()
 	root := t.TempDir()
 	harness := safeProfileHarness(t, root, false) + `
 STATE_FAULT_UNIT=pulse-agent.service
@@ -448,6 +459,7 @@ safe_profile_begin_transaction
 }
 
 func TestSafeProfileMigrationIsExplicitAndRunnerIndependent(t *testing.T) {
+	t.Parallel()
 	content, err := os.ReadFile(repoFile("scripts", "install.sh"))
 	if err != nil {
 		t.Fatal(err)
@@ -474,6 +486,7 @@ func TestSafeProfileMigrationIsExplicitAndRunnerIndependent(t *testing.T) {
 }
 
 func TestSafeProfileApplyRequiresReadinessHelperAndRegistration(t *testing.T) {
+	t.Parallel()
 	gate := extractInstallShellFunction(t, "safe_profile_verify_declared_health")
 	script := `
 set -euo pipefail
@@ -520,6 +533,7 @@ fi
 }
 
 func TestSafeProfileFailsClosedOnEffectiveSystemdOverrides(t *testing.T) {
+	t.Parallel()
 	for _, tc := range []struct {
 		name, property, value string
 	}{
@@ -527,6 +541,7 @@ func TestSafeProfileFailsClosedOnEffectiveSystemdOverrides(t *testing.T) {
 		{name: "different fragment", property: "FragmentPath", value: "/usr/lib/systemd/system/pulse-agent.service"},
 	} {
 		t.Run(tc.name, func(t *testing.T) {
+			t.Parallel()
 			root := t.TempDir()
 			harness := safeProfileHarness(t, root, false)
 			old := tc.property + `) printf '%s\n' "$SAFE_PROFILE_COLLECTOR_UNIT" ;;`
@@ -544,6 +559,7 @@ func TestSafeProfileFailsClosedOnEffectiveSystemdOverrides(t *testing.T) {
 }
 
 func TestSafeProfileValidatesEveryEffectiveSystemdBoundary(t *testing.T) {
+	t.Parallel()
 	testCases := []struct {
 		name, unit, property, value string
 	}{
@@ -578,6 +594,7 @@ func TestSafeProfileValidatesEveryEffectiveSystemdBoundary(t *testing.T) {
 	functions := safeProfileEffectiveSystemdFunctions(t)
 	for _, testCase := range testCases {
 		t.Run(testCase.name, func(t *testing.T) {
+			t.Parallel()
 			script := effectiveSystemdHarness(t, testCase.unit, testCase.property, testCase.value) + "\n" + functions + `
 if safe_profile_verify_effective_target; then
   echo 'unsafe effective systemd profile was accepted' >&2
@@ -591,6 +608,7 @@ fi
 	}
 
 	t.Run("canonical profile", func(t *testing.T) {
+		t.Parallel()
 		script := effectiveSystemdHarness(t, "", "", "") + "\n" + functions + "\nsafe_profile_verify_effective_target\n"
 		if out, err := exec.Command("bash", "-c", script).CombinedOutput(); err != nil {
 			t.Fatalf("canonical effective profile rejected: %v\n%s", err, out)
@@ -599,6 +617,7 @@ fi
 }
 
 func TestActionRunnerProvisionChecksEffectiveUnitBeforeStart(t *testing.T) {
+	t.Parallel()
 	provision := extractInstallShellFunction(t, "provision_action_runner")
 	validation := strings.Index(provision, "action_runner_verify_effective_target")
 	enable := strings.Index(provision, `systemctl enable "${ACTION_RUNNER_NAME}.service"`)
@@ -609,6 +628,7 @@ func TestActionRunnerProvisionChecksEffectiveUnitBeforeStart(t *testing.T) {
 }
 
 func TestTypedHelperProvisionChecksEffectiveUnitsBeforeSocketActivation(t *testing.T) {
+	t.Parallel()
 	provision := extractInstallShellFunction(t, "provision_typed_privileged_helper")
 	validation := strings.Index(provision, "safe_profile_verify_helper_effective_target")
 	enable := strings.Index(provision, `systemctl enable --now "${PRIVILEGED_HELPER_NAME}.socket"`)
@@ -618,6 +638,7 @@ func TestTypedHelperProvisionChecksEffectiveUnitsBeforeSocketActivation(t *testi
 }
 
 func TestTypedHelperProvisionReplacesRunningHelperAfterValidatedUnit(t *testing.T) {
+	t.Parallel()
 	provision := extractInstallShellFunction(t, "provision_typed_privileged_helper")
 	// The production activation target remains fixed. Translate just that
 	// comparison into this disposable filesystem, not the installer itself;
@@ -628,6 +649,7 @@ func TestTypedHelperProvisionReplacesRunningHelperAfterValidatedUnit(t *testing.
 	}
 	for _, mode := range []string{"success", "effective-unit-failure", "restart-failure", "wrong-target"} {
 		t.Run(mode, func(t *testing.T) {
+			t.Parallel()
 			root := t.TempDir()
 			mustMkdirAll(t, filepath.Join(root, "bin"), filepath.Join(root, "systemd"))
 			if err := os.WriteFile(filepath.Join(root, "bin", "pulse-agent"), []byte("fixture"), 0o755); err != nil {
@@ -719,6 +741,7 @@ printf 'old-helper\n' > "$ROOT/running-helper"
 // hand a planted link's target to the collector, so only the collector's own
 // authority may touch that name unless its parent is closed to the collector.
 func TestTypedHelperQuarantineUsesCollectorAuthorityInsideCollectorWritableParent(t *testing.T) {
+	t.Parallel()
 	provision := extractInstallShellFunction(t, "provision_typed_privileged_helper")
 	if strings.Count(provision, "\n    ensure_collector_update_quarantine\n") != 1 ||
 		strings.Contains(provision, "PRIVILEGED_HELPER_UPDATE_QUARANTINE_DIR") {
@@ -727,6 +750,7 @@ func TestTypedHelperQuarantineUsesCollectorAuthorityInsideCollectorWritableParen
 	ensure := extractInstallShellFunction(t, "ensure_collector_update_quarantine")
 	for _, mode := range []string{"collector-parent", "shared-root-parent", "planted-link", "occupied-name", "root-parent"} {
 		t.Run(mode, func(t *testing.T) {
+			t.Parallel()
 			root := t.TempDir()
 			victim := filepath.Join(root, "victim")
 			quarantine := filepath.Join(root, "state", "update-quarantine")
@@ -812,6 +836,7 @@ install() { printf 'root %s\n' "$*" >> "$ROOT/events"; }
 }
 
 func TestTypedHelperUnitRendersBoundedResources(t *testing.T) {
+	t.Parallel()
 	unitPath := filepath.Join(t.TempDir(), "pulse-agent-helper.service")
 	render := extractInstallShellFunction(t, "render_privileged_helper_service_unit")
 	script := `
@@ -841,9 +866,11 @@ render_privileged_helper_service_unit "` + unitPath + `" /usr/local/lib/pulse-ag
 // on every platform, not infer enforcement from an effective property string.
 // These are installer regressions, not execution of a native sandbox.
 func TestTypedHelperIsolationDoesNotDependOnArchitectureOrPVE(t *testing.T) {
+	t.Parallel()
 	for _, arch := range []string{"amd64", "arm64", "armv7", "armv6", "386", "unknown"} {
 		for _, pve := range []string{"false", "true"} {
 			t.Run(arch+"/pve="+pve, func(t *testing.T) {
+				t.Parallel()
 				unitPath := filepath.Join(t.TempDir(), "helper.service")
 				script := `
 set -euo pipefail
@@ -886,6 +913,7 @@ fi
 }
 
 func TestSafeProfileRegistrationMustAdvanceLastSeen(t *testing.T) {
+	t.Parallel()
 	functions := extractInstallShellFunction(t, "verify_agent_server_registration")
 	script := `
 set -euo pipefail
@@ -924,8 +952,10 @@ test "$AGENT_REGISTRATION_LAST_SEEN" = '2026-08-30T10:00:31Z'
 }
 
 func TestSafeProfileHelperProtocolProbeValidatesFramedHealth(t *testing.T) {
+	t.Parallel()
 	for _, success := range []bool{true, false} {
 		t.Run(map[bool]string{true: "healthy", false: "typed failure"}[success], func(t *testing.T) {
+			t.Parallel()
 			root, err := os.MkdirTemp("/tmp", "pulse-helper-probe-")
 			if err != nil {
 				t.Fatal(err)
@@ -1005,6 +1035,7 @@ id() { return 0; }
 }
 
 func TestSafeProfileExitTrapRestoresUncommittedTransaction(t *testing.T) {
+	t.Parallel()
 	root := t.TempDir()
 	harness := safeProfileHarness(t, root, true) + "\n" + extractInstallShellFunction(t, "cleanup") + `
 TMP_FILES=()
@@ -1026,6 +1057,7 @@ exit 23
 }
 
 func TestSafeProfileDockerDegradationRequiresCollectorOwnedRootlessRuntime(t *testing.T) {
+	t.Parallel()
 	function := extractInstallShellFunction(t, "safe_profile_apply_docker_degradation")
 	for _, tc := range []struct {
 		name          string
@@ -1038,6 +1070,7 @@ func TestSafeProfileDockerDegradationRequiresCollectorOwnedRootlessRuntime(t *te
 		{name: "no safe source", want: "enabled=false explicit=true"},
 	} {
 		t.Run(tc.name, func(t *testing.T) {
+			t.Parallel()
 			script := `
 set -euo pipefail
 SAFE_PROFILE_ACTION=apply

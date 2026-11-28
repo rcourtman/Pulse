@@ -26,6 +26,7 @@ import (
 // qualification without repeating minutes of wall-clock waiting per case.
 // Unscaled 15s/60s transport timing is separate retained one-off evidence.
 func TestRootInstallerRegistrationTransferDeadlines(t *testing.T) {
+	t.Parallel()
 	for _, phase := range []string{"smoke", "setup", "register"} {
 		for _, mode := range []string{"healthy", "transient-503", "stalled-headers", "stalled-body", "registered-response-stall"} {
 			if mode == "registered-response-stall" && phase != "register" {
@@ -164,8 +165,10 @@ func TestRootInstallerRegistrationTransferDeadlines(t *testing.T) {
 // substring or reaching a provider. This fails on the old unbounded source;
 // real transfers above establish that curl enforces the arguments too.
 func TestRootInstallerRegistrationDeadlineArguments(t *testing.T) {
+	t.Parallel()
 	for _, phase := range []string{"smoke", "setup", "register"} {
 		t.Run(phase, func(t *testing.T) {
+			t.Parallel()
 			root := t.TempDir()
 			script := `curl() { printf '%s\n' "$@" > "$FIXTURE_ROOT/argv"; cat >/dev/null; printf '{}'; }
 ` + rootRegistrationDeadlineScript(t, phase)
@@ -189,9 +192,11 @@ func TestRootInstallerRegistrationDeadlineArguments(t *testing.T) {
 // The acceleration boundary must reject drift rather than silently restoring
 // expected flags and allowing a broken production invocation to pass.
 func TestRootInstallerRegistrationDeadlineShimRefusesChangedArguments(t *testing.T) {
+	t.Parallel()
 	for _, phase := range []string{"smoke", "setup", "register"} {
 		for _, fault := range []string{"missing-max-time", "changed-max-time", "duplicate-max-time", "changed-retries", "changed-backoff", "changed-connect-timeout", "missing-config-isolation", "extra-header"} {
 			t.Run(phase+"/"+fault, func(t *testing.T) {
+				t.Parallel()
 				root := t.TempDir()
 				env := rootRegistrationDeadlineEnvironment(t, root, "http://fixture.invalid", phase, "{}")
 				args := rootRegistrationDeadlineArguments(phase, "http://fixture.invalid", "{}")

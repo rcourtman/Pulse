@@ -99,6 +99,7 @@ func nativeInstallerFixtureSteps(t *testing.T) (nativeGuidanceStep, nativeGuidan
 }
 
 func TestNativeInstallerPhasesKeepNASBeforeFrontendAndAllChecksGating(t *testing.T) {
+	t.Parallel()
 	content, err := os.ReadFile(repoFile(".github", "workflows", "unified-agent-native.yml"))
 	if err != nil {
 		t.Fatal(err)
@@ -121,6 +122,7 @@ func TestNativeInstallerPhasesKeepNASBeforeFrontendAndAllChecksGating(t *testing
 	remaining := indices["Test native Unix installer contracts"]
 	for _, scenario := range []string{"missing preflight", "missing remaining", "duplicate preflight", "after Node", "before tools", "Linux only", "hidden early failure", "hidden remaining failure", "all checks repeated", "no remaining checks", "nonlocal tools", "wrong directory"} {
 		t.Run(scenario, func(t *testing.T) {
+			t.Parallel()
 			changed := append([]nativeGuidanceStep(nil), steps...)
 			switch scenario {
 			case "missing preflight":
@@ -201,6 +203,7 @@ func runNativeInstallerFixtureCommand(t *testing.T, limit time.Duration, env []s
 }
 
 func TestNativeInstallerFixtureToolsAreRealAndStepLocal(t *testing.T) {
+	t.Parallel()
 	supply, preflight, installer := nativeInstallerFixtureSteps(t)
 	for _, scenario := range []string{"real tools", "symlinked fixture root", "streamed version output", "failed version producer", "install failure", "missing bash", "legacy bash", "missing stat", "non-GNU chmod", "missing cp", "non-GNU cp", "missing mv", "non-GNU mv", "missing ln", "non-GNU ln", "missing readlink", "non-GNU readlink", "missing sha256sum", "non-GNU sha256sum", "missing tar", "non-GNU tar", "missing awk", "non-GNU awk", "missing flock", "missing sed", "non-GNU sed"} {
 		t.Run(scenario, func(t *testing.T) {

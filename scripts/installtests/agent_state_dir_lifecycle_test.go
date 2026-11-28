@@ -533,6 +533,7 @@ func TestPulseAgentStateDirLifecycleIntegration(t *testing.T) {
 		{name: "custom_state_commands_enabled", commandsEnabled: true, customState: true},
 	} {
 		t.Run(tc.name, func(t *testing.T) {
+			t.Parallel()
 			root := t.TempDir()
 			stateName := "default-state"
 			if tc.customState {
