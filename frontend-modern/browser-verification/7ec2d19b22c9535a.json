@@ -1,6 +1,6 @@
 {
   "version": 1,
-  "base_sha": "fde1816008a092751e5e5f8cf1e7913c80147a7d",
+  "base_sha": "7b155e48aeebcdb7a47f6650dfb0a6a5f2a9166f",
   "verified_at": "2026-11-28T00:30:38Z",
   "result": "passed",
   "changed_paths": [
@@ -20,7 +20,7 @@
     "frontend-modern/src/components/Workloads/guestDrawerModel.ts": "895ef1eb728c542c1f64c7121cb36774bae01507d8e88fa0b29f6643c104a1e0",
     "frontend-modern/src/components/Workloads/useGuestRowState.ts": "4a7d28a1683fb5e9a2e3e166803e086886e240b80270be5ade12b75e4b7555df",
     "frontend-modern/src/components/Workloads/workloadSelectors.ts": "fc54e573eb72bab02ef26e812b320feb7eb883db024814af8bc2ab1bfff316c3",
-    "frontend-modern/src/hooks/useWorkloads.ts": "81d92833ac673f77ed59c712108ae707f0d714c",
+    "frontend-modern/src/hooks/useWorkloads.ts": "81d92833ac673f77ed59c16094f4b0a0cca02e8374422c702108ae707f0d714c",
     "frontend-modern/src/types/workloads.ts": "c5de3f48e9b94b2ca3130c20436723df9e4e45c29ac29297933994ec0abc0e40",
     "frontend-modern/src/utils/status.ts": "aa4ad781869ea2817e92fb91be1885795afbfaff5fa74e814b5689ae89119bbc",
     "frontend-modern/src/utils/workloadSourceFreshness.ts": "33314a88c5905462729bd7b5bf1b0f69f86ccbcfbfcfb7e8daa76109edade51e"
