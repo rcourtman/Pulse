@@ -544,6 +544,59 @@ class UpdateRecoveryDocsTest(unittest.TestCase):
             with self.subTest(marker=marker):
                 self.assertIn(marker, manager)
 
+    def test_pro_runtime_switch_help_matches_backend_and_ui_source(self):
+        switch_text = " ".join(
+            section("AUTO_UPDATE", "Switching from Community to the Pulse Pro Runtime").split()
+        )
+        backend = (ROOT / "internal/updates/pro_runtime_switch.go").read_text(encoding="utf-8")
+        routes = (ROOT / "internal/api/router_routes_registration.go").read_text(encoding="utf-8")
+        ui = (ROOT / "frontend-modern/src/components/Settings/ProLicensePlanSection.tsx").read_text(
+            encoding="utf-8"
+        )
+
+        for method, route in (
+            ("GET", "/api/updates/pro-runtime"),
+            ("POST", "/api/updates/pro-runtime/apply"),
+        ):
+            with self.subTest(route=route):
+                self.assertIn(route, routes)
+                self.assertIn(f"`{method} {route}`", switch_text)
+
+        for reason in (
+            "already_pro",
+            "not_activated",
+            "not_eligible",
+            "source_build",
+            "unsupported_deployment",
+            "older_release",
+            "prerelease_only",
+            "unavailable",
+        ):
+            with self.subTest(reason=reason):
+                self.assertIn(f'"{reason}"', backend)
+                self.assertIn(f"`{reason}`", switch_text)
+
+        for ui_label in (
+            "Switch this install to Pulse Pro",
+            "Switch to Pulse Pro",
+            "Switch this container to Pulse Pro",
+        ):
+            with self.subTest(ui_label=ui_label):
+                self.assertIn(ui_label, ui)
+                self.assertIn(f"**{ui_label}**", switch_text)
+
+        for phrase in (
+            "**Settings → System → Plans & Billing**",
+            "`settings:read`",
+            "`settings:write`",
+            "digest-pinned private image commands",
+            "refuses a silent downgrade",
+            "stable channel will not switch to a preview Pro build",
+            "(#check-that-monitoring-resumed)",
+        ):
+            with self.subTest(phrase=phrase):
+                self.assertIn(phrase, switch_text)
+
 
 if __name__ == "__main__":
     unittest.main()
