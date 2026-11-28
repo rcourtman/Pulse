@@ -559,6 +559,7 @@ sudo chmod 0700 /usr/local/libexec/pulse-queue-depth
 |------|---------|-------------|---------|
 | `--url` | `PULSE_URL` | Pulse server URL | `http://localhost:7655` |
 | `--token` | `PULSE_TOKEN` | API token. Required when enrolling (`--enroll`); otherwise the `token` file in the state directory is used when unset | *(none)* |
+| `--enroll` | - | Exchange a bootstrap token for a runtime token on first start (used by deploy wizard flows) | `false` |
 | `--observers-file` | `PULSE_OBSERVERS_FILE` | Private JSON file defining report-only destinations | *(none)* |
 | `--custom-sensors-file` | `PULSE_CUSTOM_SENSORS_FILE` | Private YAML file defining command/REST custom metrics and thresholds | *(none)* |
 | `--token-file` | - | Read API token from file | *(unset)* |
@@ -569,6 +570,7 @@ sudo chmod 0700 /usr/local/libexec/pulse-queue-depth
 | `--enable-kubernetes` | `PULSE_ENABLE_KUBERNETES` | Enable Kubernetes metrics | `false` (installer auto-detect if not configured) |
 | `--enable-proxmox` | `PULSE_ENABLE_PROXMOX` | Enable Proxmox integration | `false` |
 | `--proxmox-type` | `PULSE_PROXMOX_TYPE` | Proxmox type: `pve` or `pbs` | *(auto-detect)* |
+| `--disable-cluster-peer-sensors` | `PULSE_DISABLE_CLUSTER_PEER_SENSORS` | Skip SSH sensor collection from Proxmox cluster peers | `false` |
 | `--enable-commands` | `PULSE_ENABLE_COMMANDS` | Enable Pulse command execution: Docker / Podman container actions from the UI (start/stop/restart/update), Patrol actions, starting a stopped Proxmox guest after an admin approves it, and Proxmox LXC Docker inventory (disabled by default) | `false` |
 | `--command-authority` | `PULSE_COMMAND_AUTHORITY` | Local command authority ceiling: `monitoring-only`, `command-capable`, or `legacy` | *(derived from flags)* |
 | `--disable-commands` | `PULSE_DISABLE_COMMANDS` | **Deprecated** (commands are disabled by default) | - |
@@ -588,10 +590,14 @@ sudo chmod 0700 /usr/local/libexec/pulse-queue-depth
 | `--enable-live-logs` | `PULSE_ENABLE_LIVE_LOGS` | Allow Pulse administrators to request a bounded, masked log tail from a container on this host | `false` |
 | `--docker-compose-sources` | `PULSE_DOCKER_COMPOSE_SOURCES` | Path to the host-owned Compose project source registry | *(none)* |
 | `--deploy-ssh-user` | `PULSE_DEPLOY_SSH_USER` | SSH user for peer deploy fan-out (non-root requires passwordless sudo) | `root` |
+| `--cacert` | `PULSE_CACERT` | Path to a custom CA bundle for agent HTTPS transport | *(system trust store)* |
+| `--server-fingerprint` | `PULSE_SERVER_FINGERPRINT` | Expected Pulse server TLS certificate SHA-256 fingerprint for certificate pinning | *(none)* |
 | `--insecure` | `PULSE_INSECURE_SKIP_VERIFY` | Skip TLS verification | `false` |
 | `--allow-plaintext-http` | `PULSE_AGENT_ALLOW_PLAINTEXT_HTTP` | Allow plain HTTP to a Pulse server at an address that is not local. Local-network Pulse URLs (private IP, single-label, `.local`/`.lan`/`.home`/`.home.arpa`/`.internal`, or resolves to private addresses) already work over HTTP for the primary URL without this flag. The flag extends plain HTTP to any host, including servers numbered from public IP space. Sends the API token in cleartext; only for networks you fully control. Report-only observers still need their own `allowPlaintextHTTP` opt-in | `false` |
 | `--hostname` | `PULSE_HOSTNAME` | Override hostname | *(OS hostname)* |
 | `--agent-id` | `PULSE_AGENT_ID` | Unique agent identifier | *(saved ID, then machine ID)* |
+| `--agent-id-file` | `PULSE_AGENT_ID_FILE` | Path to a file storing the agent identifier (read on start, written on first start). Mount this file or `--state-dir` as a volume to keep identity stable across container recreation | `<state-dir>/agent-id` |
+| `--state-dir` | `PULSE_STATE_DIR` | Persistent state directory for saved agent identity, runtime/saved token, and report buffers | `/var/lib/pulse-agent` (Linux/macOS), `%ProgramData%\Pulse` (Windows) |
 | `--report-ip` | `PULSE_REPORT_IP` | Override reported IP (multi-NIC) | *(auto)* |
 | `--disable-ceph` | `PULSE_DISABLE_CEPH` | Disable local Ceph status polling | `false` |
 | `--tag` | `PULSE_TAGS` | Apply tags (repeatable or CSV, at most 32, each up to 64 bytes) | *(none)* |
@@ -601,7 +607,8 @@ sudo chmod 0700 /usr/local/libexec/pulse-queue-depth
 
 Use `--health-addr :9191` only when another host must scrape the
 health/metrics endpoint over the network. Use `--health-addr ""` or
-`PULSE_HEALTH_ADDR=off` to disable that listener.
+`PULSE_HEALTH_ADDR=off` (`none` and `disabled` are also accepted) to disable
+that listener.
 
 **Token resolution order**: `--token` → `--token-file` → `PULSE_TOKEN` → the `token` file in the state directory (`<state-dir>/token`; the default state directory is `/var/lib/pulse-agent` on Linux and macOS and `%ProgramData%\Pulse` on Windows).
 
@@ -921,7 +928,9 @@ The agent can report S.M.A.R.T. disk temperatures, health status, identity, and 
 
 ## Auto-Update
 
-Eligible v6 agents automatically check the Pulse server for updates every hour.
+Eligible v6 agents check the Pulse server for updates shortly after startup,
+every hour while running, and when a server report acknowledgement advertises a
+newer server version.
 The check is asynchronous: updating the Pulse server changes the target version,
 but does not prove every agent is online, eligible, or already current. When a
 new version is available:
@@ -937,8 +946,9 @@ Use the manual update path for v5 agents, PVE host agents and agents with
 auto-update disabled. For a failed or uncertain update, first follow
 [Agent Not Updating](#agent-not-updating); a manual command is not a diagnostic
 retry or a repair for every automatic-update failure. For a planned manual
-update, open an outdated-agent notice or
-`/settings/infrastructure?agentDoctor=1` to open **Agent Doctor** and
+update, open an outdated-agent notice or **Agent Doctor** at
+`/settings/infrastructure/agent-doctor` (legacy
+`/settings/infrastructure?agentDoctor=1` links still open the same page) and
 copy the command for each reported host. Pulse does not remotely execute those
 commands.
 
@@ -1118,20 +1128,25 @@ The agent exposes HTTP endpoints for health checks and Prometheus metrics on `12
 
 | Endpoint | Description |
 |----------|-------------|
-| `/healthz` | Liveness probe - returns 200 if agent is running |
-| `/readyz` | Readiness probe - returns 200 when agents are initialized |
+| `/healthz` | Liveness probe - returns HTTP 200 (`ok`) if the agent health server is running |
+| `/readyz` | Readiness probe - returns a JSON readiness snapshot with HTTP 200 when enabled modules are initialized, or HTTP 503 while not ready |
+| `/status` | Runtime status snapshot - always returns HTTP 200 with the same JSON overall `ready` flag and per-module state, last error, and update time |
 | `/metrics` | Prometheus metrics |
 
 ### Prometheus Metrics
 
 | Metric | Type | Description |
 |--------|------|-------------|
-| `pulse_agent_info` | Gauge | Agent info with version, host_enabled, docker_enabled labels |
-| `pulse_agent_up` | Gauge | 1 when running, 0 when shutting down |
+| `pulse_agent_info` | Gauge | Agent info with `version`, `host_enabled`, `docker_enabled`, and `kubernetes_enabled` labels |
+| `pulse_agent_up` | Gauge | `1` when running, `0` when shutting down |
+| `pulse_agent_module_enabled` | Gauge | `1` when a module is configured to run, `0` when disabled (`module` label) |
+| `pulse_agent_module_ready` | Gauge | `1` when a configured module initialized successfully, `0` when not ready (`module` label) |
+| `pulse_agent_destination_configured` | Gauge | `1` for each configured primary or observer report destination (`module`, `destination`, `role` labels) |
+| `pulse_agent_destination_delivery_up` | Gauge | `1` when the latest report delivery to a destination succeeded, `0` otherwise (`module`, `destination`, `role` labels) |
 
 ### Kubernetes Probes
 
-The default listener binds to `127.0.0.1`, which kubelet probes cannot reach because they connect to the pod IP. Set `PULSE_HEALTH_ADDR=:9191` (or `--health-addr :9191`) on the agent container before using these probes. That exposes `/healthz`, `/readyz` and `/metrics` on all pod interfaces, so restrict access with a NetworkPolicy.
+The default listener binds to `127.0.0.1`, which kubelet probes cannot reach because they connect to the pod IP. Set `PULSE_HEALTH_ADDR=:9191` (or `--health-addr :9191`) on the agent container before using these probes. That exposes `/healthz`, `/readyz`, `/status`, and `/metrics` on all pod interfaces, so restrict access with a NetworkPolicy.
 
 ```yaml
 livenessProbe:
@@ -1151,7 +1166,7 @@ readinessProbe:
 
 ### Disable Health Server
 
-Set `--health-addr=""` or `PULSE_HEALTH_ADDR=off` to disable the health/metrics server. Set `--health-addr :9191` when network Prometheus scraping is intentional.
+Set `--health-addr=""` or `PULSE_HEALTH_ADDR=off` (`none` and `disabled` are also accepted) to disable the health/metrics server. Set `--health-addr :9191` when network Prometheus scraping is intentional.
 
 ## Troubleshooting
 
