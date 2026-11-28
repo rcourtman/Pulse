@@ -1,0 +1,39 @@
+{
+  "version": 1,
+  "base_sha": "6f708f829eb3ccca653a2b2a8da5910d21de3c8a",
+  "verified_at": "2026-11-28T09:45:56Z",
+  "result": "passed",
+  "changed_paths": [
+    "frontend-modern/src/components/Workloads/GuestDrawer.tsx",
+    "frontend-modern/src/components/Workloads/GuestDrawerOverview.tsx"
+  ],
+  "content_sha256": {
+    "frontend-modern/src/components/Workloads/GuestDrawer.tsx": "7f16c103f434422d698cc2c60a84094e89451b254529937c77b255dac5c6f903",
+    "frontend-modern/src/components/Workloads/GuestDrawerOverview.tsx": "adf909f6ab9dc962af3a0fd6ce8d34e8d96ac72c600852ea6452788d57194060"
+  },
+  "routes": [
+    "/proxmox/overview",
+    "/vmware/overview"
+  ],
+  "viewports": [
+    {
+      "width": 1440,
+      "height": 940
+    },
+    {
+      "width": 360,
+      "height": 820
+    }
+  ],
+  "states": [
+    "Paired production Vite builds of unpatched base (9ab10347ba/6f708f829e) and patched HEAD served locally via pulse-worker-browser over identical synthetic REST and WebSocket payloads in desktop Chromium (1440x940 light theme, en-GB, UTC) and touch phone WebKit (360x820 dark theme, en-GB, UTC).",
+    "/proxmox/overview stale db-primary GuestDrawer: inline History defers all 7 platform metrics (cpu, memory, disk, netin, netout, diskread, diskwrite) as last known with concise notes instead of current, and guest-drawer-facts preserves static capacities 8.00 GB RAM and 100 GB disk without showing stale used bytes (vs 6.00 GB of 8.00 GB RAM and 48.0 GB of 100 GB disk on unpatched base).",
+    "/proxmox/overview live WebSocket rawData recovery on db-primary without page reload: clears Readings are stale notice, restores Running 2 / Attention 0 and green indicator, restores all 7 History metrics to current, and restores 6.00 GB of 8.00 GB RAM and 48.0 GB of 100 GB disk in guest-drawer-facts.",
+    "/vmware/overview stale billing-api-vm GuestDrawer: inline History defers cpu, memory, and disk as last known while leaving unavailable network/disk I/O unflagged, and guest-drawer-facts preserves static 8.00 GB RAM and 80.0 GB disk beside 10.20.0.41 (vs 4.40 GB of 8.00 GB RAM and 40.0 GB of 80.0 GB disk on unpatched base).",
+    "Zero console errors, zero page errors, zero HTTP >= 400 responses, and 0px horizontal overflow across all captured desktop and phone states; all 10 paired before/after PNGs were visually inspected."
+  ],
+  "interactions": [
+    "Loaded /proxmox/overview on desktop Chromium (1440x940 light) and touch WebKit phone (360x820 dark), clicked stale workload db-primary to open GuestDrawer, verified deferred last-known History metrics and static RAM/disk facts, scrolled facts into view, and sent live WebSocket rawData recovery without reload to verify reactive restoration.",
+    "Navigated to /vmware/overview on desktop Chromium and touch WebKit phone, clicked stale VM billing-api-vm to open GuestDrawer, and verified deferred last-known History metrics and static 8.00 GB RAM and 80.0 GB disk facts."
+  ]
+}

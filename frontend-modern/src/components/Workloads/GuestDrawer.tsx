@@ -11,6 +11,7 @@ import {
   getGuestDrawerGuestReadPrecaution,
   getGuestDrawerCurrentMetrics,
   getGuestDrawerDeferredMetrics,
+  type GuestDrawerHistoryDeferredMetric,
   type GuestDrawerProps,
 } from './guestDrawerModel';
 import { getCanonicalWorkloadId } from '@/utils/workloads';
@@ -50,8 +51,28 @@ const GuestDrawerContent: Component<GuestDrawerProps> = (props) => {
     workloadActionAgentTitle,
   } = useGuestDrawerState(props);
   const headingId = () => `guest-drawer-heading-${guestId()}`;
-  const historyCurrentMetrics = createMemo(() => getGuestDrawerCurrentMetrics(props.guest));
-  const historyDeferredMetrics = createMemo(() => getGuestDrawerDeferredMetrics(props.guest));
+  const baseCurrentMetrics = createMemo(() => getGuestDrawerCurrentMetrics(props.guest));
+  const historyCurrentMetrics = createMemo(() => {
+    const current = baseCurrentMetrics();
+    if (!props.guest.telemetryStale) return current;
+    return props.guest.disksFromAgent && current.disk !== undefined ? { disk: current.disk } : {};
+  });
+  const historyDeferredMetrics = createMemo(() => {
+    const deferred = getGuestDrawerDeferredMetrics(props.guest);
+    const stale = props.guest.telemetryStale;
+    if (!stale) return deferred;
+    const staleMessage = stale.age
+      ? `Last value received ${stale.age} ago.`
+      : 'Last value received before polling stopped.';
+    const next: Record<string, GuestDrawerHistoryDeferredMetric> = { ...deferred };
+    for (const [metric, lastKnownValue] of Object.entries(baseCurrentMetrics())) {
+      if (metric === 'disk' && props.guest.disksFromAgent) continue;
+      if (!next[metric] && lastKnownValue !== undefined) {
+        next[metric] = { lastKnownValue, message: staleMessage };
+      }
+    }
+    return next;
+  });
 
   const guestReadPrecaution = createMemo(() => getGuestDrawerGuestReadPrecaution(props.guest));
 

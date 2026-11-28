@@ -1,10 +1,27 @@
-import { cleanup, render, screen } from '@solidjs/testing-library';
+import { cleanup, render, screen, waitFor } from '@solidjs/testing-library';
 import { createSignal } from 'solid-js';
-import { afterEach, describe, expect, it } from 'vitest';
+import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { GuestDrawer } from '../GuestDrawer';
 import { NodeGroupHeader } from '@/components/shared/NodeGroupHeader';
+import { resetCreateNonSuspendingQueryCacheForTest } from '@/hooks/createNonSuspendingQuery';
 import type { Node } from '@/types/api';
 import type { WorkloadGuest } from '@/types/workloads';
+
+vi.mock('@/api/charts', async (importOriginal) => {
+  const actual = await importOriginal<typeof import('@/api/charts')>();
+  return {
+    ...actual,
+    ChartsAPI: {
+      ...actual.ChartsAPI,
+      getMetricsHistory: vi.fn().mockResolvedValue({
+        resourceType: 'vm',
+        resourceId: 'prod-pve-stale-101',
+        range: '24h',
+        metrics: {},
+      }),
+    },
+  };
+});
 
 const makeGuest = (overrides: Partial<WorkloadGuest> = {}): WorkloadGuest => ({
   id: 'prod-pve-stale-101',
@@ -16,7 +33,17 @@ const makeGuest = (overrides: Partial<WorkloadGuest> = {}): WorkloadGuest => ({
   status: 'running',
   cpu: 0.42,
   cpus: 4,
-  memory: { total: 8 * 1024 ** 3, used: 6 * 1024 ** 3, free: 2 * 1024 ** 3, usage: 75 },
+  memory: {
+    total: 8 * 1024 ** 3,
+    used: 6 * 1024 ** 3,
+    free: 2 * 1024 ** 3,
+    usage: 75,
+    observation: {
+      state: 'current',
+      source: 'guest-agent-meminfo',
+      observedAt: new Date().toISOString(),
+    },
+  },
   disk: { total: 100 * 1024 ** 3, used: 48 * 1024 ** 3, free: 52 * 1024 ** 3, usage: 48 },
   networkIn: 120000,
   networkOut: 85000,
@@ -53,10 +80,17 @@ const makeNode = (overrides: Partial<Node> = {}): Node => ({
   ...overrides,
 });
 
-afterEach(cleanup);
+beforeEach(() => {
+  resetCreateNonSuspendingQueryCacheForTest();
+});
+
+afterEach(() => {
+  cleanup();
+  resetCreateNonSuspendingQueryCacheForTest();
+});
 
 describe('GuestDrawer and NodeGroupHeader stale telemetry presentation', () => {
-  it('shows stale warning header status and notice in GuestDrawer and clears reactively on recovery', () => {
+  it('shows stale warning header status, defers platform metrics with static capacities, and clears reactively on recovery', async () => {
     const stale = {
       label: 'Stale data',
       age: '18m',
@@ -73,9 +107,67 @@ describe('GuestDrawer and NodeGroupHeader stale telemetry presentation', () => {
     expect(notice).toHaveTextContent(stale.detail);
     expect(screen.getByRole('img', { name: stale.detail })).toBeVisible();
 
+    const facts = screen.getByTestId('guest-drawer-facts');
+    expect(facts).toHaveTextContent('8.00 GB RAM');
+    expect(facts).not.toHaveTextContent('6.00 GB of 8.00 GB RAM');
+    expect(facts).toHaveTextContent('100 GB disk');
+    expect(facts).not.toHaveTextContent('48.0 GB of 100 GB disk');
+
+    await waitFor(() => {
+      const historyRegion = screen.getByTestId('guest-history-region');
+      const cpuDeferred = historyRegion.querySelector('[data-history-deferred="cpu"]');
+      expect(cpuDeferred).not.toBeNull();
+      expect(cpuDeferred).toHaveTextContent('Last value received 18m ago.');
+      expect(historyRegion.querySelector('[data-history-deferred="memory"]')).not.toBeNull();
+      expect(historyRegion.querySelector('[data-history-deferred="disk"]')).not.toBeNull();
+      expect(historyRegion.querySelector('[data-history-deferred="netin"]')).not.toBeNull();
+      expect(historyRegion.querySelector('[data-history-deferred="netout"]')).not.toBeNull();
+      expect(historyRegion.querySelector('[data-history-deferred="diskread"]')).not.toBeNull();
+      expect(historyRegion.querySelector('[data-history-deferred="diskwrite"]')).not.toBeNull();
+    });
+
     setGuest(makeGuest({ telemetryStale: undefined }));
     expect(screen.queryByTestId('guest-telemetry-stale-notice')).not.toBeInTheDocument();
     expect(screen.getByRole('img', { name: 'Running' })).toBeVisible();
+    expect(facts).toHaveTextContent('6.00 GB of 8.00 GB RAM');
+    expect(facts).toHaveTextContent('48.0 GB of 100 GB disk');
+    await waitFor(() => {
+      const historyRegion = screen.getByTestId('guest-history-region');
+      expect(historyRegion.querySelector('[data-history-deferred="cpu"]')).toBeNull();
+      expect(historyRegion.querySelector('[data-history-deferred="memory"]')).toBeNull();
+      expect(historyRegion.querySelector('[data-history-deferred="disk"]')).toBeNull();
+    });
+  });
+
+  it('keeps fresh linked-agent disk live while deferring stale hypervisor metrics', async () => {
+    const stale = {
+      label: 'Stale data',
+      age: '18m',
+      detail: 'No Proxmox report for 18m. Showing the last values received.',
+    };
+    render(() => (
+      <GuestDrawer
+        guest={makeGuest({
+          telemetryStale: stale,
+          disksFromAgent: true,
+          agentStale: false,
+          agentKind: 'pulse',
+        })}
+        onClose={() => {}}
+      />
+    ));
+
+    const facts = screen.getByTestId('guest-drawer-facts');
+    expect(facts).toHaveTextContent('8.00 GB RAM');
+    expect(facts).not.toHaveTextContent('6.00 GB of 8.00 GB RAM');
+    expect(facts).toHaveTextContent('48.0 GB of 100 GB disk');
+
+    await waitFor(() => {
+      const historyRegion = screen.getByTestId('guest-history-region');
+      expect(historyRegion.querySelector('[data-history-deferred="cpu"]')).not.toBeNull();
+      expect(historyRegion.querySelector('[data-history-deferred="memory"]')).not.toBeNull();
+      expect(historyRegion.querySelector('[data-history-deferred="disk"]')).toBeNull();
+    });
   });
 
   it('shows a Stale data badge on NodeGroupHeader when node connection health is stale', () => {
