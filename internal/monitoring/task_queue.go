@@ -386,11 +386,36 @@ func (q *TaskQueue) Snapshot() QueueSnapshot {
 	q.mu.Lock()
 	defer q.mu.Unlock()
 
+	snapshot := q.snapshotTimingLocked()
+	snapshot.PerType = maps.Clone(q.queuedByType)
+	return snapshot
+}
+
+type queuedTypeCount struct {
+	kind  string
+	count int
+}
+
+// snapshotWithTypeCounts captures timing and counts under one lock, like
+// Snapshot, but copies counts into caller-owned scratch space rather than
+// cloning the per-type map. The returned QueueSnapshot has no PerType map.
+func (q *TaskQueue) snapshotWithTypeCounts(dst []queuedTypeCount) (QueueSnapshot, []queuedTypeCount) {
+	q.mu.Lock()
+	defer q.mu.Unlock()
+
+	snapshot := q.snapshotTimingLocked()
+	dst = dst[:0]
+	for kind, count := range q.queuedByType {
+		dst = append(dst, queuedTypeCount{kind: kind, count: count})
+	}
+	return snapshot, dst
+}
+
+func (q *TaskQueue) snapshotTimingLocked() QueueSnapshot {
 	now := time.Now()
 	snapshot := QueueSnapshot{
 		Depth:            len(q.heap),
 		DueWithinSeconds: q.heap.countDue(0, now.Add(12*time.Second)),
-		PerType:          maps.Clone(q.queuedByType),
 	}
 	if oldest := q.heap.oldestTimestamped(0); !oldest.IsZero() {
 		snapshot.OldestOverdueSeconds = max(0, now.Sub(oldest)).Seconds()
