@@ -245,6 +245,7 @@ func testGuestWindowsBootstrapPolling(t *testing.T) {
 		for _, collector := range []string{"cluster", "node"} {
 			for _, state := range []string{"cold", "expired"} {
 				t.Run(kind+"/"+collector+"/"+state, func(t *testing.T) {
+					t.Parallel()
 					f, s := newWindowsBootstrapFixture(t)
 					client := windowsBootstrapClient(t, s.URL, kind)
 					m := windowsBootstrapMonitor(t)
@@ -351,6 +352,7 @@ func testGuestWindowsBootstrapProcessRestart(t *testing.T) {
 	for _, kind := range []string{"client", "cluster-client"} {
 		for _, collector := range []string{"cluster", "node"} {
 			t.Run(kind+"/"+collector, func(t *testing.T) {
+				t.Parallel()
 				f, s := newWindowsBootstrapFixture(t)
 				var firstPID int
 				for poll := 1; poll <= 2; poll++ {
@@ -396,7 +398,9 @@ func testGuestWindowsBootstrapSafety(t *testing.T) {
 	for _, kind := range []string{"client", "cluster-client"} {
 		for _, collector := range []string{"cluster", "node"} {
 			t.Run(kind+"/"+collector, func(t *testing.T) {
+				t.Parallel()
 				t.Run("authoritative-lock", func(t *testing.T) {
+					t.Parallel()
 					f, s := newWindowsBootstrapFixture(t)
 					f.mu.Lock()
 					f.locked = true
@@ -420,6 +424,7 @@ func testGuestWindowsBootstrapSafety(t *testing.T) {
 					checkBootstrapHistory(t, m, makeGuestID("bootstrap", "node", 105), "disk", []float64{25})
 				})
 				t.Run("in-flight-channel", func(t *testing.T) {
+					t.Parallel()
 					f, s := newWindowsBootstrapFixture(t)
 					f.mu.Lock()
 					f.fsEntered, f.fsRelease = make(chan struct{}), make(chan struct{})
@@ -451,6 +456,7 @@ func testGuestWindowsBootstrapSafety(t *testing.T) {
 				})
 				for _, uncertain := range []string{"get-fsinfo", "network-get-interfaces", "get-osinfo", "info"} {
 					t.Run("uncertain-"+uncertain, func(t *testing.T) {
+						t.Parallel()
 						f, s := newWindowsBootstrapFixture(t)
 						f.mu.Lock()
 						f.uncertain = uncertain
@@ -507,6 +513,7 @@ func testGuestWindowsBootstrapSafety(t *testing.T) {
 					})
 				}
 				t.Run("linux-unknown-and-replacement", func(t *testing.T) {
+					t.Parallel()
 					f, s := newWindowsBootstrapFixture(t)
 					m := windowsBootstrapMonitor(t)
 					client := windowsBootstrapClient(t, s.URL, kind)

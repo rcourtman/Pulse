@@ -89,6 +89,7 @@ func TestInterruptedDisorderedImportReplayResumesEveryOccurrence(t *testing.T) {
 		{name: "simulated crash after the mid-pass checkpoint", simulateCrash: true},
 	} {
 		t.Run(tc.name, func(t *testing.T) {
+			t.Parallel()
 			var webhookRequests atomic.Int64
 			server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 				webhookRequests.Add(1)

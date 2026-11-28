@@ -22,6 +22,7 @@ import (
 // monitor's per-endpoint projection. The independent sibling stays usable,
 // while Proxmox's online state remains distinct from Pulse's usable session.
 func TestClusterRecoverySessionEndpointProjection(t *testing.T) {
+	t.Parallel()
 	var phase atomic.Int32
 	var recoveryLogins atomic.Int32
 	newEndpoint := func(primary bool) *httptest.Server {

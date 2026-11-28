@@ -168,6 +168,7 @@ safe_systemctl() { echo UNEXPECTED_SYSTEMCTL; }
 // doubles and private saved configuration. Optional updater failure must not
 // strand monitoring; failed configuration publication must preserve all bytes.
 func TestRootAutoUpdateSetupCompletion(t *testing.T) {
+	t.Parallel()
 	if runtime.GOOS == "windows" {
 		t.Skip("Unix server installer fixture")
 	}
@@ -196,6 +197,7 @@ func TestRootAutoUpdateSetupCompletion(t *testing.T) {
 					caller = "conditional-main"
 				}
 				t.Run(service+"/"+fault+"/"+caller, func(t *testing.T) {
+					t.Parallel()
 					dir := t.TempDir()
 					config := filepath.Join(dir, "system.json")
 					original := `{"autoUpdateEnabled":false,"updateChannel":"rc","pollingInterval":17,"marker":"preserved"}` + "\n"

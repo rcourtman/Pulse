@@ -145,6 +145,7 @@ func TestPVEStorageHTTPInvalidResponseRetainsHistory(t *testing.T) {
 		for _, cold := range []bool{false, true} {
 			for name, body := range cases {
 				t.Run(fmt.Sprintf("%s/cold=%t/%s", kind, cold, name), func(t *testing.T) {
+					t.Parallel()
 					h := newStorageInventoryHTTPFixture(t)
 					f := h.f
 					h.poll(t, 4)

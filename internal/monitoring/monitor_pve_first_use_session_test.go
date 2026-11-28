@@ -28,6 +28,7 @@ import (
 // polling session is refused; ordinary later recovery must precede removing
 // the consumer's Unreachable state. No guest, backup or native host is used.
 func TestClusterFirstUsePasswordEndpointProjection(t *testing.T) {
+	t.Parallel()
 	var acceptMember atomic.Bool
 	var memberLogins atomic.Int32
 	endpoint := func(member bool) *httptest.Server {

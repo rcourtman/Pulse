@@ -2081,8 +2081,14 @@ func TestGuestAgentBackupMonitoringContract(t *testing.T) {
 }
 
 func TestGuestAgentOptionalReadOrderingContract(t *testing.T) {
-	t.Run("current-status", func(t *testing.T) { testGuestAgentOptionalReadOrdering(t, false) })
-	t.Run("recent-evidence-without-status", func(t *testing.T) { testGuestAgentOptionalReadOrdering(t, true) })
+	t.Run("current-status", func(t *testing.T) {
+		t.Parallel()
+		testGuestAgentOptionalReadOrdering(t, false)
+	})
+	t.Run("recent-evidence-without-status", func(t *testing.T) {
+		t.Parallel()
+		testGuestAgentOptionalReadOrdering(t, true)
+	})
 }
 
 func TestGuestWindowsMeminfoPollingContract(t *testing.T) {
@@ -2090,9 +2096,18 @@ func TestGuestWindowsMeminfoPollingContract(t *testing.T) {
 }
 
 func TestGuestWindowsRestartPollingContract(t *testing.T) {
-	t.Run("cold-and-expired", testGuestWindowsBootstrapPolling)
-	t.Run("process-restart", testGuestWindowsBootstrapProcessRestart)
-	t.Run("admission-and-identity", testGuestWindowsBootstrapSafety)
+	t.Run("cold-and-expired", func(t *testing.T) {
+		t.Parallel()
+		testGuestWindowsBootstrapPolling(t)
+	})
+	t.Run("process-restart", func(t *testing.T) {
+		t.Parallel()
+		testGuestWindowsBootstrapProcessRestart(t)
+	})
+	t.Run("admission-and-identity", func(t *testing.T) {
+		t.Parallel()
+		testGuestWindowsBootstrapSafety(t)
+	})
 }
 
 func TestGuestMetadataRejectionRecoveryContract(t *testing.T) {

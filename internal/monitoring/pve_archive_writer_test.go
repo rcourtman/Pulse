@@ -22,7 +22,10 @@ import (
 // protection. No provider write is needed and the live window stays at 200.
 func TestPVEArchiveWritersOutsideDisplayWindow(t *testing.T) {
 	for _, kind := range []string{"direct", "scheduled"} {
-		t.Run(kind, func(t *testing.T) { testPVEArchiveWritersOutsideDisplayWindow(t, kind == "scheduled") })
+		t.Run(kind, func(t *testing.T) {
+			t.Parallel()
+			testPVEArchiveWritersOutsideDisplayWindow(t, kind == "scheduled")
+		})
 	}
 }
 

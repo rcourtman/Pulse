@@ -233,6 +233,7 @@ smoke_test_pve_auto_register_token "$FIXTURE_ORIGIN" 'synthetic@pve!monitor' 'sy
 // host/guest/ACL mutation. Keep their real payload mechanism and retry policy;
 // the function's other validation and state transitions are not claimed here.
 func TestRootInstallerRegistrationCurlConfigIsolation(t *testing.T) {
+	t.Parallel()
 	content, err := os.ReadFile(rootCurlFixtureSource(t))
 	if err != nil {
 		t.Fatal(err)
@@ -254,6 +255,7 @@ func TestRootInstallerRegistrationCurlConfigIsolation(t *testing.T) {
 		}
 		for _, unavailable := range []bool{false, true} {
 			t.Run(fmt.Sprintf("%s/unavailable-%t", phase, unavailable), func(t *testing.T) {
+				t.Parallel()
 				root := t.TempDir()
 				path := "/api/setup-script-url"
 				if phase == "register" {

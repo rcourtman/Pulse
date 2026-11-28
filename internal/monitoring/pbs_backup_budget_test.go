@@ -140,6 +140,7 @@ func exercisePBSBudgetAcceptedListings(t *testing.T) {
 		for _, boundary := range []string{"datastore", "namespace", "snapshots", "tasks"} {
 			for _, cold := range []bool{false, true} {
 				t.Run(fmt.Sprintf("%s/%s/cold=%t", kind, boundary, cold), func(t *testing.T) {
+					t.Parallel()
 					f := newPBSBudgetFixture(t, kind, boundary)
 					f.collect(t, context.Background())
 					oldRaw := f.m.state.GetSnapshot().PBSBackups

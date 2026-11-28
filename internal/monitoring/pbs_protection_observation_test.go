@@ -157,6 +157,7 @@ func TestPBSOrdinaryPollNewestRemovalInvalidatesCappedCache(t *testing.T) {
 	for _, kind := range []string{"vm", "ct"} {
 		for _, failure := range []int{0, http.StatusServiceUnavailable, http.StatusForbidden} {
 			t.Run(fmt.Sprintf("%s/refresh-status-%d", kind, failure), func(t *testing.T) {
+				t.Parallel()
 				f := newPBSPosturePollFixture(t, 1, kind)
 				var phase, snapshotReads atomic.Int32
 				oldAt := time.Unix(f.backupAt, 0).Add(-8 * 24 * time.Hour).Unix()
@@ -618,6 +619,7 @@ func TestPBSFailedRefreshDoesNotRenewCarriedPointEvidence(t *testing.T) {
 		for _, scope := range []string{"snapshot", "datastore"} {
 			for _, failure := range []int{http.StatusServiceUnavailable, http.StatusForbidden} {
 				t.Run(fmt.Sprintf("%s/%s/%d", kind, scope, failure), func(t *testing.T) {
+					t.Parallel()
 					f := newPBSPosturePollFixture(t, 2, kind)
 					var phase, snapshotReads atomic.Int32
 					server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {

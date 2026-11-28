@@ -31,6 +31,7 @@ func TestPBSDatastoreWholeResponseRetainsEvidence(t *testing.T) {
 				{name: "partial", body: `{"data":[]}`, status: http.StatusPartialContent},
 			} {
 				t.Run(fmt.Sprintf("%s/cold=%t/%s", kind, cold, scenario.name), func(t *testing.T) {
+					t.Parallel()
 					f := newPBSNamespacePollFixture(t, kind)
 					f.poll(t, "pbs-main")
 					before := f.points(t, "pbs-main")

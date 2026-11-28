@@ -20,6 +20,7 @@ import (
 // real signed CLI and isolated files. Inject execute denial using file modes,
 // not mount administration. No service, token, boot job or appliance is used.
 func TestTrueNASScaleInstallerChecksVerifiedCollectorOffDownloadScratch(t *testing.T) {
+	t.Parallel()
 	if _, err := exec.LookPath("ssh-keygen"); err != nil {
 		t.Skip("signed installer fixture requires ssh-keygen")
 	}
@@ -127,6 +128,7 @@ mv() {
 		{name: "changed-staged-bytes", fault: "changed-transfer", upgrade: true, stage: true, exit: 12, verdict: "does not match the verified download"},
 	} {
 		t.Run(tc.name, func(t *testing.T) {
+			t.Parallel()
 			root := t.TempDir()
 			dataParent := filepath.Join(root, "data")
 			storage := filepath.Join(dataParent, "pulse-agent")

@@ -41,6 +41,7 @@ func testGuestAgentOptionalReadOrdering(t *testing.T, withoutStatus bool) {
 				continue // No-status enrichment does not issue a memory fallback.
 			}
 			t.Run(clientKind+"/"+tc.name, func(t *testing.T) {
+				t.Parallel()
 				const mib = uint64(1024 * 1024)
 				var poll atomic.Int32
 				var mu sync.Mutex
