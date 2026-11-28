@@ -112,9 +112,7 @@ func wantMonitoringWebSocketClosed(t *testing.T, conn *gorillaws.Conn) {
 func TestMonitoringWebSocketRejectsWithdrawnTokenAuthority(t *testing.T) {
 	for _, transport := range []string{"header", "bearer", "query"} {
 		for _, change := range []string{"revoked", "expired", "read_scope_removed", "org_rebound", "identity_replaced", "principal_replaced", "invalid_role"} {
-			transport, change := transport, change
 			t.Run(transport+"/"+change, func(t *testing.T) {
-				t.Parallel()
 				_, cfg, server, hub := newMonitoringWebSocketRouter(t)
 				primary := openMonitoringWebSocket(t, server, monitoringWebSocketToken, transport)
 				control := openMonitoringWebSocket(t, server, monitoringWebSocketControl, transport)

@@ -69,9 +69,7 @@ func TestSecurityTokenMutationRoutesFollowCallerWithdrawal(t *testing.T) {
 	t.Cleanup(resetAdminBypassState)
 	for _, operation := range []string{"create", "rename", "scope"} {
 		for _, change := range []string{"revoked", "rotated", "scope removed", "expired", "rebound", "owner changed"} {
-			operation, change := operation, change
 			t.Run(operation+"/"+change, func(t *testing.T) {
-				t.Parallel()
 				router, cfg, caller, target := tokenWithdrawalFixture(t)
 				method, path, body := http.MethodPatch, "/api/security/tokens/"+target.ID, `{"name":"Current collector"}`
 				if operation == "create" {

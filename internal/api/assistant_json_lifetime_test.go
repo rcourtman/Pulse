@@ -45,15 +45,18 @@ func newAssistantJSONFixture(t *testing.T, kind string, scopes []string) *assist
 	t.Helper()
 	licensed := &atomic.Bool{}
 	licensed.Store(true)
-	var binder func(extensions.AIAlertAnalysisEndpoints, extensions.AIAlertAnalysisRuntime) extensions.AIAlertAnalysisEndpoints
 	if kind == "kubernetes" {
-		binder = func(defaults extensions.AIAlertAnalysisEndpoints, runtime extensions.AIAlertAnalysisRuntime) extensions.AIAlertAnalysisEndpoints {
+		aiAlertAnalysisBindMu.RLock()
+		previous := aiAlertAnalysisEndpointsBinder
+		aiAlertAnalysisBindMu.RUnlock()
+		SetAIAlertAnalysisEndpointsBinder(func(defaults extensions.AIAlertAnalysisEndpoints, runtime extensions.AIAlertAnalysisRuntime) extensions.AIAlertAnalysisEndpoints {
 			return assistantJSONAnalysisFixture{defaults, runtime, licensed}
-		}
+		})
+		defer SetAIAlertAnalysisEndpointsBinder(previous)
 	}
 	// Share the held text-only Ollama and native full-Router setup. The JSON
 	// requests below never open an SSE reader or execute a tool/agent/command.
-	f := &assistantJSONFixture{newAssistantStreamFixtureWithBinder(t, "json-"+kind, scopes, binder), kind, licensed}
+	f := &assistantJSONFixture{newAssistantStreamFixture(t, "json-"+kind, scopes), kind, licensed}
 	if kind == "kubernetes" {
 		registry := unifiedresources.NewRegistry(nil)
 		registry.IngestSnapshot(models.StateSnapshot{KubernetesClusters: []models.KubernetesCluster{
@@ -143,9 +146,7 @@ func TestAssistantJSONWithdrawAuthority(t *testing.T) {
 	for _, kind := range []string{"execute", "kubernetes"} {
 		for _, transport := range []string{"header", "bearer"} {
 			for _, change := range []string{"revoked", "expired", "scope_removed", "org_removed", "credential_replaced", "principal_replaced", "invalid_role", "instance_removed"} {
-				kind, transport, change := kind, transport, change
 				t.Run(kind+"/"+transport+"/"+change, func(t *testing.T) {
-					t.Parallel()
 					f := newAssistantJSONFixture(t, kind, []string{config.ScopeAIExecute})
 					control := f.begin(t, "control", assistantControlToken, "header")
 					primary := f.begin(t, "primary", f.token, transport)
@@ -226,9 +227,7 @@ func TestAssistantJSONPreserveReaders(t *testing.T) {
 
 func TestAssistantJSONPreserveRequestCancellation(t *testing.T) {
 	for _, kind := range []string{"execute", "kubernetes"} {
-		kind := kind
 		t.Run(kind, func(t *testing.T) {
-			t.Parallel()
 			f := newAssistantJSONFixture(t, kind, []string{config.ScopeAIExecute})
 			req := f.request(t, "primary", f.token, "header")
 			ctx, cancel := context.WithCancel(req.Context())

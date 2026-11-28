@@ -64,27 +64,17 @@ type snapshotAuthorityFixture struct {
 	path     string
 }
 
-func setupSnapshotAuthorityEnv(t *testing.T) {
+func newSnapshotAuthorityFixture(t *testing.T, path string, scopes []string) *snapshotAuthorityFixture {
 	t.Helper()
 	setMockModeForTest(t, false)
 	t.Setenv("PULSE_AUTH_BYPASS", "false")
-	InitSessionStore(t.TempDir())
-}
-
-func newSnapshotAuthorityFixture(t *testing.T, path string, scopes []string) *snapshotAuthorityFixture {
-	t.Helper()
-	setupSnapshotAuthorityEnv(t)
-	return newSnapshotAuthorityFixtureWithEnv(t, path, scopes)
-}
-
-func newSnapshotAuthorityFixtureWithEnv(t *testing.T, path string, scopes []string) *snapshotAuthorityFixture {
-	t.Helper()
 	cfg := newTestConfigWithTokens(t,
 		newTokenRecord(t, snapshotAuthorityToken, scopes, nil),
 		newTokenRecord(t, snapshotAuthorityControl, []string{config.ScopeWildcard}, nil),
 	)
 	cfg.AuthUser, cfg.AuthPass = "operator", "fixture-nonempty-hash"
 	cfg.ProxyAuthSecret, cfg.ProxyAuthUserHeader = "snapshot-proxy-fixture", "X-Remote-User"
+	InitSessionStore(cfg.DataPath)
 	router := newTestRouter(t, cfg, nil, nil, nil, nil, "test")
 	t.Cleanup(router.ShutdownResourceStores)
 	now := time.Now().UTC()
@@ -275,14 +265,11 @@ func (f *snapshotAuthorityFixture) changeToken(t *testing.T, change string) {
 }
 
 func TestAgentSnapshotsWithdrawnTokenCannotDisclose(t *testing.T) {
-	setupSnapshotAuthorityEnv(t)
 	for _, path := range snapshotAuthorityPaths {
 		for _, transport := range []string{"header", "bearer"} {
 			for _, change := range []string{"revoked", "expired", "scope", "organization", "credential", "principal"} {
-				path, transport, change := path, transport, change
 				t.Run(path+"/"+transport+"/"+change, func(t *testing.T) {
-					t.Parallel()
-					f := newSnapshotAuthorityFixtureWithEnv(t, path, []string{config.ScopeMonitoringRead, config.ScopeAIExecute})
+					f := newSnapshotAuthorityFixture(t, path, []string{config.ScopeMonitoringRead, config.ScopeAIExecute})
 					control := f.begin(t, snapshotAuthorityControl, "header")
 					primary := f.begin(t, snapshotAuthorityToken, transport)
 					f.changeToken(t, change)
@@ -333,12 +320,9 @@ func TestAgentSnapshotsWithdrawnSessionCannotDisclose(t *testing.T) {
 }
 
 func TestAgentSnapshotsCommandWithdrawalAndCurrentRedaction(t *testing.T) {
-	setupSnapshotAuthorityEnv(t)
 	for _, transport := range []string{"header", "bearer"} {
-		transport := transport
 		t.Run(transport, func(t *testing.T) {
-			t.Parallel()
-			f := newSnapshotAuthorityFixtureWithEnv(t, snapshotAuthorityPaths[0], []string{config.ScopeMonitoringRead, config.ScopeAIExecute})
+			f := newSnapshotAuthorityFixture(t, snapshotAuthorityPaths[0], []string{config.ScopeMonitoringRead, config.ScopeAIExecute})
 			control := f.begin(t, snapshotAuthorityControl, "header")
 			primary := f.begin(t, snapshotAuthorityToken, transport)
 			f.changeToken(t, "command_scope")
@@ -351,12 +335,9 @@ func TestAgentSnapshotsCommandWithdrawalAndCurrentRedaction(t *testing.T) {
 }
 
 func TestAgentSnapshotsWithdrawalWithholdsMissingResourceError(t *testing.T) {
-	setupSnapshotAuthorityEnv(t)
 	for _, kind := range []string{"resource-context", "resource-capabilities"} {
-		kind := kind
 		t.Run(kind, func(t *testing.T) {
-			t.Parallel()
-			f := newSnapshotAuthorityFixtureWithEnv(t, "/api/agent/"+kind+"/missing", []string{config.ScopeMonitoringRead})
+			f := newSnapshotAuthorityFixture(t, "/api/agent/"+kind+"/missing", []string{config.ScopeMonitoringRead})
 			primary := f.begin(t, snapshotAuthorityToken, "header")
 			f.changeToken(t, "revoked")
 			f.provider.unblock()
@@ -367,12 +348,9 @@ func TestAgentSnapshotsWithdrawalWithholdsMissingResourceError(t *testing.T) {
 }
 
 func TestAgentSnapshotsKeepAdmissionAndRecovery(t *testing.T) {
-	setupSnapshotAuthorityEnv(t)
 	for _, path := range snapshotAuthorityPaths {
-		path := path
 		t.Run(path, func(t *testing.T) {
-			t.Parallel()
-			f := newSnapshotAuthorityFixtureWithEnv(t, path, []string{config.ScopeSettingsRead})
+			f := newSnapshotAuthorityFixture(t, path, []string{config.ScopeSettingsRead})
 			f.provider.unblock()
 			f.current(t, "", "header", http.StatusUnauthorized)
 			f.current(t, snapshotAuthorityToken, "header", http.StatusForbidden)

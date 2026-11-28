@@ -88,9 +88,7 @@ func wantLogStreamClosed(t *testing.T, reader *bufio.Reader, forbidden string) {
 func TestLogStreamRejectsWithdrawnTokenAuthority(t *testing.T) {
 	for _, transport := range []string{"header", "bearer"} {
 		for _, change := range []string{"revoked", "expired", "settings_read_removed", "org_rebound", "multi_org_rebound", "identity_replaced", "principal_replaced", "invalid_role"} {
-			transport, change := transport, change
 			t.Run(transport+"/"+change, func(t *testing.T) {
-				t.Parallel()
 				_, cfg, server := newLogStreamRouter(t)
 				control := openLogStream(t, server, logStreamControl, "header")
 				primary := openLogStream(t, server, logStreamToken, transport)

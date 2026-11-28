@@ -264,9 +264,7 @@ func TestProtectedReadStreamsWithdrawAuthority(t *testing.T) {
 	for _, kind := range protectedReadKinds {
 		for _, transport := range []string{"header", "bearer"} {
 			for _, change := range []string{"revoked", "expired", "scope_removed", "org_access_removed", "credential_replaced", "principal_replaced", "invalid_role"} {
-				kind, transport, change := kind, transport, change
 				t.Run(kind+"/"+transport+"/"+change, func(t *testing.T) {
-					t.Parallel()
 					scope := config.ScopeSettingsRead
 					if kind == "patrol" {
 						scope = config.ScopeAIExecute
@@ -320,9 +318,7 @@ func TestProtectedReadStreamsWithdrawAuthority(t *testing.T) {
 
 func TestProtectedReadStreamsDurableDeletion(t *testing.T) {
 	for _, kind := range protectedReadKinds {
-		kind := kind
 		t.Run(kind, func(t *testing.T) {
-			t.Parallel()
 			f := newProtectedReadFixture(t, []string{config.ScopeSettingsRead, config.ScopeAIExecute})
 			primary := f.open(t, kind, scopedReadToken, "header")
 			control := f.open(t, kind, scopedReadControl, "header")
@@ -435,9 +431,7 @@ func TestProtectedReadStreamsRetainAdmissionPolicy(t *testing.T) {
 
 func TestProtectedReadStreamsKeepOrgAndInstanceSplit(t *testing.T) {
 	for _, kind := range protectedReadKinds {
-		kind := kind
 		t.Run(kind, func(t *testing.T) {
-			t.Parallel()
 			f := newProtectedReadFixture(t, []string{config.ScopeSettingsRead, config.ScopeAIExecute})
 			reader := f.open(t, kind, scopedReadToken, "header")
 			config.Mu.Lock()

@@ -28,13 +28,7 @@ var resourceReadAuthorityPaths = []string{
 
 func newResourceReadAuthorityFixture(t *testing.T, path string, scopes []string) *snapshotAuthorityFixture {
 	t.Helper()
-	setupSnapshotAuthorityEnv(t)
-	return newResourceReadAuthorityFixtureWithEnv(t, path, scopes)
-}
-
-func newResourceReadAuthorityFixtureWithEnv(t *testing.T, path string, scopes []string) *snapshotAuthorityFixture {
-	t.Helper()
-	f := newSnapshotAuthorityFixtureWithEnv(t, path, scopes)
+	f := newSnapshotAuthorityFixture(t, path, scopes)
 	now := time.Now().UTC()
 	parent := "vm:101"
 	f.provider.resources[0].Metrics = &unified.ResourceMetrics{CPU: &unified.MetricValue{Value: 23, Percent: 23, Unit: "%"}}
@@ -95,14 +89,11 @@ func checkResourceReadAuthorityCurrent(t *testing.T, path string, wire snapshotA
 }
 
 func TestResourceReadsWithdrawnTokenCannotDisclose(t *testing.T) {
-	setupSnapshotAuthorityEnv(t)
 	for _, path := range resourceReadAuthorityPaths {
 		for _, transport := range []string{"header", "bearer"} {
 			for _, change := range []string{"revoked", "expired", "scope", "organization", "credential", "principal"} {
-				path, transport, change := path, transport, change
 				t.Run(path+"/"+transport+"/"+change, func(t *testing.T) {
-					t.Parallel()
-					f := newResourceReadAuthorityFixtureWithEnv(t, path, []string{config.ScopeMonitoringRead})
+					f := newResourceReadAuthorityFixture(t, path, []string{config.ScopeMonitoringRead})
 					control := f.begin(t, snapshotAuthorityControl, "header")
 					primary := f.begin(t, snapshotAuthorityToken, transport)
 					f.changeToken(t, change)
@@ -153,12 +144,9 @@ func TestResourceReadsWithdrawnSessionCannotDisclose(t *testing.T) {
 }
 
 func TestResourceReadsWithdrawalWithholdsErrors(t *testing.T) {
-	setupSnapshotAuthorityEnv(t)
 	for _, path := range []string{"/api/resources/missing", "/api/resources/missing/facets", "/api/resources/missing/metrics", "/api/resources?type=synthetic-invalid-type"} {
-		path := path
 		t.Run(path, func(t *testing.T) {
-			t.Parallel()
-			f := newResourceReadAuthorityFixtureWithEnv(t, path, []string{config.ScopeMonitoringRead})
+			f := newResourceReadAuthorityFixture(t, path, []string{config.ScopeMonitoringRead})
 			primary := f.begin(t, snapshotAuthorityToken, "header")
 			f.changeToken(t, "revoked")
 			f.provider.unblock()
@@ -173,12 +161,9 @@ func TestResourceReadsWithdrawalWithholdsErrors(t *testing.T) {
 }
 
 func TestResourceReadsKeepAdmissionAndRecovery(t *testing.T) {
-	setupSnapshotAuthorityEnv(t)
 	for _, path := range resourceReadAuthorityPaths {
-		path := path
 		t.Run(path, func(t *testing.T) {
-			t.Parallel()
-			f := newResourceReadAuthorityFixtureWithEnv(t, path, []string{config.ScopeSettingsRead})
+			f := newResourceReadAuthorityFixture(t, path, []string{config.ScopeSettingsRead})
 			f.provider.unblock()
 			f.current(t, "", "header", http.StatusUnauthorized)
 			f.current(t, snapshotAuthorityToken, "header", http.StatusForbidden)
@@ -196,12 +181,9 @@ func TestResourceReadsKeepAdmissionAndRecovery(t *testing.T) {
 // their live routing/admission and stable envelopes without database locks or
 // crash experiments; the response writer's delayed-write tests cover the guard.
 func TestResourceReadsStoreOnlyEntrancesKeepAdmission(t *testing.T) {
-	setupSnapshotAuthorityEnv(t)
 	for _, path := range []string{"/api/resources/timeline", "/api/resources/vm:101/timeline", "/api/resources/vm:101/operator-state?view=lookup", "/api/resources/vm:101/maintenance-verifications"} {
-		path := path
 		t.Run(path, func(t *testing.T) {
-			t.Parallel()
-			f := newResourceReadAuthorityFixtureWithEnv(t, path, []string{config.ScopeSettingsRead})
+			f := newResourceReadAuthorityFixture(t, path, []string{config.ScopeSettingsRead})
 			f.provider.unblock()
 			f.current(t, "", "header", http.StatusUnauthorized)
 			f.current(t, snapshotAuthorityToken, "header", http.StatusForbidden)
@@ -228,7 +210,6 @@ func TestResourceReadMissingVerificationKeepsAdmission(t *testing.T) {
 }
 
 func TestResourceReadScopeCannotMutate(t *testing.T) {
-	setupSnapshotAuthorityEnv(t)
 	for _, mutation := range []struct{ method, path string }{
 		{http.MethodPost, "/api/resources/vm:101/link"},
 		{http.MethodPost, "/api/resources/vm:101/unlink"},
@@ -238,10 +219,8 @@ func TestResourceReadScopeCannotMutate(t *testing.T) {
 		{http.MethodDelete, "/api/resources/vm:101/operator-state"},
 		{http.MethodPost, "/api/maintenance-verifications/missing/review"},
 	} {
-		mutation := mutation
 		t.Run(mutation.method+mutation.path, func(t *testing.T) {
-			t.Parallel()
-			f := newResourceReadAuthorityFixtureWithEnv(t, mutation.path, []string{config.ScopeMonitoringRead})
+			f := newResourceReadAuthorityFixture(t, mutation.path, []string{config.ScopeMonitoringRead})
 			f.provider.unblock()
 			req := f.request(t, snapshotAuthorityToken, "header")
 			req.Method = mutation.method

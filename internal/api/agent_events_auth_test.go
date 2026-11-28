@@ -255,9 +255,7 @@ func TestAgentEventTokenRefreshKeepsBoundedContext(t *testing.T) {
 func TestAgentEventTokenLifecycleRejectsWithdrawnAuthority(t *testing.T) {
 	for _, transport := range []string{"header", "bearer"} {
 		for _, change := range []string{"revoked", "expired", "read_scope_removed", "org_rebound", "identity_replaced", "principal_replaced", "invalid_role"} {
-			transport, change := transport, change
 			t.Run(transport+"/"+change, func(t *testing.T) {
-				t.Parallel()
 				router, cfg, server := newAgentLifecycleRouter(t, time.Hour)
 				primary := openAgentLifecycleStream(t, server, agentEventLifecycleToken, transport)
 				control := openAgentLifecycleStream(t, server, agentEventControlToken, transport)
@@ -299,9 +297,7 @@ func TestAgentEventTokenLifecycleRejectsWithdrawnAuthority(t *testing.T) {
 
 func TestAgentEventTokenLifecycleClosesIdleStream(t *testing.T) {
 	for _, change := range []string{"revoke", "natural_expiry"} {
-		change := change
 		t.Run(change, func(t *testing.T) {
-			t.Parallel()
 			_, cfg, server := newAgentLifecycleRouter(t, 10*time.Millisecond)
 			primary := openAgentLifecycleStream(t, server, agentEventLifecycleToken, "header")
 			config.Mu.Lock()
