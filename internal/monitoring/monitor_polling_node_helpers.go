@@ -77,40 +77,41 @@ func (m *Monitor) determineNodeIDAndStatus(instanceName string, instanceCfg *con
 	// that ambiguous case the instance name prevents cross-cluster resource
 	// collisions without churning IDs for established unambiguous clusters.
 	nodeID := m.pveNodeID(instanceName, instanceCfg, node.Node)
-	effectiveStatus := node.Status
 	now := time.Now()
 	gracePeriod := m.pveNodeOfflineGracePeriod()
 
-	m.mu.Lock()
 	if strings.ToLower(node.Status) == "online" {
 		// Node is online - update last-online timestamp
+		m.mu.Lock()
 		m.nodeLastOnline[nodeID] = now
-	} else {
-		// Node is reported as offline - check grace period
-		lastOnline, exists := m.nodeLastOnline[nodeID]
-		if exists && now.Sub(lastOnline) < gracePeriod {
-			// Still within grace period - preserve online status
-			effectiveStatus = "online"
-			log.Debug().
-				Str("instance", instanceName).
-				Str("node", node.Node).
-				Dur("timeSinceOnline", now.Sub(lastOnline)).
-				Dur("gracePeriod", gracePeriod).
-				Msg("Node offline but within grace period - preserving online status")
-		} else {
-			// Grace period expired or never seen online - mark as offline
-			if exists {
-				log.Info().
-					Str("instance", instanceName).
-					Str("node", node.Node).
-					Dur("timeSinceOnline", now.Sub(lastOnline)).
-					Msg("Node offline and grace period expired - marking as offline")
-			}
-		}
+		m.mu.Unlock()
+		return nodeID, node.Status
 	}
-	m.mu.Unlock()
 
-	return nodeID, effectiveStatus
+	// Snapshot only the clock. The synchronous diagnostic must not hold
+	// the monitor lock needed by other sources' polls and reports.
+	m.mu.RLock()
+	lastOnline, exists := m.nodeLastOnline[nodeID]
+	m.mu.RUnlock()
+	if !exists {
+		return nodeID, node.Status
+	}
+	elapsed := now.Sub(lastOnline)
+	if elapsed < gracePeriod {
+		log.Debug().
+			Str("instance", instanceName).
+			Str("node", node.Node).
+			Dur("timeSinceOnline", elapsed).
+			Dur("gracePeriod", gracePeriod).
+			Msg("Node offline but within grace period - preserving online status")
+		return nodeID, "online"
+	}
+	log.Info().
+		Str("instance", instanceName).
+		Str("node", node.Node).
+		Dur("timeSinceOnline", elapsed).
+		Msg("Node offline and grace period expired - marking as offline")
+	return nodeID, node.Status
 }
 
 func (m *Monitor) pveNodeID(instanceName string, instanceCfg *config.PVEInstance, nativeName string) string {
