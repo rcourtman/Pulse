@@ -209,17 +209,22 @@ When expected results stop, check the two claimed-poll stages on successive scra
   for a process-wide worker slot (`POLL_TASK_WORKERS`). The budget starts at
   the poll's scheduled time.
 - `running`: a worker took the poll but has not returned, including task
-  preparation, provider calls, rescheduling and recovery logging. The budget
-  starts at worker admission. An execution deadline can expire before the work
-  actually returns.
+  preparation, provider calls, rescheduling and recovery logging. A worker
+  stays visible in this stage while occupied in panic recovery logging even
+  after releasing its queue claim. The budget starts at worker admission. An
+  execution deadline can expire before the work actually returns.
 
 If `pulse_scheduler_queued_poll_overdue_seconds` and both claimed-poll stages
 stay at zero while expected poll counters stop moving, check
 `pulse_scheduler_poll_planning_age_seconds` on successive scrapes. A rising age
 means an unfinished poll planning pass is still blocked reading provider
 rosters, building the plan, or queuing tasks before any work reaches the queue.
-Zero means no active planning wait is measured at scrape time, not that polling
-is healthy or that the watchdog heartbeat or alert rules ran.
+When a monitor is retired while a planning pass is reading rosters, Pulse
+abandons the returned plan once cancellation is observed instead of queuing
+tasks or running post-plan statistics and alert reconciliation, while keeping
+the still-running pass visible in `pulse_scheduler_poll_planning_age_seconds`
+until it returns. Zero means no active planning wait is measured at scrape time,
+not that polling is healthy or that the watchdog heartbeat or alert rules ran.
 
 Use this signal with the [result counters](#check-whether-polling-is-still-running).
 A returned error waiting for its next retry is not overdue work. The gauges

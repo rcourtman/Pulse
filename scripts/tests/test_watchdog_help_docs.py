@@ -122,6 +122,96 @@ class WatchdogHelpDocsTest(unittest.TestCase):
             with self.subTest(phrase=phrase):
                 self.assertIn(phrase, self.guide)
 
+    def test_poll_planning_retirement_and_panic_logging_help_matches_runtime(self) -> None:
+        alerting_path = ROOT / "docs/ALERTING.md"
+        alerting_mirror = ROOT / "frontend-modern/public/docs/ALERTING.md"
+        self.assertEqual(alerting_path.read_bytes(), alerting_mirror.read_bytes())
+
+        schedule_src = (ROOT / "internal/monitoring/monitor_polling_schedule.go").read_text(
+            encoding="utf-8"
+        )
+        progress_src = (ROOT / "internal/monitoring/poll_work_progress.go").read_text(
+            encoding="utf-8"
+        )
+        workers_src = (ROOT / "internal/monitoring/poll_task_workers.go").read_text(
+            encoding="utf-8"
+        )
+
+        for token in (
+            "func (m *Monitor) planScheduledPolls(ctx context.Context, now time.Time)",
+            "id := progress.beginPlanning(time.Now())",
+            "defer progress.finishPlanning(id)",
+            "descriptors := m.describeInstancesForScheduler()",
+            "if ctx.Err() != nil {",
+            "m.taskQueue.upsertPlan(task, revision)",
+            "m.state.UpdatePollStats(",
+            "m.syncAlertsToState()",
+        ):
+            with self.subTest(schedule_token=token):
+                self.assertIn(token, schedule_src)
+
+        for token in (
+            '"pulse_scheduler_poll_planning_age_seconds"',
+            '"pulse_scheduler_claimed_poll_overdue_seconds"',
+            '"waiting_for_slot", "running"',
+        ):
+            with self.subTest(progress_token=token):
+                self.assertIn(token, progress_src)
+
+        for token in (
+            "defer progress.finish(work)",
+            'Msg("Recovered from panic in scheduled poll task")',
+            "defer func() { m.taskQueue.completeClaim(task, next, reschedule) }()",
+        ):
+            with self.subTest(workers_token=token):
+                self.assertIn(token, workers_src)
+        self.assertLess(
+            workers_src.index("defer progress.finish(work)"),
+            workers_src.index('Msg("Recovered from panic in scheduled poll task")'),
+        )
+        self.assertLess(
+            workers_src.index('Msg("Recovered from panic in scheduled poll task")'),
+            workers_src.index(
+                "defer func() { m.taskQueue.completeClaim(task, next, reschedule) }()"
+            ),
+        )
+
+        docs_checks = (
+            (
+                "docs/ALERTING.md",
+                (
+                    'stage="running"',
+                    "panic recovery logging after releasing its queue claim",
+                    "Unfinished poll planning:",
+                    "pulse_scheduler_poll_planning_age_seconds",
+                    "reading provider rosters, building the plan, or queuing tasks",
+                    "When a monitor is retired during a planning pass, Pulse abandons the returned plan once cancellation is observed instead of queuing tasks or running post-plan statistics and alert reconciliation",
+                    "keeping any still-running roster read visible in pulse_scheduler_poll_planning_age_seconds until it returns",
+                ),
+            ),
+            (
+                "docs/monitoring/PROMETHEUS_METRICS.md",
+                (
+                    "stays visible in this stage while occupied in panic recovery logging even after releasing its queue claim",
+                    "When a monitor is retired while a planning pass is reading rosters, Pulse abandons the returned plan once cancellation is observed instead of queuing tasks or running post-plan statistics and alert reconciliation",
+                    "keeping the still-running pass visible in pulse_scheduler_poll_planning_age_seconds until it returns",
+                ),
+            ),
+            (
+                "docs/api/SCHEDULER_HEALTH.md",
+                (
+                    'releases its queue claim during panic recovery logging stays visible under stage="running" until logging finishes',
+                    "When a monitor is retired during poll planning, Pulse abandons the returned plan once cancellation is observed instead of queuing tasks or running post-plan statistics and alert reconciliation",
+                    "keeping any still-running roster read visible in pulse_scheduler_poll_planning_age_seconds until it returns",
+                ),
+            ),
+        )
+        for rel_path, phrases in docs_checks:
+            text = plain((ROOT / rel_path).read_text(encoding="utf-8"))
+            for phrase in phrases:
+                with self.subTest(doc=rel_path, phrase=phrase):
+                    self.assertIn(phrase, text)
+
 
 if __name__ == "__main__":
     unittest.main()

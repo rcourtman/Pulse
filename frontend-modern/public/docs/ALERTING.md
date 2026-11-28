@@ -287,11 +287,25 @@ is not zero):
   `pulse_scheduler_queued_poll_overdue_seconds` and
   `pulse_scheduler_claimed_poll_overdue_seconds` (`stage="waiting_for_slot"`
   and `stage="running"`) across fresh scrapes. Growing ages show queued or
-  claimed polls falling behind their schedule or timeout budget. A stopped
-  scheduler drops out of `pulse_scheduler_queued_poll_overdue_seconds` even if
-  a blocked worker has not returned yet, so keep checking
+  claimed polls falling behind their schedule or timeout budget. A worker stays
+  visible under `stage="running"` even while occupied in panic recovery logging
+  after releasing its queue claim. A stopped scheduler drops out of
+  `pulse_scheduler_queued_poll_overdue_seconds` even if a blocked worker has
+  not returned yet, so keep checking
   `pulse_scheduler_claimed_poll_overdue_seconds` for that worker. Zero does not
   prove polling recovered.
+- **Unfinished poll planning:** if both overdue gauges stay at zero while
+  expected poll counters stop moving, check
+  `pulse_scheduler_poll_planning_age_seconds` across fresh scrapes. A rising
+  age means an active poll planning pass has not finished reading provider
+  rosters, building the plan, or queuing tasks before any work reaches the
+  queue. When a monitor is retired during a planning pass, Pulse abandons the
+  returned plan once cancellation is observed instead of queuing tasks or
+  running post-plan statistics and alert reconciliation, while keeping any
+  still-running roster read visible in
+  `pulse_scheduler_poll_planning_age_seconds` until it returns. Zero means no
+  active planning wait is measured at scrape time, not that polling recovered
+  or that alert rules ran.
 - **Parked poll failures:** `pulse_scheduler_dead_letter_depth` counts terminal
   poll entries still parked in running schedulers at scrape time by
   `instance_type` and `instance`. After a connection recovers, or its scheduler
