@@ -64,22 +64,31 @@ def generated_collector_is_running(listing, runtime):
 
 
 def write_wide_ps_adapter(tools, executable):
-    """Observe real fixture processes with a native basename and full argv.
+    """Observe real fixture processes with native basename and full argv.
 
     These Linux NAS wrappers run in a long private Darwin temporary path during
     CI. Darwin truncates a middle comm path even with -ww. Its native ucomm
-    field supplies the basename Linux's comm uses; args still supplies the
-    exact executable path. Change only this fixture transport, not the
-    production parser, ownership checks or deadlines.
+    field supplies the basename Linux's comm uses. Keep the kernel's argv
+    intact, but restrict the rows to the private watchdog group and this
+    reader (a benign row even when the watchdog group has fully exited).
+    Host processes outside the fixture must not veto or receive its signals.
     """
     target = tools / "ps"
     target.write_text("#!/bin/sh\n" + r'''
+group=${PULSE_NAS_FIXTURE_PGID:-}
+case "$group" in ''|0*|*[!0-9]*) exit 2 ;; esac
 for arg do
     case "$arg" in comm=) arg=ucomm= ;; esac
     set -- "$@" "$arg"
     shift
 done
-exec ''' + shlex.quote(str(executable)) + ' -ww "$@"\n')
+listing=$(''' + shlex.quote(str(executable)) + r''' -ww -o pgid= -o pid= "$@") || exit "$?"
+printf '%s\n' "$listing" | LC_ALL=C awk -v group="$group" -v reader="$$" '
+    $1 == group || $2 == reader {
+        sub(/^[[:blank:]]*[0-9]+[[:blank:]]+[0-9]+[[:blank:]]+/, "")
+        print
+    }'
+''')
     target.chmod(0o700)
     return target
 
@@ -631,19 +640,41 @@ remove_safe_profile_state_dir() { rm -rf -- "$SAFE_PROFILE_STATE_DIR"; }
         with tempfile.TemporaryDirectory() as directory:
             root = Path(directory)
             native = root / 'native ps'
-            # Fixed synthetic argv recorder, not a process-inventory model.
-            native.write_text('#!/bin/sh\nprintf "%s\\n" "$@"\n')
+            argv = root / 'argv'
+            env = dict(os.environ, PULSE_NAS_FIXTURE_PGID='420', FIXTURE_PS_ARGV=str(argv))
+            native.touch()
             native.chmod(0o700)
             tools = root / 'tools'; tools.mkdir()
             adapter = write_wide_ps_adapter(tools, native)
-            for fields in (
-                ['-ax', '-o', 'comm=', '-o', 'args='],
-                ['-ax', '-o', 'pid=', '-o', 'ppid=', '-o', 'comm=', '-o', 'args='],
+            for fields, owned, foreign in (
+                (['-ax', '-o', 'comm=', '-o', 'args='],
+                 'pulse-agent /private/bin/pulse-agent 30',
+                 'sh /foreign/start-pulse-agent.sh'),
+                (['-ax', '-o', 'pid=', '-o', 'ppid=', '-o', 'comm=', '-o', 'args='],
+                 '421 420 pulse-agent /private/bin/pulse-agent 30',
+                 '591 590 sh /foreign/start-pulse-agent.sh'),
             ):
                 with self.subTest(fields=fields):
-                    result = subprocess.run([str(adapter), *fields], capture_output=True, text=True, check=True)
-                    self.assertEqual(result.stdout.splitlines(),
-                                     ['-ww', *(field if field != 'comm=' else 'ucomm=' for field in fields)])
+                    native.write_text(
+                        '#!/bin/sh\nprintf "%s\\n" "$@" > "$FIXTURE_PS_ARGV"\n'
+                        'if [ "$2:$3:$4:$5" = "-o:pgid=:-o:pid=" ]; then\n    printf "%s\\n" '
+                        + shlex.join(['  420 421 ' + owned, '  590 591 ' + foreign])
+                        + '\nelse\n    printf "%s\\n" ' + shlex.join([owned, foreign]) + '\nfi\n'
+                    )
+                    result = subprocess.run([str(adapter), *fields], env=env,
+                                            capture_output=True, text=True, check=True)
+                    self.assertEqual(result.stdout.splitlines(), [owned])
+                    self.assertEqual(argv.read_text().splitlines(),
+                                     ['-ww', '-o', 'pgid=', '-o', 'pid=',
+                                      *(field if field != 'comm=' else 'ucomm=' for field in fields)])
+
+            native.write_text('#!/bin/sh\nexit 7\n')
+            result = subprocess.run([str(adapter), *fields], env=env, capture_output=True, text=True)
+            self.assertEqual(result.returncode, 7)
+            result = subprocess.run([str(adapter), *fields], env=dict(env, PULSE_NAS_FIXTURE_PGID=''),
+                                    capture_output=True, text=True)
+            self.assertNotEqual(result.returncode, 0)
+            self.assertEqual(result.stdout, '')
 
     def test_generated_collector_observation_keeps_exact_identity_on_both_unix_formats(self):
         runtime = Path('/synthetic/owned/bin/pulse-agent')
@@ -673,7 +704,7 @@ remove_safe_profile_state_dir() { rm -rf -- "$SAFE_PROFILE_STATE_DIR"; }
 
 
 class AgentNASLiveTeardown(unittest.TestCase):
-    """Real machine-wide process observation; the Go caller keeps this serial."""
+    """Real process observations and signals for a private watchdog group."""
 
     source = SOURCE.read_text()
 
@@ -706,9 +737,8 @@ class AgentNASLiveTeardown(unittest.TestCase):
                 watchdog = root / 'state/start-pulse-agent.sh'
                 (root / 'tools/pkill').write_text('#!/bin/sh\nexit 0\n'); (root / 'tools/pkill').chmod(0o700)
                 (root / 'tools/flash').write_text('#!/bin/sh\nexit 0\n'); (root / 'tools/flash').chmod(0o700)
-                # Capture the native executable before placing the adapter on
-                # PATH. The same untruncated kernel rows feed startup and the
-                # unchanged production teardown parser (no model or PID claim).
+                # The same untruncated, group-scoped kernel rows feed startup
+                # and the unchanged production teardown parser.
                 native_ps = shutil.which('ps')
                 self.assertIsNotNone(native_ps, 'native process reader missing')
                 fixture_ps = write_wide_ps_adapter(root / 'tools', Path(native_ps).resolve())
@@ -749,13 +779,25 @@ class AgentNASLiveTeardown(unittest.TestCase):
                 control.write_text('set -euo pipefail\n' + setup + '\n' + functions + '\ncommand() { [[ "$*" != "-v systemctl" ]] || return 1; builtin command "$@"; }\nquiesce_nas_agent_for_removal ' + platform + '\n')
                 output = root / 'watchdog.log'
                 collector_log = root / 'logs' / ('pulse-agent-watchdog.log' if platform == 'QNAP' else 'watchdog.log')
-                with output.open('wb') as stream:
+                # An unrelated shell with the same script basename must not
+                # appear to the real parser as an unknown boot owner. Its
+                # only input is this private pipe, closed by Popen on exit.
+                foreign_script = root / 'start-pulse-agent.sh'
+                foreign_script.write_text('read -r line\n')
+                with output.open('wb') as stream, subprocess.Popen(
+                    ['bash', str(foreign_script)], stdin=subprocess.PIPE, start_new_session=True,
+                ) as foreign:
+                    self.assertIsNone(foreign.poll())
                     process = subprocess.Popen([str(watchdog)] if platform == 'QNAP' else ['bash', str(watchdog)], env=env,
                                                stdout=stream, stderr=stream, start_new_session=True)
                     try:
+                        # start_new_session makes this child the group leader;
+                        # only its inherited group enters either observation.
+                        env['PULSE_NAS_FIXTURE_PGID'] = str(process.pid)
                         deadline = time.monotonic() + 8
                         while time.monotonic() < deadline:
-                            listing = subprocess.run([str(fixture_ps), '-ax', '-o', 'comm=', '-o', 'args='], capture_output=True, text=True, check=True).stdout
+                            listing = subprocess.run([str(fixture_ps), '-ax', '-o', 'comm=', '-o', 'args='],
+                                                     env=env, capture_output=True, text=True, check=True).stdout
                             if (generated_collector_is_running(listing, runtime)
                                     and collector_log.is_file()
                                     and 'private NAS fixture collector ready\n' in collector_log.read_text()): break
@@ -767,10 +809,16 @@ class AgentNASLiveTeardown(unittest.TestCase):
                             logs = '\n'.join(p.read_text() for p in (root / 'logs').glob('*.log'))
                             self.fail('private generated collector did not start\n' + owned + '\n' + output.read_text() + '\n' + logs)
                         result = subprocess.run(['bash', str(control)], env=env, capture_output=True, text=True, timeout=12)
-                        self.assertEqual(result.returncode, 0, result.stdout + result.stderr + output.read_text())
+                        if result.returncode != 0:
+                            self.fail(
+                                f'teardown exit={result.returncode}, watchdog exit={process.poll()}, '
+                                f'boot entry present={"# Pulse Agent" in bootfile.read_text()}\n'
+                                + result.stdout + result.stderr + output.read_text()
+                            )
                         process.wait(timeout=3)
                         with self.assertRaises(ProcessLookupError): os.killpg(process.pid, 0)
                         self.assertNotIn('# Pulse Agent', bootfile.read_text())
+                        self.assertIsNone(foreign.poll(), 'teardown stopped the unrelated watchdog shell')
                     finally:
                         try: os.killpg(process.pid, signal.SIGKILL)
                         except ProcessLookupError: pass
