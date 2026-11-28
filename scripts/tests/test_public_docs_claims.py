@@ -684,6 +684,9 @@ class AIAutonomyHelpDocsTest(unittest.TestCase):
             encoding="utf-8"
         )
         vmware_go = (ROOT / "internal/api/vmware_handlers.go").read_text(encoding="utf-8")
+        vmware_client_go = (ROOT / "internal/vmware/client.go").read_text(
+            encoding="utf-8"
+        )
 
         self.assertIn('FeatureExternalProbe     = "external_probe"', features_go)
         self.assertIn("FeatureExternalProbe,", features_go)
@@ -695,6 +698,7 @@ class AIAutonomyHelpDocsTest(unittest.TestCase):
         self.assertIn('r.mux.HandleFunc("/api/vmware/connections"', routes_go)
         self.assertIn('r.mux.HandleFunc("/api/vmware/connections/test"', routes_go)
         self.assertIn('r.mux.HandleFunc("/api/vmware/connections/preview"', routes_go)
+        self.assertIn('FeatureVMware              = "PULSE_ENABLE_VMWARE"', vmware_client_go)
         self.assertIn('"vmware_disabled"', vmware_go)
         self.assertIn('"vmware_not_found"', vmware_go)
         self.assertIn('"vmware_invalid_config"', vmware_go)
@@ -722,10 +726,11 @@ class AIAutonomyHelpDocsTest(unittest.TestCase):
         )
         self.assertEqual(api_doc, api_mirror)
         api_norm = " ".join(api_doc.split())
+        self.assertNotIn("PULSE_FEATURE_VMWARE", api_doc)
         for phrase in (
             "`truenas`, `vmware` or `vmware-vsphere`, `availability`",
             "## VMware vSphere (Early Access)",
-            "`PULSE_FEATURE_VMWARE=false`, these routes return `404` (`vmware_disabled`)",
+            "`PULSE_ENABLE_VMWARE=false`, these routes return `404` (`vmware_disabled`)",
             "`GET /api/vmware/connections` (admin, `settings:read`)",
             "`POST /api/vmware/connections` (admin, `settings:write`)",
             "`PUT /api/vmware/connections/{id}` (admin, `settings:write`)",
@@ -734,6 +739,96 @@ class AIAutonomyHelpDocsTest(unittest.TestCase):
             "`POST /api/vmware/connections/{id}/test` (admin, `settings:write`)",
             "`POST /api/vmware/connections/preview` and `POST /api/vmware/connections/{id}/preview` (admin, `settings:write`)",
             "`source=vmware` (or its `source=vmware-vsphere` alias)",
+        ):
+            with self.subTest(doc="API.md", phrase=phrase):
+                self.assertIn(phrase, api_norm)
+
+    def test_api_docs_match_saml_notifications_and_alert_durability_runtime(self) -> None:
+        auth_routes = (
+            ROOT / "internal/api/router_routes_auth_security.go"
+        ).read_text(encoding="utf-8")
+        saml_go = (ROOT / "internal/api/saml_handlers.go").read_text(encoding="utf-8")
+        mon_routes = (
+            ROOT / "internal/api/router_routes_monitoring.go"
+        ).read_text(encoding="utf-8")
+        queue_go = (
+            ROOT / "internal/api/alerting/notification_queue.go"
+        ).read_text(encoding="utf-8")
+        notif_go = (ROOT / "internal/api/alerting/notifications.go").read_text(
+            encoding="utf-8"
+        )
+        alerts_go = (ROOT / "internal/api/alerting/alerts.go").read_text(
+            encoding="utf-8"
+        )
+        durability_go = (
+            ROOT / "internal/api/alerting/history_durability.go"
+        ).read_text(encoding="utf-8")
+
+        for marker in (
+            '"provider_managed_by_environment"',
+            'r.mux.HandleFunc("/api/saml/"',
+            'case "login":',
+            'case "acs":',
+            'case "metadata":',
+            'case "logout":',
+            'case "slo":',
+        ):
+            self.assertIn(marker, auth_routes)
+        for marker in (
+            '"authorizationUrl": redirectURL',
+            'if req.Method != http.MethodPost',
+            'if req.Method != http.MethodGet',
+            'if !requireRequestMethod(w, req, http.MethodPost)',
+            'IdP-initiated logout not supported',
+        ):
+            self.assertIn(marker, saml_go)
+        for marker in (
+            'r.mux.HandleFunc("/api/notifications/dlq", RequireAdmin(r.config, RequireScope(config.ScopeSettingsRead',
+            'r.mux.HandleFunc("/api/notifications/dlq/retry", RequireAdmin(r.config, RequireScope(config.ScopeSettingsWrite',
+        ):
+            self.assertIn(marker, mon_routes)
+        self.assertIn("apihttp.EnsureScope(w, r, config.ScopeMonitoringRead)", queue_go)
+        self.assertIn("apihttp.EnsureScope(w, r, config.ScopeSettingsWrite)", queue_go)
+        self.assertIn('case path == "/rehearsals" || strings.HasPrefix(path, "/rehearsals/"):', notif_go)
+        self.assertIn('strings.HasSuffix(path, "/recover")', notif_go)
+        for marker in (
+            'case path == "intent-policies" && r.Method == http.MethodGet:',
+            'case path == "intent-policies" && r.Method == http.MethodPut:',
+            'case path == "intent-policies/preview" && r.Method == http.MethodPost:',
+            'case path == "history/durability" && r.Method == http.MethodGet:',
+            'case path == "history/durability/acknowledgement" && r.Method == http.MethodPost:',
+            "writeHistoryCompleteness(w, manager)",
+        ):
+            self.assertIn(marker, alerts_go)
+        self.assertIn('"X-Pulse-History-Complete"', durability_go)
+        self.assertIn('"X-Pulse-History-Gap-Revision"', durability_go)
+
+        api_doc = (ROOT / "docs/API.md").read_text(encoding="utf-8")
+        api_mirror = (ROOT / "frontend-modern/public/docs/API.md").read_text(
+            encoding="utf-8"
+        )
+        self.assertEqual(api_doc, api_mirror)
+        api_norm = " ".join(api_doc.split())
+        for phrase in (
+            "`GET /api/notifications/dlq` (admin, `settings:read` and `monitoring:read`)",
+            "`POST /api/notifications/dlq/retry` (admin, `settings:write`)",
+            "### Delivery Rehearsals",
+            "`GET /api/notifications/rehearsals` (org manager or admin, `settings:read` or `settings:write`)",
+            "`POST /api/notifications/rehearsals` (org manager or admin, `settings:write`)",
+            "`GET /api/notifications/rehearsals/{id}` (org manager or admin, `settings:read` or `settings:write`)",
+            "`POST /api/notifications/rehearsals/{id}/recover` (org manager or admin, `settings:write`)",
+            "`GET /api/alerts/intent-policies` (`monitoring:read`)",
+            "`PUT /api/alerts/intent-policies` (`monitoring:write`)",
+            "`POST /api/alerts/intent-policies/preview` (`monitoring:read`)",
+            "`X-Pulse-History-Complete` and `X-Pulse-History-Gap-Revision`",
+            "`GET /api/alerts/history/durability` (`monitoring:read`)",
+            "`POST /api/alerts/history/durability/acknowledgement` (`monitoring:write`)",
+            "`GET /api/saml/{providerID}/metadata`",
+            "`GET` or `POST /api/saml/{providerID}/login`",
+            "`POST /api/saml/{providerID}/acs`",
+            "`POST /api/saml/{providerID}/logout`",
+            "`GET` or `POST /api/saml/{providerID}/slo`",
+            "returns `409` (`provider_managed_by_environment`)",
         ):
             with self.subTest(doc="API.md", phrase=phrase):
                 self.assertIn(phrase, api_norm)
