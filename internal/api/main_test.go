@@ -16,6 +16,9 @@ func TestMain(m *testing.M) {
 		panic(err)
 	}
 	_ = os.Setenv("PULSE_TEST_BCRYPT_COST", strconv.Itoa(bcrypt.MinCost))
+	if _, ok := os.LookupEnv("PULSE_TEST_EXPORT_PBKDF2_ITERATIONS"); !ok {
+		_ = os.Setenv("PULSE_TEST_EXPORT_PBKDF2_ITERATIONS", "1000")
+	}
 	_ = os.Setenv("PULSE_UPDATE_SERVER", "http://127.0.0.1:1")
 	_ = os.Setenv("PULSE_DATA_DIR", dataDir)
 	allowLoopbackSSOFetch = true

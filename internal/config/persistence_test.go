@@ -13,6 +13,8 @@ import (
 	"os"
 	"path/filepath"
 	"reflect"
+	"strconv"
+	"strings"
 	"testing"
 	"time"
 
@@ -1352,13 +1354,22 @@ func mustEncodeExport(t *testing.T, data config.ExportData, passphrase string) s
 	return base64.StdEncoding.EncodeToString(ciphertext)
 }
 
+func exportTestPBKDF2Iterations() int {
+	if raw := strings.TrimSpace(os.Getenv("PULSE_TEST_EXPORT_PBKDF2_ITERATIONS")); raw != "" {
+		if parsed, err := strconv.Atoi(raw); err == nil && parsed >= 1000 && parsed <= 600000 {
+			return parsed
+		}
+	}
+	return 600000
+}
+
 func encryptExportPayload(plaintext []byte, passphrase string) ([]byte, error) {
 	salt := make([]byte, 32)
 	if _, err := io.ReadFull(rand.Reader, salt); err != nil {
 		return nil, err
 	}
 
-	key := pbkdf2.Key([]byte(passphrase), salt, 600000, 32, sha256.New)
+	key := pbkdf2.Key([]byte(passphrase), salt, exportTestPBKDF2Iterations(), 32, sha256.New)
 
 	block, err := aes.NewCipher(key)
 	if err != nil {
@@ -1388,7 +1399,7 @@ func decryptExportPayload(ciphertext []byte, passphrase string) ([]byte, error) 
 	salt := ciphertext[:32]
 	cipherbody := ciphertext[32:]
 
-	key := pbkdf2.Key([]byte(passphrase), salt, 600000, 32, sha256.New)
+	key := pbkdf2.Key([]byte(passphrase), salt, exportTestPBKDF2Iterations(), 32, sha256.New)
 
 	block, err := aes.NewCipher(key)
 	if err != nil {

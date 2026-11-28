@@ -12,6 +12,8 @@ import (
 	"os"
 	"path/filepath"
 	"reflect"
+	"strconv"
+	"strings"
 	"testing"
 
 	"github.com/rcourtman/pulse-go-rewrite/internal/config"
@@ -94,8 +96,14 @@ func encryptedImportValidationFixture(t *testing.T, plaintext []byte, passphrase
 	t.Helper()
 	// Fixed public salt/nonce keep this synthetic malformed fixture stable;
 	// production export encryption still uses independent crypto/rand bytes.
+	iterations := 600000
+	if raw := strings.TrimSpace(os.Getenv("PULSE_TEST_EXPORT_PBKDF2_ITERATIONS")); raw != "" {
+		if parsed, err := strconv.Atoi(raw); err == nil && parsed >= 1000 && parsed <= 600000 {
+			iterations = parsed
+		}
+	}
 	salt := sha256.Sum256([]byte("synthetic-import-validation-salt"))
-	key := pbkdf2.Key([]byte(passphrase), salt[:], 600000, 32, sha256.New)
+	key := pbkdf2.Key([]byte(passphrase), salt[:], iterations, 32, sha256.New)
 	block, err := aes.NewCipher(key)
 	if err != nil {
 		t.Fatal(err)

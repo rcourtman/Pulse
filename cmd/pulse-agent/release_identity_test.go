@@ -25,7 +25,7 @@ func TestPublishedAgentReleaseIdentity(t *testing.T) {
 	if runtime.GOOS == "windows" {
 		binary += ".exe"
 	}
-	cmd := exec.Command("go", "build", "-p=1", "-trimpath", "-buildvcs=false", "-ldflags="+strings.TrimSpace(string(output)), "-o", binary, ".")
+	cmd := exec.Command("go", "build", "-trimpath", "-buildvcs=false", "-ldflags="+strings.TrimSpace(string(output)), "-o", binary, ".")
 	cmd.Env = append(os.Environ(), "CGO_ENABLED=0", "GOFLAGS=")
 	if out, err := cmd.CombinedOutput(); err != nil {
 		t.Fatalf("canonical build: %v %s", err, out)
@@ -62,7 +62,7 @@ func TestUnstampedAgentReleaseIdentityCannotUseLinkerLiteral(t *testing.T) {
 	// when the actual shared ReleaseIdentity variable remains unset. This is a
 	// static-contract control, not a canonical release or source authentication.
 	flags := "-s -w -X main.Version=v6.2.1 -X main.UnusedReleaseLiteral=[[pulse-agent-release:v1:v6.2.1]]"
-	cmd := exec.Command("go", "build", "-p=1", "-buildvcs=false", "-ldflags="+flags, "-o", binary, ".")
+	cmd := exec.Command("go", "build", "-buildvcs=false", "-ldflags="+flags, "-o", binary, ".")
 	cmd.Env = append(os.Environ(), "CGO_ENABLED=0", "GOFLAGS=")
 	if out, err := cmd.CombinedOutput(); err != nil {
 		t.Fatalf("unstamped main build: %v %s", err, out)
@@ -97,7 +97,7 @@ func TestPublishedAgentReleaseIdentityNonTrimpath(t *testing.T) {
 	if runtime.GOOS == "windows" {
 		path += ".exe"
 	}
-	cmd := exec.Command("go", "build", "-p=1", "-buildvcs=false", "-ldflags="+strings.TrimSpace(string(output)), "-o", path, ".")
+	cmd := exec.Command("go", "build", "-buildvcs=false", "-ldflags="+strings.TrimSpace(string(output)), "-o", path, ".")
 	cmd.Env = append(os.Environ(), "CGO_ENABLED=0", "GOFLAGS=")
 	if out, err := cmd.CombinedOutput(); err != nil {
 		t.Fatalf("non-trimpath release build: %v %s", err, out)
