@@ -300,6 +300,24 @@ gauges do not measure provider success, applied reports or alert evaluation.
 that cancellation retires the stopped scheduler's queued depth and age
 without clearing the overdue claim or hiding a live peer.
 
+### Prometheus exposes planning that has not reached the queue
+
+`pulse_scheduler_poll_planning_age_seconds` reports the age of the oldest
+active planning pass across the process at scrape time. It starts before the
+planner reads the queue revision or the provider rosters and stays active
+through queue admission. It clears only when that pass returns or unwinds.
+A skipped cycle that never entered planning is not counted. Scraping the
+gauge requires no queue, monitor or provider lock and adds no tenant or
+connection labels. A positive value is elapsed time, not a missed deadline;
+zero does not establish poll freshness, agent progress or alert evaluation.
+The watchdog's canonical loop heartbeat and the queue and claim gauges are
+unchanged.
+
+`TestSchedulerPlanningAgeWhileBothPollCyclesAreHeld` keeps both planning
+slots occupied before enqueue, verifies that the gauge ages even with an
+empty queue, and checks that a newer successful plan does not clear the
+older marker before it unwinds.
+
 ### Notification delivery health does not hold the monitoring tick
 
 Periodic notification-health evaluation still starts from the poll tick and

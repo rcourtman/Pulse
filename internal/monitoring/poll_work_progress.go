@@ -22,14 +22,16 @@ type pollWorkDeadline struct {
 	deadline time.Time
 }
 
-// pollWorkProgress tracks only claimed slots and active workers, never the
-// scheduled inventory. No lock is shared with the scheduler, a monitor or a
-// provider. A scrape can measure a task even when it never returns.
+// pollWorkProgress tracks only active planning passes and claimed tasks,
+// never the scheduled inventory. Its lock is not held during queue or
+// provider work. A scrape can measure work even when it never returns.
 type pollWorkProgress struct {
-	overdue *prometheus.Desc
-	mu      sync.Mutex
-	lastID  uint64
-	active  map[uint64]pollWorkDeadline
+	overdue     *prometheus.Desc
+	planningAge *prometheus.Desc
+	mu          sync.Mutex
+	lastID      uint64
+	active      map[uint64]pollWorkDeadline
+	planning    map[uint64]time.Time
 }
 
 func newPollWorkProgress() *pollWorkProgress {
@@ -39,8 +41,34 @@ func newPollWorkProgress() *pollWorkProgress {
 			"Seconds past one poll task timeout for the most overdue claimed poll in each stage; zero if none.",
 			[]string{"stage"}, nil,
 		),
-		active: make(map[uint64]pollWorkDeadline),
+		planningAge: prometheus.NewDesc(
+			"pulse_scheduler_poll_planning_age_seconds",
+			"Age in seconds of the oldest poll planning pass still running; zero if none.",
+			nil, nil,
+		),
+		active:   make(map[uint64]pollWorkDeadline),
+		planning: make(map[uint64]time.Time),
 	}
+}
+
+func (p *pollWorkProgress) beginPlanning(at time.Time) uint64 {
+	if p == nil {
+		return 0
+	}
+	p.mu.Lock()
+	defer p.mu.Unlock()
+	p.lastID++
+	p.planning[p.lastID] = at
+	return p.lastID
+}
+
+func (p *pollWorkProgress) finishPlanning(id uint64) {
+	if p == nil {
+		return
+	}
+	p.mu.Lock()
+	delete(p.planning, id)
+	p.mu.Unlock()
 }
 
 func (p *pollWorkProgress) begin(stage pollWorkStage, deadline time.Time) uint64 {
@@ -74,6 +102,7 @@ func (p *pollWorkProgress) finish(id uint64) {
 
 func (p *pollWorkProgress) Describe(ch chan<- *prometheus.Desc) {
 	ch <- p.overdue
+	ch <- p.planningAge
 }
 
 func (p *pollWorkProgress) Collect(ch chan<- prometheus.Metric) {
@@ -83,9 +112,14 @@ func (p *pollWorkProgress) Collect(ch chan<- prometheus.Metric) {
 	for _, work := range p.active {
 		overdue[work.stage] = max(overdue[work.stage], now.Sub(work.deadline))
 	}
+	var planningAge time.Duration
+	for _, started := range p.planning {
+		planningAge = max(planningAge, now.Sub(started))
+	}
 	p.mu.Unlock()
 
 	for stage, wait := range overdue {
 		ch <- prometheus.MustNewConstMetric(p.overdue, prometheus.GaugeValue, wait.Seconds(), pollWorkStageNames[stage])
 	}
+	ch <- prometheus.MustNewConstMetric(p.planningAge, prometheus.GaugeValue, planningAge.Seconds())
 }
