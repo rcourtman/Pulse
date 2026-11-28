@@ -78,7 +78,7 @@ func issueBasicBrowserSession(w http.ResponseWriter, r *http.Request, username s
 		Name:   CookieNameCSRF,
 		Value:  csrfToken,
 		Path:   "/",
-		MaxAge: 86400, // 24 hours
+		MaxAge: csrfCookieMaxAge(24 * time.Hour),
 	})
 
 	// Audit log successful login

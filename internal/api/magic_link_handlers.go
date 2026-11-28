@@ -199,7 +199,7 @@ func (h *MagicLinkHandlers) HandlePublicMagicLinkVerify(w http.ResponseWriter, r
 		Name:   CookieNameCSRF,
 		Value:  csrfToken,
 		Path:   "/",
-		MaxAge: cookieMaxAge,
+		MaxAge: csrfCookieMaxAge(sessionDuration),
 	})
 	// Org cookie is intentionally NOT HttpOnly — the frontend reads/writes it to
 	// synchronize org context for WebSocket connections (which cannot send custom headers).

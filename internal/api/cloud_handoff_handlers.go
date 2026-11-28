@@ -433,7 +433,7 @@ func HandleHandoffExchange(configDir string) http.HandlerFunc {
 			Name:   CookieNameCSRF,
 			Value:  csrfToken,
 			Path:   "/",
-			MaxAge: cookieMaxAge,
+			MaxAge: csrfCookieMaxAge(sessionDuration),
 		})
 		cookiePolicy.setClientReadable(w, &http.Cookie{
 			Name:   CookieNameOrgID,

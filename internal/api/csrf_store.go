@@ -41,7 +41,20 @@ type CSRFTokenStore struct {
 	preserveFailureLogged bool
 }
 
-const maxCSRFTokensPerSession = 8
+const (
+	maxCSRFTokensPerSession = 8
+	csrfTokenTTL            = 4 * time.Hour
+	// Expire the browser cookie slightly before the server-side token so an idle
+	// tab drops the stale cookie and fetches a fresh one before any non-replayed
+	// mutation.
+	csrfCookieGraceWindow   = 5 * time.Minute
+	csrfCookieMaxAgeSeconds = int((csrfTokenTTL - csrfCookieGraceWindow) / time.Second)
+	// Proactively refresh a still-valid cookie during active GET /api/* traffic
+	// when less than this much server-side lifetime remains, coalesced across
+	// parallel requests so a page load mints at most one replacement token.
+	csrfProactiveRefreshWindow  = 30 * time.Minute
+	csrfProactiveCoalesceWindow = 30 * time.Second
+)
 
 func csrfSessionKey(sessionID string) string {
 	return sessionHash(sessionID)
@@ -229,7 +242,7 @@ func (c *CSRFTokenStore) GenerateCSRFToken(sessionID string) string {
 	key := csrfSessionKey(sessionID)
 	c.addTokenUnsafe(key, &CSRFToken{
 		Hash:    csrfTokenHash(token),
-		Expires: now.Add(4 * time.Hour),
+		Expires: now.Add(csrfTokenTTL),
 	}, now)
 	c.mu.Unlock()
 
@@ -241,6 +254,12 @@ func (c *CSRFTokenStore) GenerateCSRFToken(sessionID string) string {
 
 // ValidateCSRFToken checks if a CSRF token is valid for a session
 func (c *CSRFTokenStore) ValidateCSRFToken(sessionID, token string) bool {
+	return c.ValidateCSRFTokenWithMinTTL(sessionID, token, 0)
+}
+
+// ValidateCSRFTokenWithMinTTL checks whether token is valid for sessionID and
+// has at least minRemaining lifetime left before expiration.
+func (c *CSRFTokenStore) ValidateCSRFTokenWithMinTTL(sessionID, token string, minRemaining time.Duration) bool {
 	c.mu.RLock()
 	defer c.mu.RUnlock()
 
@@ -249,11 +268,14 @@ func (c *CSRFTokenStore) ValidateCSRFToken(sessionID, token string) bool {
 		return false
 	}
 
-	now := time.Now()
+	cutoff := time.Now()
+	if minRemaining > 0 {
+		cutoff = cutoff.Add(minRemaining)
+	}
 	tokenHash := csrfTokenHash(token)
 	valid := false
 	for _, csrfToken := range candidates {
-		if csrfToken == nil || now.After(csrfToken.Expires) {
+		if csrfToken == nil || cutoff.After(csrfToken.Expires) {
 			continue
 		}
 		if subtle.ConstantTimeCompare([]byte(csrfToken.Hash), []byte(tokenHash)) == 1 {
@@ -262,6 +284,31 @@ func (c *CSRFTokenStore) ValidateCSRFToken(sessionID, token string) bool {
 	}
 
 	return valid
+}
+
+// HasRecentToken reports whether sessionID already has a valid CSRF token
+// issued within maxAge, without storing or exposing raw token values.
+func (c *CSRFTokenStore) HasRecentToken(sessionID string, maxAge time.Duration) bool {
+	if maxAge <= 0 || maxAge >= csrfTokenTTL {
+		return false
+	}
+
+	c.mu.RLock()
+	defer c.mu.RUnlock()
+
+	candidates, exists := c.tokens[csrfSessionKey(sessionID)]
+	if !exists {
+		return false
+	}
+
+	minExpiry := time.Now().Add(csrfTokenTTL - maxAge)
+	for _, csrfToken := range candidates {
+		if csrfToken != nil && csrfToken.Expires.After(minExpiry) {
+			return true
+		}
+	}
+
+	return false
 }
 
 // DeleteCSRFToken removes a CSRF token

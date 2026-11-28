@@ -372,3 +372,146 @@ func TestRouterDoesNotIssueCSRFCookieForUnknownSession(t *testing.T) {
 		t.Fatalf("expected no CSRF records for unknown sessions, got %d", sessions)
 	}
 }
+
+func findCSRFCookie(cookies []*http.Cookie) *http.Cookie {
+	for _, c := range cookies {
+		if c.Name == CookieNameCSRF {
+			return c
+		}
+	}
+	return nil
+}
+
+func TestRouterRefreshesExpiredOrInvalidCSRFCookieOnGet(t *testing.T) {
+	router, sessionToken := newRouterWithSession(t)
+
+	router.mux.HandleFunc("/api/security/status", func(w http.ResponseWriter, r *http.Request) {
+		w.WriteHeader(http.StatusOK)
+	})
+	router.mux.HandleFunc("/api/secure", func(w http.ResponseWriter, r *http.Request) {
+		w.WriteHeader(http.StatusOK)
+	})
+
+	// Seed an expired token for this session to simulate a cookie that outlived the 4h store TTL.
+	expiredToken := generateCSRFToken(sessionToken)
+	store := GetCSRFStore()
+	store.mu.Lock()
+	store.tokens[csrfSessionKey(sessionToken)][0].Expires = time.Now().Add(-1 * time.Hour)
+	store.mu.Unlock()
+
+	// GET /api/security/status (a public route) with the valid session and expired CSRF cookie must refresh it.
+	getReq := httptest.NewRequest(http.MethodGet, "/api/security/status", nil)
+	getReq.AddCookie(&http.Cookie{Name: "pulse_session", Value: sessionToken})
+	getReq.AddCookie(&http.Cookie{Name: CookieNameCSRF, Value: expiredToken})
+	getRec := httptest.NewRecorder()
+
+	router.ServeHTTP(getRec, getReq)
+
+	if getRec.Code != http.StatusOK {
+		t.Fatalf("expected GET status %d, got %d (%s)", http.StatusOK, getRec.Code, getRec.Body.String())
+	}
+
+	refreshed := findCSRFCookie(getRec.Result().Cookies())
+	if refreshed == nil || refreshed.Value == "" {
+		t.Fatalf("expected refreshed pulse_csrf cookie after expired token")
+	}
+	if refreshed.Value == expiredToken {
+		t.Fatalf("expected new pulse_csrf token, got expired token back")
+	}
+	if refreshed.MaxAge != csrfCookieMaxAgeSeconds {
+		t.Fatalf("refreshed pulse_csrf MaxAge = %d, want %d", refreshed.MaxAge, csrfCookieMaxAgeSeconds)
+	}
+
+	// Subsequent non-replayed POST with the refreshed cookie must succeed on the first attempt.
+	postReq := httptest.NewRequest(http.MethodPost, "/api/secure", nil)
+	postReq.AddCookie(&http.Cookie{Name: "pulse_session", Value: sessionToken})
+	postReq.AddCookie(&http.Cookie{Name: CookieNameCSRF, Value: refreshed.Value})
+	postReq.Header.Set("X-CSRF-Token", refreshed.Value)
+	postRec := httptest.NewRecorder()
+
+	router.ServeHTTP(postRec, postReq)
+
+	if postRec.Code != http.StatusOK {
+		t.Fatalf("expected POST status %d with refreshed CSRF token, got %d (%s)", http.StatusOK, postRec.Code, postRec.Body.String())
+	}
+
+	// A follow-up GET with the fresh token must not needlessly rotate the cookie.
+	freshGetReq := httptest.NewRequest(http.MethodGet, "/api/security/status", nil)
+	freshGetReq.AddCookie(&http.Cookie{Name: "pulse_session", Value: sessionToken})
+	freshGetReq.AddCookie(&http.Cookie{Name: CookieNameCSRF, Value: refreshed.Value})
+	freshGetRec := httptest.NewRecorder()
+
+	router.ServeHTTP(freshGetRec, freshGetReq)
+
+	if c := findCSRFCookie(freshGetRec.Result().Cookies()); c != nil {
+		t.Fatalf("did not expect fresh pulse_csrf cookie to rotate, got %q", c.Value)
+	}
+}
+
+func TestRouterProactivelyRefreshesNearExpiryCSRFCookieOnce(t *testing.T) {
+	router, sessionToken := newRouterWithSession(t)
+
+	router.mux.HandleFunc("/api/ping", func(w http.ResponseWriter, r *http.Request) {
+		w.WriteHeader(http.StatusOK)
+	})
+
+	nearExpiryToken := generateCSRFToken(sessionToken)
+	store := GetCSRFStore()
+	store.mu.Lock()
+	store.tokens[csrfSessionKey(sessionToken)][0].Expires = time.Now().Add(10 * time.Minute)
+	store.mu.Unlock()
+
+	// First GET sees a valid token with <30m left and rotates once.
+	req1 := httptest.NewRequest(http.MethodGet, "/api/ping", nil)
+	req1.AddCookie(&http.Cookie{Name: "pulse_session", Value: sessionToken})
+	req1.AddCookie(&http.Cookie{Name: CookieNameCSRF, Value: nearExpiryToken})
+	rec1 := httptest.NewRecorder()
+	router.ServeHTTP(rec1, req1)
+
+	rotated := findCSRFCookie(rec1.Result().Cookies())
+	if rotated == nil || rotated.Value == "" || rotated.Value == nearExpiryToken {
+		t.Fatalf("expected proactive rotation of near-expiry pulse_csrf cookie")
+	}
+
+	// A concurrent GET carrying the same near-expiry cookie must coalesce instead of minting a second token.
+	req2 := httptest.NewRequest(http.MethodGet, "/api/ping", nil)
+	req2.AddCookie(&http.Cookie{Name: "pulse_session", Value: sessionToken})
+	req2.AddCookie(&http.Cookie{Name: CookieNameCSRF, Value: nearExpiryToken})
+	rec2 := httptest.NewRecorder()
+	router.ServeHTTP(rec2, req2)
+
+	if duplicate := findCSRFCookie(rec2.Result().Cookies()); duplicate != nil {
+		t.Fatalf("expected concurrent near-expiry GET to coalesce, but issued another cookie %q", duplicate.Value)
+	}
+
+	// The old near-expiry token must remain valid so in-flight mutations still succeed.
+	if !validateCSRFToken(sessionToken, nearExpiryToken) {
+		t.Fatalf("expected old near-expiry token to stay valid during proactive rotation")
+	}
+}
+
+func TestRouterDoesNotRefreshCSRFCookieForInvalidSessionWithStaleCookie(t *testing.T) {
+	router, _ := newRouterWithSession(t)
+
+	router.mux.HandleFunc("/api/health", func(w http.ResponseWriter, r *http.Request) {
+		w.WriteHeader(http.StatusOK)
+	})
+
+	bogusSession := "not-a-valid-session-token"
+	req := httptest.NewRequest(http.MethodGet, "/api/health", nil)
+	req.AddCookie(&http.Cookie{Name: "pulse_session", Value: bogusSession})
+	req.AddCookie(&http.Cookie{Name: CookieNameCSRF, Value: "stale-csrf"})
+	rec := httptest.NewRecorder()
+
+	router.ServeHTTP(rec, req)
+
+	if rec.Code != http.StatusOK {
+		t.Fatalf("expected public GET status %d, got %d", http.StatusOK, rec.Code)
+	}
+	if c := findCSRFCookie(rec.Result().Cookies()); c != nil {
+		t.Fatalf("did not expect pulse_csrf cookie for invalid session, got %q", c.Value)
+	}
+	if sessions := csrfSessionCountForTest(); sessions != 0 {
+		t.Fatalf("invalid session on public GET must not write to CSRFTokenStore, got %d sessions", sessions)
+	}
+}

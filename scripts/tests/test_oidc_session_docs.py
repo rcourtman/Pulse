@@ -481,7 +481,8 @@ class OIDCSessionDocsTest(unittest.TestCase):
             "// handleLogin", 1
         )[0]
         self.assertIn("24*time.Hour", session)
-        self.assertEqual(session.count("MaxAge:   86400") + session.count("MaxAge: 86400"), 2)
+        self.assertEqual(session.count("MaxAge:   86400") + session.count("MaxAge: 86400"), 1)
+        self.assertIn("MaxAge: csrfCookieMaxAge(24 * time.Hour)", session)
         store = (ROOT / "internal/api/session_store.go").read_text()
         sliding = store.split("func (s *SessionStore) ValidateAndExtendSession(", 1)[1]
         self.assertIn("now.After(session.ExpiresAt)", sliding)

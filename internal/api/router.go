@@ -4555,24 +4555,24 @@ func (r *Router) ServeHTTP(w http.ResponseWriter, req *http.Request) {
 			return
 		}
 
-		// Issue CSRF token for GET requests if session exists but CSRF cookie is missing
-		// This ensures the frontend has a token before making POST requests
-		if req.Method == "GET" && strings.HasPrefix(req.URL.Path, "/api/") {
+		// Issue or refresh the CSRF cookie on GET /api/* requests for live sessions
+		// when the cookie is missing, invalid/expired, or nearing expiry. This ensures
+		// the frontend holds a valid token before non-replayed mutations.
+		if req.Method == http.MethodGet && strings.HasPrefix(req.URL.Path, "/api/") {
 			sessionCookie, err := readSessionCookie(req)
 			// The cookie value is client-supplied and this runs for public paths too,
 			// so only a live session may add a token to the persisted CSRF store.
 			if err == nil && sessionCookie.Value != "" && ValidateSession(sessionCookie.Value) {
-				// Check if CSRF cookie exists
-				_, csrfErr := req.Cookie(CookieNameCSRF)
-				if csrfErr != nil {
-					// Session exists but no CSRF cookie - issue one
-					csrfToken := generateCSRFToken(sessionCookie.Value)
-					getBrowserCookiePolicy(req).setClientReadable(w, &http.Cookie{
-						Name:   CookieNameCSRF,
-						Value:  csrfToken,
-						Path:   "/",
-						MaxAge: 86400,
-					})
+				csrfStore := GetCSRFStore()
+				csrfCookie, csrfErr := req.Cookie(CookieNameCSRF)
+				needsCSRF := csrfErr != nil || csrfCookie.Value == "" || !csrfStore.ValidateCSRFToken(sessionCookie.Value, csrfCookie.Value)
+				if !needsCSRF &&
+					!csrfStore.ValidateCSRFTokenWithMinTTL(sessionCookie.Value, csrfCookie.Value, csrfProactiveRefreshWindow) &&
+					!csrfStore.HasRecentToken(sessionCookie.Value, csrfProactiveCoalesceWindow) {
+					needsCSRF = true
+				}
+				if needsCSRF {
+					issueNewCSRFCookie(w, req, sessionCookie.Value)
 				}
 			}
 		}
@@ -5610,7 +5610,7 @@ func (r *Router) establishSession(w http.ResponseWriter, req *http.Request, user
 		Name:   CookieNameCSRF,
 		Value:  csrfToken,
 		Path:   "/",
-		MaxAge: 86400,
+		MaxAge: csrfCookieMaxAge(24 * time.Hour),
 	})
 
 	return nil
@@ -5647,7 +5647,7 @@ func (r *Router) establishRecoverySession(w http.ResponseWriter, req *http.Reque
 		Name:   CookieNameCSRF,
 		Value:  csrfToken,
 		Path:   "/",
-		MaxAge: 86400,
+		MaxAge: csrfCookieMaxAge(24 * time.Hour),
 	})
 
 	return nil
@@ -5688,7 +5688,7 @@ func (r *Router) establishOIDCSession(w http.ResponseWriter, req *http.Request, 
 		Name:   CookieNameCSRF,
 		Value:  csrfToken,
 		Path:   "/",
-		MaxAge: 86400,
+		MaxAge: csrfCookieMaxAge(24 * time.Hour),
 	})
 
 	return nil
@@ -5807,7 +5807,7 @@ func (r *Router) handleLogin(w http.ResponseWriter, req *http.Request) {
 			Name:   CookieNameCSRF,
 			Value:  csrfToken,
 			Path:   "/",
-			MaxAge: cookieMaxAge,
+			MaxAge: csrfCookieMaxAge(sessionDuration),
 		})
 
 		// Audit log successful login

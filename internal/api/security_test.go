@@ -1128,12 +1128,15 @@ func TestIssueNewCSRFCookie(t *testing.T) {
 			t.Error("expected non-empty token for valid session")
 		}
 
-		// Check that a cookie was set
+		// Check that a cookie was set with MaxAge bounded below the server-side CSRF TTL
 		cookies := w.Result().Cookies()
 		found := false
 		for _, c := range cookies {
 			if c.Name == "pulse_csrf" && c.Value == token {
 				found = true
+				if c.MaxAge != csrfCookieMaxAgeSeconds {
+					t.Errorf("pulse_csrf MaxAge = %d, want %d", c.MaxAge, csrfCookieMaxAgeSeconds)
+				}
 				break
 			}
 		}
@@ -1141,6 +1144,31 @@ func TestIssueNewCSRFCookie(t *testing.T) {
 			t.Error("expected pulse_csrf cookie to be set with the token value")
 		}
 	})
+}
+
+func TestCSRFCookieMaxAge(t *testing.T) {
+	if csrfCookieMaxAgeSeconds >= int(csrfTokenTTL/time.Second) {
+		t.Fatalf("csrfCookieMaxAgeSeconds (%d) must be strictly less than csrfTokenTTL (%d)", csrfCookieMaxAgeSeconds, int(csrfTokenTTL/time.Second))
+	}
+
+	cases := []struct {
+		name     string
+		duration time.Duration
+		want     int
+	}{
+		{name: "default", duration: 0, want: csrfCookieMaxAgeSeconds},
+		{name: "24h session capped", duration: 24 * time.Hour, want: csrfCookieMaxAgeSeconds},
+		{name: "30d remember-me capped", duration: 30 * 24 * time.Hour, want: csrfCookieMaxAgeSeconds},
+		{name: "1h session bounded to session", duration: time.Hour, want: 3600},
+	}
+
+	for _, tc := range cases {
+		t.Run(tc.name, func(t *testing.T) {
+			if got := csrfCookieMaxAge(tc.duration); got != tc.want {
+				t.Errorf("csrfCookieMaxAge(%v) = %d, want %d", tc.duration, got, tc.want)
+			}
+		})
+	}
 }
 
 func TestFailedLogin_Fields(t *testing.T) {

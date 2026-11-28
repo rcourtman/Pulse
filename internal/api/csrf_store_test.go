@@ -196,6 +196,56 @@ func TestCSRFTokenStore_GenerateAndValidate(t *testing.T) {
 	}
 }
 
+func TestCSRFTokenStore_ValidateWithMinTTLAndHasRecentToken(t *testing.T) {
+	store := &CSRFTokenStore{
+		tokens:   make(map[string][]*CSRFToken),
+		dataPath: t.TempDir(),
+	}
+
+	sessionID := "ttl-session"
+	token := store.GenerateCSRFToken(sessionID)
+	if token == "" {
+		t.Fatal("GenerateCSRFToken() returned empty string")
+	}
+
+	if !store.ValidateCSRFTokenWithMinTTL(sessionID, token, csrfProactiveRefreshWindow) {
+		t.Fatal("fresh token should satisfy proactive refresh minimum TTL")
+	}
+	if !store.HasRecentToken(sessionID, csrfProactiveCoalesceWindow) {
+		t.Fatal("fresh token should register as recent within coalesce window")
+	}
+	if store.HasRecentToken("other-session", csrfProactiveCoalesceWindow) {
+		t.Fatal("other session should not report a recent token")
+	}
+
+	// Age the token to 10 minutes remaining (still valid, but inside the 30-minute proactive refresh window).
+	store.mu.Lock()
+	store.tokens[csrfSessionKey(sessionID)][0].Expires = time.Now().Add(10 * time.Minute)
+	store.mu.Unlock()
+
+	if !store.ValidateCSRFToken(sessionID, token) {
+		t.Fatal("token with 10m remaining should still validate normally")
+	}
+	if store.ValidateCSRFTokenWithMinTTL(sessionID, token, csrfProactiveRefreshWindow) {
+		t.Fatal("token with 10m remaining should not satisfy 30m minimum TTL")
+	}
+	if store.HasRecentToken(sessionID, csrfProactiveCoalesceWindow) {
+		t.Fatal("aged token should not register as recently minted")
+	}
+
+	// Expire the token completely.
+	store.mu.Lock()
+	store.tokens[csrfSessionKey(sessionID)][0].Expires = time.Now().Add(-1 * time.Minute)
+	store.mu.Unlock()
+
+	if store.ValidateCSRFToken(sessionID, token) {
+		t.Fatal("expired token should fail validation")
+	}
+	if store.ValidateCSRFTokenWithMinTTL(sessionID, token, 0) {
+		t.Fatal("expired token should fail ValidateCSRFTokenWithMinTTL")
+	}
+}
+
 func TestCSRFTokenStore_DeleteToken(t *testing.T) {
 	tmpDir := t.TempDir()
 
