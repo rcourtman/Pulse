@@ -255,6 +255,27 @@ separate-session login and permission checks in Quick Start.
 
 > **Note**: Plain SSO login, **Allowed Groups** gating, and group mapping to built-in roles work on every plan. Creating custom roles and manually managing user assignments require Pro RBAC.
 
+## SAML 2.0 Single Sign-On
+
+SAML 2.0 is included on every plan alongside OIDC and supports multiple saved providers under **Settings → Security → Single Sign-On**. Keep a working, independent administrator login open throughout setup.
+
+### SAML setup and endpoints
+
+1. **Choose the IdP metadata source.** Add a SAML provider and supply **IdP Metadata URL** (preferred), raw IdP metadata XML, or manual **IdP SSO URL**, **IdP Entity ID**, and **IdP Certificate (PEM)**.
+2. **Configure access and attributes before saving.** Set **Username Attribute** (defaults to `NameID`), **Email Attribute**, and **Groups Attribute** (Pulse matches either the SAML attribute `Name` or `FriendlyName`). Open **Show access restrictions & role mapping** to set **Allowed Groups**, **Allowed Domains**, **Allowed Emails**, and **Group Role Mappings**, including a trusted admin group mapped to `admin` if administrators will sign in through SAML.
+3. **Save, then register Pulse in the IdP.** Saving generates the provider ID and exposes the **SP Metadata** (`/api/saml/{id}/metadata`, `GET`, `application/xml`) and **ACS URL** (`/api/saml/{id}/acs`, `POST`) on the saved provider card. Copy those exact HTTPS URLs into the IdP rather than guessing a provider ID. Pulse's default SP Entity ID is `<public-url>/saml/{id}` unless overridden (`spEntityId`), and SP-initiated sign-in starts at `/api/saml/{id}/login` (`GET` redirects to the IdP, and `POST` returns `authorizationUrl`).
+4. **Understand what SAML Test checks.** **Check SAML metadata** (with a metadata URL or XML) verifies that the metadata parses and contains an IdP Entity ID and usable SSO URL, and reports whether an X.509 signing certificate was read. With manual settings (**Check the IdP SSO URL format only**), Pulse checks only URL syntax. Neither verifies assertion signatures end-to-end or completes a sign-in: verify administrator, non-admin, and excluded users in a separate browser session.
+
+Optional signed authentication requests (`signRequests`) require both an SP certificate and an RSA private key (PKCS#1 or PKCS#8 PEM, inline or file path).
+
+### SAML browser binding, sessions, and Single Logout
+
+- **SP-initiated login binding:** Each SP-initiated `AuthnRequest` is valid for **10 minutes** (up to 1,024 outstanding entries per provider) and is bound to a browser-only HttpOnly login cookie (`__Host-pulse_saml_login` over HTTPS, `pulse_saml_login` over HTTP). Pulse accepts each signed IdP response at most once, only from the browser that started the login, and returns to the local path recorded when login began.
+- **SameSite repost on ACS:** Browsers withhold `SameSite=Lax` cookies on cross-site `POST` requests from the IdP to `/api/saml/{id}/acs`. When a SAML response arrives without the login cookie on an SP-initiated provider, Pulse returns a one-time same-origin repost form so the browser re-submits the assertion with its cookie. If cookies are blocked or no login started in that browser, ACS refuses the login with `saml_validation_failed`.
+- **Keep IdP-initiated SSO off by default:** **Allow IdP-initiated SSO** (`allowIdpInitiated`) is disabled by default because unsolicited assertions answer no `AuthnRequest` and bypass `InResponseTo` and browser binding. Enable it only when an IdP workflow specifically requires it.
+- **Sessions and access boundaries:** SAML creates the same 24-hour browser session cookie as OIDC, binds each user's stable principal to the assertion's verified `Issuer` / IdP Entity ID and `NameID` (an assertion without `NameID` fails with `missing_subject`), enforces all non-empty **Allowed Groups**, **Allowed Domains**, and **Allowed Emails** rules, writes `saml_role_assignment` audit events only when at least one role is mapped, and rejects in-flight callbacks with `invalid_state` if the provider is edited or disabled before completion.
+- **Single Logout (SLO):** SP-initiated logout (`POST /api/saml/{id}/logout`) requires an active browser session, clears the local Pulse session first, and redirects to the IdP's SLO endpoint when present in metadata (or to `/?logout=success` otherwise). `/api/saml/{id}/slo` validates only a signed `LogoutResponse` answering an outstanding SP-initiated `LogoutRequest` from that session. **IdP-initiated Single Logout** (`SAMLRequest` sent to `/slo`) is not supported and returns HTTP 400 (`IdP-initiated logout not supported`) without clearing sessions.
+
 ## 🔧 Troubleshooting
 
 | Issue | Solution |
@@ -263,6 +284,9 @@ separate-session login and permission checks in Quick Start.
 | **`unexpected signature algorithm "HS256"`** | Your IdP is signing with HS256. Configure it to use **RS256**. |
 | **Redirect Loop** | [Check the callback address](#check-the-callback-address) before changing proxy or cookie settings. |
 | **Self-Signed Certs** | The SSO provider form in Settings has no CA Bundle field. Set `oidc.caBundle` on the provider through the SSO provider API (`/api/security/sso/providers`) to a host path readable by Pulse (e.g. `/etc/ssl/certs/oidc-ca.pem` mounted into the container). For a provider configured with the legacy `OIDC_ENABLED` environment variables, set `OIDC_CA_BUNDLE` instead (see [Configuration](CONFIGURATION.md)). |
+| **`saml_validation_failed`** | The SAML response failed signature/assertion checks, expired past the 10-minute login window, was replayed, or arrived without the browser's login cookie (including when cookies or JavaScript are blocked on the same-origin ACS repost). Start a fresh SP-initiated login from Pulse in the same browser and check the IdP signing certificate and clock skew locally. |
+| **`missing_subject`** | The SAML assertion omitted `NameID`. Configure the IdP to send a stable `NameID` subject for the user. |
+| **`provider_not_initialized`** | Pulse could not initialize the SAML service from its saved metadata URL/XML or SP signing credentials. Check metadata reachability, XML validity, and any SP certificate/key paths privately. |
 
 ### Safe diagnosis
 
