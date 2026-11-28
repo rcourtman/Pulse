@@ -5441,17 +5441,21 @@ func (m *Monitor) expiredRemovedHostAgents(now time.Time) map[string]time.Time {
 // Durable state is deleted before memory so a persistence failure retains the
 // deny boundary across this process and the next restart.
 func (m *Monitor) cleanupRemovedHostAgents(now time.Time) {
-	// This runs on every tick of the monitor loop. A host report holds the
-	// lifecycle lock for reading until it is fully applied, and a writer that
-	// waits for it holds back every later report, so ask for the lock only
-	// when a tombstone is due. What is due is read again under the lock.
+	// Avoid taking the lifecycle lock at all when nothing is due.
 	if len(m.expiredRemovedHostAgents(now)) == 0 {
 		return
 	}
 
-	m.hostAgentLifecycleMu.Lock()
+	// A waiting RWMutex writer blocks later readers as well as this
+	// monitoring tick. If a report or lifecycle change is in flight, leave
+	// the blocks intact and let the next ordinary sweep retry.
+	if !m.hostAgentLifecycleMu.TryLock() {
+		return
+	}
 	defer m.hostAgentLifecycleMu.Unlock()
 
+	// Another lifecycle transition may have changed what is due since the
+	// first check. Only the second, exclusive check authorizes deletion.
 	for hostID, removedAt := range m.expiredRemovedHostAgents(now) {
 		if m.hostContinuityStore != nil {
 			if continuity, ok := m.hostContinuityStore.Get(hostID); ok && !continuity.RemovedAt.IsZero() {

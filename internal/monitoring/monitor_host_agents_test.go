@@ -5071,6 +5071,84 @@ func TestCleanupRemovedHostAgents_LeavesLifecycleLockAloneWhenNothingIsDue(t *te
 	}
 }
 
+func TestCleanupRemovedHostAgents_DefersDueTombstoneDuringReport(t *testing.T) {
+	dir := t.TempDir()
+	m := newContinuityJournalMonitor(t, dir)
+	now := time.Now().UTC()
+	for id, age := range map[string]time.Duration{
+		"host-expired": 25 * time.Hour,
+		"host-recent":  time.Hour,
+	} {
+		if err := m.hostContinuityStore.Upsert(config.HostContinuityEntry{
+			HostID:    id,
+			Hostname:  id + ".local",
+			RemovedAt: now.Add(-age),
+		}); err != nil {
+			t.Fatal(err)
+		}
+	}
+	// Load both tombstones before either was old enough to expire.
+	m.hydrateRemovedHostAgents(now.Add(-2 * time.Hour))
+	requireRemoved := func(expired bool) {
+		t.Helper()
+		_, inMemory := m.removedHostAgents["host-expired"]
+		_, recentInMemory := m.removedHostAgents["host-recent"]
+		state := m.state.GetRemovedHostAgents()
+		wantCount := 2
+		if expired {
+			wantCount = 1
+		}
+		durable := config.NewHostContinuityStore(dir, nil).RemovedEntries()
+		if inMemory == expired || !recentInMemory || len(state) != wantCount || len(durable) != wantCount {
+			t.Fatalf("expired=%v: memory=%v; state=%+v; disk=%+v", expired, inMemory, state, durable)
+		}
+		if expired && (state[0].ID != "host-recent" || durable[0].HostID != "host-recent") {
+			t.Fatalf("sweep removed the wrong block: state=%+v; disk=%+v", state, durable)
+		}
+	}
+
+	// Model a report still holding the shared lifecycle lock. An exclusive
+	// waiter would pin the poll tick and stop new reports from acquiring it.
+	m.hostAgentLifecycleMu.RLock()
+	done := make(chan struct{})
+	go func() {
+		defer close(done)
+		m.cleanupRemovedHostAgents(now)
+	}()
+	select {
+	case <-done:
+	case <-time.After(2 * time.Second):
+		m.hostAgentLifecycleMu.RUnlock()
+		<-done
+		t.Fatal("periodic sweep waited behind an in-flight report with a tombstone due")
+	}
+	// Independently apply a real peer report before releasing the first
+	// reader's lock. The monitor must accept it without clearing either block.
+	report := hostRemovalLifecycleReport("peer-host", "peer-machine", "peer-agent", "peer.local", "linux", now)
+	peerDone := make(chan error, 1)
+	go func() {
+		_, err := m.ApplyHostReport(report, nil)
+		peerDone <- err
+	}()
+	select {
+	case err := <-peerDone:
+		m.hostAgentLifecycleMu.RUnlock()
+		if err != nil {
+			t.Fatalf("peer report did not apply: %v", err)
+		}
+	case <-time.After(2 * time.Second):
+		m.hostAgentLifecycleMu.RUnlock()
+		<-peerDone
+		t.Fatal("peer report waited behind tombstone expiry")
+	}
+	if hosts := m.state.GetHosts(); len(hosts) != 1 || hosts[0].Hostname != "peer.local" {
+		t.Fatalf("missing applied peer report: %+v", hosts)
+	}
+	requireRemoved(false)
+	m.cleanupRemovedHostAgents(now.Add(15 * time.Second))
+	requireRemoved(true)
+}
+
 // TestMatchHostConfigContinuity pins the #1570 config-fetch fallback: after a
 // monitor reload wipes live state, a report-scoped token still resolves its
 // bound host from the persisted continuity store, other tokens do not, and a
