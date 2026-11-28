@@ -1,0 +1,45 @@
+{
+  "version": 1,
+  "base_sha": "cfe1aceff902bee17bb450b28fd07194dab4af83",
+  "verified_at": "2026-11-28T14:14:44Z",
+  "result": "passed",
+  "changed_paths": [
+    "frontend-modern/src/components/Workloads/GuestDrawerHistory.tsx",
+    "frontend-modern/src/components/Workloads/guestDrawerModel.ts"
+  ],
+  "content_sha256": {
+    "frontend-modern/src/components/Workloads/GuestDrawerHistory.tsx": "5b6a7d4af19e7361d44a82507a85f0593c058e4e104eebf50a8abaf318af4547",
+    "frontend-modern/src/components/Workloads/guestDrawerModel.ts": "a28348c5faabd6f1721e7d96e3ba6acd6a1d5e7451fe5d8e94fbb92047078428"
+  },
+  "routes": [
+    "/proxmox"
+  ],
+  "viewports": [
+    {
+      "width": 1280,
+      "height": 800
+    },
+    {
+      "width": 390,
+      "height": 844
+    }
+  ],
+  "states": [
+    "Desktop dark default multi-series Utilization, Network I/O, and Disk I/O charts alongside drag-to-zoom controls",
+    "Desktop dark isolated CPU with 0-100% axis, active CPU warning threshold, hidden Memory critical threshold, and hover peak callout",
+    "Desktop dark multi-selected CPU and Memory alongside isolated Network I/O Out rescaled from 115M/s to 1.4M/s",
+    "Desktop light multi-selected Utilization and rescaled Network I/O with 7.58:1 hidden legend text contrast",
+    "Mobile 390px isolated CPU with Compare and Show all controls (24px min height, 35px min center distance, zero horizontal overflow)",
+    "Mobile 390px tap-only Compare mode with CPU and Memory visible and Disk hidden"
+  ],
+  "interactions": [
+    "Click legend item to isolate a single series and hide sibling traces, bands, alert lines, hover markers, and deferred freshness warnings",
+    "Hover plot while isolated to verify single-series crosshair, marker, and peak label",
+    "Ctrl/Cmd/Shift+click legend item to compare multiple series without hiding the last visible series",
+    "Click isolated Network I/O Out series to rescale auto-scaled Y-axis and click again to restore full scale",
+    "Activate Memory legend button via keyboard Space to verify stable DOM node focus retention across isolate and restore",
+    "Activate Show all via keyboard Enter to restore all series and return focus to the first legend button",
+    "Switch time range from 24h to 7d to confirm isolation persists on the same resource and switch to another guest to confirm reset",
+    "Tap Compare then Memory on 390px mobile viewport without modifier keys to compare CPU and Memory with Disk hidden"
+  ]
+}

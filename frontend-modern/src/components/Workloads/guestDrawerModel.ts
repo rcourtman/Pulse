@@ -422,6 +422,54 @@ export const getGuestDrawerHistoryValueLabel = (
   return formatHistoryChartTooltipValue(latest.value, unit);
 };
 
+export const getEffectiveHiddenHistoryMetrics = (
+  allMetrics: readonly string[],
+  hiddenMetrics: ReadonlySet<string>,
+): ReadonlySet<string> => {
+  if (allMetrics.length <= 1 || hiddenMetrics.size === 0) return new Set();
+  const next = new Set<string>();
+  for (const metric of allMetrics) {
+    if (hiddenMetrics.has(metric)) next.add(metric);
+  }
+  return next.size >= allMetrics.length ? new Set() : next;
+};
+
+// Grafana-style legend visibility toggle:
+// - Regular click isolates the clicked series, or restores all series when that
+//   series is already the only visible one.
+// - Modifier click (Ctrl, Cmd, or Shift) toggles just the clicked series on or
+//   off, restoring all series instead of hiding the last visible one.
+export const toggleGuestDrawerHistorySeriesVisibility = (
+  allMetrics: readonly string[],
+  currentHidden: ReadonlySet<string>,
+  clickedMetric: string,
+  multiSelect: boolean,
+): ReadonlySet<string> => {
+  if (allMetrics.length <= 1 || !allMetrics.includes(clickedMetric)) {
+    return new Set();
+  }
+  const normalizedHidden = getEffectiveHiddenHistoryMetrics(allMetrics, currentHidden);
+  const visible = allMetrics.filter((metric) => !normalizedHidden.has(metric));
+
+  if (!multiSelect) {
+    if (visible.length === 1 && visible[0] === clickedMetric) {
+      return new Set();
+    }
+    return new Set(allMetrics.filter((metric) => metric !== clickedMetric));
+  }
+
+  const next = new Set(normalizedHidden);
+  if (next.has(clickedMetric)) {
+    next.delete(clickedMetric);
+    return next;
+  }
+  if (visible.length <= 1) {
+    return new Set();
+  }
+  next.add(clickedMetric);
+  return next;
+};
+
 export const getGuestDrawerHistoryRangeBounds = (
   groupedSeries: readonly { points: readonly AggregatedMetricPoint[] }[],
   window?: { start: number; end: number },

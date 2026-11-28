@@ -8,14 +8,17 @@ import {
   on,
   onCleanup,
   type Component,
-} from 'solid-js';
+} from "solid-js";
 
-import { type AggregatedMetricPoint, type HistoryTimeRange } from '@/api/charts';
-import { Button } from '@/components/shared/Button';
-import { FormSelect } from '@/components/shared/FormSelect';
-import { InlineNotice } from '@/components/shared/InlineNotice';
-import { LoadingSpinner } from '@/components/shared/LoadingSpinner';
-import { PhoneChartsToggle } from '@/components/shared/PhoneChartsToggle';
+import {
+  type AggregatedMetricPoint,
+  type HistoryTimeRange,
+} from "@/api/charts";
+import { Button } from "@/components/shared/Button";
+import { FormSelect } from "@/components/shared/FormSelect";
+import { InlineNotice } from "@/components/shared/InlineNotice";
+import { LoadingSpinner } from "@/components/shared/LoadingSpinner";
+import { PhoneChartsToggle } from "@/components/shared/PhoneChartsToggle";
 import {
   formatHistoryChartTooltipValue,
   formatHistoryChartTimeLabel,
@@ -26,35 +29,37 @@ import {
   getHistorySourceNotice,
   type HistoryReadoutSource,
   withoutRepeatedHistoryAxisLabels,
-} from '@/components/shared/historyChartModel';
-import { getAPIReadAccessErrorMessage } from '@/utils/apiAccessError';
-import { formatCompactSpeed } from '@/utils/format';
+} from "@/components/shared/historyChartModel";
+import { getAPIReadAccessErrorMessage } from "@/utils/apiAccessError";
+import { formatCompactSpeed } from "@/utils/format";
 
 import {
   GUEST_DRAWER_HISTORY_GROUPS,
   buildGuestDrawerHistoryBandPath,
   buildGuestDrawerHistoryPath,
+  getEffectiveHiddenHistoryMetrics,
   getGuestDrawerHistoryRangeBounds,
   getGuestDrawerHistoryScale,
   getGuestDrawerHistorySegments,
   getGuestDrawerHistoryValueLabel,
   normalizeGuestDrawerHistoryPoints,
+  toggleGuestDrawerHistorySeriesVisibility,
   type GuestDrawerHistoryGroupConfig,
   type GuestDrawerHistoryDeferredMetric,
   type GuestDrawerHistoryTarget,
   type GuestDrawerHistoryTimeBounds,
-} from './guestDrawerModel';
+} from "./guestDrawerModel";
 import {
   createGuestDrawerHistoryQuery,
   createGuestDrawerHistorySource,
-} from './guestDrawerHistoryQuery';
-import { GuestDrawerHistoryRangeSelect } from './GuestDrawerHistoryRangeSelect';
+} from "./guestDrawerHistoryQuery";
+import { GuestDrawerHistoryRangeSelect } from "./GuestDrawerHistoryRangeSelect";
 
 export { GuestDrawerHistoryRangeSelect };
 
 /** An active alert on one charted metric; a numeric trigger draws a dashed line. */
 export interface GuestDrawerHistoryAlert {
-  severity: 'warning' | 'critical';
+  severity: "warning" | "critical";
   value?: number;
 }
 
@@ -62,7 +67,10 @@ interface GuestDrawerHistoryProps {
   currentMetrics?: Record<string, number | null | undefined>;
   /** False when the owning resource no longer supplies current readings. */
   liveReadingsAvailable?: boolean;
-  deferredMetrics?: Record<string, GuestDrawerHistoryDeferredMetric | undefined>;
+  deferredMetrics?: Record<
+    string,
+    GuestDrawerHistoryDeferredMetric | undefined
+  >;
   groups?: GuestDrawerHistoryGroupConfig[];
   range: HistoryTimeRange;
   target: GuestDrawerHistoryTarget | null;
@@ -89,17 +97,25 @@ interface GuestDrawerHistoryGroupChartProps {
   hiddenOnPhone?: boolean;
   isZoomed: boolean;
   currentMetrics?: Record<string, number | null | undefined>;
-  deferredMetrics?: Record<string, GuestDrawerHistoryDeferredMetric | undefined>;
+  deferredMetrics?: Record<
+    string,
+    GuestDrawerHistoryDeferredMetric | undefined
+  >;
   group: GuestDrawerHistoryGroupConfig;
+  hiddenMetrics: ReadonlySet<string>;
   loading: boolean;
   metrics: Record<string, AggregatedMetricPoint[] | undefined>;
+  /** Per-metric origin when a reply mixes store, memory, and native readings. */
+  metricSources?: Record<string, HistoryReadoutSource>;
   onBrushPreviewChange: (preview: HistoryBrushPreview | null) => void;
   onCommitZoom: (window: GuestDrawerHistoryTimeBounds) => void;
+  onHiddenMetricsChange: (next: ReadonlySet<string>) => void;
   onResetZoom: () => void;
   range: HistoryTimeRange;
   /** Where the reply's readings came from; names the readout's time. */
   source?: HistoryReadoutSource;
   sourceKey: string;
+  targetKey: string;
   timeBounds: GuestDrawerHistoryTimeBounds | null;
   touchInspection: boolean;
 }
@@ -115,11 +131,11 @@ const HISTORY_MIN_ZOOM_SPAN_MS = 60_000;
 const HISTORY_MAX_ZOOM_SPAN_MS = 365 * 24 * 60 * 60 * 1000;
 const HISTORY_SHORT_SPAN_MS = 15 * 60_000;
 
-const pad2 = (value: number): string => String(value).padStart(2, '0');
+const pad2 = (value: number): string => String(value).padStart(2, "0");
 
 const formatUtcOffsetLabel = (timestamp: number): string => {
   const offsetMinutes = -new Date(timestamp).getTimezoneOffset();
-  const sign = offsetMinutes >= 0 ? '+' : '-';
+  const sign = offsetMinutes >= 0 ? "+" : "-";
   const absMinutes = Math.abs(offsetMinutes);
   const hours = Math.floor(absMinutes / 60);
   const mins = absMinutes % 60;
@@ -128,7 +144,7 @@ const formatUtcOffsetLabel = (timestamp: number): string => {
 
 const toDatetimeLocalInputValue = (timestamp: number): string => {
   const date = new Date(timestamp);
-  if (!Number.isFinite(date.getTime())) return '';
+  if (!Number.isFinite(date.getTime())) return "";
   return `${date.getFullYear()}-${pad2(date.getMonth() + 1)}-${pad2(date.getDate())}T${pad2(date.getHours())}:${pad2(date.getMinutes())}:${pad2(date.getSeconds())}`;
 };
 
@@ -143,7 +159,9 @@ const DST_PROBE_OFFSETS_MS = [
   -7_200_000, -3_600_000, -1_800_000, 0, 1_800_000, 3_600_000, 7_200_000,
 ];
 
-const resolveLocalDatetimeCandidates = (raw: string): LocalDatetimeCandidate[] => {
+const resolveLocalDatetimeCandidates = (
+  raw: string,
+): LocalDatetimeCandidate[] => {
   const match = LOCAL_DATETIME_PATTERN.exec(raw.trim());
   if (!match) return [];
   const year = Number(match[1]);
@@ -152,8 +170,16 @@ const resolveLocalDatetimeCandidates = (raw: string): LocalDatetimeCandidate[] =
   const hour = Number(match[4]);
   const minute = Number(match[5]);
   const second = match[6] ? Number(match[6]) : 0;
-  const millisecond = match[7] ? Number(match[7].padEnd(3, '0')) : 0;
-  const base = new Date(year, month - 1, day, hour, minute, second, millisecond).getTime();
+  const millisecond = match[7] ? Number(match[7].padEnd(3, "0")) : 0;
+  const base = new Date(
+    year,
+    month - 1,
+    day,
+    hour,
+    minute,
+    second,
+    millisecond,
+  ).getTime();
   if (!Number.isFinite(base)) return [];
 
   const matchesWallClock = (ms: number): boolean => {
@@ -172,7 +198,11 @@ const resolveLocalDatetimeCandidates = (raw: string): LocalDatetimeCandidate[] =
   const unique = new Map<number, LocalDatetimeCandidate>();
   for (const delta of DST_PROBE_OFFSETS_MS) {
     const candidate = base + delta;
-    if (candidate > 0 && matchesWallClock(candidate) && !unique.has(candidate)) {
+    if (
+      candidate > 0 &&
+      matchesWallClock(candidate) &&
+      !unique.has(candidate)
+    ) {
       unique.set(candidate, {
         timestamp: candidate,
         offsetLabel: formatUtcOffsetLabel(candidate),
@@ -191,18 +221,26 @@ const getAxisLabel = (
   scale: { minValue: number; maxValue: number },
 ): string => {
   const value = scale.maxValue - pct * (scale.maxValue - scale.minValue);
-  if (unit === '%') return `${Math.round(value)}%`;
-  if (unit === 'C') return `${Math.round(value)}°C`;
-  if (unit === 'B/s') return value <= 0 ? '0' : `${formatCompactSpeed(value)}/s`;
+  if (unit === "%") return `${Math.round(value)}%`;
+  if (unit === "C") return `${Math.round(value)}°C`;
+  if (unit === "B/s")
+    return value <= 0 ? "0" : `${formatCompactSpeed(value)}/s`;
   return `${Math.round(value)}`;
 };
 
-const alertToneClass = (severity: GuestDrawerHistoryAlert['severity'] | undefined) =>
-  severity === 'critical'
-    ? 'font-semibold text-red-700 dark:text-red-300'
-    : severity === 'warning'
-      ? 'font-semibold text-amber-700 dark:text-amber-300'
-      : '';
+const alertToneClass = (
+  severity: GuestDrawerHistoryAlert["severity"] | undefined,
+  muted = false,
+) =>
+  severity === "critical"
+    ? muted
+      ? "font-semibold text-muted"
+      : "font-semibold text-red-700 dark:text-red-300"
+    : severity === "warning"
+      ? muted
+        ? "font-semibold text-muted"
+        : "font-semibold text-amber-700 dark:text-amber-300"
+      : "";
 
 const clampNumber = (value: number, min: number, max: number): number =>
   Math.min(Math.max(value, min), max);
@@ -214,30 +252,39 @@ const clampNumber = (value: number, min: number, max: number): number =>
 // one width, so texts compare by shape and the two widest by estimated advance
 // are reserved.
 const RESERVED_TEXT_CLASS =
-  'inline-grid whitespace-nowrap tabular-nums before:invisible before:[grid-area:1/1] before:content-[attr(data-reserve-a)] after:invisible after:[grid-area:1/1] after:content-[attr(data-reserve-b)]';
-const NARROW_GLYPHS = new Set('.,:/- ilIjtfr');
-const WIDE_GLYPHS = new Set('%@MWmw');
+  "inline-grid whitespace-nowrap tabular-nums before:invisible before:[grid-area:1/1] before:content-[attr(data-reserve-a)] after:invisible after:[grid-area:1/1] after:content-[attr(data-reserve-b)]";
+const NARROW_GLYPHS = new Set(".,:/- ilIjtfr");
+const WIDE_GLYPHS = new Set("%@MWmw");
 
 const estimateTextAdvance = (text: string): number =>
   [...text].reduce(
-    (sum, glyph) => sum + (NARROW_GLYPHS.has(glyph) ? 0.3 : WIDE_GLYPHS.has(glyph) ? 0.85 : 0.6),
+    (sum, glyph) =>
+      sum +
+      (NARROW_GLYPHS.has(glyph) ? 0.3 : WIDE_GLYPHS.has(glyph) ? 0.85 : 0.6),
     0,
   );
 
 const getReservedTextShapes = (texts: readonly string[]): [string, string] => {
-  const shapes = [...new Set(texts.map((text) => text.replace(/\d/g, '0')))].sort(
-    (a, b) => estimateTextAdvance(b) - estimateTextAdvance(a),
-  );
-  return [shapes[0] ?? '', shapes[1] ?? shapes[0] ?? ''];
+  const shapes = [
+    ...new Set(texts.map((text) => text.replace(/\d/g, "0"))),
+  ].sort((a, b) => estimateTextAdvance(b) - estimateTextAdvance(a));
+  return [shapes[0] ?? "", shapes[1] ?? shapes[0] ?? ""];
 };
 
-const getGuestDrawerHistoryX = (timestamp: number, startTime: number, endTime: number): number => {
+const getGuestDrawerHistoryX = (
+  timestamp: number,
+  startTime: number,
+  endTime: number,
+): number => {
   const plotWidth =
     GUEST_DRAWER_HISTORY_CHART_WIDTH -
     GUEST_DRAWER_HISTORY_PLOT_LEFT -
     GUEST_DRAWER_HISTORY_PLOT_RIGHT;
   const timeSpan = Math.max(1, endTime - startTime);
-  return GUEST_DRAWER_HISTORY_PLOT_LEFT + ((timestamp - startTime) / timeSpan) * plotWidth;
+  return (
+    GUEST_DRAWER_HISTORY_PLOT_LEFT +
+    ((timestamp - startTime) / timeSpan) * plotWidth
+  );
 };
 
 const getGuestDrawerHistoryY = (
@@ -250,7 +297,10 @@ const getGuestDrawerHistoryY = (
     GUEST_DRAWER_HISTORY_PLOT_BOTTOM;
   const valueSpan = Math.max(1, scale.maxValue - scale.minValue);
   const bounded = clampNumber(value, scale.minValue, scale.maxValue);
-  return GUEST_DRAWER_HISTORY_PLOT_TOP + (1 - (bounded - scale.minValue) / valueSpan) * plotHeight;
+  return (
+    GUEST_DRAWER_HISTORY_PLOT_TOP +
+    (1 - (bounded - scale.minValue) / valueSpan) * plotHeight
+  );
 };
 
 const findClosestGuestDrawerHistoryTimestamp = (
@@ -276,8 +326,8 @@ interface HistoryPointMarkerProps {
   y: number;
   diameter: number;
   color: string;
-  'data-history-observation'?: string;
-  'data-history-hover-marker'?: string;
+  "data-history-observation"?: string;
+  "data-history-hover-marker"?: string;
 }
 
 // The plot stretches its viewBox to the panel (preserveAspectRatio="none"), so
@@ -289,8 +339,8 @@ const HistoryPointMarker: Component<HistoryPointMarkerProps> = (props) => {
   return (
     <g
       aria-hidden="true"
-      data-history-observation={props['data-history-observation']}
-      data-history-hover-marker={props['data-history-hover-marker']}
+      data-history-observation={props["data-history-observation"]}
+      data-history-hover-marker={props["data-history-hover-marker"]}
       data-x={props.x}
       data-y={props.y}
     >
@@ -313,7 +363,7 @@ const HistoryPointMarker: Component<HistoryPointMarkerProps> = (props) => {
   );
 };
 
-type LiveReadingQualifier = 'current' | 'last known' | 'freshness unknown';
+type LiveReadingQualifier = "current" | "last known" | "freshness unknown";
 
 interface LiveReading {
   value: number | undefined;
@@ -328,11 +378,13 @@ interface LiveReading {
 const getLiveReading = (
   metric: string,
   currentMetrics: Record<string, number | null | undefined> | undefined,
-  deferredMetrics: Record<string, GuestDrawerHistoryDeferredMetric | undefined> | undefined,
+  deferredMetrics:
+    Record<string, GuestDrawerHistoryDeferredMetric | undefined> | undefined,
 ): LiveReading => {
   const deferred = deferredMetrics?.[metric];
   const raw = deferred ? deferred.lastKnownValue : currentMetrics?.[metric];
-  const value = typeof raw === 'number' && Number.isFinite(raw) ? raw : undefined;
+  const value =
+    typeof raw === "number" && Number.isFinite(raw) ? raw : undefined;
   return {
     value,
     deferred,
@@ -340,23 +392,28 @@ const getLiveReading = (
       value === undefined
         ? null
         : !deferred
-          ? 'current'
-          : deferred.valueLabel === 'freshness unknown'
-            ? 'freshness unknown'
-            : 'last known',
+          ? "current"
+          : deferred.valueLabel === "freshness unknown"
+            ? "freshness unknown"
+            : "last known",
   };
 };
 
 interface GuestDrawerLiveReadingsProps {
   currentMetrics?: Record<string, number | null | undefined>;
-  deferredMetrics?: Record<string, GuestDrawerHistoryDeferredMetric | undefined>;
+  deferredMetrics?: Record<
+    string,
+    GuestDrawerHistoryDeferredMetric | undefined
+  >;
   groups: GuestDrawerHistoryGroupConfig[];
 }
 
 // Shown in place of the charts when none can be drawn (the first read failed
 // or the range is beyond the plan), so CPU and memory stay visible: they
 // belong to the resource, not to its stored history.
-const GuestDrawerLiveReadings: Component<GuestDrawerLiveReadingsProps> = (props) => {
+const GuestDrawerLiveReadings: Component<GuestDrawerLiveReadingsProps> = (
+  props,
+) => {
   const descriptionId = `live-readings-${createUniqueId()}`;
   const items = createMemo(() => {
     const seen = new Set<string>();
@@ -364,8 +421,14 @@ const GuestDrawerLiveReadings: Component<GuestDrawerLiveReadingsProps> = (props)
       group.series.flatMap((series) => {
         if (seen.has(series.metric)) return [];
         seen.add(series.metric);
-        const reading = getLiveReading(series.metric, props.currentMetrics, props.deferredMetrics);
-        return reading.value !== undefined || reading.deferred ? [{ ...series, ...reading }] : [];
+        const reading = getLiveReading(
+          series.metric,
+          props.currentMetrics,
+          props.deferredMetrics,
+        );
+        return reading.value !== undefined || reading.deferred
+          ? [{ ...series, ...reading }]
+          : [];
       }),
     );
   });
@@ -385,18 +448,26 @@ const GuestDrawerLiveReadings: Component<GuestDrawerLiveReadingsProps> = (props)
                 class="inline-flex items-center gap-1"
                 data-live-reading={item.metric}
                 data-live-reading-qualifier={item.qualifier ?? undefined}
-                aria-describedby={item.deferred ? `${descriptionId}-${index()}` : undefined}
+                aria-describedby={
+                  item.deferred ? `${descriptionId}-${index()}` : undefined
+                }
               >
-                <svg aria-hidden="true" class="h-2.5 w-2.5 shrink-0" viewBox="0 0 10 10">
+                <svg
+                  aria-hidden="true"
+                  class="h-2.5 w-2.5 shrink-0"
+                  viewBox="0 0 10 10"
+                >
                   <circle cx="5" cy="5" r="4" fill={item.color} />
                 </svg>
                 <span class="font-medium text-base-content">{item.label}</span>
                 <span class="tabular-nums text-base-content">
                   {item.value !== undefined
                     ? formatHistoryChartTooltipValue(item.value, item.unit)
-                    : '-'}
+                    : "-"}
                 </span>
-                <Show when={item.qualifier}>{(qualifier) => <span>{qualifier()}</span>}</Show>
+                <Show when={item.qualifier}>
+                  {(qualifier) => <span>{qualifier()}</span>}
+                </Show>
               </span>
             )}
           </For>
@@ -421,17 +492,74 @@ const GuestDrawerLiveReadings: Component<GuestDrawerLiveReadingsProps> = (props)
   );
 };
 
-const GuestDrawerHistoryGroupChart: Component<GuestDrawerHistoryGroupChartProps> = (props) => {
+const resolveHistoryReadoutSource = (
+  metrics: readonly string[],
+  fallbackSource: HistoryReadoutSource | undefined,
+  metricSources: Record<string, HistoryReadoutSource> | undefined,
+): HistoryReadoutSource | undefined => {
+  if (!metricSources) return fallbackSource;
+  const origins = new Set(
+    metrics.map((metric) => metricSources[metric]).filter(Boolean),
+  );
+  if (origins.size === 0) return fallbackSource ?? "mixed";
+  // The time readout belongs to the plotted series. Don't call it stored if
+  // the visible series disagree on origin.
+  return origins.size === 1 ? origins.values().next().value : "mixed";
+};
+
+const formatSeriesLabelList = (labels: readonly string[]): string => {
+  if (labels.length <= 1) return labels[0] ?? "";
+  if (labels.length === 2) return `${labels[0]} and ${labels[1]}`;
+  return `${labels.slice(0, -1).join(", ")}, and ${labels[labels.length - 1]}`;
+};
+
+const EMPTY_HIDDEN_METRICS: ReadonlySet<string> = new Set();
+
+const getLegendSeriesTitle = (
+  label: string,
+  visible: boolean,
+  isolated: boolean,
+  filtered: boolean,
+  compareMode: boolean,
+): string => {
+  if (compareMode) {
+    if (!visible) return `${label} hidden. Click to add ${label}.`;
+    return isolated ? "Click to show all series." : `Click to hide ${label}.`;
+  }
+  if (!visible) {
+    return `${label} hidden. Click to show only ${label}, or Ctrl/Cmd+click to add.`;
+  }
+  if (isolated) {
+    return `Showing only ${label}. Click to show all series, or Ctrl/Cmd+click another to compare.`;
+  }
+  if (filtered) {
+    return `Click to show only ${label}, or Ctrl/Cmd+click to hide.`;
+  }
+  return `Click to show only ${label}, or Ctrl/Cmd+click to toggle.`;
+};
+
+const GuestDrawerHistoryGroupChart: Component<
+  GuestDrawerHistoryGroupChartProps
+> = (props) => {
   const [hoverTimestamp, setHoverTimestamp] = createSignal<number | null>(null);
-  const [selectedTimestamp, setSelectedTimestamp] = createSignal<number | null>(null);
+  const [selectedTimestamp, setSelectedTimestamp] = createSignal<number | null>(
+    null,
+  );
+  const [compareMode, setCompareMode] = createSignal(false);
+  const [seriesAnnouncement, setSeriesAnnouncement] = createSignal("");
   const inspectionId = `history-inspection-${createUniqueId()}`;
+  let firstLegendButtonRef: HTMLButtonElement | undefined;
   createEffect(
     on(
       () => props.touchInspection,
       (touch, previousTouch) => {
         // Native touch scrubbing need not focus the input. Give inspection
         // back to the mouse when no focused control still owns the selection.
-        if (previousTouch && !touch && document.activeElement?.id !== inspectionId) {
+        if (
+          previousTouch &&
+          !touch &&
+          document.activeElement?.id !== inspectionId
+        ) {
           setSelectedTimestamp(null);
         }
       },
@@ -446,18 +574,109 @@ const GuestDrawerHistoryGroupChart: Component<GuestDrawerHistoryGroupChartProps>
       },
     ),
   );
+  createEffect(
+    on(
+      () => props.targetKey,
+      () => {
+        setCompareMode(false);
+        setSeriesAnnouncement("");
+      },
+    ),
+  );
   const series = createMemo(() =>
     props.group.series.map((config) => ({
       ...config,
-      points: normalizeGuestDrawerHistoryPoints(props.metrics[config.metric], config.unit),
+      points: normalizeGuestDrawerHistoryPoints(
+        props.metrics[config.metric],
+        config.unit,
+      ),
     })),
   );
-  // Step through actual stored times, not synthetic points between samples.
-  // Keep the selected time across polls even if its ordinal index changes.
-  const observationTimes = createMemo(() =>
-    [...new Set(series().flatMap((item) => item.points.map((point) => point.timestamp)))].sort(
-      (a, b) => a - b,
+  const allMetrics = createMemo(() =>
+    props.group.series.map((config) => config.metric),
+  );
+  const isInteractiveLegend = createMemo(() => props.group.series.length > 1);
+  const supportsCompareMode = createMemo(() => props.group.series.length > 2);
+  const effectiveHiddenMetrics = createMemo(() =>
+    getEffectiveHiddenHistoryMetrics(allMetrics(), props.hiddenMetrics),
+  );
+  const isSeriesFiltered = createMemo(() => effectiveHiddenMetrics().size > 0);
+  const isCompareActive = createMemo(
+    () => supportsCompareMode() && isSeriesFiltered() && compareMode(),
+  );
+  const visibleSeries = createMemo(() => {
+    const hidden = effectiveHiddenMetrics();
+    return hidden.size === 0
+      ? series()
+      : series().filter((item) => !hidden.has(item.metric));
+  });
+  const effectiveSource = createMemo(() =>
+    resolveHistoryReadoutSource(
+      visibleSeries().map((item) => item.metric),
+      props.source,
+      props.metricSources,
     ),
+  );
+  const visibleSeriesLabels = createMemo(() =>
+    formatSeriesLabelList(visibleSeries().map((item) => item.label)),
+  );
+  const handleSeriesToggle = (metric: string, event: MouseEvent) => {
+    const multiSelect =
+      isCompareActive() || event.ctrlKey || event.metaKey || event.shiftKey;
+    const nextHidden = toggleGuestDrawerHistorySeriesVisibility(
+      allMetrics(),
+      effectiveHiddenMetrics(),
+      metric,
+      multiSelect,
+    );
+    props.onHiddenMetricsChange(nextHidden);
+    if (nextHidden.size === 0) {
+      setCompareMode(false);
+      setSeriesAnnouncement(`${props.group.label}: showing all series.`);
+    } else {
+      const nextLabels = props.group.series
+        .filter((config) => !nextHidden.has(config.metric))
+        .map((config) => config.label);
+      setSeriesAnnouncement(
+        `${props.group.label}: showing ${formatSeriesLabelList(nextLabels)} only.`,
+      );
+    }
+  };
+  const handleToggleCompareMode = () => {
+    const next = !isCompareActive();
+    setCompareMode(next);
+    setSeriesAnnouncement(
+      next
+        ? `${props.group.label}: compare mode on. Select series to add or remove.`
+        : `${props.group.label}: compare mode off.`,
+    );
+  };
+  const handleShowAllSeries = () => {
+    setCompareMode(false);
+    props.onHiddenMetricsChange(EMPTY_HIDDEN_METRICS);
+    setSeriesAnnouncement(`${props.group.label}: showing all series.`);
+    firstLegendButtonRef?.focus();
+  };
+  // Full-panel observation times preserve gap detection and width reserves
+  // even while individual series are hidden.
+  const panelObservationTimes = createMemo(() =>
+    [
+      ...new Set(
+        series().flatMap((item) => item.points.map((point) => point.timestamp)),
+      ),
+    ].sort((a, b) => a - b),
+  );
+  // Step through actual stored times for the visible series, not synthetic
+  // points between samples. Keep the selected time across polls even if its
+  // ordinal index changes.
+  const observationTimes = createMemo(() =>
+    [
+      ...new Set(
+        visibleSeries().flatMap((item) =>
+          item.points.map((point) => point.timestamp),
+        ),
+      ),
+    ].sort((a, b) => a - b),
   );
   const selectedIndex = createMemo(() => {
     const times = observationTimes();
@@ -467,9 +686,11 @@ const GuestDrawerHistoryGroupChart: Component<GuestDrawerHistoryGroupChartProps>
     return closest === null ? 0 : times.indexOf(closest);
   });
   const inspectionTimestamp = createMemo(() =>
-    selectedTimestamp() === null ? null : (observationTimes()[selectedIndex()] ?? null),
+    selectedTimestamp() === null
+      ? null
+      : (observationTimes()[selectedIndex()] ?? null),
   );
-  // Resolve the pointer to one real time across the whole group. Independent
+  // Resolve the pointer to one real time across the visible series. Independent
   // nearest-series reads would attribute values from different times to the
   // first metric's timestamp, and can even borrow a live fallback reading.
   const activeTimestamp = createMemo(() => {
@@ -483,42 +704,68 @@ const GuestDrawerHistoryGroupChart: Component<GuestDrawerHistoryGroupChartProps>
   // The default legend is a single dated observation too. Independent latest
   // values would combine different times (or a live fallback) into a tuple
   // which never existed, disagreeing with the chart's accessible description.
-  const readoutTimestamp = createMemo(() => activeTimestamp() ?? observationTimes().at(-1) ?? null);
+  const readoutTimestamp = createMemo(
+    () => activeTimestamp() ?? observationTimes().at(-1) ?? null,
+  );
+  const bounds = () => props.timeBounds;
+  const hasPanelStoredData = createMemo(
+    () => panelObservationTimes().length > 0 && bounds() !== null,
+  );
+  const hasStoredData = createMemo(
+    () => observationTimes().length > 0 && bounds() !== null,
+  );
   const observationValueText = (timestamp: number | undefined): string => {
-    if (timestamp === undefined) return 'No stored history observations.';
-    const values = series().map((item) => {
+    if (timestamp === undefined) {
+      return isSeriesFiltered() && hasPanelStoredData()
+        ? `No stored history observations for ${visibleSeriesLabels()}.`
+        : "No stored history observations.";
+    }
+    const values = visibleSeries().map((item) => {
       const point = item.points.find((point) => point.timestamp === timestamp);
       if (!point) return `${item.label} no observation`;
       const value = formatHistoryChartTooltipValue(point.value, item.unit);
-      const low = formatHistoryChartTooltipValue(point.min ?? point.value, item.unit);
-      const high = formatHistoryChartTooltipValue(point.max ?? point.value, item.unit);
+      const low = formatHistoryChartTooltipValue(
+        point.min ?? point.value,
+        item.unit,
+      );
+      const high = formatHistoryChartTooltipValue(
+        point.max ?? point.value,
+        item.unit,
+      );
       return low === high
         ? `${item.label} ${value}`
         : `${item.label} ${value} average, ${low} to ${high}`;
     });
-    return `${new Date(timestamp).toLocaleString()}. ${values.join('. ')}.`;
+    return `${new Date(timestamp).toLocaleString()}. ${values.join(". ")}.`;
   };
   const inspectionValueText = createMemo(() =>
     observationValueText(observationTimes()[selectedIndex()]),
   );
   const chartDescription = createMemo(() => {
-    if (props.loading) return 'Loading history.';
+    if (props.loading) return "Loading history.";
+    const scopePrefix = isSeriesFiltered()
+      ? `Showing ${visibleSeriesLabels()} only. `
+      : "";
     const timestamp = activeTimestamp();
-    if (timestamp !== null) return observationValueText(timestamp);
+    if (timestamp !== null)
+      return `${scopePrefix}${observationValueText(timestamp)}`;
     const count = observationTimes().length;
-    if (count === 0) return inspectionValueText();
+    if (count === 0) return `${scopePrefix}${inspectionValueText()}`;
     const origin =
-      props.source === 'native'
-        ? 'device'
-        : props.source === 'mixed' || props.source === 'memory'
-          ? 'recorded'
-          : 'stored';
-    return `${count} ${origin} observation ${count === 1 ? 'time' : 'times'}. ${inspectionValueText()}`;
+      effectiveSource() === "native"
+        ? "device"
+        : effectiveSource() === "mixed" || effectiveSource() === "memory"
+          ? "recorded"
+          : "stored";
+    return `${scopePrefix}${count} ${origin} observation ${count === 1 ? "time" : "times"}. ${inspectionValueText()}`;
   });
   const segmentedSeries = createMemo(() =>
-    series().map((item) => ({
+    visibleSeries().map((item) => ({
       ...item,
-      segments: getGuestDrawerHistorySegments(item.points, observationTimes()),
+      segments: getGuestDrawerHistorySegments(
+        item.points,
+        panelObservationTimes(),
+      ),
     })),
   );
   const gapMessage = createMemo(() => {
@@ -526,49 +773,64 @@ const GuestDrawerHistoryGroupChart: Component<GuestDrawerHistoryGroupChartProps>
       .filter((item) => item.segments.length > 1)
       .map((item) => item.label);
     return labels.length > 0
-      ? `Missing observations: ${labels.join(', ')}. Lines break where a reading is missing.`
+      ? `Missing observations: ${labels.join(", ")}. Lines break where a reading is missing.`
       : null;
   });
   const drawableSeries = createMemo(() =>
     segmentedSeries().flatMap((item) =>
-      item.segments.filter((points) => points.length >= 2).map((points) => ({ ...item, points })),
+      item.segments
+        .filter((points) => points.length >= 2)
+        .map((points) => ({ ...item, points })),
     ),
   );
   const singlePointSeries = createMemo(() =>
     segmentedSeries().flatMap((item) =>
-      item.segments.filter((points) => points.length === 1).map((points) => ({ ...item, points })),
+      item.segments
+        .filter((points) => points.length === 1)
+        .map((points) => ({ ...item, points })),
     ),
   );
   const singleObservation = createMemo(() =>
-    observationTimes().length === 1 ? { timestamp: observationTimes()[0] } : null,
+    observationTimes().length === 1
+      ? { timestamp: observationTimes()[0] }
+      : null,
   );
   const thresholds = createMemo(() =>
-    series().flatMap((item) => {
+    visibleSeries().flatMap((item) => {
       const alert = props.alerts?.[item.metric];
-      return alert && typeof alert.value === 'number' && Number.isFinite(alert.value)
-        ? [{ metric: item.metric, label: item.label, severity: alert.severity, value: alert.value }]
+      return alert &&
+        typeof alert.value === "number" &&
+        Number.isFinite(alert.value)
+        ? [
+            {
+              metric: item.metric,
+              label: item.label,
+              severity: alert.severity,
+              value: alert.value,
+            },
+          ]
         : [];
     }),
   );
   const alertDescription = createMemo(() =>
-    series()
+    visibleSeries()
       .flatMap((item) => {
         const alert = props.alerts?.[item.metric];
         if (!alert) return [];
         const trigger =
-          typeof alert.value === 'number' && Number.isFinite(alert.value)
+          typeof alert.value === "number" && Number.isFinite(alert.value)
             ? ` at ${formatHistoryChartTooltipValue(alert.value, item.unit)}`
-            : '';
+            : "";
         return [`${item.label} ${alert.severity} alert${trigger}.`];
       })
-      .join(' '),
+      .join(" "),
   );
   // An alert trigger outside the observed range widens the scale, so the
   // dashed line sits at its real value, not clamped to an edge.
   const scale = createMemo(() =>
     getGuestDrawerHistoryScale(
       [
-        ...series(),
+        ...visibleSeries(),
         ...(observationTimes().length > 0
           ? thresholds().map((threshold) => ({
               points: [
@@ -591,21 +853,25 @@ const GuestDrawerHistoryGroupChart: Component<GuestDrawerHistoryGroupChartProps>
       [0, 0.5, 1].map((tick) => getAxisLabel(props.group.unit, tick, scale())),
     ),
   );
-  const bounds = () => props.timeBounds;
-  const hasStoredData = createMemo(() => observationTimes().length > 0 && bounds() !== null);
   const hoveredSeries = createMemo(() => {
     const timestamp = activeTimestamp();
     const rangeBounds = bounds();
     if (timestamp === null || !rangeBounds) return [];
 
-    return series()
+    return visibleSeries()
       .map((item) => {
-        const point = item.points.find((point) => point.timestamp === timestamp);
+        const point = item.points.find(
+          (point) => point.timestamp === timestamp,
+        );
         if (!point) return null;
         return {
           ...item,
           point,
-          x: getGuestDrawerHistoryX(point.timestamp, rangeBounds.startTime, rangeBounds.endTime),
+          x: getGuestDrawerHistoryX(
+            point.timestamp,
+            rangeBounds.startTime,
+            rangeBounds.endTime,
+          ),
           y: getGuestDrawerHistoryY(point.value, scale()),
         };
       })
@@ -630,19 +896,27 @@ const GuestDrawerHistoryGroupChart: Component<GuestDrawerHistoryGroupChartProps>
         label: `peak ${formatHistoryChartTooltipValue(item.point.max ?? item.point.value, item.unit)}`,
         left: (item.x / GUEST_DRAWER_HISTORY_CHART_WIDTH) * 100,
         top:
-          (getGuestDrawerHistoryY(item.point.max ?? item.point.value, currentScale) /
+          (getGuestDrawerHistoryY(
+            item.point.max ?? item.point.value,
+            currentScale,
+          ) /
             GUEST_DRAWER_HISTORY_CHART_HEIGHT) *
           100,
       }))
       .sort((a, b) => a.top - b.top);
     const gap = 14;
-    const highest = (GUEST_DRAWER_HISTORY_PLOT_TOP / GUEST_DRAWER_HISTORY_CHART_HEIGHT) * 100;
+    const highest =
+      (GUEST_DRAWER_HISTORY_PLOT_TOP / GUEST_DRAWER_HISTORY_CHART_HEIGHT) * 100;
     const lowest =
       ((GUEST_DRAWER_HISTORY_CHART_HEIGHT - GUEST_DRAWER_HISTORY_PLOT_BOTTOM) /
         GUEST_DRAWER_HISTORY_CHART_HEIGHT) *
       100;
     labels.forEach((label, index) => {
-      label.top = Math.max(label.top, highest, index > 0 ? labels[index - 1].top + gap : highest);
+      label.top = Math.max(
+        label.top,
+        highest,
+        index > 0 ? labels[index - 1].top + gap : highest,
+      );
     });
     const overflow = (labels.at(-1)?.top ?? lowest) - lowest;
     return labels.map((label) => ({
@@ -666,7 +940,9 @@ const GuestDrawerHistoryGroupChart: Component<GuestDrawerHistoryGroupChartProps>
           return [
             item.metric,
             getReservedTextShapes(
-              observationTimes().map((timestamp) => labels.get(timestamp) ?? 'no reading'),
+              panelObservationTimes().map(
+                (timestamp) => labels.get(timestamp) ?? "no reading",
+              ),
             ),
           ] as const;
         }),
@@ -694,20 +970,43 @@ const GuestDrawerHistoryGroupChart: Component<GuestDrawerHistoryGroupChartProps>
     }
     return formatHistoryChartTimeLabel(timestamp, props.range);
   };
-  const timeReserve = createMemo(() =>
-    getReservedTextShapes(
-      observationTimes().flatMap((timestamp) => {
+  const timeReserve = createMemo(() => {
+    const possibleSources = new Set<HistoryReadoutSource | undefined>([
+      effectiveSource(),
+      resolveHistoryReadoutSource(
+        allMetrics(),
+        props.source,
+        props.metricSources,
+      ),
+      ...allMetrics().map((metric) =>
+        resolveHistoryReadoutSource(
+          [metric],
+          props.source,
+          props.metricSources,
+        ),
+      ),
+    ]);
+    return getReservedTextShapes(
+      panelObservationTimes().flatMap((timestamp) => {
         const time = formatObservationTime(timestamp);
-        return [false, true].map(
-          (inspected) => `${getHistoryReadoutLabel(props.source, inspected)} · ${time}`,
+        return [...possibleSources].flatMap((source) =>
+          [false, true].map(
+            (inspected) =>
+              `${getHistoryReadoutLabel(source, inspected)} · ${time}`,
+          ),
         );
       }),
-    ),
-  );
-  const effectiveCurrentMetrics = () => (props.isZoomed ? undefined : props.currentMetrics);
-  const effectiveDeferredMetrics = () => (props.isZoomed ? undefined : props.deferredMetrics);
-  const displaySeries = createMemo(() =>
-    series().map((item, index) => {
+    );
+  });
+  const effectiveCurrentMetrics = () =>
+    props.isZoomed ? undefined : props.currentMetrics;
+  const effectiveDeferredMetrics = () =>
+    props.isZoomed ? undefined : props.deferredMetrics;
+  const displaySeries = createMemo(() => {
+    const hidden = effectiveHiddenMetrics();
+    const visibleCount = visibleSeries().length;
+    const panelHasStored = hasPanelStoredData();
+    return series().map((item, index) => {
       const timestamp = readoutTimestamp();
       const point = item.points.find((point) => point.timestamp === timestamp);
       const reading = getLiveReading(
@@ -715,33 +1014,45 @@ const GuestDrawerHistoryGroupChart: Component<GuestDrawerHistoryGroupChartProps>
         effectiveCurrentMetrics(),
         effectiveDeferredMetrics(),
       );
-      const isFallback = !props.isZoomed && timestamp === null && reading.value !== undefined;
+      const isFallback =
+        !props.isZoomed &&
+        timestamp === null &&
+        !panelHasStored &&
+        reading.value !== undefined;
       const alert = props.alerts?.[item.metric];
+      const visible = !hidden.has(item.metric);
       return {
         ...item,
+        visible,
+        isolated: hidden.size > 0 && visible && visibleCount === 1,
         // Names the dashed line: its metric's reading carries the trigger.
         alertLabel:
-          alert && typeof alert.value === 'number' && Number.isFinite(alert.value)
+          alert &&
+          typeof alert.value === "number" &&
+          Number.isFinite(alert.value)
             ? `alert at ${formatHistoryChartTooltipValue(alert.value, item.unit)}`
             : null,
-        reserve: valueReserves().get(item.metric) ?? ['', ''],
+        reserve: valueReserves().get(item.metric) ?? ["", ""],
         deferred: reading.deferred,
         descriptionId: `${inspectionId}-deferred-${index}`,
-        isCurrent: isFallback && reading.qualifier === 'current',
-        isLastKnown: isFallback && reading.qualifier === 'last known',
-        isUnknown: isFallback && reading.qualifier === 'freshness unknown',
+        isCurrent: isFallback && reading.qualifier === "current",
+        isLastKnown: isFallback && reading.qualifier === "last known",
+        isUnknown: isFallback && reading.qualifier === "freshness unknown",
         valueLabel: point
           ? getGuestDrawerHistoryValueLabel([point], item.unit)
           : // A stored time where this series has no reading says so in place,
             // rather than through a note that appears and disappears (and moves
             // the chart) as the inspected time changes.
-            timestamp !== null
-            ? 'no reading'
+            timestamp !== null || panelHasStored
+            ? "no reading"
             : reading.value !== undefined
               ? formatHistoryChartTooltipValue(reading.value, item.unit)
-              : '-',
+              : "-",
       };
-    }),
+    });
+  });
+  const displaySeriesByMetric = createMemo(
+    () => new Map(displaySeries().map((item) => [item.metric, item])),
   );
   const readoutTime = createMemo(() => {
     const timestamp = readoutTimestamp();
@@ -754,7 +1065,8 @@ const GuestDrawerHistoryGroupChart: Component<GuestDrawerHistoryGroupChartProps>
     };
   });
 
-  const plotRight = GUEST_DRAWER_HISTORY_CHART_WIDTH - GUEST_DRAWER_HISTORY_PLOT_RIGHT;
+  const plotRight =
+    GUEST_DRAWER_HISTORY_CHART_WIDTH - GUEST_DRAWER_HISTORY_PLOT_RIGHT;
   const plotWidth = plotRight - GUEST_DRAWER_HISTORY_PLOT_LEFT;
   const plotHeight =
     GUEST_DRAWER_HISTORY_CHART_HEIGHT -
@@ -776,10 +1088,21 @@ const GuestDrawerHistoryGroupChart: Component<GuestDrawerHistoryGroupChartProps>
   const clientXToSvgX = (clientX: number, rect: DOMRect): number =>
     ((clientX - rect.left) / rect.width) * GUEST_DRAWER_HISTORY_CHART_WIDTH;
 
-  const svgXToTimestamp = (svgX: number, rangeBounds: GuestDrawerHistoryTimeBounds): number => {
-    const clampedX = clampNumber(svgX, GUEST_DRAWER_HISTORY_PLOT_LEFT, plotRight);
-    const ratio = (clampedX - GUEST_DRAWER_HISTORY_PLOT_LEFT) / Math.max(1, plotWidth);
-    return rangeBounds.startTime + ratio * (rangeBounds.endTime - rangeBounds.startTime);
+  const svgXToTimestamp = (
+    svgX: number,
+    rangeBounds: GuestDrawerHistoryTimeBounds,
+  ): number => {
+    const clampedX = clampNumber(
+      svgX,
+      GUEST_DRAWER_HISTORY_PLOT_LEFT,
+      plotRight,
+    );
+    const ratio =
+      (clampedX - GUEST_DRAWER_HISTORY_PLOT_LEFT) / Math.max(1, plotWidth);
+    return (
+      rangeBounds.startTime +
+      ratio * (rangeBounds.endTime - rangeBounds.startTime)
+    );
   };
 
   const computeDragSelection = (currentSvgX: number, drag: ActiveBrushDrag) => {
@@ -788,10 +1111,18 @@ const GuestDrawerHistoryGroupChart: Component<GuestDrawerHistoryGroupChartProps>
     const sortedStart = Math.min(rawA, rawB);
     const sortedEnd = Math.max(rawA, rawB);
     const startTime = Math.round(
-      clampNumber(sortedStart, drag.clampBounds.startTime, drag.clampBounds.endTime),
+      clampNumber(
+        sortedStart,
+        drag.clampBounds.startTime,
+        drag.clampBounds.endTime,
+      ),
     );
     const endTime = Math.round(
-      clampNumber(sortedEnd, drag.clampBounds.startTime, drag.clampBounds.endTime),
+      clampNumber(
+        sortedEnd,
+        drag.clampBounds.startTime,
+        drag.clampBounds.endTime,
+      ),
     );
     return {
       startTime,
@@ -801,7 +1132,7 @@ const GuestDrawerHistoryGroupChart: Component<GuestDrawerHistoryGroupChartProps>
   };
 
   const handleBrushKeyDown = (event: KeyboardEvent) => {
-    if (event.key !== 'Escape' || !activeDrag) return;
+    if (event.key !== "Escape" || !activeDrag) return;
     event.preventDefault();
     event.stopPropagation();
     event.stopImmediatePropagation();
@@ -812,7 +1143,7 @@ const GuestDrawerHistoryGroupChart: Component<GuestDrawerHistoryGroupChartProps>
     if (!activeDrag) return;
     const pointerId = activeDrag.pointerId;
     activeDrag = null;
-    window.removeEventListener('keydown', handleBrushKeyDown, true);
+    window.removeEventListener("keydown", handleBrushKeyDown, true);
     try {
       if (plotSvgRef?.hasPointerCapture?.(pointerId)) {
         plotSvgRef.releasePointerCapture(pointerId);
@@ -827,7 +1158,13 @@ const GuestDrawerHistoryGroupChart: Component<GuestDrawerHistoryGroupChartProps>
 
   createEffect(
     on(
-      () => [props.sourceKey, props.enabled, bounds()?.startTime, bounds()?.endTime] as const,
+      () =>
+        [
+          props.sourceKey,
+          props.enabled,
+          bounds()?.startTime,
+          bounds()?.endTime,
+        ] as const,
       () => {
         // Cancel an in-flight drag if the resource, preset, visibility, or
         // underlying coordinate bounds shift under the pointer.
@@ -838,7 +1175,9 @@ const GuestDrawerHistoryGroupChart: Component<GuestDrawerHistoryGroupChartProps>
   );
   onCleanup(() => cancelDrag());
 
-  const handleHoverMove = (event: MouseEvent & { currentTarget: SVGSVGElement }) => {
+  const handleHoverMove = (
+    event: MouseEvent & { currentTarget: SVGSVGElement },
+  ) => {
     if (activeDrag || props.brushPreview !== null) return;
     if (inspectionTimestamp() !== null) return;
     const rangeBounds = bounds();
@@ -851,9 +1190,11 @@ const GuestDrawerHistoryGroupChart: Component<GuestDrawerHistoryGroupChartProps>
     setHoverTimestamp(svgXToTimestamp(pointerX, rangeBounds));
   };
 
-  const handlePointerDown = (event: PointerEvent & { currentTarget: SVGSVGElement }) => {
+  const handlePointerDown = (
+    event: PointerEvent & { currentTarget: SVGSVGElement },
+  ) => {
     if (
-      event.pointerType === 'touch' ||
+      event.pointerType === "touch" ||
       event.button !== 0 ||
       event.isPrimary === false ||
       props.loading ||
@@ -867,18 +1208,25 @@ const GuestDrawerHistoryGroupChart: Component<GuestDrawerHistoryGroupChartProps>
     if (rect.width <= 0) return;
 
     const startSvgX = clientXToSvgX(event.clientX, rect);
-    if (startSvgX < GUEST_DRAWER_HISTORY_PLOT_LEFT || startSvgX > plotRight) return;
+    if (startSvgX < GUEST_DRAWER_HISTORY_PLOT_LEFT || startSvgX > plotRight)
+      return;
 
     event.preventDefault();
     cancelDrag();
     const clampBounds = props.clampWindow
-      ? { startTime: props.clampWindow.startTime, endTime: props.clampWindow.endTime }
+      ? {
+          startTime: props.clampWindow.startTime,
+          endTime: props.clampWindow.endTime,
+        }
       : { startTime: rangeBounds.startTime, endTime: rangeBounds.endTime };
     activeDrag = {
       pointerId: event.pointerId,
       startClientX: event.clientX,
       startSvgX,
-      bounds: { startTime: rangeBounds.startTime, endTime: rangeBounds.endTime },
+      bounds: {
+        startTime: rangeBounds.startTime,
+        endTime: rangeBounds.endTime,
+      },
       clampBounds,
       active: false,
     };
@@ -887,10 +1235,12 @@ const GuestDrawerHistoryGroupChart: Component<GuestDrawerHistoryGroupChartProps>
     } catch {
       // Synthetic pointer events in unit tests do not register a real capture.
     }
-    window.addEventListener('keydown', handleBrushKeyDown, true);
+    window.addEventListener("keydown", handleBrushKeyDown, true);
   };
 
-  const handlePointerMove = (event: PointerEvent & { currentTarget: SVGSVGElement }) => {
+  const handlePointerMove = (
+    event: PointerEvent & { currentTarget: SVGSVGElement },
+  ) => {
     if (activeDrag) {
       if (event.pointerId !== activeDrag.pointerId) return;
       setHoverTimestamp(null);
@@ -898,7 +1248,8 @@ const GuestDrawerHistoryGroupChart: Component<GuestDrawerHistoryGroupChartProps>
       if (rect.width <= 0) return;
       if (
         !activeDrag.active &&
-        Math.abs(event.clientX - activeDrag.startClientX) >= HISTORY_BRUSH_THRESHOLD_PX
+        Math.abs(event.clientX - activeDrag.startClientX) >=
+          HISTORY_BRUSH_THRESHOLD_PX
       ) {
         activeDrag.active = true;
       }
@@ -919,7 +1270,9 @@ const GuestDrawerHistoryGroupChart: Component<GuestDrawerHistoryGroupChartProps>
     handleHoverMove(event);
   };
 
-  const handlePointerUp = (event: PointerEvent & { currentTarget: SVGSVGElement }) => {
+  const handlePointerUp = (
+    event: PointerEvent & { currentTarget: SVGSVGElement },
+  ) => {
     if (!activeDrag || event.pointerId !== activeDrag.pointerId) return;
     const drag = activeDrag;
     const rect = event.currentTarget.getBoundingClientRect();
@@ -938,7 +1291,8 @@ const GuestDrawerHistoryGroupChart: Component<GuestDrawerHistoryGroupChartProps>
     if (
       selection &&
       !selection.tooShort &&
-      (selection.startTime !== drag.bounds.startTime || selection.endTime !== drag.bounds.endTime)
+      (selection.startTime !== drag.bounds.startTime ||
+        selection.endTime !== drag.bounds.endTime)
     ) {
       props.onCommitZoom({
         startTime: selection.startTime,
@@ -952,12 +1306,20 @@ const GuestDrawerHistoryGroupChart: Component<GuestDrawerHistoryGroupChartProps>
     const rangeBounds = bounds();
     if (!preview || !rangeBounds) return null;
     const x1 = clampNumber(
-      getGuestDrawerHistoryX(preview.startTime, rangeBounds.startTime, rangeBounds.endTime),
+      getGuestDrawerHistoryX(
+        preview.startTime,
+        rangeBounds.startTime,
+        rangeBounds.endTime,
+      ),
       GUEST_DRAWER_HISTORY_PLOT_LEFT,
       plotRight,
     );
     const x2 = clampNumber(
-      getGuestDrawerHistoryX(preview.endTime, rangeBounds.startTime, rangeBounds.endTime),
+      getGuestDrawerHistoryX(
+        preview.endTime,
+        rangeBounds.startTime,
+        rangeBounds.endTime,
+      ),
       GUEST_DRAWER_HISTORY_PLOT_LEFT,
       plotRight,
     );
@@ -979,13 +1341,13 @@ const GuestDrawerHistoryGroupChart: Component<GuestDrawerHistoryGroupChartProps>
 
   return (
     <section
-      class={`flex min-h-[154px] flex-col rounded-xs border border-border bg-surface p-2.5 ${props.hiddenOnPhone ? 'max-sm:hidden' : ''}`}
+      class={`flex min-h-[154px] flex-col rounded-xs border border-border bg-surface p-2.5 ${props.hiddenOnPhone ? "max-sm:hidden" : ""}`}
       data-testid="guest-history-group-chart"
-      data-phone-collapsed={props.hiddenOnPhone ? 'true' : undefined}
+      data-phone-collapsed={props.hiddenOnPhone ? "true" : undefined}
       data-history-group={props.group.id}
     >
-      <div class="mb-2 flex flex-wrap items-start justify-between gap-x-4 gap-y-1">
-        <div class="flex min-w-0 flex-wrap items-baseline gap-x-2 gap-y-1">
+      <div class="mb-2 flex flex-wrap items-center justify-between gap-x-3 gap-y-1.5">
+        <div class="flex min-h-6 min-w-0 flex-wrap items-center gap-x-2 gap-y-1">
           <h4 class="text-xs font-semibold uppercase tracking-wide text-muted">
             {props.group.label}
           </h4>
@@ -1001,72 +1363,208 @@ const GuestDrawerHistoryGroupChart: Component<GuestDrawerHistoryGroupChartProps>
                   data-testid="guest-history-hover-time"
                   dateTime={time().dateTime}
                   title={time().fullLabel}
-                  aria-label={`${getHistoryReadoutLabel(props.source, true)} observation: ${time().fullLabel}`}
+                  aria-label={`${getHistoryReadoutLabel(effectiveSource(), true)} observation: ${time().fullLabel}`}
                 >
-                  {getHistoryReadoutLabel(props.source, activeTimestamp() !== null)}
-                  {' · '}
+                  {getHistoryReadoutLabel(
+                    effectiveSource(),
+                    activeTimestamp() !== null,
+                  )}
+                  {" · "}
                   {time().label}
                 </time>
               </span>
             )}
           </Show>
-        </div>
-        <div class="flex flex-wrap justify-end gap-x-3 gap-y-1 text-xs text-muted">
-          <For each={displaySeries()}>
-            {(item) => (
-              <span
-                class="inline-flex items-center gap-1"
-                data-history-current={item.isCurrent ? item.metric : undefined}
-                data-history-last-known={item.isLastKnown ? item.metric : undefined}
-                data-history-unknown={item.isUnknown ? item.metric : undefined}
-                aria-describedby={item.deferred ? item.descriptionId : undefined}
-              >
-                <svg aria-hidden="true" class="h-2.5 w-2.5 shrink-0" viewBox="0 0 10 10">
-                  <circle cx="5" cy="5" r="4" fill={item.color} />
-                </svg>
-                <span class="font-medium text-base-content">{item.label}</span>
-                <span
-                  class={`${RESERVED_TEXT_CLASS} ${alertToneClass(props.alerts?.[item.metric]?.severity)}`}
-                  data-reserve-a={item.reserve[0]}
-                  data-reserve-b={item.reserve[1]}
+          <Show when={isSeriesFiltered()}>
+            <div class="inline-flex flex-wrap items-center gap-1.5">
+              <Show when={supportsCompareMode()}>
+                <button
+                  type="button"
+                  data-testid="guest-history-compare-toggle"
+                  aria-pressed={isCompareActive()}
+                  aria-label={`Compare ${props.group.label} series`}
+                  title={
+                    isCompareActive()
+                      ? "Compare mode on. Tap series to add or remove."
+                      : "Select multiple series by tapping."
+                  }
+                  class={`inline-flex min-h-6 cursor-pointer items-center rounded-xs px-1.5 text-[10px] font-medium transition-colors focus-visible:outline-solid focus-visible:outline-2 focus-visible:outline-offset-1 focus-visible:outline-blue-500 ${
+                    isCompareActive()
+                      ? "bg-surface-hover text-base-content ring-1 ring-inset ring-border"
+                      : "text-muted underline decoration-border underline-offset-2 hover:bg-surface-hover/70 hover:text-base-content"
+                  }`}
+                  onClick={handleToggleCompareMode}
                 >
-                  <span class="[grid-area:1/1]">{item.valueLabel}</span>
-                </span>
-                <Show when={item.alertLabel}>
-                  {(label) => (
-                    <span
-                      data-history-alert-label={item.metric}
-                      class={alertToneClass(props.alerts?.[item.metric]?.severity)}
+                  Compare
+                </button>
+              </Show>
+              <button
+                type="button"
+                data-testid="guest-history-show-all"
+                aria-label={`Show all ${props.group.label} series`}
+                class="inline-flex min-h-6 cursor-pointer items-center rounded-xs px-1.5 text-[10px] font-medium text-muted underline decoration-border underline-offset-2 transition-colors hover:bg-surface-hover/70 hover:text-base-content focus-visible:outline-solid focus-visible:outline-2 focus-visible:outline-offset-1 focus-visible:outline-blue-500"
+                onClick={handleShowAllSeries}
+              >
+                Show all
+              </button>
+            </div>
+          </Show>
+        </div>
+        <div class="flex flex-wrap justify-end gap-x-1.5 gap-y-1.5 text-xs text-muted">
+          <For each={allMetrics()}>
+            {(metric, index) => {
+              const item = () => displaySeriesByMetric().get(metric)!;
+              const renderContent = () => (
+                <>
+                  <svg
+                    aria-hidden="true"
+                    class="h-2.5 w-2.5 shrink-0"
+                    viewBox="0 0 10 10"
+                  >
+                    <Show
+                      when={item().visible}
+                      fallback={
+                        <circle
+                          cx="5"
+                          cy="5"
+                          r="3.25"
+                          fill="none"
+                          stroke={item().color}
+                          stroke-width="1.75"
+                        />
+                      }
                     >
-                      {label()}
+                      <circle cx="5" cy="5" r="4" fill={item().color} />
+                    </Show>
+                  </svg>
+                  <span
+                    class={`font-medium ${item().visible ? "text-base-content" : "text-muted"}`}
+                  >
+                    {item().label}
+                  </span>
+                  <span
+                    class={`${RESERVED_TEXT_CLASS} ${alertToneClass(props.alerts?.[metric]?.severity, !item().visible)}`}
+                    data-reserve-a={item().reserve[0]}
+                    data-reserve-b={item().reserve[1]}
+                  >
+                    <span class="[grid-area:1/1]">{item().valueLabel}</span>
+                  </span>
+                  <Show when={item().alertLabel}>
+                    {(label) => (
+                      <span
+                        data-history-alert-label={metric}
+                        class={alertToneClass(
+                          props.alerts?.[metric]?.severity,
+                          !item().visible,
+                        )}
+                      >
+                        {label()}
+                      </span>
+                    )}
+                  </Show>
+                  <Show when={item().isCurrent}>
+                    <span>current</span>
+                  </Show>
+                  <Show when={item().isUnknown}>
+                    <span>freshness unknown</span>
+                  </Show>
+                  <Show when={item().isLastKnown}>
+                    <span>last known</span>
+                  </Show>
+                </>
+              );
+
+              return (
+                <Show
+                  when={isInteractiveLegend()}
+                  fallback={
+                    <span
+                      class="inline-flex min-h-6 items-center gap-1"
+                      data-history-current={
+                        item().isCurrent ? metric : undefined
+                      }
+                      data-history-last-known={
+                        item().isLastKnown ? metric : undefined
+                      }
+                      data-history-unknown={
+                        item().isUnknown ? metric : undefined
+                      }
+                      aria-describedby={
+                        item().deferred ? item().descriptionId : undefined
+                      }
+                    >
+                      {renderContent()}
                     </span>
-                  )}
+                  }
+                >
+                  <button
+                    type="button"
+                    ref={(el) => {
+                      if (index() === 0) firstLegendButtonRef = el;
+                    }}
+                    class={`inline-flex min-h-6 cursor-pointer items-center gap-1 rounded-xs px-1.5 py-0.5 text-left transition-colors hover:bg-surface-hover/70 focus-visible:outline-solid focus-visible:outline-2 focus-visible:outline-offset-1 focus-visible:outline-blue-500 ${
+                      item().visible
+                        ? isSeriesFiltered()
+                          ? "bg-surface-hover/60 ring-1 ring-inset ring-border/70"
+                          : ""
+                        : "text-muted hover:text-base-content"
+                    }`}
+                    aria-pressed={item().visible}
+                    data-history-legend-series={metric}
+                    data-history-series-state={
+                      !item().visible
+                        ? "hidden"
+                        : item().isolated
+                          ? "isolated"
+                          : "visible"
+                    }
+                    data-history-current={item().isCurrent ? metric : undefined}
+                    data-history-last-known={
+                      item().isLastKnown ? metric : undefined
+                    }
+                    data-history-unknown={item().isUnknown ? metric : undefined}
+                    aria-describedby={
+                      item().deferred ? item().descriptionId : undefined
+                    }
+                    title={getLegendSeriesTitle(
+                      item().label,
+                      item().visible,
+                      item().isolated,
+                      isSeriesFiltered(),
+                      isCompareActive(),
+                    )}
+                    onClick={(event) => handleSeriesToggle(metric, event)}
+                  >
+                    {renderContent()}
+                  </button>
                 </Show>
-                <Show when={item.isCurrent}>
-                  <span>current</span>
-                </Show>
-                <Show when={item.isUnknown}>
-                  <span>freshness unknown</span>
-                </Show>
-                <Show when={item.isLastKnown}>
-                  <span>last known</span>
-                </Show>
-              </span>
-            )}
+              );
+            }}
           </For>
         </div>
       </div>
 
-      <For each={displaySeries().filter((item) => item.deferred)}>
-        {(item) => (
-          <p
-            id={item.descriptionId}
-            class="mb-2 text-xs leading-relaxed text-muted"
-            data-history-deferred={item.metric}
-          >
-            {item.label} reading: {item.deferred?.message}
-          </p>
-        )}
+      <For each={allMetrics()}>
+        {(metric) => {
+          const item = () => displaySeriesByMetric().get(metric)!;
+          return (
+            <Show when={item().deferred}>
+              {(deferred) => (
+                <p
+                  id={item().descriptionId}
+                  class={
+                    item().visible
+                      ? "mb-2 text-xs leading-relaxed text-muted"
+                      : "sr-only"
+                  }
+                  data-history-deferred={metric}
+                >
+                  {item().label} reading: {deferred().message}
+                </p>
+              )}
+            </Show>
+          );
+        }}
       </For>
 
       <div class="relative min-h-24 flex-1">
@@ -1077,7 +1575,11 @@ const GuestDrawerHistoryGroupChart: Component<GuestDrawerHistoryGroupChartProps>
               // Centred on the SVG gridlines at y = 8, 41 and 74 of the 92-unit
               // viewBox (8.7%, 44.6%, 80.4%), so each label sits on its line.
               class={`pointer-events-none absolute left-0 w-8 -translate-y-1/2 text-right text-[10px] tabular-nums text-muted ${
-                tick === 0 ? 'top-[8.7%]' : tick === 0.5 ? 'top-[44.6%]' : 'top-[80.4%]'
+                tick === 0
+                  ? "top-[8.7%]"
+                  : tick === 0.5
+                    ? "top-[44.6%]"
+                    : "top-[80.4%]"
               }`}
             >
               {axisLabels()[tick === 0 ? 0 : tick === 0.5 ? 1 : 2]}
@@ -1087,18 +1589,20 @@ const GuestDrawerHistoryGroupChart: Component<GuestDrawerHistoryGroupChartProps>
         <svg
           ref={plotSvgRef}
           aria-label={`${props.group.label} history`}
-          aria-describedby={`${inspectionId}-description${gapMessage() ? ` ${inspectionId}-gaps` : ''}`}
+          aria-describedby={`${inspectionId}-description${gapMessage() ? ` ${inspectionId}-gaps` : ""}`}
           class="absolute inset-0 h-full w-full cursor-crosshair select-none"
           data-testid="guest-history-plot"
           onDblClick={() => {
             if (props.isZoomed) props.onResetZoom();
           }}
           onLostPointerCapture={(event) => {
-            if (activeDrag && event.pointerId === activeDrag.pointerId) cancelDrag();
+            if (activeDrag && event.pointerId === activeDrag.pointerId)
+              cancelDrag();
           }}
           onMouseMove={handleHoverMove}
           onPointerCancel={(event) => {
-            if (activeDrag && event.pointerId === activeDrag.pointerId) cancelDrag();
+            if (activeDrag && event.pointerId === activeDrag.pointerId)
+              cancelDrag();
           }}
           onPointerDown={handlePointerDown}
           onPointerLeave={() => {
@@ -1131,11 +1635,18 @@ const GuestDrawerHistoryGroupChart: Component<GuestDrawerHistoryGroupChartProps>
               <line
                 data-history-threshold={threshold.metric}
                 x1={GUEST_DRAWER_HISTORY_PLOT_LEFT}
-                x2={GUEST_DRAWER_HISTORY_CHART_WIDTH - GUEST_DRAWER_HISTORY_PLOT_RIGHT}
+                x2={
+                  GUEST_DRAWER_HISTORY_CHART_WIDTH -
+                  GUEST_DRAWER_HISTORY_PLOT_RIGHT
+                }
                 y1={getGuestDrawerHistoryY(threshold.value, scale())}
                 y2={getGuestDrawerHistoryY(threshold.value, scale())}
                 stroke="currentColor"
-                class={threshold.severity === 'critical' ? 'text-red-500' : 'text-amber-500'}
+                class={
+                  threshold.severity === "critical"
+                    ? "text-red-500"
+                    : "text-amber-500"
+                }
                 stroke-width="1"
                 stroke-dasharray="4 4"
                 vector-effect="non-scaling-stroke"
@@ -1216,13 +1727,20 @@ const GuestDrawerHistoryGroupChart: Component<GuestDrawerHistoryGroupChartProps>
           </Show>
           <Show when={brushBox()}>
             {(box) => (
-              <g aria-hidden="true" data-history-brush-selection={props.group.id}>
+              <g
+                aria-hidden="true"
+                data-history-brush-selection={props.group.id}
+              >
                 <rect
                   x={box().left}
                   y={GUEST_DRAWER_HISTORY_PLOT_TOP}
                   width={box().width}
                   height={plotHeight}
-                  class={box().preview.tooShort ? 'fill-amber-500/20' : 'fill-blue-500/20'}
+                  class={
+                    box().preview.tooShort
+                      ? "fill-amber-500/20"
+                      : "fill-blue-500/20"
+                  }
                 />
                 <line
                   x1={box().left}
@@ -1231,7 +1749,9 @@ const GuestDrawerHistoryGroupChart: Component<GuestDrawerHistoryGroupChartProps>
                   y2={GUEST_DRAWER_HISTORY_PLOT_TOP + plotHeight}
                   stroke="currentColor"
                   stroke-width="1.5"
-                  class={box().preview.tooShort ? 'text-amber-500' : 'text-blue-500'}
+                  class={
+                    box().preview.tooShort ? "text-amber-500" : "text-blue-500"
+                  }
                   vector-effect="non-scaling-stroke"
                 />
                 <line
@@ -1241,20 +1761,29 @@ const GuestDrawerHistoryGroupChart: Component<GuestDrawerHistoryGroupChartProps>
                   y2={GUEST_DRAWER_HISTORY_PLOT_TOP + plotHeight}
                   stroke="currentColor"
                   stroke-width="1.5"
-                  class={box().preview.tooShort ? 'text-amber-500' : 'text-blue-500'}
+                  class={
+                    box().preview.tooShort ? "text-amber-500" : "text-blue-500"
+                  }
                   vector-effect="non-scaling-stroke"
                 />
               </g>
             )}
           </Show>
           <Show
-            when={props.brushPreview === null && hoverX() !== null && hoveredSeries().length > 0}
+            when={
+              props.brushPreview === null &&
+              hoverX() !== null &&
+              hoveredSeries().length > 0
+            }
           >
             <line
               x1={hoverX() ?? 0}
               x2={hoverX() ?? 0}
               y1={GUEST_DRAWER_HISTORY_PLOT_TOP}
-              y2={GUEST_DRAWER_HISTORY_CHART_HEIGHT - GUEST_DRAWER_HISTORY_PLOT_BOTTOM}
+              y2={
+                GUEST_DRAWER_HISTORY_CHART_HEIGHT -
+                GUEST_DRAWER_HISTORY_PLOT_BOTTOM
+              }
               stroke="currentColor"
               stroke-dasharray="3 3"
               stroke-width="1"
@@ -1276,7 +1805,9 @@ const GuestDrawerHistoryGroupChart: Component<GuestDrawerHistoryGroupChartProps>
         </svg>
         <Show
           when={
-            brushBox() && brushBox()!.preview.originGroupId === props.group.id ? brushBox() : null
+            brushBox() && brushBox()!.preview.originGroupId === props.group.id
+              ? brushBox()
+              : null
           }
         >
           {(box) => (
@@ -1286,8 +1817,11 @@ const GuestDrawerHistoryGroupChart: Component<GuestDrawerHistoryGroupChartProps>
               class="pointer-events-none absolute top-1 z-10 -translate-x-1/2 whitespace-nowrap rounded-xs border border-border bg-surface/95 px-1.5 py-0.5 text-[10px] leading-none tabular-nums text-base-content shadow-xs"
               style={{ left: `${box().centerPct}%` }}
             >
-              {formatHistoryWindowSummary(box().preview.startTime, box().preview.endTime)}
-              {box().preview.tooShort ? ' (min 1m)' : ''}
+              {formatHistoryWindowSummary(
+                box().preview.startTime,
+                box().preview.endTime,
+              )}
+              {box().preview.tooShort ? " (min 1m)" : ""}
             </span>
           )}
         </Show>
@@ -1299,7 +1833,7 @@ const GuestDrawerHistoryGroupChart: Component<GuestDrawerHistoryGroupChartProps>
               aria-hidden="true"
               data-history-peak={peak.metric}
               class={`pointer-events-none absolute inline-flex -translate-y-1/2 items-center gap-1 whitespace-nowrap rounded-xs bg-surface/95 px-1 py-0.5 text-[10px] leading-none tabular-nums text-base-content shadow-xs ${
-                peak.flip ? '-translate-x-[calc(100%+6px)]' : 'translate-x-1.5'
+                peak.flip ? "-translate-x-[calc(100%+6px)]" : "translate-x-1.5"
               }`}
               style={{ left: `${peak.left}%`, top: `${peak.top}%` }}
             >
@@ -1311,8 +1845,10 @@ const GuestDrawerHistoryGroupChart: Component<GuestDrawerHistoryGroupChartProps>
           )}
         </For>
         <Show when={!hasStoredData() && !props.loading}>
-          <div class="pointer-events-none absolute inset-x-8 inset-y-2 flex items-center justify-center rounded-xs text-xs text-muted">
-            No stored history in this range
+          <div class="pointer-events-none absolute inset-x-8 inset-y-2 flex items-center justify-center rounded-xs text-center text-xs text-muted">
+            {isSeriesFiltered() && hasPanelStoredData()
+              ? `No stored history for ${visibleSeriesLabels()} in this range`
+              : "No stored history in this range"}
           </div>
         </Show>
         <Show when={props.loading}>
@@ -1329,8 +1865,8 @@ const GuestDrawerHistoryGroupChart: Component<GuestDrawerHistoryGroupChartProps>
           >
             <For
               each={[
-                { label: 'Window start', timestamp: window().startTime },
-                { label: 'Window end', timestamp: window().endTime },
+                { label: "Window start", timestamp: window().startTime },
+                { label: "Window end", timestamp: window().endTime },
               ]}
             >
               {(endpoint) => (
@@ -1342,7 +1878,8 @@ const GuestDrawerHistoryGroupChart: Component<GuestDrawerHistoryGroupChartProps>
                   {formatHistoryWindowEndpointLabel(
                     endpoint.timestamp,
                     props.isZoomed &&
-                      window().endTime - window().startTime <= HISTORY_SHORT_SPAN_MS,
+                      window().endTime - window().startTime <=
+                        HISTORY_SHORT_SPAN_MS,
                   )}
                 </time>
               )}
@@ -1352,11 +1889,23 @@ const GuestDrawerHistoryGroupChart: Component<GuestDrawerHistoryGroupChartProps>
       </Show>
       <p id={`${inspectionId}-description`} class="sr-only">
         {chartDescription()}
-        {alertDescription() ? ` ${alertDescription()}` : ''}
+        {alertDescription() ? ` ${alertDescription()}` : ""}
+      </p>
+      <p
+        class="sr-only"
+        aria-live="polite"
+        aria-atomic="true"
+        data-testid="guest-history-series-status"
+      >
+        {seriesAnnouncement()}
       </p>
       <Show when={gapMessage()}>
         {(message) => (
-          <p id={`${inspectionId}-gaps`} class="mt-2 text-xs text-muted" data-history-gaps>
+          <p
+            id={`${inspectionId}-gaps`}
+            class="mt-2 text-xs text-muted"
+            data-history-gaps
+          >
             {message()}
           </p>
         )}
@@ -1378,10 +1927,13 @@ const GuestDrawerHistoryGroupChart: Component<GuestDrawerHistoryGroupChartProps>
         {/* Keep native keyboard and assistive-technology access while hiding
             mouse-redundant controls. Touch also reveals them on hybrid devices. */}
         <div
-          class={`mt-2 ${props.touchInspection ? '' : '[@media(hover:hover)_and_(pointer:fine)]:not-focus-within:sr-only'}`}
+          class={`mt-2 ${props.touchInspection ? "" : "[@media(hover:hover)_and_(pointer:fine)]:not-focus-within:sr-only"}`}
           data-testid="guest-history-inspection-control"
         >
-          <label for={inspectionId} class="flex justify-between gap-2 text-[10px] text-muted">
+          <label
+            for={inspectionId}
+            class="flex justify-between gap-2 text-[10px] text-muted"
+          >
             <span>Inspect history</span>
             <span aria-hidden="true">
               {selectedIndex() + 1} / {observationTimes().length}
@@ -1397,7 +1949,7 @@ const GuestDrawerHistoryGroupChart: Component<GuestDrawerHistoryGroupChartProps>
             max={observationTimes().length - 1}
             step="1"
             value={selectedIndex()}
-            class={`h-11 w-full cursor-pointer rounded-xs focus-visible:outline-solid focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-blue-500 ${props.touchInspection ? '' : '[@media(hover:hover)_and_(pointer:fine)]:h-6'}`}
+            class={`h-11 w-full cursor-pointer rounded-xs focus-visible:outline-solid focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-blue-500 ${props.touchInspection ? "" : "[@media(hover:hover)_and_(pointer:fine)]:h-6"}`}
             onFocus={() => {
               setHoverTimestamp(null);
               setSelectedTimestamp(observationTimes()[selectedIndex()] ?? null);
@@ -1405,14 +1957,17 @@ const GuestDrawerHistoryGroupChart: Component<GuestDrawerHistoryGroupChartProps>
             onBlur={() => setSelectedTimestamp(null)}
             onInput={(event) => {
               const index = event.currentTarget.valueAsNumber;
-              if (Number.isFinite(index)) setSelectedTimestamp(observationTimes()[index] ?? null);
+              if (Number.isFinite(index))
+                setSelectedTimestamp(observationTimes()[index] ?? null);
             }}
           />
           <p id={`${inspectionId}-help`} class="sr-only">
-            Use arrow keys, Home or End to inspect{' '}
-            {props.source === 'native' || props.source === 'mixed' || props.source === 'memory'
-              ? 'readings'
-              : 'stored observations'}
+            Use arrow keys, Home or End to inspect{" "}
+            {effectiveSource() === "native" ||
+            effectiveSource() === "mixed" ||
+            effectiveSource() === "memory"
+              ? "readings"
+              : "stored observations"}
             .
           </p>
         </div>
@@ -1421,7 +1976,9 @@ const GuestDrawerHistoryGroupChart: Component<GuestDrawerHistoryGroupChartProps>
   );
 };
 
-export const GuestDrawerHistory: Component<GuestDrawerHistoryProps> = (props) => {
+export const GuestDrawerHistory: Component<GuestDrawerHistoryProps> = (
+  props,
+) => {
   const [touchInspection, setTouchInspection] = createSignal(false);
   // On a phone every panel stacks, so a drawer's Overview ran four charts
   // deep before its disks and details. Phones show the first panel, plus any
@@ -1429,7 +1986,8 @@ export const GuestDrawerHistory: Component<GuestDrawerHistoryProps> = (props) =>
   // every panel; the class only applies below the sm breakpoint.
   const [showAllOnPhone, setShowAllOnPhone] = createSignal(false);
   const presetScopeKey = createMemo(
-    () => `${props.target?.resourceType ?? ''}:${props.target?.resourceId ?? ''}:${props.range}`,
+    () =>
+      `${props.target?.resourceType ?? ""}:${props.target?.resourceId ?? ""}:${props.range}`,
   );
   const [scopedZoom, setScopedZoom] = createSignal<{
     scopeKey: string;
@@ -1437,15 +1995,18 @@ export const GuestDrawerHistory: Component<GuestDrawerHistoryProps> = (props) =>
   } | null>(null);
   const zoomWindow = createMemo<GuestDrawerHistoryTimeBounds | null>(() => {
     const current = scopedZoom();
-    return current && current.scopeKey === presetScopeKey() ? current.window : null;
+    return current && current.scopeKey === presetScopeKey()
+      ? current.window
+      : null;
   });
-  const [brushPreview, setBrushPreview] = createSignal<HistoryBrushPreview | null>(null);
-  const [windowAnnouncement, setWindowAnnouncement] = createSignal('');
+  const [brushPreview, setBrushPreview] =
+    createSignal<HistoryBrushPreview | null>(null);
+  const [windowAnnouncement, setWindowAnnouncement] = createSignal("");
   const [windowEditorOpen, setWindowEditorOpen] = createSignal(false);
-  const [windowDraftStart, setWindowDraftStart] = createSignal('');
-  const [windowDraftEnd, setWindowDraftEnd] = createSignal('');
-  const [windowStartOffset, setWindowStartOffset] = createSignal('');
-  const [windowEndOffset, setWindowEndOffset] = createSignal('');
+  const [windowDraftStart, setWindowDraftStart] = createSignal("");
+  const [windowDraftEnd, setWindowDraftEnd] = createSignal("");
+  const [windowStartOffset, setWindowStartOffset] = createSignal("");
+  const [windowEndOffset, setWindowEndOffset] = createSignal("");
   const [windowInitialBounds, setWindowInitialBounds] = createSignal<{
     startMs: number;
     endMs: number;
@@ -1454,7 +2015,9 @@ export const GuestDrawerHistory: Component<GuestDrawerHistoryProps> = (props) =>
     startOffset: string;
     endOffset: string;
   } | null>(null);
-  const [windowDraftError, setWindowDraftError] = createSignal<string | null>(null);
+  const [windowDraftError, setWindowDraftError] = createSignal<string | null>(
+    null,
+  );
   const gridId = `history-groups-${createUniqueId()}`;
   const windowEditorId = `history-window-editor-${createUniqueId()}`;
   const windowStartInputId = `history-window-start-${createUniqueId()}`;
@@ -1501,7 +2064,7 @@ export const GuestDrawerHistory: Component<GuestDrawerHistoryProps> = (props) =>
         setBrushPreview(null);
         setWindowEditorOpen(false);
         setWindowDraftError(null);
-        setWindowAnnouncement('');
+        setWindowAnnouncement("");
       },
       { defer: true },
     ),
@@ -1518,7 +2081,9 @@ export const GuestDrawerHistory: Component<GuestDrawerHistoryProps> = (props) =>
     setBrushPreview(null);
     setWindowEditorOpen(false);
     setWindowDraftError(null);
-    setWindowAnnouncement(`Zoomed to ${formatHistoryWindowSummary(startTime, endTime)}.`);
+    setWindowAnnouncement(
+      `Zoomed to ${formatHistoryWindowSummary(startTime, endTime)}.`,
+    );
   };
 
   const resetZoom = () => {
@@ -1527,36 +2092,34 @@ export const GuestDrawerHistory: Component<GuestDrawerHistoryProps> = (props) =>
     setBrushPreview(null);
     setWindowEditorOpen(false);
     setWindowDraftError(null);
-    setWindowAnnouncement('Zoom reset.');
+    setWindowAnnouncement("Zoom reset.");
   };
 
   const metrics = createMemo(() => historyQuery.value().metrics ?? {});
   const groups = createMemo(() => props.groups ?? GUEST_DRAWER_HISTORY_GROUPS);
-  const sourceForGroup = (
-    group: GuestDrawerHistoryGroupConfig,
-  ): HistoryReadoutSource | undefined => {
-    const { source, metricSources } = historyQuery.value();
-    if (!metricSources) return source;
-    const origins = new Set(
-      group.series.map(({ metric }) => metricSources[metric]).filter(Boolean),
-    );
-    // The time readout belongs to the whole chart, including all of its
-    // directions. Don't call it stored if the plotted series disagree.
-    return origins.size === 1 ? origins.values().next().value : 'mixed';
-  };
   const sourceNotice = () => {
     const { source, metricSources } = historyQuery.value();
     if (!metricSources) return getHistorySourceNotice(source)?.detail;
     // This describes the series we drew, not where each sample might also
     // have been saved.
-    const hasMemory = Object.values(metricSources).includes('memory');
-    if (metricSources.smart_temp === 'native') {
+    const hasMemory = Object.values(metricSources).includes("memory");
+    if (metricSources.smart_temp === "native") {
       return hasMemory
-        ? 'Temperature from the device. Some readings from memory.'
-        : 'Temperature history comes from the device.';
+        ? "Temperature from the device. Some readings from memory."
+        : "Temperature history comes from the device.";
     }
-    return hasMemory ? 'This view includes readings from memory.' : undefined;
+    return hasMemory ? "This view includes readings from memory." : undefined;
   };
+  const targetKey = () =>
+    `${props.target?.resourceType ?? ""}:${props.target?.resourceId ?? ""}`;
+  const [hiddenMetricsByGroup, setHiddenMetricsByGroup] = createSignal<
+    Record<string, ReadonlySet<string>>
+  >({});
+  createEffect(
+    on(targetKey, () => {
+      setHiddenMetricsByGroup({});
+    }),
+  );
   const sourceKey = () => {
     const zoom = zoomWindow();
     return zoom
@@ -1601,7 +2164,9 @@ export const GuestDrawerHistory: Component<GuestDrawerHistoryProps> = (props) =>
     () =>
       new Set(
         normalizedGroups()
-          .filter(({ series }) => series.some(({ points }) => points.length > 0))
+          .filter(({ series }) =>
+            series.some(({ points }) => points.length > 0),
+          )
           .map(({ id }) => id),
       ),
   );
@@ -1612,7 +2177,9 @@ export const GuestDrawerHistory: Component<GuestDrawerHistoryProps> = (props) =>
   const windowStartCandidates = createMemo(() =>
     resolveLocalDatetimeCandidates(windowDraftStart()),
   );
-  const windowEndCandidates = createMemo(() => resolveLocalDatetimeCandidates(windowDraftEnd()));
+  const windowEndCandidates = createMemo(() =>
+    resolveLocalDatetimeCandidates(windowDraftEnd()),
+  );
 
   const resolveEndpointTimestamp = (
     draftText: string,
@@ -1631,19 +2198,30 @@ export const GuestDrawerHistory: Component<GuestDrawerHistoryProps> = (props) =>
     }
     if (candidates.length === 0) return null;
     if (candidates.length === 1) return candidates[0].timestamp;
-    const matched = candidates.find((candidate) => candidate.offsetLabel === selectedOffset);
+    const matched = candidates.find(
+      (candidate) => candidate.offsetLabel === selectedOffset,
+    );
     return (matched ?? candidates[0]).timestamp;
   };
 
   const openWindowEditor = () => {
     const activeBounds = zoomWindow() ?? replyWindow() ?? timeBounds();
-    const startMs = activeBounds ? activeBounds.startTime : Date.now() - 3_600_000;
+    const startMs = activeBounds
+      ? activeBounds.startTime
+      : Date.now() - 3_600_000;
     const endMs = activeBounds ? activeBounds.endTime : Date.now();
     const startText = toDatetimeLocalInputValue(startMs);
     const endText = toDatetimeLocalInputValue(endMs);
     const startOffset = formatUtcOffsetLabel(startMs);
     const endOffset = formatUtcOffsetLabel(endMs);
-    setWindowInitialBounds({ startMs, endMs, startText, endText, startOffset, endOffset });
+    setWindowInitialBounds({
+      startMs,
+      endMs,
+      startText,
+      endText,
+      startOffset,
+      endOffset,
+    });
     setWindowDraftStart(startText);
     setWindowDraftEnd(endText);
     setWindowStartOffset(startOffset);
@@ -1672,24 +2250,24 @@ export const GuestDrawerHistory: Component<GuestDrawerHistoryProps> = (props) =>
       initial?.endMs,
     );
     if (startMs === null || endMs === null) {
-      setWindowDraftError('Enter valid start and end times.');
+      setWindowDraftError("Enter valid start and end times.");
       return;
     }
     if (endMs <= startMs) {
-      setWindowDraftError('End time must be after start time.');
+      setWindowDraftError("End time must be after start time.");
       return;
     }
     const spanMs = endMs - startMs;
     if (spanMs < HISTORY_MIN_ZOOM_SPAN_MS) {
-      setWindowDraftError('Select a window of at least 1 minute.');
+      setWindowDraftError("Select a window of at least 1 minute.");
       return;
     }
     if (spanMs > HISTORY_MAX_ZOOM_SPAN_MS) {
-      setWindowDraftError('Window cannot exceed 365 days.');
+      setWindowDraftError("Window cannot exceed 365 days.");
       return;
     }
     if (endMs > Date.now()) {
-      setWindowDraftError('End time cannot be in the future.');
+      setWindowDraftError("End time cannot be in the future.");
       return;
     }
     commitZoom({ startTime: startMs, endTime: endMs });
@@ -1708,7 +2286,8 @@ export const GuestDrawerHistory: Component<GuestDrawerHistoryProps> = (props) =>
 
   const inlineDiskActivity = () => {
     const first = groups()[0];
-    return props.target?.resourceType === 'disk' && first?.id === 'disk-activity'
+    return props.target?.resourceType === "disk" &&
+      first?.id === "disk-activity"
       ? first
       : undefined;
   };
@@ -1719,8 +2298,14 @@ export const GuestDrawerHistory: Component<GuestDrawerHistoryProps> = (props) =>
       (groupsWithPoints().has(activity.id) ||
         (!zoomWindow() &&
           activity.series.some(({ metric }) => {
-            const reading = getLiveReading(metric, liveCurrentMetrics(), props.deferredMetrics);
-            return reading.value !== undefined || reading.deferred !== undefined;
+            const reading = getLiveReading(
+              metric,
+              liveCurrentMetrics(),
+              props.deferredMetrics,
+            );
+            return (
+              reading.value !== undefined || reading.deferred !== undefined
+            );
           }))),
     );
   });
@@ -1729,33 +2314,38 @@ export const GuestDrawerHistory: Component<GuestDrawerHistoryProps> = (props) =>
   // nothing to report, lead with recorded Temperature or I/O instead. Keep
   // that chart open for this disk and range while it still has observations:
   // a poll must not fold away the chart someone is inspecting.
-  const diskPhoneFallback = createMemo<{ key: string; id: string } | undefined>((previous) => {
-    if (!inlineDiskActivity()) return;
-    const reply = historyQuery.value();
-    const zoom = zoomWindow();
-    const expectedRange = zoom ? 'custom' : props.range;
-    if (
-      reply.resourceId !== props.target?.resourceId ||
-      reply.resourceType !== props.target?.resourceType ||
-      reply.range !== expectedRange ||
-      (zoom !== null && (reply.start !== zoom.startTime || reply.end !== zoom.endTime))
-    ) {
-      return;
-    }
-    const key = sourceKey();
-    const withPoints = groupsWithPoints();
-    if (previous?.key === key && withPoints.has(previous.id)) return previous;
-    if (diskActivityHasReading()) return;
-    const id = ['disk-thermal', 'disk-io'].find((id) => withPoints.has(id));
-    return id ? { key, id } : undefined;
-  });
+  const diskPhoneFallback = createMemo<{ key: string; id: string } | undefined>(
+    (previous) => {
+      if (!inlineDiskActivity()) return;
+      const reply = historyQuery.value();
+      const zoom = zoomWindow();
+      const expectedRange = zoom ? "custom" : props.range;
+      if (
+        reply.resourceId !== props.target?.resourceId ||
+        reply.resourceType !== props.target?.resourceType ||
+        reply.range !== expectedRange ||
+        (zoom !== null &&
+          (reply.start !== zoom.startTime || reply.end !== zoom.endTime))
+      ) {
+        return;
+      }
+      const key = sourceKey();
+      const withPoints = groupsWithPoints();
+      if (previous?.key === key && withPoints.has(previous.id)) return previous;
+      if (diskActivityHasReading()) return;
+      const id = ["disk-thermal", "disk-io"].find((id) => withPoints.has(id));
+      return id ? { key, id } : undefined;
+    },
+  );
 
   // A panel shown on a phone because of an alert stays shown after the alert
   // clears, so a reader mid-inspection does not lose the chart under them.
   const alertedGroupIds = new Set<string>();
   const alertedGroups = createMemo(() => {
     for (const group of groups()) {
-      if (group.series.some((series) => Boolean(props.alerts?.[series.metric]))) {
+      if (
+        group.series.some((series) => Boolean(props.alerts?.[series.metric]))
+      ) {
         alertedGroupIds.add(group.id);
       }
     }
@@ -1767,13 +2357,19 @@ export const GuestDrawerHistory: Component<GuestDrawerHistoryProps> = (props) =>
     const alerted = alertedGroups();
     return groups().filter(
       (group, index) =>
-        (index > 0 || foldActivity) && group.id !== fallback?.id && !alerted.has(group.id),
+        (index > 0 || foldActivity) &&
+        group.id !== fallback?.id &&
+        !alerted.has(group.id),
     );
   });
   // A final 401/403 withdraws the whole History panel, readings included; an
   // outage or a locked range leaves the resource's own readings standing.
   const liveReadings = () => (
-    <Show when={!zoomWindow() && !getAPIReadAccessErrorMessage(historyQuery.error())}>
+    <Show
+      when={
+        !zoomWindow() && !getAPIReadAccessErrorMessage(historyQuery.error())
+      }
+    >
       <GuestDrawerLiveReadings
         groups={groups()}
         currentMetrics={liveCurrentMetrics()}
@@ -1785,27 +2381,42 @@ export const GuestDrawerHistory: Component<GuestDrawerHistoryProps> = (props) =>
   // Keep Select time window available for any authorized target, including when
   // the current preset has no stored readings, so users can jump to older windows.
   const canSelectWindow = createMemo(
-    () => Boolean(props.target) && !getAPIReadAccessErrorMessage(historyQuery.error()),
+    () =>
+      Boolean(props.target) &&
+      !getAPIReadAccessErrorMessage(historyQuery.error()),
   );
-  const isInitialLoading = createMemo(() => historyQuery.loading() && !historyQuery.resolvedOnce());
+  const isInitialLoading = createMemo(
+    () => historyQuery.loading() && !historyQuery.resolvedOnce(),
+  );
   const isEnabled = createMemo(() => props.enabled !== false);
   const isZoomed = createMemo(() => zoomWindow() !== null);
   const showToolbar = () =>
-    Boolean(props.onRangeChange || historyQuery.error() || isZoomed() || canSelectWindow());
+    Boolean(
+      props.onRangeChange ||
+      historyQuery.error() ||
+      isZoomed() ||
+      canSelectWindow(),
+    );
 
   return (
     <Show
       when={props.target}
-      fallback={<div class="py-6 text-center text-sm text-muted">History unavailable</div>}
+      fallback={
+        <div class="py-6 text-center text-sm text-muted">
+          History unavailable
+        </div>
+      }
     >
       <div
         ref={regionRef}
         tabIndex={-1}
         data-testid="guest-history-region"
         class="outline-none"
-        onPointerDown={(event) => setTouchInspection(event.pointerType === 'touch')}
+        onPointerDown={(event) =>
+          setTouchInspection(event.pointerType === "touch")
+        }
         onPointerMove={(event) => {
-          if (event.pointerType === 'mouse') setTouchInspection(false);
+          if (event.pointerType === "mouse") setTouchInspection(false);
         }}
       >
         <div
@@ -1818,7 +2429,11 @@ export const GuestDrawerHistory: Component<GuestDrawerHistoryProps> = (props) =>
           {windowAnnouncement()}
         </div>
         <div
-          class={showToolbar() ? 'mb-3 flex flex-wrap items-center justify-end gap-2' : 'sr-only'}
+          class={
+            showToolbar()
+              ? "mb-3 flex flex-wrap items-center justify-end gap-2"
+              : "sr-only"
+          }
         >
           <div
             class="min-w-0 flex-1"
@@ -1828,11 +2443,11 @@ export const GuestDrawerHistory: Component<GuestDrawerHistoryProps> = (props) =>
             aria-atomic="true"
           >
             <Show when={historyQuery.error()}>
-              <InlineNotice tone={hasHistoryPoints() ? 'warning' : 'danger'}>
+              <InlineNotice tone={hasHistoryPoints() ? "warning" : "danger"}>
                 {getAPIReadAccessErrorMessage(historyQuery.error()) ||
                   (hasHistoryPoints()
-                    ? 'History refresh failed. Showing previously loaded history.'
-                    : 'Failed to load history data')}
+                    ? "History refresh failed. Showing previously loaded history."
+                    : "Failed to load history data")}
               </InlineNotice>
             </Show>
           </div>
@@ -1840,7 +2455,8 @@ export const GuestDrawerHistory: Component<GuestDrawerHistoryProps> = (props) =>
             {(zoom) => {
               onCleanup(() => {
                 resetZoomHadFocus =
-                  resetZoomRef !== undefined && document.activeElement === resetZoomRef;
+                  resetZoomRef !== undefined &&
+                  document.activeElement === resetZoomRef;
               });
               return (
                 <div
@@ -1851,7 +2467,10 @@ export const GuestDrawerHistory: Component<GuestDrawerHistoryProps> = (props) =>
                     class="rounded-xs border border-border bg-surface-subtle px-2 py-1 text-[11px] tabular-nums text-base-content"
                     data-testid="guest-history-zoom-label"
                   >
-                    {formatHistoryWindowSummary(zoom().startTime, zoom().endTime)}
+                    {formatHistoryWindowSummary(
+                      zoom().startTime,
+                      zoom().endTime,
+                    )}
                   </span>
                   <Button
                     ref={resetZoomRef}
@@ -1890,7 +2509,10 @@ export const GuestDrawerHistory: Component<GuestDrawerHistoryProps> = (props) =>
           </Show>
           <Show when={props.onRangeChange}>
             {(onRangeChange) => (
-              <GuestDrawerHistoryRangeSelect range={props.range} onRangeChange={onRangeChange()} />
+              <GuestDrawerHistoryRangeSelect
+                range={props.range}
+                onRangeChange={onRangeChange()}
+              />
             )}
           </Show>
           {/* The charts poll every 30 seconds, so a manual refresh is offered
@@ -1898,7 +2520,8 @@ export const GuestDrawerHistory: Component<GuestDrawerHistoryProps> = (props) =>
           <Show when={historyQuery.error()}>
             {(_error) => {
               onCleanup(() => {
-                retryHadFocus = retryRef !== undefined && document.activeElement === retryRef;
+                retryHadFocus =
+                  retryRef !== undefined && document.activeElement === retryRef;
               });
               return (
                 <Button
@@ -1929,7 +2552,7 @@ export const GuestDrawerHistory: Component<GuestDrawerHistoryProps> = (props) =>
             data-testid="guest-history-window-editor"
             onSubmit={applyWindowEditor}
             onKeyDown={(event) => {
-              if (event.key === 'Escape') {
+              if (event.key === "Escape") {
                 event.preventDefault();
                 event.stopPropagation();
                 setWindowEditorOpen(false);
@@ -1952,10 +2575,13 @@ export const GuestDrawerHistory: Component<GuestDrawerHistoryProps> = (props) =>
                   onInput={(event) => {
                     const nextValue = event.currentTarget.value;
                     setWindowDraftStart(nextValue);
-                    const candidates = resolveLocalDatetimeCandidates(nextValue);
+                    const candidates =
+                      resolveLocalDatetimeCandidates(nextValue);
                     if (
                       candidates.length > 0 &&
-                      !candidates.some((c) => c.offsetLabel === windowStartOffset())
+                      !candidates.some(
+                        (c) => c.offsetLabel === windowStartOffset(),
+                      )
                     ) {
                       setWindowStartOffset(candidates[0].offsetLabel);
                     }
@@ -1978,7 +2604,9 @@ export const GuestDrawerHistory: Component<GuestDrawerHistoryProps> = (props) =>
                   >
                     <For each={windowStartCandidates()}>
                       {(candidate) => (
-                        <option value={candidate.offsetLabel}>{candidate.offsetLabel}</option>
+                        <option value={candidate.offsetLabel}>
+                          {candidate.offsetLabel}
+                        </option>
                       )}
                     </For>
                   </FormSelect>
@@ -1997,10 +2625,13 @@ export const GuestDrawerHistory: Component<GuestDrawerHistoryProps> = (props) =>
                   onInput={(event) => {
                     const nextValue = event.currentTarget.value;
                     setWindowDraftEnd(nextValue);
-                    const candidates = resolveLocalDatetimeCandidates(nextValue);
+                    const candidates =
+                      resolveLocalDatetimeCandidates(nextValue);
                     if (
                       candidates.length > 0 &&
-                      !candidates.some((c) => c.offsetLabel === windowEndOffset())
+                      !candidates.some(
+                        (c) => c.offsetLabel === windowEndOffset(),
+                      )
                     ) {
                       setWindowEndOffset(candidates[0].offsetLabel);
                     }
@@ -2023,7 +2654,9 @@ export const GuestDrawerHistory: Component<GuestDrawerHistoryProps> = (props) =>
                   >
                     <For each={windowEndCandidates()}>
                       {(candidate) => (
-                        <option value={candidate.offsetLabel}>{candidate.offsetLabel}</option>
+                        <option value={candidate.offsetLabel}>
+                          {candidate.offsetLabel}
+                        </option>
                       )}
                     </For>
                   </FormSelect>
@@ -2067,17 +2700,23 @@ export const GuestDrawerHistory: Component<GuestDrawerHistoryProps> = (props) =>
           </form>
         </Show>
         <div class="space-y-3">
-          <Show when={!historyQuery.error() || hasHistoryPoints()} fallback={liveReadings()}>
+          <Show
+            when={!historyQuery.error() || hasHistoryPoints()}
+            fallback={liveReadings()}
+          >
             <Show when={hasHistoryPoints() && sourceNotice()}>
               {(notice) => (
-                <p class="text-xs text-muted" data-testid="history-source-notice">
+                <p
+                  class="text-xs text-muted"
+                  data-testid="history-source-notice"
+                >
                   {notice()}
                 </p>
               )}
             </Show>
             <div
               id={gridId}
-              class={`grid gap-3 md:grid-cols-2 ${groups().length > 3 ? 'xl:grid-cols-4' : 'xl:grid-cols-3'}`}
+              class={`grid gap-3 md:grid-cols-2 ${groups().length > 3 ? "xl:grid-cols-4" : "xl:grid-cols-3"}`}
             >
               <For each={groups()}>
                 {(group) => (
@@ -2086,19 +2725,33 @@ export const GuestDrawerHistory: Component<GuestDrawerHistoryProps> = (props) =>
                     brushPreview={brushPreview()}
                     clampWindow={replyWindow()}
                     enabled={isEnabled()}
-                    hiddenOnPhone={!showAllOnPhone() && phoneCollapsedGroups().includes(group)}
+                    hiddenOnPhone={
+                      !showAllOnPhone() &&
+                      phoneCollapsedGroups().includes(group)
+                    }
                     isZoomed={isZoomed()}
                     group={group}
+                    hiddenMetrics={
+                      hiddenMetricsByGroup()[group.id] ?? EMPTY_HIDDEN_METRICS
+                    }
                     loading={isInitialLoading()}
                     metrics={metrics()}
+                    metricSources={historyQuery.value().metricSources}
                     onBrushPreviewChange={setBrushPreview}
                     onCommitZoom={commitZoom}
+                    onHiddenMetricsChange={(next) =>
+                      setHiddenMetricsByGroup((previous) => ({
+                        ...previous,
+                        [group.id]: next,
+                      }))
+                    }
                     onResetZoom={resetZoom}
                     currentMetrics={liveCurrentMetrics()}
                     deferredMetrics={props.deferredMetrics}
                     range={props.range}
-                    source={sourceForGroup(group)}
+                    source={historyQuery.value().source}
                     sourceKey={sourceKey()}
+                    targetKey={targetKey()}
                     timeBounds={timeBounds()}
                     touchInspection={touchInspection()}
                   />
