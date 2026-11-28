@@ -1294,6 +1294,36 @@ describe('GuestDrawer', () => {
       ));
       expect(screen.getByTestId('guest-drawer-facts')).not.toHaveTextContent('RAM');
     });
+
+    it('states only the disk size for a retained reading and omits it when unavailable', () => {
+      const GiB = 1024 ** 3;
+      solidRender(() => (
+        <GuestDrawer
+          guest={makeGuest({
+            type: 'qemu',
+            disk: { total: 100 * GiB, used: 25 * GiB, free: 75 * GiB, usage: 25 },
+            diskStatusReason: 'prev-vm-locked',
+          })}
+          onClose={vi.fn()}
+        />
+      ));
+      const retainedFacts = screen.getByTestId('guest-drawer-facts');
+      expect(retainedFacts).toHaveTextContent('100 GB disk');
+      expect(retainedFacts).not.toHaveTextContent(/of 100 GB disk/);
+
+      cleanup();
+      solidRender(() => (
+        <GuestDrawer
+          guest={makeGuest({
+            type: 'qemu',
+            disk: { total: 100 * GiB, used: 25 * GiB, free: 75 * GiB, usage: 25 },
+            diskStatusReason: 'agent-not-running',
+          })}
+          onClose={vi.fn()}
+        />
+      ));
+      expect(screen.getByTestId('guest-drawer-facts')).not.toHaveTextContent('disk');
+    });
   });
 
   // ── Tags card ──
@@ -1812,6 +1842,7 @@ it('shows stale source notice, defers platform metrics as last known, and recove
   expect(notice).toHaveTextContent('vCenter collection error: vCenter session expired (401).');
   expect(screen.getByTestId('guest-drawer-facts')).toHaveTextContent('8.00 GB RAM');
   expect(screen.getByTestId('guest-drawer-facts')).not.toHaveTextContent('5.40 GB of 8.00 GB RAM');
+  expect(screen.getByTestId('guest-drawer-facts')).toHaveTextContent('100 GB disk');
   expect(screen.getByTestId('guest-drawer-facts')).not.toHaveTextContent('54.0 GB of 100 GB disk');
 
   await waitFor(() => expect(chartsApiMocks.getMetricsHistory).toHaveBeenCalledTimes(1));
@@ -1843,4 +1874,5 @@ it('shows stale source notice, defers platform metrics as last known, and recove
   );
   expect(utilChart.querySelector('[data-history-deferred="cpu"]')).toBeNull();
   expect(screen.getByTestId('guest-drawer-facts')).toHaveTextContent('5.40 GB of 8.00 GB RAM');
+  expect(screen.getByTestId('guest-drawer-facts')).toHaveTextContent('54.0 GB of 100 GB disk');
 });

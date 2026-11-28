@@ -1,0 +1,37 @@
+{
+  "version": 1,
+  "base_sha": "cbb2c47f61a2f73a390b5712c00389916f6b4ddf",
+  "verified_at": "2026-11-28T01:19:01Z",
+  "result": "passed",
+  "changed_paths": [
+    "frontend-modern/src/components/Workloads/GuestDrawerOverview.tsx"
+  ],
+  "content_sha256": {
+    "frontend-modern/src/components/Workloads/GuestDrawerOverview.tsx": "adf909f6ab9dc962af3a0fd6ce8d34e8d96ac72c600852ea6452788d57194060"
+  },
+  "routes": [
+    "/proxmox/overview",
+    "/vmware/overview"
+  ],
+  "viewports": [
+    {
+      "width": 1440,
+      "height": 940
+    },
+    {
+      "width": 360,
+      "height": 820
+    }
+  ],
+  "states": [
+    "paired production builds of unpatched base 227f178e4cb8 and patched HEAD served over identical local HTTP/WebSocket fixture in desktop Chromium (1440x940 light theme, en-GB, UTC) and touch phone WebKit (360x820 dark theme, en-GB, UTC)",
+    "/proxmox/overview stale prod-db-01 GuestDrawer: guest-drawer-facts preserves static capacity '8.00 GB RAM' and '100 GB disk' without showing stale used bytes as current, beside amber header, Stale data InlineNotice, and 7/7 last-known deferred History metrics (vs 5.40 GB of 8.00 GB RAM and 54.0 GB of 100 GB disk on unpatched base)",
+    "/proxmox/overview live WebSocket rawData recovery on prod-db-01 without page reload: clears Stale data cue and InlineNotice, restores green indicator and Running 2 / Attention 0 counts, restores 7/7 current History metrics, and restores live '4.20 GB of 8.00 GB RAM' and '54.0 GB of 100 GB disk' in guest-drawer-facts",
+    "/vmware/overview stale billing-api-vm GuestDrawer: guest-drawer-facts preserves static capacity '8.00 GB RAM' and '80.0 GB disk' beside amber header, Stale data InlineNotice, and 5/5 last-known deferred History metrics, then restores '4.40 GB of 8.00 GB RAM' and '40.0 GB of 80.0 GB disk' on live WebSocket recovery without reload",
+    "zero console errors, zero page errors, zero failed network requests, and 0px horizontal overflow across all routes, themes, and viewports"
+  ],
+  "interactions": [
+    "loaded /proxmox/overview on desktop Chromium (1440x940 light) and touch WebKit phone (360x820 dark), filtered Attention chip (isolated prod-db-01), searched 'stale' (matched prod-db-01 and archive-worker-102), expanded prod-db-01 GuestDrawer, inspected guest-drawer-facts before and after scrolling on phone, and triggered live WebSocket rawData recovery without reload",
+    "navigated to /vmware/overview on desktop Chromium and touch WebKit phone, expanded billing-api-vm GuestDrawer, inspected guest-drawer-facts ('8.00 GB RAM' and '80.0 GB disk') before and after scrolling on phone, and triggered live WebSocket rawData recovery without reload"
+  ]
+}
