@@ -5478,6 +5478,23 @@ func (m *Monitor) cleanupRemovedHostAgents(now time.Time) {
 	}
 }
 
+type cacheExpiryLog struct {
+	key string
+	at  time.Time
+}
+
+func cacheExpiryDebugEnabled() bool {
+	return logging.IsLevelEnabled(zerolog.DebugLevel) && log.Logger.GetLevel() <= zerolog.DebugLevel
+}
+
+// Write only after releasing the cache locks: the log sink can block even
+// though live polls still need these caches to read and publish observations.
+func logCacheExpiries(entries []cacheExpiryLog, keyField, timeField, message string) {
+	for _, entry := range entries {
+		log.Debug().Str(keyField, entry.key).Time(timeField, entry.at).Msg(message)
+	}
+}
+
 // cleanupGuestMetadataCache removes stale guest metadata cache and limiter entries.
 // Idle entries older than 2x the cache TTL (10 minutes) are removed to prevent
 // unbounded growth when VMs are deleted or moved. A successful observation's age
@@ -5485,12 +5502,13 @@ func (m *Monitor) cleanupRemovedHostAgents(now time.Time) {
 // OS-info failure counter or known-unsupported command suppression.
 func (m *Monitor) cleanupGuestMetadataCache(now time.Time) {
 	const maxAge = 2 * guestMetadataCacheTTL // 10 minutes
+	debug := cacheExpiryDebugEnabled()
+	var expiredCache, expiredLimiter []cacheExpiryLog
 
 	// Serialize the activity check with touches and reservations. No caller holds
 	// the metadata lock while acquiring the limiter lock; this order also keeps
 	// in-flight ownership intact throughout a sweep.
 	m.guestMetadataLimiterMu.Lock()
-	defer m.guestMetadataLimiterMu.Unlock()
 	m.guestMetadataMu.Lock()
 	for key, entry := range m.guestMetadataCache {
 		activityAt := m.guestMetadataLastAccess[key]
@@ -5499,10 +5517,9 @@ func (m *Monitor) cleanupGuestMetadataCache(now time.Time) {
 		}
 		if m.guestMetadataInFlight[key] == nil && now.Sub(activityAt) > maxAge {
 			delete(m.guestMetadataCache, key)
-			log.Debug().
-				Str("key", key).
-				Time("fetchedAt", entry.fetchedAt).
-				Msg("Cleaned up stale guest metadata cache entry")
+			if debug {
+				expiredCache = append(expiredCache, cacheExpiryLog{key, entry.fetchedAt})
+			}
 		}
 	}
 	m.guestMetadataMu.Unlock()
@@ -5516,12 +5533,15 @@ func (m *Monitor) cleanupGuestMetadataCache(now time.Time) {
 		// Keep near-term limiter state; remove long-idle keys.
 		if m.guestMetadataInFlight[key] == nil && now.Sub(nextAllowed) > maxAge {
 			delete(m.guestMetadataLimiter, key)
-			log.Debug().
-				Str("key", key).
-				Time("nextAllowed", nextAllowed).
-				Msg("Cleaned up stale guest metadata limiter entry")
+			if debug {
+				expiredLimiter = append(expiredLimiter, cacheExpiryLog{key, nextAllowed})
+			}
 		}
 	}
+	m.guestMetadataLimiterMu.Unlock()
+
+	logCacheExpiries(expiredCache, "key", "fetchedAt", "Cleaned up stale guest metadata cache entry")
+	logCacheExpiries(expiredLimiter, "key", "nextAllowed", "Cleaned up stale guest metadata limiter entry")
 }
 
 // cleanupTrackingMaps removes stale entries from various tracking maps to prevent unbounded memory growth.
@@ -5651,29 +5671,32 @@ func (m *Monitor) cleanupTrackingMaps(now time.Time) {
 // when nodes/VMs are deleted or reconfigured.
 func (m *Monitor) cleanupDiagnosticSnapshots(now time.Time) {
 	const maxAge = 1 * time.Hour
+	debug := cacheExpiryDebugEnabled()
+	var expiredNodes, expiredGuests []cacheExpiryLog
 
 	m.diagMu.Lock()
-	defer m.diagMu.Unlock()
 
 	for key, snapshot := range m.nodeSnapshots {
 		if now.Sub(snapshot.RetrievedAt) > maxAge {
 			delete(m.nodeSnapshots, key)
-			log.Debug().
-				Str("key", key).
-				Time("retrievedAt", snapshot.RetrievedAt).
-				Msg("Cleaned up stale node snapshot")
+			if debug {
+				expiredNodes = append(expiredNodes, cacheExpiryLog{key, snapshot.RetrievedAt})
+			}
 		}
 	}
 
 	for key, snapshot := range m.guestSnapshots {
 		if now.Sub(snapshot.RetrievedAt) > maxAge {
 			delete(m.guestSnapshots, key)
-			log.Debug().
-				Str("key", key).
-				Time("retrievedAt", snapshot.RetrievedAt).
-				Msg("Cleaned up stale guest snapshot")
+			if debug {
+				expiredGuests = append(expiredGuests, cacheExpiryLog{key, snapshot.RetrievedAt})
+			}
 		}
 	}
+	m.diagMu.Unlock()
+
+	logCacheExpiries(expiredNodes, "key", "retrievedAt", "Cleaned up stale node snapshot")
+	logCacheExpiries(expiredGuests, "key", "retrievedAt", "Cleaned up stale guest snapshot")
 }
 
 // cleanupRRDCache removes stale RRD memory cache entries.
@@ -5681,17 +5704,17 @@ func (m *Monitor) cleanupDiagnosticSnapshots(now time.Time) {
 // unbounded growth when nodes or guests disappear from the poll set.
 func (m *Monitor) cleanupRRDCache(now time.Time) {
 	const maxAge = 2 * nodeRRDCacheTTL // 1 minute
+	debug := cacheExpiryDebugEnabled()
+	var expiredNodes []cacheExpiryLog
 
 	m.rrdCacheMu.Lock()
-	defer m.rrdCacheMu.Unlock()
 
 	for key, entry := range m.nodeRRDMemCache {
 		if now.Sub(entry.fetchedAt) > maxAge {
 			delete(m.nodeRRDMemCache, key)
-			log.Debug().
-				Str("node", key).
-				Time("fetchedAt", entry.fetchedAt).
-				Msg("Cleaned up stale RRD cache entry")
+			if debug {
+				expiredNodes = append(expiredNodes, cacheExpiryLog{key, entry.fetchedAt})
+			}
 		}
 	}
 
@@ -5710,6 +5733,9 @@ func (m *Monitor) cleanupRRDCache(now time.Time) {
 			delete(m.vmFSInfoCache, key)
 		}
 	}
+	m.rrdCacheMu.Unlock()
+
+	logCacheExpiries(expiredNodes, "node", "fetchedAt", "Cleaned up stale RRD cache entry")
 }
 
 // cleanupMetricsHistory removes stale entries from the metrics history.
