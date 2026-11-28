@@ -156,11 +156,17 @@ export function AlertEscalationSection(props: AlertEscalationSectionProps) {
                   <button
                     type="button"
                     onClick={() => props.removeEscalationLevel(index())}
-                    class="rounded-md p-1.5 text-red-600 transition-colors hover:bg-red-100 dark:hover:bg-red-900/25"
+                    class="inline-flex min-h-11 min-w-11 shrink-0 items-center justify-center rounded-md p-1.5 text-red-600 transition-colors hover:bg-red-100 focus-visible:outline-hidden focus-visible:ring-2 focus-visible:ring-blue-500 focus-visible:ring-offset-1 sm:min-h-0 sm:min-w-0 dark:hover:bg-red-900/25 dark:focus-visible:ring-offset-surface"
                     title={ALERT_CONFIG_ESCALATION_REMOVE_TITLE}
                     aria-label={ALERT_CONFIG_ESCALATION_REMOVE_TITLE}
                   >
-                    <svg class="h-4 w-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                    <svg
+                      aria-hidden="true"
+                      class="h-4 w-4"
+                      fill="none"
+                      stroke="currentColor"
+                      viewBox="0 0 24 24"
+                    >
                       <path
                         stroke-linecap="round"
                         stroke-linejoin="round"
@@ -212,9 +218,15 @@ export function AlertEscalationSection(props: AlertEscalationSectionProps) {
           <button
             type="button"
             onClick={props.addEscalationLevel}
-            class="flex w-full items-center justify-center gap-2 rounded-md border-2 border-dashed border-border py-2 text-sm text-muted transition-all hover:border-slate-400 hover:bg-surface-hover"
+            class="flex min-h-11 w-full items-center justify-center gap-2 rounded-md border-2 border-dashed border-border py-2 text-sm text-muted transition-all hover:border-slate-400 hover:bg-surface-hover focus-visible:outline-hidden focus-visible:ring-2 focus-visible:ring-blue-500 focus-visible:ring-offset-1 sm:min-h-0 dark:focus-visible:ring-offset-surface"
           >
-            <svg class="h-4 w-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+            <svg
+              aria-hidden="true"
+              class="h-4 w-4"
+              fill="none"
+              stroke="currentColor"
+              viewBox="0 0 24 24"
+            >
               <path
                 stroke-linecap="round"
                 stroke-linejoin="round"

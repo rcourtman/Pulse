@@ -1,0 +1,49 @@
+{
+  "version": 1,
+  "base_sha": "b234aeba1347a1226cb836fe4a33447cd5c5338a",
+  "verified_at": "2026-11-28T16:00:00Z",
+  "result": "passed",
+  "changed_paths": [
+    "frontend-modern/src/components/shared/statusBadgeModel.ts",
+    "frontend-modern/src/features/alerts/AlertEscalationSection.tsx",
+    "frontend-modern/src/features/alerts/AlertGroupingSection.tsx",
+    "frontend-modern/src/features/alerts/AlertQuietHoursSection.tsx",
+    "frontend-modern/src/features/alerts/tabs/ScheduleTab.tsx",
+    "frontend-modern/src/utils/alertGroupingPresentation.ts",
+    "frontend-modern/src/utils/alertSchedulePresentation.ts"
+  ],
+  "content_sha256": {
+    "frontend-modern/src/components/shared/statusBadgeModel.ts": "03daadbe0e9ddca5a63f9bcd1bf15cdd3ce6934fa0f2e9d7de642a999f36951e",
+    "frontend-modern/src/features/alerts/AlertEscalationSection.tsx": "d59591b5a154e7d72981b1a8af1cc18396f10bd42aac7fcac7f39c03c7a760dd",
+    "frontend-modern/src/features/alerts/AlertGroupingSection.tsx": "efb66b31de4b97c29bb916682b5aa3f39545a1d5b3596b61f98fa94898a57513",
+    "frontend-modern/src/features/alerts/AlertQuietHoursSection.tsx": "ab0e9ad93676795bd506d7af1596106534d311a902961a6f7898b2473ad576f8",
+    "frontend-modern/src/features/alerts/tabs/ScheduleTab.tsx": "69ad8ad12ba1ad8972d5b5e0ed777b018437c8e72a1e000321a3cb91d8998f91",
+    "frontend-modern/src/utils/alertGroupingPresentation.ts": "415d573c44546b3c42ca15e5e22a65c7ba03a44a152fe2538b1a5e097e8bc520",
+    "frontend-modern/src/utils/alertSchedulePresentation.ts": "978f3daa9596acb1c45cfef33bb28396e83633611d70315643ae553ed92570f0"
+  },
+  "routes": [
+    "/alerts/schedule",
+    "/alerts/thresholds"
+  ],
+  "viewports": [
+    {
+      "width": 1440,
+      "height": 940
+    },
+    {
+      "width": 360,
+      "height": 820
+    }
+  ],
+  "states": [
+    "Paired production dist builds of base b234aeba13 and patched Alert Schedule and StatusBadge served over loopback HTTP via pulse-worker-browser in desktop Chromium (1440x940 dark and light) and touch phone WebKit (360x820 dark, isMobile=true, hasTouch=true) with 0 console errors, 0 page errors, 0 unexpected HTTP>=400 responses, and 0px horizontal overflow across all 12 captures (all 12 PNGs inspected natively).",
+    "/alerts/schedule Quiet hours selected Suppress Categories cards in dark mode: background changes from solid rgb(59, 130, 246) (swallowing the checkbox border and leaving description contrast at 2.48:1) to rgba(30, 58, 138, 0.25) with 9.15:1 description contrast and crisp checkbox outline; light mode remains visually identical.",
+    "/alerts/schedule touch phone WebKit (360x820 dark): Reset to defaults grows from 38px to 44px, Quiet day buttons grow from 32px to 44px, Remove escalation level grows from 28x28px to 44x44px, and Add Escalation Level grows from 40px to 44px with zero clipping or overflow.",
+    "/alerts/thresholds Recovery Global Defaults enabled StatusBadge (On) toggles in dark mode: background changes from solid rgb(59, 130, 246) with 2.04:1 blue-300 text to rgba(30, 58, 138, 0.3) with 7.41:1 text contrast in both desktop Chromium and phone WebKit."
+  ],
+  "interactions": [
+    "Focused the Performance alerts sr-only checkbox inside AlertQuietHoursSection on /alerts/schedule in desktop Chromium dark mode; verified visible focus-within ring (none -> rgb(59, 130, 246) 3px ring).",
+    "Dispatched live input event (value=18) on the Grouping window range slider in AlertGroupingSection without a release change event; verified readout updated live from 10 min to 18 min (base stayed stuck at 10 min).",
+    "Expanded Recovery on /alerts/thresholds and clicked an enabled StatusBadge (On) in desktop Chromium dark mode; verified aria-pressed toggled from true to false (On -> Off)."
+  ]
+}

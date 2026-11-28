@@ -165,6 +165,7 @@ export function AlertQuietHoursSection(props: AlertQuietHoursSectionProps) {
                     >
                       <Show when={props.quietHours.suppress[option.key]}>
                         <svg
+                          aria-hidden="true"
                           class="h-3 w-3 text-white"
                           fill="none"
                           viewBox="0 0 24 24"

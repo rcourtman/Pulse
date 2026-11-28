@@ -24,7 +24,7 @@ const STATUS_BADGE_PADDING_BY_SIZE: Record<StatusBadgeSize, string> = {
   md: 'px-2.5 py-1',
 };
 const STATUS_BADGE_ENABLED_CLASS =
-  'bg-blue-50 text-blue-700 hover:bg-blue-100 dark:bg-blue-500 dark:text-blue-300 dark:hover:bg-blue-500';
+  'bg-blue-50 text-blue-700 hover:bg-blue-100 dark:bg-blue-900/30 dark:text-blue-300 dark:hover:bg-blue-900/50';
 const STATUS_BADGE_DISABLED_STATE_CLASS = 'text-muted hover:bg-surface-hover';
 const STATUS_BADGE_INTERACTION_DISABLED_CLASS =
   'opacity-60 cursor-not-allowed hover:bg-transparent dark:hover:bg-transparent';

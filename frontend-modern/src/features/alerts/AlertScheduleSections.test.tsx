@@ -1,4 +1,4 @@
-import { cleanup, render, screen } from '@solidjs/testing-library';
+import { cleanup, fireEvent, render, screen } from '@solidjs/testing-library';
 import { afterEach, describe, expect, it, vi } from 'vitest';
 import { AlertCooldownSection } from './AlertCooldownSection';
 import { AlertDeliveryRoutingSection } from './AlertDeliveryRoutingSection';
@@ -67,8 +67,12 @@ describe('Alert schedule sections', () => {
     expect(timezoneSelect).toBeInTheDocument();
     expect(timezoneSelect.closest('.sm\\:col-span-2')).not.toBeNull();
     const performanceCard = screen.getByText('Performance').closest('label');
-    expect(performanceCard).toHaveClass('w-full');
-    expect(screen.getByRole('button', { name: 'Monday' })).toHaveAttribute('aria-pressed', 'true');
+    expect(performanceCard).toHaveClass('w-full', 'focus-within:ring-2', 'dark:bg-blue-900/25');
+    expect(performanceCard).not.toHaveClass('dark:bg-blue-500');
+    expect(performanceCard?.querySelector('svg')).toHaveAttribute('aria-hidden', 'true');
+    const mondayButton = screen.getByRole('button', { name: 'Monday' });
+    expect(mondayButton).toHaveAttribute('aria-pressed', 'true');
+    expect(mondayButton).toHaveClass('min-h-11', 'sm:min-h-0', 'focus-visible:ring-2');
     expect(screen.getByRole('button', { name: 'Saturday' })).toHaveAttribute(
       'aria-pressed',
       'false',
@@ -95,14 +99,15 @@ describe('Alert schedule sections', () => {
     expect(screen.getByRole('spinbutton', { name: 'Max alerts / hour' })).toBeInTheDocument();
   });
 
-  it('associates visible labels with grouping controls', () => {
+  it('associates visible labels with grouping controls and updates live on slider input', () => {
     const grouping: GroupingConfig = { enabled: true, window: 10, byNode: true, byGuest: false };
+    const setGroupingWindow = vi.fn();
 
     render(() => (
       <AlertGroupingSection
         grouping={grouping}
         setGroupingEnabled={vi.fn()}
-        setGroupingWindow={vi.fn()}
+        setGroupingWindow={setGroupingWindow}
         setGroupingByNode={vi.fn()}
         setGroupingByGuest={vi.fn()}
       />
@@ -112,11 +117,15 @@ describe('Alert schedule sections', () => {
       'aria-pressed',
       'true',
     );
-    expect(screen.getByRole('slider', { name: 'Grouping window' })).toHaveAttribute(
-      'aria-valuetext',
-      '10 minutes',
-    );
-    expect(screen.getByRole('checkbox', { name: 'By node' })).toBeInTheDocument();
+    const slider = screen.getByRole('slider', { name: 'Grouping window' });
+    expect(slider).toHaveAttribute('aria-valuetext', '10 minutes');
+    fireEvent.input(slider, { target: { value: '15' } });
+    expect(setGroupingWindow).toHaveBeenCalledWith('15');
+    const byNode = screen.getByRole('checkbox', { name: 'By node' });
+    expect(byNode).toBeInTheDocument();
+    const byNodeCard = byNode.closest('label');
+    expect(byNodeCard).toHaveClass('cursor-pointer', 'focus-within:ring-2');
+    expect(byNodeCard?.querySelector('svg')).toHaveAttribute('aria-hidden', 'true');
     expect(screen.getByRole('checkbox', { name: 'By workload' })).toBeInTheDocument();
   });
 
@@ -158,7 +167,12 @@ describe('Alert schedule sections', () => {
       screen.getByRole('button', { name: 'Repeat critical escalation until acknowledged' }),
     ).toHaveAttribute('aria-pressed', 'true');
     expect(screen.getByRole('spinbutton', { name: 'Repeat every' })).toHaveValue(30);
-    expect(screen.getByRole('button', { name: 'Remove escalation level' })).toBeInTheDocument();
+    const removeButton = screen.getByRole('button', { name: 'Remove escalation level' });
+    expect(removeButton).toHaveClass('min-h-11', 'min-w-11', 'sm:min-h-0', 'sm:min-w-0');
+    expect(removeButton.querySelector('svg')).toHaveAttribute('aria-hidden', 'true');
+    const addButton = screen.getByRole('button', { name: 'Add Escalation Level' });
+    expect(addButton).toHaveClass('min-h-11', 'sm:min-h-0');
+    expect(addButton.querySelector('svg')).toHaveAttribute('aria-hidden', 'true');
   });
 
   it('associates the initial delivery selector and exposes every destination type', () => {

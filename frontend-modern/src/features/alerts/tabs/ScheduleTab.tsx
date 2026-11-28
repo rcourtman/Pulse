@@ -55,10 +55,11 @@ export function ScheduleTab(props: ScheduleTabProps) {
         <button
           type="button"
           onClick={scheduleState.resetToDefaults}
-          class="inline-flex items-center gap-2 self-start rounded-md border border-border bg-surface px-3 py-2 text-sm font-medium shadow-xs transition-colors hover:bg-surface-hover"
+          class="inline-flex min-h-11 items-center gap-2 self-start rounded-md border border-border bg-surface px-3 py-2 text-sm font-medium shadow-xs transition-colors hover:bg-surface-hover focus-visible:outline-hidden focus-visible:ring-2 focus-visible:ring-blue-500 focus-visible:ring-offset-1 sm:min-h-0 dark:focus-visible:ring-offset-surface"
           title={getAlertConfigResetDefaultsTitle()}
         >
           <svg
+            aria-hidden="true"
             class="h-4 w-4"
             viewBox="0 0 24 24"
             fill="none"
