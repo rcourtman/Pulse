@@ -113,19 +113,100 @@ class AuditRecoveryDocsTest(unittest.TestCase):
     def test_what_gets_logged_covers_live_api_audit_event_types(self):
         guide = (ROOT / "docs/AUDIT_LOGGING.md").read_text(encoding="utf-8")
         logged = set()
-        for path in sorted((ROOT / "internal/api").glob("*.go")):
-            if path.name.endswith("_test.go"):
-                continue
-            source = path.read_text(encoding="utf-8")
-            for pattern in (
-                r'LogAuditEventForTenant\s*\([^,\n]+,\s*"([a-z0-9_]+)"',
-                r'LogAuditEvent\s*\(\s*"([a-z0-9_]+)"',
-                r'auditTokenEvent\s*\([^,\n]+,\s*"([a-z0-9_]+)"',
-            ):
-                logged.update(re.findall(pattern, source))
-        self.assertGreaterEqual(len(logged), 40, "expected to discover live API audit event literals")
+        scan_globs = (
+            (ROOT / "internal/api").glob("*.go"),
+            (ROOT / "internal/api/configapi").glob("*.go"),
+            (ROOT / "internal/websocket").glob("*.go"),
+            (ROOT / "pkg/server").glob("*.go"),
+            (ROOT / "pkg/audit").glob("sqlite_logger.go"),
+        )
+        for paths in scan_globs:
+            for path in sorted(paths):
+                if path.name.endswith("_test.go"):
+                    continue
+                source = path.read_text(encoding="utf-8")
+                for pattern in (
+                    r'LogAuditEventForTenant\s*\([^,\n]+,\s*"([a-z0-9_]+)"',
+                    r'LogAuditEvent\s*\(\s*"([a-z0-9_]+)"',
+                    r'auditTokenEvent\s*\([^,\n]+,\s*"([a-z0-9_]+)"',
+                    r'\.AuditEvent\s*\([^,\n]+,\s*"([a-z0-9_]+)"',
+                    r'audit\.Log\s*\(\s*"([a-z0-9_]+)"',
+                    r'EventType:\s*"([a-z0-9_]+)"',
+                ):
+                    logged.update(re.findall(pattern, source))
+        self.assertGreaterEqual(len(logged), 50, "expected to discover live audit event literals")
         missing = sorted(event for event in logged if f"`{event}`" not in guide)
-        self.assertEqual(missing, [], f"AUDIT_LOGGING.md is missing live API audit events: {missing}")
+        self.assertEqual(missing, [], f"AUDIT_LOGGING.md is missing live audit events: {missing}")
+
+    def test_audit_export_summary_retention_and_error_bounds_match_runtime(self):
+        guide = read_guide("AUDIT_LOGGING")
+        api_doc = read_guide("API")
+        handlers = (ROOT / "internal/api/activity_audit_handlers.go").read_text(encoding="utf-8")
+        exporter = (ROOT / "pkg/audit/export.go").read_text(encoding="utf-8")
+        logger = (ROOT / "pkg/audit/sqlite_logger.go").read_text(encoding="utf-8")
+
+        for source, token in (
+            (handlers, "auditStoreBusyRetryAfterSeconds = 2"),
+            (handlers, '"ambiguous_query"'),
+            (handlers, '"invalid_query"'),
+            (handlers, '"audit_store_busy"'),
+            (handlers, '"audit_store_unavailable"'),
+            (handlers, '"export_unavailable"'),
+            (handlers, '"summary_unavailable"'),
+            (handlers, '"invalid_id"'),
+            (handlers, '"not_found"'),
+            (handlers, 'w.Header().Set("X-Event-Count"'),
+            (exporter, 'ExportFormatCSV  ExportFormat = "csv"'),
+            (exporter, 'ExportFormatJSON ExportFormat = "json"'),
+            (exporter, 'InvalidSigCount int            `json:"invalid_signature_count,omitempty"`'),
+            (logger, "retentionStartupCleanupDelay = 5 * time.Minute"),
+            (logger, "defaultAuditCleanupInterval      = 24 * time.Hour"),
+            (logger, "retentionDays = 90"),
+            (logger, 'EventType: "audit_cleanup"'),
+        ):
+            with self.subTest(runtime_token=token):
+                self.assertIn(token, source)
+
+        for marker in (
+            "`invalid_query`",
+            "`ambiguous_query`",
+            "`audit_store_busy`",
+            "`Retry-After: 2`",
+            "`audit_store_unavailable`",
+            "`format` (`json` by default, or `csv`)",
+            "`verify=true`",
+            "`X-Event-Count`",
+            "JSON is the lossless evidence export",
+            "`invalid_signature_count`",
+            "`export_unavailable`",
+            "`summary_unavailable`",
+            "`invalid_id`",
+            "`not_found`",
+            "**90 days** by default",
+            "**5 minutes after startup**",
+            "**24 hours**",
+            "`audit_cleanup`",
+        ):
+            with self.subTest(audit_doc_marker=marker):
+                self.assertIn(marker, guide)
+
+        for marker in (
+            "### Export Audit Events",
+            "GET /api/audit/export",
+            "### Audit Summary",
+            "GET /api/audit/summary",
+            "GET /api/audit/exports",
+            "`ambiguous_query`",
+            "`audit_store_busy`",
+            "`Retry-After: 2`",
+            "`audit_store_unavailable`",
+            "`export_unavailable`",
+            "`summary_unavailable`",
+            "`invalid_signature_count`",
+            "`X-Event-Count`",
+        ):
+            with self.subTest(api_doc_marker=marker):
+                self.assertIn(marker, api_doc)
 
 
 class AuditWebhookDocsTest(unittest.TestCase):
