@@ -444,6 +444,7 @@ func TestIsUnraidOverride(t *testing.T) {
 }
 
 func TestGetServerVersion(t *testing.T) {
+	skipRetrySleep(t)
 	t.Run("Success", func(t *testing.T) {
 		var sawToken bool
 		server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
@@ -517,6 +518,7 @@ func TestGetServerVersion(t *testing.T) {
 }
 
 func TestCheckAndUpdateBranches(t *testing.T) {
+	skipRetrySleep(t)
 	t.Run("Disabled", func(t *testing.T) {
 		u := newUpdaterForTest("https://example")
 		u.cfg.Disabled = true
@@ -830,6 +832,7 @@ func TestPerformUpdatePersistsPreviousVersionForNextStart(t *testing.T) {
 }
 
 func TestPerformUpdateWrapper(t *testing.T) {
+	skipRetrySleep(t)
 	t.Run("ExecPathError", func(t *testing.T) {
 		origExec := osExecutableFn
 		t.Cleanup(func() { osExecutableFn = origExec })
@@ -878,6 +881,7 @@ func TestPerformUpdateInvalidRequest(t *testing.T) {
 }
 
 func TestPerformUpdateDownloadErrorAndHeaders(t *testing.T) {
+	skipRetrySleep(t)
 	_, execPath := writeTempExec(t)
 	u := newUpdaterForTest("https://example")
 	u.cfg.APIToken = "token"

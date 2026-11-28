@@ -29,6 +29,7 @@ func waitResolvedContract(t *testing.T, predicate func() bool) {
 // Ordinary firing establishes real receipts. Restart reloads those receipts;
 // no receipt or delivery job is manufactured by this test.
 func TestResolvedGroupingOrdinaryRestart(t *testing.T) {
+	t.Parallel()
 	for _, stage := range []string{"same_process", "after_firing", "pending_recovery", "late_arrival"} {
 		t.Run(stage, func(t *testing.T) {
 			t.Parallel()
@@ -231,6 +232,7 @@ func (s *resolvedContractServer) Close()               {}
 // deliberately hits the unchanged internal 10/minute destination limit; grouped
 // recovery above sends one request instead and creates no dead letters.
 func TestResolvedGroupingDisabledBurstRetainsRateLimit(t *testing.T) {
+	t.Parallel()
 	server := newResolvedContractServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) { w.WriteHeader(http.StatusOK) }))
 	m := NewNotificationManagerWithDataDir("", t.TempDir())
 	defer m.Stop()

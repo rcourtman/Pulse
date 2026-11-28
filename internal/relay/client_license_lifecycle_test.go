@@ -18,6 +18,7 @@ import (
 // when the licensing subsystem refreshes the grant JWT, the relay client must
 // use the fresh token on its next registration.
 func TestRunLoop_LicenseTokenRefreshedOnReconnect(t *testing.T) {
+	t.Parallel()
 	logger := zerolog.New(zerolog.NewTestWriter(t))
 
 	var mu sync.Mutex
@@ -137,8 +138,10 @@ func TestRunLoop_LicenseTokenRefreshedOnReconnect(t *testing.T) {
 // This contrast proves the license error path uses the extended delay, not
 // just that the first attempt happened.
 func TestRunLoop_LicenseErrorPausesReconnect(t *testing.T) {
+	t.Parallel()
 	// Subtest 1: Non-license error allows quick reconnect
 	t.Run("non_license_error_allows_retry", func(t *testing.T) {
+		t.Parallel()
 		logger := zerolog.New(zerolog.NewTestWriter(t))
 
 		var mu sync.Mutex
@@ -213,6 +216,7 @@ func TestRunLoop_LicenseErrorPausesReconnect(t *testing.T) {
 
 	// Subtest 2: License error blocks reconnect for maxReconnectDelay (5 min)
 	t.Run("license_error_blocks_retry", func(t *testing.T) {
+		t.Parallel()
 		logger := zerolog.New(zerolog.NewTestWriter(t))
 
 		var mu sync.Mutex
@@ -284,6 +288,7 @@ func TestRunLoop_LicenseErrorPausesReconnect(t *testing.T) {
 }
 
 func TestRunLoop_LicenseErrorSetsReconnectInStatus(t *testing.T) {
+	t.Parallel()
 	logger := zerolog.New(zerolog.NewTestWriter(t))
 
 	attempted := make(chan struct{}, 1)
@@ -528,8 +533,10 @@ func TestRunLoop_NonLicenseErrorIsNotLicenseError(t *testing.T) {
 // covers the gap where existing tests send the error immediately after
 // REGISTER_ACK without any channel activity first.
 func TestRunLoop_MidSessionLicenseErrorAfterChannelOpen(t *testing.T) {
+	t.Parallel()
 	for _, code := range []string{ErrCodeLicenseExpired, ErrCodeLicenseInvalid} {
 		t.Run(code, func(t *testing.T) {
+			t.Parallel()
 			logger := zerolog.New(zerolog.NewTestWriter(t))
 
 			var mu sync.Mutex

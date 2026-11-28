@@ -107,6 +107,7 @@ func notificationLoopbackListenerPair(t *testing.T) (string, net.Listener) {
 }
 
 func TestQueuedWebhookFallbackVerdictSurvivesRestart(t *testing.T) {
+	t.Parallel()
 	port, accepted := notificationStalledAddress(t)
 	dir := t.TempDir()
 	manager := NewNotificationManagerWithDeferredQueue("", dir)
@@ -148,8 +149,10 @@ func TestQueuedWebhookFallbackVerdictSurvivesRestart(t *testing.T) {
 }
 
 func TestPinnedNotificationConnectivityReachesHealthyAddressAfterStall(t *testing.T) {
+	t.Parallel()
 	for _, transport := range []string{"webhook", "shared-restricted-client"} {
 		t.Run(transport, func(t *testing.T) {
+			t.Parallel()
 			port, accepted := notificationStalledAddress(t)
 			ips := []net.IP{net.ParseIP("127.0.0.2"), net.ParseIP("127.0.0.1")}
 			var client *http.Client

@@ -13,6 +13,7 @@ import (
 // Exercise the ordinary grouping timer, autonomous queue, real HTTP bodies and
 // occurrence receipts. Changed tags/floors must not steal an owed recovery.
 func TestNotificationBatchRoutingHTTPRecipients(t *testing.T) {
+	t.Parallel()
 	type delivery struct {
 		path    string
 		Event   string          `json:"event"`

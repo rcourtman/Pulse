@@ -27,6 +27,7 @@ func openRehearsalManager(t *testing.T, dir, receiver string) *NotificationManag
 }
 
 func TestDeliveryRehearsalRealQueueAndRecoverySurviveRestart(t *testing.T) {
+	t.Parallel()
 	var requests atomic.Int32
 	bodies := make(chan []byte, 4)
 	server := newIPv4HTTPServer(t, http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
@@ -112,6 +113,7 @@ func TestDeliveryRehearsalUsesStableDiagnosticAliasForSavedEmail(t *testing.T) {
 }
 
 func TestDeliveryRehearsalKeepsMixedDestinationOutcomesSeparate(t *testing.T) {
+	t.Parallel()
 	var accepted, rejected atomic.Int32
 	server := newIPv4HTTPServer(t, http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		if r.URL.Path == "/reject" {
@@ -154,8 +156,10 @@ func TestDeliveryRehearsalKeepsMixedDestinationOutcomesSeparate(t *testing.T) {
 }
 
 func TestDeliveryRehearsalReportsRealSuppressionAndDeferral(t *testing.T) {
+	t.Parallel()
 	for _, scenario := range []string{"paused", "severity", "tags", "grouping", "quiet-hours", "recovery-disabled", "no-destinations"} {
 		t.Run(scenario, func(t *testing.T) {
+			t.Parallel()
 			var requests atomic.Int32
 			server := newIPv4HTTPServer(t, http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) { requests.Add(1); w.WriteHeader(http.StatusAccepted) }))
 			defer server.Close()
@@ -221,6 +225,7 @@ func TestDeliveryRehearsalReportsRealSuppressionAndDeferral(t *testing.T) {
 }
 
 func TestDeliveryRehearsalReportsTerminalFailureAndDoesNotInventRecovery(t *testing.T) {
+	t.Parallel()
 	var requests atomic.Int32
 	server := newIPv4HTTPServer(t, http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		requests.Add(1)
@@ -251,6 +256,7 @@ func TestDeliveryRehearsalReportsTerminalFailureAndDoesNotInventRecovery(t *test
 }
 
 func TestDeliveryRehearsalRetryUsesOrdinaryQueueAndKeepsAttemptEvidence(t *testing.T) {
+	t.Parallel()
 	var requests atomic.Int32
 	server := newIPv4HTTPServer(t, http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		if requests.Add(1) == 1 {
