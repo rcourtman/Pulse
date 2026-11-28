@@ -34,8 +34,7 @@ const IMPORT_SPECIFIER_RE =
   /(?:from\s+|import\s*\(\s*|vi\.(?:mock|doMock|importActual|importMock)\s*\(\s*|require\s*\(\s*|^\s*import\s+)['"]([^'"]+)['"]/gm;
 const HOISTED_FACTORY_MOCK_RE =
   /^vi\.mock\s*\(\s*['"]([^'"]+)['"]\s*,\s*(?:async\s*)?\(\s*\)\s*=>/gm;
-const DYNAMIC_MOCK_ESCAPE_RE =
-  /\b(?:importOriginal|importActual|doUnmock|unmock|resetModules)\b/;
+const DYNAMIC_MOCK_ESCAPE_RE = /\b(?:importOriginal|importActual|doUnmock|unmock|resetModules)\b/;
 
 function stripTypeOnlyModuleEdges(source: string): string {
   return source
