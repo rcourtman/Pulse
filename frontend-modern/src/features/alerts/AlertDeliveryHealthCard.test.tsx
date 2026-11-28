@@ -252,11 +252,81 @@ describe('AlertDeliveryHealthCard', () => {
       'Review delivery activity for timestamps, destinations, alerts, and errors',
     );
     expect(alert).not.toHaveTextContent('Otherwise Pulse removes expired records hourly');
+    expect(screen.getByTestId('delivery-health-failure-summary')).toHaveTextContent(
+      'Authentication failure',
+    );
+    expect(screen.getByTestId('delivery-health-failure-summary')).toHaveTextContent(
+      'Connectivity failure',
+    );
     expect(screen.queryByRole('button', { name: 'Refresh delivery status' })).toBeNull();
     expect(screen.getByRole('link', { name: 'Review delivery activity' })).toHaveAttribute(
       'href',
       '/alerts/notifications#notification-delivery-activity',
     );
+  });
+
+  it('surfaces every active failure cause with remediation and live queue counts in full mode', () => {
+    render(() => (
+      <AlertDeliveryHealthCard
+        health={{
+          ...degradedHealth,
+          pending: 3,
+          sending: 1,
+          sent: 14,
+          failureClasses7d: {
+            ...degradedHealth.failureClasses7d,
+            authentication: 2,
+            connectivity: 1,
+            tls: 1,
+          },
+        }}
+        unavailable={false}
+        refreshing={false}
+        onRefresh={vi.fn()}
+        onRetryFailures={vi.fn()}
+        onDismissFailures={vi.fn()}
+      />
+    ));
+
+    const queue = screen.getByTestId('delivery-health-queue-metrics');
+    expect(queue).toHaveTextContent('Failed1');
+    expect(queue).toHaveTextContent('Retries stopped2');
+    expect(queue).toHaveTextContent('Queued3');
+    expect(queue).toHaveTextContent('Sending1');
+    expect(queue).toHaveTextContent('Delivered14');
+
+    const breakdown = screen.getByTestId('delivery-health-failure-breakdown');
+    expect(breakdown).toHaveTextContent('Failure causes (last 7 days)');
+    expect(breakdown).toHaveTextContent('Authentication failure');
+    expect(breakdown).toHaveTextContent(
+      'Check destination credentials, tokens, and account permissions.',
+    );
+    expect(breakdown).toHaveTextContent('Connectivity failure');
+    expect(breakdown).toHaveTextContent(
+      'Check DNS, firewall, proxy, and destination reachability.',
+    );
+    expect(breakdown).toHaveTextContent('TLS failure');
+    expect(breakdown).toHaveTextContent(
+      'Check certificate trust, hostname matching, and TLS settings.',
+    );
+  });
+
+  it('hides stale failure breakdown and live queue counts when status becomes unavailable', () => {
+    const [unavailable, setUnavailable] = createSignal(false);
+    render(() => (
+      <AlertDeliveryHealthCard
+        health={degradedHealth}
+        unavailable={unavailable()}
+        refreshing={false}
+        onRefresh={vi.fn()}
+      />
+    ));
+
+    expect(screen.getByTestId('delivery-health-failure-breakdown')).toBeInTheDocument();
+    expect(screen.getByTestId('delivery-health-queue-metrics')).toHaveTextContent('Queued2');
+    setUnavailable(true);
+    expect(screen.queryByTestId('delivery-health-failure-breakdown')).toBeNull();
+    expect(screen.queryByTestId('delivery-health-queue-metrics')).toBeNull();
   });
 });
 

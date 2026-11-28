@@ -54,6 +54,8 @@ import {
   getAlertDestinationsDeliveryHealthTitle,
   getAlertDestinationsDeliveryDismissConfirmation,
   getAlertDestinationsDeliveryDismissLabel,
+  getAlertDestinationsDeliveryFailureBreakdown,
+  getAlertDestinationsDeliveryQueueMetrics,
   getAlertDestinationsDeliveryRefreshLabel,
   getAlertDestinationsDeliveryRetryConfirmation,
   getAlertDestinationsDeliveryRetryLabel,
@@ -259,6 +261,62 @@ describe('alertDestinationsPresentation', () => {
     ).toBe(
       '1 failed delivery retained for 7 days and 2 dead-lettered deliveries retained for 30 days. These notifications were not delivered. Most recent failures: connectivity (3). Review delivery activity for timestamps, destinations, alerts, and errors.',
     );
+  });
+
+  it('orders all non-zero failure classes with per-class guidance and builds queue metrics', () => {
+    expect(
+      getAlertDestinationsDeliveryFailureBreakdown(
+        {
+          tls: 1,
+          authentication: 3,
+          connectivity: 1,
+          rate_limited: 0,
+        },
+        true,
+      ),
+    ).toEqual([
+      {
+        failureClass: 'authentication',
+        label: 'Authentication failure',
+        count: 3,
+        guidance: 'Check destination credentials, tokens, and account permissions.',
+      },
+      {
+        failureClass: 'connectivity',
+        label: 'Connectivity failure',
+        count: 1,
+        guidance: 'Check DNS, firewall, proxy, and destination reachability.',
+      },
+      {
+        failureClass: 'tls',
+        label: 'TLS failure',
+        count: 1,
+        guidance: 'Check certificate trust, hostname matching, and TLS settings.',
+      },
+    ]);
+    expect(getAlertDestinationsDeliveryFailureBreakdown({ tls: 2 }, false)).toEqual([]);
+
+    expect(
+      getAlertDestinationsDeliveryQueueMetrics({
+        failed: 1,
+        deadLetter: 2,
+        pending: 3,
+        sending: 1,
+        sent: 10,
+      }),
+    ).toEqual([
+      { key: 'failed', label: 'Failed', count: 1, tone: 'danger' },
+      { key: 'deadLetter', label: 'Retries stopped', count: 2, tone: 'danger' },
+      { key: 'pending', label: 'Queued', count: 3, tone: 'warning' },
+      { key: 'sending', label: 'Sending', count: 1, tone: 'info' },
+      { key: 'sent', label: 'Delivered', count: 10, tone: 'success' },
+    ]);
+    expect(
+      getAlertDestinationsDeliveryQueueMetrics(
+        { failed: 0, deadLetter: 2, pending: 4, sending: 1, sent: 9 },
+        { terminalOnly: true },
+      ),
+    ).toEqual([{ key: 'deadLetter', label: 'Retries stopped', count: 2, tone: 'danger' }]);
   });
 });
 

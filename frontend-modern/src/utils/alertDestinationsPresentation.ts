@@ -184,7 +184,12 @@ type AlertDestinationsDeliveryHealthInput = {
   occurrenceUnavailable?: boolean;
 };
 
-function getRetainedDeliveryOutcomes(input: AlertDestinationsDeliveryHealthInput) {
+type AlertDestinationsRetainedOutcomesInput = Pick<
+  AlertDestinationsDeliveryHealthInput,
+  'failed' | 'deadLetter' | 'completedRetentionDays' | 'deadLetterRetentionDays'
+>;
+
+function getRetainedDeliveryOutcomes(input: AlertDestinationsRetainedOutcomesInput) {
   const outcomes: string[] = [];
   if (input.failed > 0) {
     outcomes.push(
@@ -199,11 +204,119 @@ function getRetainedDeliveryOutcomes(input: AlertDestinationsDeliveryHealthInput
   return outcomes.join(' and ') || 'A retained terminal delivery failure';
 }
 
+const DELIVERY_FAILURE_CLASS_ORDER = [
+  'authentication',
+  'rate_limited',
+  'connectivity',
+  'tls',
+  'configuration',
+  'rejected',
+  'server_error',
+  'unknown',
+] as const;
+
+const DELIVERY_FAILURE_CLASS_GUIDANCE: Record<string, string> = {
+  authentication: 'Check destination credentials, tokens, and account permissions.',
+  rate_limited: 'Check provider rate limits and reduce delivery volume before retrying.',
+  connectivity: 'Check DNS, firewall, proxy, and destination reachability.',
+  tls: 'Check certificate trust, hostname matching, and TLS settings.',
+  configuration: 'Review the enabled destination configuration and required fields.',
+  rejected: 'Check the destination endpoint and payload requirements.',
+  server_error:
+    'Check the destination service status and server logs. Retry retained deliveries once the service is available.',
+  unknown: 'Review the local notification audit details for the terminal error.',
+};
+
+export const ALERT_DESTINATIONS_DELIVERY_RECOVERY_NOTE =
+  'Review delivery activity in Notifications for timestamps, destinations, alerts, and safely redacted errors. After correcting the destination, retry them. Dismiss retained failures to clear this warning without deleting delivery history. Otherwise Pulse removes expired records hourly after their retention limit. Recoverable retry attempts do not trigger this warning.';
+
+export interface AlertDeliveryFailureBreakdownItem {
+  failureClass: string;
+  label: string;
+  count: number;
+  guidance: string;
+}
+
+export interface AlertDeliveryQueueMetric {
+  key: 'failed' | 'deadLetter' | 'pending' | 'sending' | 'sent';
+  label: string;
+  count: number;
+  tone: 'danger' | 'warning' | 'info' | 'success';
+}
+
+export function getAlertDestinationsDeliveryFailureBreakdown(
+  failureClasses7d?: Record<string, number>,
+  failureClassesAvailable?: boolean,
+): AlertDeliveryFailureBreakdownItem[] {
+  if (!failureClassesAvailable || !failureClasses7d) return [];
+  const rank = (key: string) => {
+    const idx = DELIVERY_FAILURE_CLASS_ORDER.indexOf(
+      key as (typeof DELIVERY_FAILURE_CLASS_ORDER)[number],
+    );
+    return idx === -1 ? DELIVERY_FAILURE_CLASS_ORDER.length : idx;
+  };
+  return Object.entries(failureClasses7d)
+    .filter(([, count]) => Number.isFinite(count) && count > 0)
+    .sort(([leftKey, leftCount], [rightKey, rightCount]) =>
+      rightCount !== leftCount ? rightCount - leftCount : rank(leftKey) - rank(rightKey),
+    )
+    .map(([failureClass, count]) => ({
+      failureClass,
+      label: getAlertDeliveryLogFailureClassLabel(failureClass),
+      count,
+      guidance:
+        DELIVERY_FAILURE_CLASS_GUIDANCE[failureClass] ?? DELIVERY_FAILURE_CLASS_GUIDANCE.unknown,
+    }));
+}
+
+export function getAlertDestinationsDeliveryQueueMetrics(
+  health: {
+    failed: number;
+    deadLetter: number;
+    pending: number;
+    sending: number;
+    sent: number;
+  },
+  options?: { terminalOnly?: boolean },
+): AlertDeliveryQueueMetric[] {
+  const metrics: AlertDeliveryQueueMetric[] = [];
+  if (health.failed > 0) {
+    metrics.push({ key: 'failed', label: 'Failed', count: health.failed, tone: 'danger' });
+  }
+  if (health.deadLetter > 0) {
+    metrics.push({
+      key: 'deadLetter',
+      label: 'Retries stopped',
+      count: health.deadLetter,
+      tone: 'danger',
+    });
+  }
+  if (!options?.terminalOnly) {
+    if (health.pending > 0) {
+      metrics.push({ key: 'pending', label: 'Queued', count: health.pending, tone: 'warning' });
+    }
+    if (health.sending > 0) {
+      metrics.push({ key: 'sending', label: 'Sending', count: health.sending, tone: 'info' });
+    }
+    if (health.sent > 0) {
+      metrics.push({ key: 'sent', label: 'Delivered', count: health.sent, tone: 'success' });
+    }
+  }
+  return metrics;
+}
+
+export function getAlertDestinationsDeliveryLeadSummary(
+  input: AlertDestinationsRetainedOutcomesInput,
+) {
+  return `${getRetainedDeliveryOutcomes(input)}. These notifications were not delivered.`;
+}
+
 function getDominantDeliveryFailure(input: AlertDestinationsDeliveryHealthInput) {
-  if (!input.failureClassesAvailable || !input.failureClasses7d) return undefined;
-  return Object.entries(input.failureClasses7d)
-    .filter(([, count]) => count > 0)
-    .sort((left, right) => right[1] - left[1])[0];
+  const [dominant] = getAlertDestinationsDeliveryFailureBreakdown(
+    input.failureClasses7d,
+    input.failureClassesAvailable,
+  );
+  return dominant;
 }
 
 function getUnavailableDeliveryDescription(
@@ -257,9 +370,9 @@ export function getAlertDestinationsDeliveryHealthSummary(
 
   const dominant = getDominantDeliveryFailure(input);
   const diagnosis = dominant
-    ? ` Most recent failures: ${dominant[0].replace('_', ' ')} (${dominant[1]}).`
+    ? ` Most recent failures: ${dominant.failureClass.replace('_', ' ')} (${dominant.count}).`
     : '';
-  return `${getRetainedDeliveryOutcomes(input)}. These notifications were not delivered.${diagnosis} Review delivery activity for timestamps, destinations, alerts, and errors.`;
+  return `${getAlertDestinationsDeliveryLeadSummary(input)}${diagnosis} Review delivery activity for timestamps, destinations, alerts, and errors.`;
 }
 
 export function getAlertDestinationsDeliveryHealthDescription(
@@ -269,24 +382,11 @@ export function getAlertDestinationsDeliveryHealthDescription(
     return getUnavailableDeliveryDescription(input, false);
   }
 
-  const summary = getRetainedDeliveryOutcomes(input);
-  const guidanceByClass: Record<string, string> = {
-    authentication: 'Check destination credentials, tokens, and account permissions.',
-    rate_limited: 'Check provider rate limits and reduce delivery volume before retrying.',
-    connectivity: 'Check DNS, firewall, proxy, and destination reachability.',
-    tls: 'Check certificate trust, hostname matching, and TLS settings.',
-    configuration: 'Review the enabled destination configuration and required fields.',
-    rejected: 'Check the destination endpoint and payload requirements.',
-    server_error:
-      'Check the destination service status and server logs. Retry retained deliveries once the service is available.',
-    unknown: 'Review the local notification audit details for the terminal error.',
-  };
-  let diagnostic = 'Check each enabled destination and send a test.';
   const dominant = getDominantDeliveryFailure(input);
-  if (dominant) {
-    diagnostic = `Most recent terminal failures were classified as ${dominant[0].replace('_', ' ')} (${dominant[1]}). ${guidanceByClass[dominant[0]] ?? guidanceByClass.unknown}`;
-  }
-  return `${summary}. These notifications were not delivered. ${diagnostic} Review delivery activity in Notifications for timestamps, destinations, alerts, and safely redacted errors. After correcting the destination, retry them. Dismiss retained failures to clear this warning without deleting delivery history. Otherwise Pulse removes expired records hourly after their retention limit. Recoverable retry attempts do not trigger this warning.`;
+  const diagnostic = dominant
+    ? `Most recent terminal failures were classified as ${dominant.failureClass.replace('_', ' ')} (${dominant.count}). ${dominant.guidance}`
+    : 'Check each enabled destination and send a test.';
+  return `${getAlertDestinationsDeliveryLeadSummary(input)} ${diagnostic} ${ALERT_DESTINATIONS_DELIVERY_RECOVERY_NOTE}`;
 }
 
 export function getAlertDestinationsDeliveryRefreshLabel() {
