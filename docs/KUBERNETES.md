@@ -551,7 +551,7 @@ Deployments, controllers, and the remaining inventory tables (**Autoscaling**,
   stale online or unknown rows read as amber **Stale data** while worse
   **Offline** and **Degraded** verdicts stay first. On **Events**, rows keep
   their **Warning** and **Normal** severity dots and add an amber **Stale data**
-  cue beneath the event name; on **Active Alerts**, rows keep their
+  cue beneath the event name. On **Active Alerts**, rows keep their
   **Critical**, **Warning** and **Info** severity indicators and add an amber
   **Stale data** cue beneath the affected resource name.
 - **Filters, search and overview placement.** Stale Kubernetes resources leave
