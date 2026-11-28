@@ -20,6 +20,17 @@ export interface WorkloadTelemetryAvailability {
   uptime: boolean;
 }
 
+export interface WorkloadTelemetryStaleNotice {
+  /** Compact inline cue shown in the workload row (e.g. "Stale data"). */
+  label: string;
+  /** Full stale explanation including provider, optional age, and optional error. */
+  detail: string;
+  /** Backend-formatted staleness age from `telemetry_stale`, e.g. "18m". */
+  age?: string;
+  /** Provider collection error supplied by `sourceStatus`, when present. */
+  error?: string;
+}
+
 export type WorkloadGuest = (VM | Container) & {
   workloadType?: WorkloadType;
   /** Backend identities that may own active alerts for this canonical workload. */
@@ -34,6 +45,8 @@ export type WorkloadGuest = (VM | Container) & {
   resourceStatus?: string;
   /** The unified-resource health names an open warning or critical alert. */
   hasOpenAlert?: boolean;
+  /** Set when the workload's primary provider poll is stale or errored. */
+  telemetryStale?: WorkloadTelemetryStaleNotice;
   displayId?: string;
   image?: string;
   // Provider/runtime-native identifier for app-container actions such as Docker image updates.

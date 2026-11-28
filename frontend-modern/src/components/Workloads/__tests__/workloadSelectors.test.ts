@@ -1312,4 +1312,70 @@ describe('memory selection preserves displayed observation provenance', () => {
     rows[0] = guest('retained', 99);
     expect(filter('memory>85')).toEqual(['retained', 'current-high']);
   });
+
+  it('routes stale workloads into Attention, excludes them from Running, and indexes stale error search', () => {
+    const staleNotice = {
+      label: 'Stale data',
+      age: '18m',
+      error: 'dial tcp 10.0.0.10:8006: i/o timeout',
+      detail:
+        'Proxmox has not updated this recently: dial tcp 10.0.0.10:8006: i/o timeout (last report 18m ago). Showing the last values received.',
+    };
+    const guests = [
+      makeGuest(1, {
+        id: 'stale-running',
+        status: 'running',
+        resourceStatus: 'running',
+        telemetryStale: staleNotice,
+      }),
+      makeGuest(2, {
+        id: 'stale-stopped',
+        status: 'stopped',
+        resourceStatus: 'stopped',
+        telemetryStale: staleNotice,
+      }),
+      makeGuest(3, {
+        id: 'stale-offline',
+        status: 'stopped',
+        resourceStatus: 'offline',
+        telemetryStale: staleNotice,
+      }),
+      makeGuest(4, {
+        id: 'fresh-running',
+        status: 'running',
+        resourceStatus: 'running',
+      }),
+    ];
+
+    const filterIds = (statusMode: 'all' | 'running' | 'degraded' | 'stopped', searchTerm = '') =>
+      filterWorkloads({
+        guests,
+        viewMode: 'all',
+        statusMode,
+        searchTerm,
+        selectedNode: null,
+        selectedHostHint: null,
+        selectedKubernetesContext: null,
+      }).map((row) => row.id);
+
+    expect(filterIds('running')).toEqual(['fresh-running']);
+    expect(filterIds('degraded')).toEqual(['stale-running', 'stale-stopped']);
+    expect(filterIds('stopped')).toEqual(['stale-offline']);
+    expect(filterIds('all', 'i/o timeout')).toEqual([
+      'stale-running',
+      'stale-stopped',
+      'stale-offline',
+    ]);
+    expect(filterIds('all', 'stale data')).toEqual([
+      'stale-running',
+      'stale-stopped',
+      'stale-offline',
+    ]);
+    expect(computeWorkloadStats(guests)).toMatchObject({
+      total: 4,
+      running: 1,
+      degraded: 2,
+      stopped: 1,
+    });
+  });
 });

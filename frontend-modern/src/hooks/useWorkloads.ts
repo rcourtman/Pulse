@@ -5,9 +5,12 @@ import { apiFetchJSON, getOrgID } from '@/utils/apiClient';
 import { normalizeOrgScope } from '@/utils/orgScope';
 import { eventBus } from '@/stores/events';
 import {
+  normalizeSourcePlatformKey,
   normalizeSourcePlatformScopes,
   resolvePlatformTypeFromSources,
 } from '@/utils/sourcePlatforms';
+import { getResourceStaleness } from '@/features/platformPage/resourceStaleness';
+import { buildProviderStaleNotice } from '@/utils/truenasDatasetState';
 import { canonicalDiscoveryResourceType } from '@/utils/discoveryTarget';
 import { normalizeDiskArray } from '@/utils/format';
 import { parseBackupTimestampMs } from '@/utils/backupTimestamp';
@@ -19,7 +22,7 @@ import {
 } from '@/utils/workloads';
 import { getPreferredResourceKubernetesContext } from '@/utils/resourceIdentity';
 import { getExplicitResourceClusterName } from '@/utils/agentResources';
-import type { WorkloadGuest } from '@/types/workloads';
+import type { WorkloadGuest, WorkloadTelemetryStaleNotice } from '@/types/workloads';
 import type { HostRAIDArray } from '@/types/api';
 import type {
   Resource,
@@ -71,6 +74,7 @@ type APIResource = {
   name?: string;
   status?: string;
   health?: { verdict?: string; reasons?: Array<{ code?: string; detail?: string }> };
+  sourceStatus?: Record<string, { status?: string; lastSeen?: string | number; error?: string }>;
   uptime?: number;
   lastSeen?: string;
   sources?: string[];
@@ -442,6 +446,99 @@ const vmwareRowTags = (resource: APIResource): string[] | undefined => {
     .filter((label) => label.length > 0);
 };
 
+const CONNECTED_WORKLOAD_SOURCE_STATUS = /^(online|running|healthy|connected|ok)$/i;
+
+const ensureSentence = (value: string): string => {
+  const trimmed = value.trim();
+  if (!trimmed) return '';
+  return /[.!?]$/.test(trimmed) ? trimmed : `${trimmed}.`;
+};
+
+const resolvePrimaryWorkloadProvider = (
+  platformType: string | undefined,
+): { sourceKey: string; label: string } => {
+  switch (platformType) {
+    case 'proxmox-pve':
+      return { sourceKey: 'proxmox-pve', label: 'Proxmox' };
+    case 'vmware-vsphere':
+      return { sourceKey: 'vmware-vsphere', label: 'vCenter' };
+    case 'docker':
+      return { sourceKey: 'docker', label: 'Docker' };
+    case 'kubernetes':
+      return { sourceKey: 'kubernetes', label: 'Kubernetes' };
+    default:
+      return { sourceKey: '', label: 'Provider' };
+  }
+};
+
+const findWorkloadSourceStatusEntry = (
+  sourceStatus: APIResource['sourceStatus'],
+  targetKey: string,
+): { status?: string; lastSeen?: string | number; error?: string } | undefined => {
+  if (!sourceStatus || !targetKey) return undefined;
+  for (const [key, entry] of Object.entries(sourceStatus)) {
+    const normalizedKey = normalizeSourcePlatformKey(key) || key.trim().toLowerCase();
+    if (normalizedKey === targetKey) return entry;
+  }
+  return undefined;
+};
+
+const resolveWorkloadTelemetryStale = (
+  resource: APIResource,
+  platformType: string | undefined,
+): WorkloadTelemetryStaleNotice | undefined => {
+  const provider = resolvePrimaryWorkloadProvider(platformType);
+  const primarySource = findWorkloadSourceStatusEntry(resource.sourceStatus, provider.sourceKey);
+  const primaryStatus =
+    typeof primarySource?.status === 'string' ? primarySource.status.trim() : '';
+
+  // Hybrid workloads (for example a Proxmox VM with an optional Pulse agent)
+  // keep fresh hypervisor telemetry when only the linked agent goes silent.
+  // Agent-sourced fields track that separately through `agentStale`.
+  if (primarySource && CONNECTED_WORKLOAD_SOURCE_STATUS.test(primaryStatus)) {
+    return undefined;
+  }
+
+  const healthStale = getResourceStaleness(resource as Pick<Resource, 'health'>);
+  const age = healthStale?.age ?? undefined;
+
+  if (primarySource) {
+    const notice = buildProviderStaleNotice(primarySource, provider.label);
+    if (notice) {
+      const withAge =
+        age && !notice.detail.includes(age)
+          ? `${notice.detail} (last report ${age} ago)`
+          : notice.detail;
+      return {
+        label: notice.badge,
+        detail: `${ensureSentence(withAge)} Showing the last values received.`,
+        ...(age ? { age } : {}),
+        ...(notice.error ? { error: notice.error } : {}),
+      };
+    }
+  }
+
+  if (healthStale) {
+    const detail = age
+      ? `No ${provider.label} report for ${age}. Showing the last values received.`
+      : `${provider.label} has not updated this recently. Showing the last values received.`;
+    return {
+      label: 'Stale data',
+      detail,
+      ...(age ? { age } : {}),
+    };
+  }
+
+  if ((resource.status || '').trim().toLowerCase() === 'stale') {
+    return {
+      label: 'Stale data',
+      detail: `${provider.label} has not updated this recently. Showing the last values received.`,
+    };
+  }
+
+  return undefined;
+};
+
 const mapResourceToWorkload = (resource: APIResource): WorkloadGuest | null => {
   const workloadType = resolveWorkloadType(resource.type);
   if (!workloadType) return null;
@@ -568,6 +665,7 @@ const mapResourceToWorkload = (resource: APIResource): WorkloadGuest | null => {
     hasOpenAlert: (resource.health?.reasons ?? []).some(
       (reason) => reason.code === 'warning_alert' || reason.code === 'critical_alert',
     ),
+    telemetryStale: resolveWorkloadTelemetryStale(resource, platformType),
     type:
       workloadType === 'vm'
         ? 'vm'
@@ -746,6 +844,7 @@ const mapCanonicalResourceToWorkload = (resource: Resource): WorkloadGuest | nul
     name: resource.name,
     status: resource.status,
     health: resource.health,
+    sourceStatus: resource.sourceStatus,
     uptime: resource.uptime,
     lastSeen: resource.lastSeen ? new Date(resource.lastSeen).toISOString() : undefined,
     sources: resource.sources,

@@ -514,6 +514,18 @@ export function GuestRow(props: GuestRowProps) {
                 </div>
               </div>
 
+              <Show when={props.guest.telemetryStale}>
+                {(stale) => (
+                  <span
+                    data-workload-stale-cue
+                    class={`inline-flex shrink-0 items-center text-[10px] font-medium leading-tight text-amber-800 dark:text-amber-300 ${usesCondensedIdentity() ? 'whitespace-normal wrap-anywhere' : 'whitespace-nowrap'}`}
+                    title={stale().detail}
+                  >
+                    {stale().age ? `Stale · ${stale().age}` : stale().label}
+                  </span>
+                )}
+              </Show>
+
               <Show when={lockLabel()}>
                 <span
                   class={`max-w-full text-[10px] font-medium text-muted uppercase tracking-wide ${usesCondensedIdentity() ? 'whitespace-normal break-words' : 'whitespace-nowrap'}`}

@@ -23,6 +23,11 @@ interface NodeGroupHeaderProps {
 export const NodeGroupHeader: Component<NodeGroupHeaderProps> = (props) => {
   const nodeStatus = () => getNodeStatusIndicator(props.node);
   const isOnline = () => nodeStatus().variant === 'success';
+  const nodeIsStale = () => {
+    const connection = (props.node.connectionHealth || '').trim().toLowerCase();
+    const status = (props.node.status || '').trim().toLowerCase();
+    return connection === 'stale' || status === 'stale';
+  };
   const nodeUrl = () => getNodeExternalUrl(props.node);
   const displayName = () => getNodeDisplayName(props.node);
   const showActualName = () => hasAlternateDisplayName(props.node);
@@ -58,6 +63,16 @@ export const NodeGroupHeader: Component<NodeGroupHeaderProps> = (props) => {
           }
         >
           {props.node.isClusterMember ? props.node.clusterName : 'Standalone'}
+        </span>
+      </Show>
+
+      <Show when={nodeIsStale()}>
+        <span
+          data-node-group-stale
+          class="inline-flex items-center rounded-sm bg-amber-100 px-1.5 py-0.5 text-[10px] font-medium whitespace-nowrap text-amber-800 dark:bg-amber-900/30 dark:text-amber-300"
+          title="Node telemetry is stale. Workload readings below reflect the last poll received."
+        >
+          Stale data
         </span>
       </Show>
 

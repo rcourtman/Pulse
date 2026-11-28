@@ -12,7 +12,7 @@ import { buildSummaryDisclosureControlsId } from '@/components/shared/summaryInt
 import { TableBody, TableCell, TableRow } from '@/components/shared/Table';
 import { getAlertsForResource, getAlertStyles } from '@/utils/alerts';
 import { guestOverrideIdCandidates } from '@/features/alerts/guestOverrideIdentity';
-import { isNodeOnline } from '@/utils/status';
+import { getNodeStatusIndicator } from '@/utils/status';
 import { getCanonicalWorkloadId, getWorkloadMetadataIdCandidates } from '@/utils/workloads';
 
 import { GuestDrawer } from './GuestDrawer';
@@ -149,9 +149,12 @@ export function WorkloadPanel(props: WorkloadPanelProps) {
                   // A group label is not parent evidence. Every row follows
                   // the validated source-owned parent, including flat mode.
                   const parentNode = () => props.guestParentNodeMap()[guestId()];
+                  // Only a confirmed offline node marks its guests "Node offline".
+                  // A stale or degraded node keeps last-known guest state visible
+                  // so row staleness cues explain it without dimming every guest.
                   const parentNodeOnline = () => {
                     const pn = parentNode();
-                    return pn ? isNodeOnline(pn) : true;
+                    return pn ? getNodeStatusIndicator(pn).variant !== 'danger' : true;
                   };
                   const nestedWorkloadContext = () =>
                     props.nestedWorkloadContextByGuestId()[guestId()];

@@ -1,0 +1,55 @@
+{
+  "version": 1,
+  "base_sha": "d21ccd504d3624be6f81146d4174bdfe88818e96",
+  "verified_at": "2026-11-28T03:58:40Z",
+  "result": "passed",
+  "changed_paths": [
+    "frontend-modern/src/components/Workloads/GuestDrawer.tsx",
+    "frontend-modern/src/components/Workloads/GuestRow.tsx",
+    "frontend-modern/src/components/Workloads/WorkloadPanel.tsx",
+    "frontend-modern/src/components/Workloads/workloadSelectors.ts",
+    "frontend-modern/src/components/shared/NodeGroupHeader.tsx",
+    "frontend-modern/src/hooks/useWorkloads.ts",
+    "frontend-modern/src/types/workloads.ts",
+    "frontend-modern/src/utils/status.ts"
+  ],
+  "content_sha256": {
+    "frontend-modern/src/components/Workloads/GuestDrawer.tsx": "38a3c21095d1d1a76b4a125fe442d6a88a35f3eb5fc0f8a7a7986295f16b7cc7",
+    "frontend-modern/src/components/Workloads/GuestRow.tsx": "cc43238337cf5e22c3f5e674f781f4863f08d55bc4d15b2da4cefe3d5b4ae9cb",
+    "frontend-modern/src/components/Workloads/WorkloadPanel.tsx": "012a74eed0b6f0ff417f536b68f263210d0e79b3e0a71b558dee204b923dd9a2",
+    "frontend-modern/src/components/Workloads/workloadSelectors.ts": "605acccaf8b4f62489228658dd459ae87901fff9268841e2146768f67109a67d",
+    "frontend-modern/src/components/shared/NodeGroupHeader.tsx": "3a38502046f306012faa7d7db9c61341299d0a2830343bed723fc570b58b6059",
+    "frontend-modern/src/hooks/useWorkloads.ts": "4ba5ed0ad37b70a60719dc84f400ae7de95cb01fcb4ee30e08a9707a49c9aace",
+    "frontend-modern/src/types/workloads.ts": "367db08431901f6d395b1e5aa020ac96d65bd121e449dfaf7042de4014106beb",
+    "frontend-modern/src/utils/status.ts": "4d1b2793fa3d043e7d041f4756972d1266aaed0f3bd3b34412142e2dfc2b7843"
+  },
+  "routes": [
+    "/proxmox/overview",
+    "/vmware/overview"
+  ],
+  "viewports": [
+    {
+      "width": 1440,
+      "height": 940
+    },
+    {
+      "width": 360,
+      "height": 820
+    }
+  ],
+  "states": [
+    "Built production frontend bundle served locally via pulse-worker-browser with deterministic fixture API/WebSocket payloads covering fresh, stale-node, stopped-stale, hybrid agent-stale/hypervisor-fresh, recovered, and stale vSphere workloads.",
+    "Desktop light mode (Chromium 1440x940) and narrow touch dark mode (WebKit 360x820): zero console errors, zero page errors, zero HTTP >= 400 responses, and zero horizontal overflow across all 12 captured states.",
+    "Stale Proxmox node group displays an amber Stale data badge without falsely marking guests as Node offline; running stale workload db-primary displays an amber indicator and Stale · 18m cue while preserving last-known CPU, memory, disk, and uptime readings; stopped stale container cache-standby keeps its stopped indicator with Stale · 18m; hybrid VM web-hybrid with stale optional agent and fresh Proxmox source stays healthy.",
+    "Running filter excludes stale workloads (Running 2: api-fresh, web-hybrid) while Attention surfaces stale running workloads (Attention 1: db-primary); searching the provider timeout text matches stale workloads.",
+    "GuestDrawer header indicator matches the row warning dot and displays the amber Readings are stale inline notice with provider error and report age; live recovery clears node badge, row cues, filter counts, and drawer notice without reload.",
+    "vSphere overview routes stale VM app-db-01 to Attention 1 with amber dot and Stale · 22m cue while fresh app-web-01 stays Powered on 1. All comparable before and after captures were visually inspected."
+  ],
+  "interactions": [
+    "Loaded /proxmox/overview with mixed fresh, stale, stopped-stale, and hybrid workloads; verified row cues and node group badge.",
+    "Toggled Running and Attention status filter buttons (opening the Filters disclosure on narrow phone viewport) and verified live filtered workload rows.",
+    "Entered provider error substring 'i/o timeout' into the workload search input and verified both stale workloads matched; cleared search.",
+    "Clicked stale workload db-primary to open GuestDrawer, verified warning header indicator and Readings are stale inline notice, then triggered live telemetry recovery refresh and verified reactive clearing.",
+    "Navigated to /vmware/overview and verified stale vs fresh vSphere VM indicators, Attention count, and Stale · 22m cue."
+  ]
+}

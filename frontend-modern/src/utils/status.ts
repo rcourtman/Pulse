@@ -71,6 +71,7 @@ export const OFFLINE_HEALTH_STATUSES = new Set([
 export const DEGRADED_HEALTH_STATUSES = new Set([
   'degraded',
   'warning',
+  'stale',
   'maintenance',
   'syncing',
   'initializing',
@@ -201,15 +202,39 @@ export function getGuestHealthIndicator(
     | (Partial<VM | Container> & {
         availability?: ResourceAvailabilityMeta;
         availabilityChecks?: ResourceAvailabilityMeta[];
+        resourceStatus?: string;
+        telemetryStale?: { label: string; detail: string };
       })
     | undefined
     | null,
   parentNodeOnline = true,
 ): StatusIndicator {
   const power = getGuestPowerIndicator(guest, parentNodeOnline);
-  if (!guest || power.variant !== 'success') return power;
+  if (!guest) return power;
+  const stale = guest.telemetryStale;
+  if (power.variant !== 'success') {
+    if (stale) {
+      return {
+        variant: power.variant,
+        label: `${power.label} · ${stale.detail || stale.label}`,
+      };
+    }
+    return power;
+  }
   if (hasFailedAttachedAvailabilityCheck(guest)) {
-    return { variant: 'warning', label: 'Running, not responding to probe' };
+    return {
+      variant: 'warning',
+      label: stale
+        ? `Running, not responding to probe · ${stale.label}`
+        : 'Running, not responding to probe',
+    };
+  }
+  if (stale) {
+    return { variant: 'warning', label: stale.detail || stale.label };
+  }
+  const normalizedResourceStatus = normalize(guest.resourceStatus);
+  if (normalizedResourceStatus && DEGRADED_HEALTH_STATUSES.has(normalizedResourceStatus)) {
+    return { variant: 'warning', label: formatStatusLabel(guest.resourceStatus, 'Degraded') };
   }
   return power;
 }
