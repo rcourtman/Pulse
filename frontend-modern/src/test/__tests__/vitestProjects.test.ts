@@ -50,6 +50,75 @@ describe('vitest project partitioning and conditional setup helpers', () => {
     expect(nodeFiles).toEqual(['src/utils/__tests__/pure.test.ts']);
   });
 
+  it('ignores multi-line and inline type-only edges without skipping mixed or adjacent runtime imports', () => {
+    const root = createFixtureRoot({
+      'src/utils/domHelper.ts':
+        'export type DomState = { ready: boolean };\nexport type DomMode = "a" | "b";\nexport const readTitle = () => document.title;\n',
+      'src/utils/__tests__/multilineTypeOnly.test.ts': [
+        'import type {',
+        '  DomMode,',
+        '  DomState,',
+        "} from '@/utils/domHelper';",
+        'export const state: DomState = { ready: true };',
+        'export const mode: DomMode = "a";',
+      ].join('\n'),
+      'src/utils/__tests__/inlineTypeOnly.test.ts':
+        "import { type DomState, type DomMode } from '@/utils/domHelper';\nexport const ok: [DomState, DomMode] = [{ ready: true }, 'a'];\n",
+      'src/utils/__tests__/mixedTypeAndRuntime.test.ts':
+        "import { type DomState, readTitle } from '@/utils/domHelper';\nexport const state: DomState = { ready: Boolean(readTitle()) };\n",
+      'src/utils/__tests__/unterminatedExportTypeBeforeRuntime.test.ts':
+        "export type LocalFlag = boolean\nimport { readTitle } from '@/utils/domHelper'\nexport const title = readTitle()\n",
+    });
+
+    const { nodeFiles } = partitionVitestFiles(root);
+    expect(nodeFiles).toEqual([
+      'src/utils/__tests__/inlineTypeOnly.test.ts',
+      'src/utils/__tests__/multilineTypeOnly.test.ts',
+    ]);
+  });
+
+  it('skips local DOM modules replaced by top-level zero-arg factory vi.mock unless unmock/importActual is present', () => {
+    const root = createFixtureRoot({
+      'src/utils/domClient.ts': 'export const readCookie = () => document.cookie;\n',
+      'src/api/clientConsumer.ts':
+        "import { readCookie } from '@/utils/domClient';\nexport const getToken = () => readCookie();\n",
+      'src/api/__tests__/factoryMocked.test.ts': [
+        "import { vi } from 'vitest';",
+        "vi.mock('@/utils/domClient', () => ({ readCookie: () => 'tok' }));",
+        "import { getToken } from '../clientConsumer';",
+        'export const value = getToken();',
+      ].join('\n'),
+      'src/api/__tests__/automocked.test.ts': [
+        "import { vi } from 'vitest';",
+        "vi.mock('@/utils/domClient');",
+        "import { getToken } from '../clientConsumer';",
+        'export const value = getToken();',
+      ].join('\n'),
+      'src/api/__tests__/partialMock.test.ts': [
+        "import { vi } from 'vitest';",
+        "vi.mock('@/utils/domClient', async (importOriginal) => ({ ...(await importOriginal()) }));",
+        "import { getToken } from '../clientConsumer';",
+        'export const value = getToken();',
+      ].join('\n'),
+      'src/api/__tests__/doMocked.test.ts': [
+        "import { vi } from 'vitest';",
+        "vi.doMock('@/utils/domClient', () => ({ readCookie: () => 'tok' }));",
+        "import { getToken } from '../clientConsumer';",
+        'export const value = getToken();',
+      ].join('\n'),
+      'src/api/__tests__/resetModulesMock.test.ts': [
+        "import { vi } from 'vitest';",
+        "vi.mock('@/utils/domClient', () => ({ readCookie: () => 'tok' }));",
+        'vi.resetModules();',
+        "import { getToken } from '../clientConsumer';",
+        'export const value = getToken();',
+      ].join('\n'),
+    });
+
+    const { nodeFiles } = partitionVitestFiles(root);
+    expect(nodeFiles).toEqual(['src/api/__tests__/factoryMocked.test.ts']);
+  });
+
   it('detects jest-dom matcher usage and TSX files conservatively', () => {
     expect(needsJestDomForSource('src/components/Foo.test.tsx', 'expect(1).toBe(1)')).toBe(true);
     expect(needsJestDomForSource('src/utils/bar.test.ts', 'expect(el).toBeInTheDocument()')).toBe(
