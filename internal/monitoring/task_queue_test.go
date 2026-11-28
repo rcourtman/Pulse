@@ -71,6 +71,49 @@ func TestTaskQueueReadinessAcrossDeadlineChanges(t *testing.T) {
 	})
 }
 
+func TestTaskQueueReadinessReusesFullScanAfterOutlierRemoval(t *testing.T) {
+	q := NewTaskQueue()
+	now := time.Now()
+	add := func(name string, deadline time.Time) {
+		q.Upsert(ScheduledTask{InstanceType: InstanceTypePVE, InstanceName: name, NextRun: deadline})
+	}
+	add("due-wall", now.Add(-time.Second).Round(0))
+	add("due-monotonic", now.Add(-time.Second))
+	add("outlier-wall", now.Add(time.Hour).Round(0))
+	add("outlier-monotonic", now.Add(time.Hour))
+
+	check := func(depth, ready int) {
+		t.Helper()
+		got := q.Snapshot()
+		if got.Depth != depth || got.DueWithinSeconds != ready || got.OldestOverdueSeconds < 1 {
+			t.Fatalf("got depth=%d ready=%d overdue=%g, want %d/%d and at least 1s overdue",
+				got.Depth, got.DueWithinSeconds, got.OldestOverdueSeconds, depth, ready)
+		}
+	}
+	check(4, 2)
+	q.Remove(InstanceTypePVE, "outlier-wall")
+	q.Remove(InstanceTypePVE, "outlier-monotonic")
+	check(2, 2)
+
+	// Neither removed outlier should force the next read to walk the heap.
+	cutoff := time.Now().Add(12 * time.Second)
+	if q.latestWallDeadline.After(cutoff.Round(0)) || q.latestMonotonicDeadline.After(cutoff) {
+		t.Fatal("full readiness scan left a stale deadline bound")
+	}
+
+	// A new live deadline on either clock must invalidate that shortcut.
+	for _, deadline := range []time.Time{now.Add(time.Hour).Round(0), now.Add(time.Hour)} {
+		add("future", deadline)
+		check(3, 2)
+		add("future", now)
+		check(3, 3)
+		cutoff = time.Now().Add(12 * time.Second)
+		if q.latestWallDeadline.After(cutoff.Round(0)) || q.latestMonotonicDeadline.After(cutoff) {
+			t.Fatal("retimed deadline still disables the shortcut")
+		}
+	}
+}
+
 func TestTaskQueue_Snapshot(t *testing.T) {
 	tests := []struct {
 		name                 string
