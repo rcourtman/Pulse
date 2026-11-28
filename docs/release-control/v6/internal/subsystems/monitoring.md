@@ -284,6 +284,15 @@ and dead letters never count in these gauges. An unrelated provider's poll
 result and a single-monitor Scheduler Health read do not overwrite them.
 The existing count metrics, listener access and poll admission are unchanged.
 
+When the latest queued deadline is already inside the readiness window,
+Scheduler Health and Prometheus can use the heap size instead of walking the
+due backlog under the worker lock. The queue keeps conservative deadline
+bounds, separately for wall-clock and monotonic timestamps. A removed or
+retimed deadline can make the estimate too high, in which case the snapshot
+still counts from the heap. `TestTaskQueueReadinessAcrossDeadlineChanges`
+checks equal results from both snapshot paths at the cutoff, after retiming
+and removing work, across claims and retries, and after refilling the queue.
+
 `pulse_scheduler_queued_poll_overdue_seconds` takes the maximum of the
 same `oldestOverdueSeconds` measurement over the live queue snapshots
 already read by the collector. It adds no queue scan, poll result dependency,
