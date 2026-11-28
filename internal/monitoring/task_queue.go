@@ -89,11 +89,10 @@ type TaskQueue struct {
 	queuedByType map[string]int // heap membership only; claimed entries do not count
 	earlierHead  chan struct{}  // lazily shared by workers waiting for new eligibility
 
-	// Upper bounds since the queue last held one entry. Removed and retimed
-	// entries can leave them too high, which only forces the normal walk.
-	// Track wall time for all entries and monotonic time where available.
-	// Mixed time.Time comparisons cannot order monotonic deadlines across
-	// a wall-clock step, so the fast path must satisfy both bounds.
+	// Upper bounds for queued deadlines, tracked separately according to
+	// which clock time.Time uses to compare the deadline with time.Now().
+	// A removed or retimed entry can leave a bound too high until a scan
+	// confirms that every remaining deadline is inside the window.
 	latestMonotonicDeadline time.Time
 	latestWallDeadline      time.Time
 
@@ -326,11 +325,12 @@ func (q *TaskQueue) noteQueuedDeadlineLocked(deadline time.Time) {
 		q.latestWallDeadline = time.Time{}
 	}
 	wall := deadline.Round(0)
-	if wall.After(q.latestWallDeadline) {
+	if deadline != wall {
+		if deadline.After(q.latestMonotonicDeadline) {
+			q.latestMonotonicDeadline = deadline
+		}
+	} else if wall.After(q.latestWallDeadline) {
 		q.latestWallDeadline = wall
-	}
-	if deadline != wall && deadline.After(q.latestMonotonicDeadline) {
-		q.latestMonotonicDeadline = deadline
 	}
 }
 
@@ -477,13 +477,25 @@ func (q *TaskQueue) snapshotWithTypeCounts(dst []queuedTypeCount) (QueueSnapshot
 func (q *TaskQueue) snapshotTimingLocked() QueueSnapshot {
 	now := time.Now()
 	cutoff := now.Add(12 * time.Second)
+	wallCutoff := cutoff.Round(0)
 	snapshot := QueueSnapshot{Depth: len(q.heap)}
-	if !q.latestWallDeadline.After(cutoff) && !q.latestMonotonicDeadline.After(cutoff) {
+	if !q.latestWallDeadline.After(wallCutoff) && !q.latestMonotonicDeadline.After(cutoff) {
 		// Don't keep workers behind a full heap walk when every queued
 		// poll is already inside the 12-second readiness window.
 		snapshot.DueWithinSeconds = snapshot.Depth
 	} else {
 		snapshot.DueWithinSeconds = q.heap.countDue(0, cutoff)
+		if snapshot.DueWithinSeconds == snapshot.Depth {
+			// Every entry was visited and compared with the cutoff on
+			// its own clock. Tighten stale bounds so later scrapes don't
+			// scan the full backlog again for a deadline no longer in it.
+			if q.latestWallDeadline.After(wallCutoff) {
+				q.latestWallDeadline = wallCutoff
+			}
+			if q.latestMonotonicDeadline.After(cutoff) {
+				q.latestMonotonicDeadline = cutoff
+			}
+		}
 	}
 	if oldest := q.heap.oldestTimestamped(0); !oldest.IsZero() {
 		snapshot.OldestOverdueSeconds = max(0, now.Sub(oldest)).Seconds()
