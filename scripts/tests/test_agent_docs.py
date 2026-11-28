@@ -403,6 +403,34 @@ Path(os.environ['HOME'], '.config/pulse/agent-install.sh').write_text('other sav
                 self.assertEqual(result.returncode, 0, result.stderr.decode())
                 self.assertEqual(recorded_args, args)
 
+    def test_unified_agent_cli_flags_and_env_vars_match_binary_source(self):
+        doc_path = ROOT / "docs/UNIFIED_AGENT.md"
+        mirror_path = ROOT / "frontend-modern/public/docs/UNIFIED_AGENT.md"
+        self.assertEqual(doc_path.read_bytes(), mirror_path.read_bytes())
+
+        doc_text = doc_path.read_text(encoding="utf-8")
+        agent_main = (ROOT / "cmd/pulse-agent/main.go").read_text(encoding="utf-8")
+
+        for flag_name, env_name in (
+            ("command-authority", "PULSE_COMMAND_AUTHORITY"),
+            ("enable-live-logs", "PULSE_ENABLE_LIVE_LOGS"),
+            ("docker-compose-sources", "PULSE_DOCKER_COMPOSE_SOURCES"),
+            ("deploy-ssh-user", "PULSE_DEPLOY_SSH_USER"),
+            ("log-file", "PULSE_LOG_FILE"),
+        ):
+            with self.subTest(flag=flag_name):
+                self.assertIn(f'"{flag_name}"', agent_main)
+                self.assertIn(f'"{env_name}"', agent_main)
+                self.assertIn(f"`--{flag_name}`", doc_text)
+                self.assertIn(f"`{env_name}`", doc_text)
+
+        for flag_name in ("release-identity", "validate-url"):
+            with self.subTest(advanced_flag=flag_name):
+                self.assertIn(f'"{flag_name}"', agent_main)
+                self.assertIn(f"`--{flag_name}`", doc_text)
+        self.assertIn("const validateURLRejectedExitCode = 65", agent_main)
+        self.assertIn("exits `65`", doc_text)
+
 
 if __name__ == "__main__":
     unittest.main()

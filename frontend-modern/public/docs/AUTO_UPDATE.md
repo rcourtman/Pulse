@@ -107,6 +107,18 @@ rollout, [compare memory and polling at the same limit and workload](PRODUCTION_
 If Pulse stops, use the [memory-stop checks](TROUBLESHOOTING.md#after-a-memory-cgroup-kill).
 Do not restart again or raise the limit just to check the update.
 
+## Switching from Community to the Pulse Pro Runtime
+
+Activating a paid licence on the public Community build unlocks only the licence-gated features compiled into that build. Pro-only runtime features such as Patrol modes, Audit, RBAC, and Reporting require the separately compiled Pulse Pro runtime.
+
+Open **Settings → System → Plans & Billing** (`/settings/pulse-intelligence/billing/plan`, **Plan** tab) to check whether this installation can switch through the license server download broker (`GET /api/updates/pro-runtime`, requires admin `settings:read`):
+
+- **Systemd and Proxmox VE LXC (in place):** When eligible, the **Switch this install to Pulse Pro** card offers **Switch to Pulse Pro** (`POST /api/updates/pro-runtime/apply`, requires admin `settings:write`). It runs the same readiness gate, signed broker download, SHA-256 and signature verification, pre-install self-test, rollback backup, and service restart as an in-app update, keeping your monitoring data and configuration intact and recording `Switch to Pulse Pro` in **Update History**. Switching to the Pro build of your current version is allowed.
+- **Docker:** Containers are not replaced in place. When eligible, the **Switch this container to Pulse Pro** card provides the broker's digest-pinned private image commands so you can update your container definition with the same mounted data volume.
+- **When a switch is not offered:** The check returns a typed `reason` instead of starting an unsafe install: `already_pro`, `not_activated`, `not_eligible`, `source_build`, `unsupported_deployment`, `older_release` (refuses a silent downgrade when the published Pro runtime is older than your current Community install), `prerelease_only` (stable channel will not switch to a preview Pro build), or `unavailable` (download broker unreachable). Do not buy a second licence or clear data to clear a refusal.
+
+After switching, confirm the running edition and [check that monitoring resumed](#check-that-monitoring-resumed).
+
 ## Configuration
 
 ### Update Preferences

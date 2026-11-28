@@ -202,6 +202,41 @@ class WebhookVerificationDocsTest(unittest.TestCase):
             with self.subTest(phrase=phrase):
                 self.assertIn(phrase, text)
 
+    def test_shipped_webhook_services_and_resolved_template_fields_match_source(self):
+        text = " ".join(DOC.read_text(encoding="utf-8").split())
+        templates = (
+            ROOT / "internal/notifications/webhook_templates.go"
+        ).read_text(encoding="utf-8")
+        enhanced = (
+            ROOT / "internal/notifications/webhook_enhanced.go"
+        ).read_text(encoding="utf-8")
+        delivery = (
+            ROOT / "internal/notifications/webhook_delivery.go"
+        ).read_text(encoding="utf-8")
+
+        for marker, source in (
+            ('Service:            "mattermost"', templates),
+            ('URLPattern:         "https://{your-mattermost-server}/hooks/{webhook_id}"', templates),
+            ('ResolvedAt    string', enhanced),
+            ('ResolvedAtISO string', enhanced),
+            ('webhook.Headers["Title"]', delivery),
+            ('webhook.Headers["Priority"]', delivery),
+            ('webhook.Headers["Tags"]', delivery),
+        ):
+            with self.subTest(marker=marker):
+                self.assertIn(marker, source)
+
+        for phrase in (
+            "| **Mattermost** | `https://{your-mattermost-server}/hooks/{webhook_id}` |",
+            "`{{.ResolvedAt}}`, `{{.ResolvedAtISO}}`",
+            "Optional `priority` (`-2` to `2`), `sound`, and `device` custom fields override the level-based defaults.",
+            "Built-in ntfy sends a plain-text body with automatic `Title`, `Priority`, and `Tags` headers.",
+            "For protected or self-hosted topics, add an `Authorization` custom header (`Bearer ...` or `Basic ...`).",
+            "**Mattermost**: uses an incoming webhook URL (`https://{your-mattermost-server}/hooks/{webhook_id}`)",
+        ):
+            with self.subTest(phrase=phrase):
+                self.assertIn(phrase, text)
+
 
 if __name__ == "__main__":
     unittest.main()

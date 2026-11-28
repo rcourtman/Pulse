@@ -28,6 +28,7 @@ error despite a successful Test, see the [Telegram delivery checks](TROUBLESHOOT
 | **Pushover** | `https://api.pushover.net/1/messages.json` |
 | **Gotify** | `https://gotify.example.com/message?token={token}` |
 | **ntfy** | `https://ntfy.sh/{topic}` |
+| **Mattermost** | `https://{your-mattermost-server}/hooks/{webhook_id}` |
 | **Generic** | `https://example.com/webhook` |
 
 ## 🎨 Custom Templates
@@ -48,7 +49,8 @@ For generic webhooks, use Go templates to format the JSON payload.
 
 **Convenience fields:**
 - `{{.ValueFormatted}}`, `{{.ThresholdFormatted}}`
-- `{{.StartTime}}`, `{{.Acknowledged}}`, `{{.AckTime}}`, `{{.AckUser}}`
+- `{{.StartTime}}`, `{{.ResolvedAt}}`, `{{.ResolvedAtISO}}` (RFC3339 resolution timestamp and its alias on resolved events)
+- `{{.Acknowledged}}`, `{{.AckTime}}`, `{{.AckUser}}`
 - `{{.NotRecovered}}` (a resolved batch includes a known non-recovery close;
   inspect each member's `.Resolution` for its reason and successor)
 
@@ -60,8 +62,9 @@ For generic webhooks, use Go templates to format the JSON payload.
 - **Telegram**: include `chat_id` in the URL query string.
 - **Telegram templates**: `{{.ChatID}}` is populated from the URL query string.
 - **PagerDuty**: set `routing_key` as a custom field (or header) in the webhook config.
-- **Pushover**: add `token` and `user` custom fields (required). Legacy `app_token` and `user_token` inputs are migrated automatically.
-- **ntfy**: choose **ntfy** in the service picker before entering the topic URL. Leave the service as Generic only when you want to send a custom JSON payload.
+- **Pushover**: add `token` and `user` custom fields (required). Legacy `app_token` and `user_token` inputs are migrated automatically. Optional `priority` (`-2` to `2`), `sound`, and `device` custom fields override the level-based defaults.
+- **ntfy**: choose **ntfy** in the service picker before entering the topic URL. Leave the service as Generic only when you want to send a custom JSON payload. Built-in ntfy sends a plain-text body with automatic `Title`, `Priority`, and `Tags` headers. For protected or self-hosted topics, add an `Authorization` custom header (`Bearer ...` or `Basic ...`).
+- **Mattermost**: uses an incoming webhook URL (`https://{your-mattermost-server}/hooks/{webhook_id}`) with Markdown formatting and optional mentions such as `@channel`, `@all`, or `@username`.
 
 **Example Payload:**
 ```json

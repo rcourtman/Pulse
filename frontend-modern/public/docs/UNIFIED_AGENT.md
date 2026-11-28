@@ -570,6 +570,7 @@ sudo chmod 0700 /usr/local/libexec/pulse-queue-depth
 | `--enable-proxmox` | `PULSE_ENABLE_PROXMOX` | Enable Proxmox integration | `false` |
 | `--proxmox-type` | `PULSE_PROXMOX_TYPE` | Proxmox type: `pve` or `pbs` | *(auto-detect)* |
 | `--enable-commands` | `PULSE_ENABLE_COMMANDS` | Enable Pulse command execution: Docker / Podman container actions from the UI (start/stop/restart/update), Patrol actions, starting a stopped Proxmox guest after an admin approves it, and Proxmox LXC Docker inventory (disabled by default) | `false` |
+| `--command-authority` | `PULSE_COMMAND_AUTHORITY` | Local command authority ceiling: `monitoring-only`, `command-capable`, or `legacy` | *(derived from flags)* |
 | `--disable-commands` | `PULSE_DISABLE_COMMANDS` | **Deprecated** (commands are disabled by default) | - |
 | `--disk-exclude` | `PULSE_DISK_EXCLUDE` | Device name/path or mount point patterns to exclude from disk and S.M.A.R.T. monitoring (repeatable or CSV) | *(none)* |
 | `--disk-include` | `PULSE_DISK_INCLUDE` | Device name/path or mount point patterns to include despite automatic filesystem filtering (repeatable or CSV) | *(none)* |
@@ -584,6 +585,9 @@ sudo chmod 0700 /usr/local/libexec/pulse-queue-depth
 | `--disable-docker-update-checks` | `PULSE_DISABLE_DOCKER_UPDATE_CHECKS` | Disable Docker image update detection | `false` |
 | `--disable-registry-credentials` | `PULSE_DISABLE_REGISTRY_CREDENTIALS` | Do not read host Docker credentials (config.json / credential helpers) for registry update checks | `false` |
 | `--enable-failure-logs` | `PULSE_ENABLE_FAILURE_LOGS` | Report the last log lines of a container that has failed, masked and cut short. Log text leaves this host. Only this setting turns it on; the server cannot. The installer takes `--enable-failure-logs` and `--disable-failure-logs` and keeps the choice across updates | `false` |
+| `--enable-live-logs` | `PULSE_ENABLE_LIVE_LOGS` | Allow Pulse administrators to request a bounded, masked log tail from a container on this host | `false` |
+| `--docker-compose-sources` | `PULSE_DOCKER_COMPOSE_SOURCES` | Path to the host-owned Compose project source registry | *(none)* |
+| `--deploy-ssh-user` | `PULSE_DEPLOY_SSH_USER` | SSH user for peer deploy fan-out (non-root requires passwordless sudo) | `root` |
 | `--insecure` | `PULSE_INSECURE_SKIP_VERIFY` | Skip TLS verification | `false` |
 | `--allow-plaintext-http` | `PULSE_AGENT_ALLOW_PLAINTEXT_HTTP` | Allow plain HTTP to a Pulse server at an address that is not local. Local-network Pulse URLs (private IP, single-label, `.local`/`.lan`/`.home`/`.home.arpa`/`.internal`, or resolves to private addresses) already work over HTTP for the primary URL without this flag. The flag extends plain HTTP to any host, including servers numbered from public IP space. Sends the API token in cleartext; only for networks you fully control. Report-only observers still need their own `allowPlaintextHTTP` opt-in | `false` |
 | `--hostname` | `PULSE_HOSTNAME` | Override hostname | *(OS hostname)* |
@@ -592,6 +596,7 @@ sudo chmod 0700 /usr/local/libexec/pulse-queue-depth
 | `--disable-ceph` | `PULSE_DISABLE_CEPH` | Disable local Ceph status polling | `false` |
 | `--tag` | `PULSE_TAGS` | Apply tags (repeatable or CSV, at most 32, each up to 64 bytes) | *(none)* |
 | `--log-level` | `LOG_LEVEL` | Log verbosity (`debug`, `info`, `warn`, `error`) | `info` |
+| `--log-file` | `PULSE_LOG_FILE` | Write rotating JSON logs to this file | *(stderr / journal)* |
 | `--health-addr` | `PULSE_HEALTH_ADDR` | Health/metrics server address | `127.0.0.1:9191` |
 
 Use `--health-addr :9191` only when another host must scrape the
@@ -739,7 +744,9 @@ broader permissions or another setup attempt.
 ### Advanced Flags
 
 - `--version`: Print the agent version and exit.
+- `--release-identity`: Print the embedded release identity and exit.
 - `--self-test`: Perform a self-test and exit (used during auto-update).
+- `--validate-url`: Validate the primary Pulse URL policy and exit without reading credentials, writing state, or starting modules (exits `65` when the URL policy rejects the address).
 
 ## Auto-Detection
 
