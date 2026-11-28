@@ -4,7 +4,7 @@ The map draws everything Pulse monitors on one screen: how traffic gets in,
 what runs, and the storage, backups and hardware underneath. It draws itself
 from what Pulse already collects. There is nothing to place by hand.
 
-Open it with the map button at the top left of the header.
+Open it from the **Map** tab on the left of the navigation bar (or the **Map** button at the top left of the header on narrower screens).
 
 ## Read the map
 

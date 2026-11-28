@@ -40,8 +40,20 @@ const MAP_STAGE = featureReleases.infrastructureMap?.stage;
 
 const MAP = 'svg[aria-label="Infrastructure map"]';
 const TILE = `${MAP} [data-map-hit]`;
+const NAV_TAB = "infrastructure-map-nav-tab";
 const HEADER_BUTTON = "infrastructure-map-header-button";
+const DESKTOP_NAV_BREAKPOINT = 1024;
 const FOCUS_RING = "rgb(59, 130, 246)";
+
+const mapEntryForViewport = (page: Page) => {
+  const isDesktopNav =
+    (page.viewportSize()?.width ?? DESKTOP_NAV_BREAKPOINT) >=
+    DESKTOP_NAV_BREAKPOINT;
+  return {
+    visibleEntry: page.getByTestId(isDesktopNav ? NAV_TAB : HEADER_BUTTON),
+    hiddenEntry: page.getByTestId(isDesktopNav ? HEADER_BUTTON : NAV_TAB),
+  };
+};
 
 type WorkerFixtures = {
   authStorageStatePath: string;
@@ -140,7 +152,9 @@ test.describe("Infrastructure map", () => {
       await openMap(page);
       const heading = page.getByRole("heading", { level: 1, name: "Map" });
       await expect(heading).toBeVisible();
-      await expect(page.getByTestId(HEADER_BUTTON)).toBeVisible();
+      const { visibleEntry, hiddenEntry } = mapEntryForViewport(page);
+      await expect(visibleEntry).toBeVisible();
+      await expect(hiddenEntry).toBeHidden();
       // A feature in preview says so beside its title.
       const tag = page
         .locator('[data-testid="infrastructure-map"] [data-page-header]')
@@ -158,6 +172,7 @@ test.describe("Infrastructure map", () => {
     ).toBeVisible({ timeout: 60_000 });
     await expect(page.locator(MAP)).toHaveCount(0);
     await expect(page).not.toHaveTitle(/^Map\b/);
+    await expect(page.getByTestId(NAV_TAB)).toHaveCount(0);
     await expect(page.getByTestId(HEADER_BUTTON)).toHaveCount(0);
     await expect(page.locator('a[href="/map"]')).toHaveCount(0);
 
@@ -175,15 +190,16 @@ test.describe("Infrastructure map", () => {
     await expect(page.locator('a[href*="/docs/MAP"]')).toHaveCount(0);
   });
 
-  test("a development build reaches the map from the header and draws the estate", async ({
+  test("a development build reaches the map from the navigation and draws the estate", async ({
     page,
   }, testInfo) => {
     await asDevelopmentBuild(page);
     await page.goto("/proxmox/overview", { waitUntil: "domcontentloaded" });
 
-    const button = page.getByTestId(HEADER_BUTTON);
-    await expect(button).toBeVisible({ timeout: 60_000 });
-    await button.click();
+    const { visibleEntry, hiddenEntry } = mapEntryForViewport(page);
+    await expect(visibleEntry).toBeVisible({ timeout: 60_000 });
+    await expect(hiddenEntry).toBeHidden();
+    await visibleEntry.click();
     await expect(page).toHaveURL(/\/map$/);
     await expect(page.locator(TILE).first()).toBeVisible({ timeout: 60_000 });
     await expect(

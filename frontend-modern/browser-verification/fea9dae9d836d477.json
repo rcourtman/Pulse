@@ -1,0 +1,49 @@
+{
+  "version": 1,
+  "base_sha": "39902fbe8d234d32620616f806b79d154e0d6445",
+  "verified_at": "2026-11-28T00:06:53Z",
+  "result": "passed",
+  "changed_paths": [
+    "frontend-modern/src/AppLayout.tsx",
+    "frontend-modern/src/features/infrastructureMap/InfrastructureMapEntry.tsx"
+  ],
+  "content_sha256": {
+    "frontend-modern/src/AppLayout.tsx": "814ea8f02834fc4274f070cfb55da1a322331942711ce78cb3f96633512b5f80",
+    "frontend-modern/src/features/infrastructureMap/InfrastructureMapEntry.tsx": "6a0fa88676900e32b72b1a3bf37a2cb7d6dce56b9a687f7ad8c095027cbd88ce"
+  },
+  "routes": [
+    "/map",
+    "/proxmox/overview"
+  ],
+  "viewports": [
+    {
+      "width": 1280,
+      "height": 800
+    },
+    {
+      "width": 1024,
+      "height": 768
+    },
+    {
+      "width": 1023,
+      "height": 768
+    },
+    {
+      "width": 390,
+      "height": 844
+    }
+  ],
+  "states": [
+    "Desktop 1280x800 dark and light with all 7 platforms plus Patrol and Map tab active before Proxmox",
+    "Desktop 1024x768 dark crowded 12-tab bar with zero horizontal overflow and Settings fully visible",
+    "Desktop 1280x800 dark empty estate with Map tab visible and no trailing divider",
+    "Narrow 1023x768 dark and mobile 390x844 dark and light with top-left Map header button visible and bottom MobileNavBar excluding Map",
+    "Kiosk mode (?kiosk=true) hiding both Map tab and header button",
+    "Held-back production build omitting both Map entries, divider, and /map links"
+  ],
+  "interactions": [
+    "Clicked Proxmox tab from /map and clicked Map desktop tab back to /map, verifying aria-current toggles cleanly",
+    "Clicked top-left Map header button at 1023x768 and 390x844 from /proxmox/overview to /map, verifying active state and zero page errors",
+    "Verified lg breakpoint handoff between 1024px (desktop tab only) and 1023px (header button plus MobileNavBar only)"
+  ]
+}

@@ -75,7 +75,10 @@ import { runtimeBranding } from '@/stores/systemSettings';
 import { presentationPolicyHidesUpgradePrompts } from '@/stores/sessionPresentationPolicy';
 import type { AppConnectionStatus, OrganizationListIssue } from '@/useAppRuntimeState';
 import { buildInfrastructureWorkspacePath } from '@/components/Settings/infrastructureWorkspaceModel';
-import { InfrastructureMapHeaderButton } from '@/features/infrastructureMap/InfrastructureMapEntry';
+import {
+  InfrastructureMapHeaderButton,
+  InfrastructureMapNavTab,
+} from '@/features/infrastructureMap/InfrastructureMapEntry';
 import { PreviewTag } from '@/components/FeatureRelease';
 import { isFeatureAvailable } from '@/utils/featureReleases';
 
@@ -356,7 +359,8 @@ export function AppLayout(props: AppLayoutProps) {
   createEffect(() => {
     const active = getNavigationActiveTab();
     if (!active) {
-      // The map is reached from the window edge, not from a tab.
+      // Map stays outside the platform/utility tab enum so it remains
+      // independent of platform visibility and mobile bottom tabs.
       const onMap =
         isFeatureAvailable('infrastructureMap') &&
         location.pathname.replace(/\/+$/, '') === INFRASTRUCTURE_MAP_PATH;
@@ -719,7 +723,7 @@ export function AppLayout(props: AppLayoutProps) {
     const targetRoute = () => getPrimaryTargetRoute(tab);
     const Icon = tab.icon;
     const baseClasses =
-      'tab relative px-1.5 xl:px-2 2xl:px-3 py-1.5 text-xs xl:text-sm font-medium flex items-center gap-1 2xl:gap-1.5 rounded-t border border-transparent transition-colors whitespace-nowrap cursor-pointer select-none focus-visible:outline-solid focus-visible:outline-2 focus-visible:-outline-offset-2 focus-visible:outline-blue-500';
+      'tab relative px-1 xl:px-2 2xl:px-3 py-1.5 text-xs xl:text-sm font-medium flex items-center gap-1 2xl:gap-1.5 rounded-t border border-transparent transition-colors whitespace-nowrap cursor-pointer select-none focus-visible:outline-solid focus-visible:outline-2 focus-visible:-outline-offset-2 focus-visible:outline-blue-500';
 
     const className = () => {
       if (isActive()) {
@@ -819,9 +823,13 @@ export function AppLayout(props: AppLayoutProps) {
       >
         <Show when={!kioskMode()}>
           <div class="flex items-center sm:col-start-1 sm:col-end-2 sm:justify-self-start">
-            {/* The slot stays, so the brand mark does not move when the map arrives. */}
+            {/* The slot stays so the brand mark remains centered across viewports.
+                Desktop (`lg`+) surfaces Map in the primary tab bar, while narrower screens
+                keep the header button so mobile bottom nav stays uncluttered. */}
             <Show when={isFeatureAvailable('infrastructureMap')}>
-              <InfrastructureMapHeaderButton />
+              <div class="lg:hidden">
+                <InfrastructureMapHeaderButton />
+              </div>
             </Show>
           </div>
           <div class="flex items-center gap-1.5 sm:col-start-2 sm:col-end-3 sm:flex-initial sm:justify-self-center sm:gap-2">
@@ -950,17 +958,29 @@ export function AppLayout(props: AppLayoutProps) {
           class="tabs mb-2 hidden lg:flex items-end gap-1 xl:gap-2 overflow-x-auto whitespace-nowrap border-b border-border scrollbar-hide"
           aria-label="Primary navigation"
         >
+          <Show when={isFeatureAvailable('infrastructureMap')}>
+            <div class="flex items-end gap-0.5 xl:gap-1" role="group" aria-label="Overview">
+              <InfrastructureMapNavTab />
+            </div>
+            <Show when={primaryTabs().length > 0}>
+              <span
+                aria-hidden="true"
+                data-testid="infrastructure-map-nav-divider"
+                class="mb-1.5 h-4 w-px shrink-0 bg-border/80 xl:mx-0.5"
+              />
+            </Show>
+          </Show>
           <div class="flex items-end gap-0.5 xl:gap-1" role="group" aria-label="Infrastructure">
             <For each={primaryTabs()}>{renderPrimaryNavigationTab}</For>
           </div>
           <div class="flex items-end gap-0.5 xl:gap-1 ml-auto" role="group" aria-label="System">
-            <div class="flex items-end gap-0.5 xl:gap-1 pl-2 xl:pl-4">
+            <div class="flex items-end gap-0.5 xl:gap-1 pl-1 xl:pl-4">
               <For each={utilityTabs()}>
                 {(tab) => {
                   const isActive = () => getActiveTabDesktop() === tab.id;
                   const Icon = tab.icon;
                   const baseClasses =
-                    'tab relative px-1.5 xl:px-2 2xl:px-3 py-1.5 text-xs xl:text-sm font-medium flex items-center gap-1 2xl:gap-1.5 rounded-t border border-transparent transition-colors whitespace-nowrap cursor-pointer select-none focus-visible:outline-solid focus-visible:outline-2 focus-visible:-outline-offset-2 focus-visible:outline-blue-500';
+                    'tab relative px-1 xl:px-2 2xl:px-3 py-1.5 text-xs xl:text-sm font-medium flex items-center gap-1 2xl:gap-1.5 rounded-t border border-transparent transition-colors whitespace-nowrap cursor-pointer select-none focus-visible:outline-solid focus-visible:outline-2 focus-visible:-outline-offset-2 focus-visible:outline-blue-500';
 
                   const className = () => {
                     if (isActive()) {
