@@ -124,6 +124,7 @@ exit "$status"
 }
 
 func TestAutoUpdateAssetWriterFailures(t *testing.T) {
+	t.Parallel()
 	updater, err := filepath.Abs(repoFile("scripts", "pulse-auto-update.sh"))
 	if err != nil {
 		t.Fatal(err)
@@ -131,6 +132,7 @@ func TestAutoUpdateAssetWriterFailures(t *testing.T) {
 	for _, pipefail := range []string{"on", "off"} {
 		for _, fault := range []string{"writer", "destination", "size-read"} {
 			t.Run(pipefail+"/"+fault, func(t *testing.T) {
+				t.Parallel()
 				ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
 				defer cancel()
 				dir := t.TempDir()

@@ -9,6 +9,7 @@ import (
 )
 
 func TestUninstallSensorProxyScriptContract(t *testing.T) {
+	t.Parallel()
 	scriptPath := repoFile("scripts", "uninstall-sensor-proxy.sh")
 	content, err := os.ReadFile(scriptPath)
 	if err != nil {
@@ -42,6 +43,7 @@ func TestUninstallSensorProxyScriptContract(t *testing.T) {
 }
 
 func TestUninstallSensorProxyRemoteCleanupUsesProvisionedHostKeys(t *testing.T) {
+	t.Parallel()
 	tmpDir := t.TempDir()
 	binDir := filepath.Join(tmpDir, "bin")
 	argsLog := filepath.Join(tmpDir, "ssh-args")
@@ -98,6 +100,7 @@ cleanup_remote_authorized_keys 192.0.2.10
 }
 
 func TestUninstallSensorProxyRemoteCleanupUsesStrictConfiguredTrustByDefault(t *testing.T) {
+	t.Parallel()
 	tmpDir := t.TempDir()
 	binDir := filepath.Join(tmpDir, "bin")
 	argsLog := filepath.Join(tmpDir, "ssh-args")
@@ -144,6 +147,7 @@ cleanup_remote_authorized_keys 192.0.2.20
 }
 
 func TestUninstallSensorProxyRemoteCleanupFailsWithoutProvisionedTrust(t *testing.T) {
+	t.Parallel()
 	tmpDir := t.TempDir()
 	binDir := filepath.Join(tmpDir, "bin")
 	argsLog := filepath.Join(tmpDir, "ssh-args")
@@ -181,6 +185,7 @@ cleanup_remote_authorized_keys 192.0.2.11
 }
 
 func TestUninstallSensorProxyRemoteCleanupRejectsHostKeyMismatch(t *testing.T) {
+	t.Parallel()
 	tmpDir := t.TempDir()
 	binDir := filepath.Join(tmpDir, "bin")
 	knownHosts := filepath.Join(tmpDir, "known_hosts")
@@ -210,6 +215,7 @@ cleanup_remote_authorized_keys 192.0.2.12
 }
 
 func TestUninstallSensorProxyLocalOnlyDoesNotUseSSH(t *testing.T) {
+	t.Parallel()
 	marker := filepath.Join(t.TempDir(), "cleanup-marker")
 	command := `source "$1"
 LOCAL_ONLY=true
@@ -232,6 +238,7 @@ cleanup_cluster_authorized_keys
 }
 
 func TestUninstallSensorProxyReportsRemoteTrustFailureAfterLocalCleanup(t *testing.T) {
+	t.Parallel()
 	marker := filepath.Join(t.TempDir(), "cleanup-marker")
 	command := `source "$1"
 disable_legacy_units() { :; }
@@ -265,6 +272,7 @@ main --quiet
 }
 
 func TestUninstallSensorProxyScriptRemovesTempFootprintAndManagedKeys(t *testing.T) {
+	t.Parallel()
 	tmpDir := t.TempDir()
 	binDir := filepath.Join(tmpDir, "bin")
 	if err := os.MkdirAll(binDir, 0755); err != nil {
@@ -373,6 +381,7 @@ if cleanup_cluster_authorized_keys; then exit 0; else exit $?; fi
 `
 
 func TestUninstallSensorProxyClusterInventoryUsesEveryValidatedNode(t *testing.T) {
+	t.Parallel()
 	dir := t.TempDir()
 	if err := os.WriteFile(filepath.Join(dir, "inventory"), []byte(`[{"node":"pve-b"},{"node":"pve-a"},{"node":"pve-b"},{"node":"pve-v6"}]`), 0600); err != nil {
 		t.Fatal(err)
@@ -398,6 +407,7 @@ func TestUninstallSensorProxyClusterInventoryUsesEveryValidatedNode(t *testing.T
 }
 
 func TestUninstallSensorProxyIncompleteInventoryNeverStartsKeyCleanup(t *testing.T) {
+	t.Parallel()
 	for _, tc := range []struct{ name, inventory string }{
 		{"empty", `[]`}, {"object", `{}`}, {"null", `null`}, {"malformed", `[{`},
 		{"missing", `[{"node":"pve-a"},{}]`}, {"wrong_type", `[{"node":7}]`},
@@ -425,6 +435,7 @@ func TestUninstallSensorProxyIncompleteInventoryNeverStartsKeyCleanup(t *testing
 }
 
 func TestUninstallSensorProxyMissingInventoryToolRequiresExplicitLocalOnly(t *testing.T) {
+	t.Parallel()
 	for _, tool := range []string{"pvesh", "python3"} {
 		t.Run(tool, func(t *testing.T) {
 			dir := t.TempDir()
@@ -449,6 +460,7 @@ if cleanup_cluster_authorized_keys; then exit 0; else exit $?; fi
 }
 
 func TestUninstallSensorProxyKeyReplacementPreservesOriginalOnEveryFailure(t *testing.T) {
+	t.Parallel()
 	const original = "ssh-ed25519 AAAAlegacy pulse # pulse-managed-key\nssh-ed25519 AAAAkeep user-key\n"
 	for _, phase := range []string{"mktemp", "grep", "cmp", "chmod", "chown", "mv", "success", "all_managed", "unchanged", "missing"} {
 		t.Run(phase, func(t *testing.T) {
@@ -513,6 +525,7 @@ if cleanup_local_authorized_keys; then exit 0; else exit $?; fi
 }
 
 func TestUninstallSensorProxyLocalOnlyPropagatesKeyFailure(t *testing.T) {
+	t.Parallel()
 	body := `source "$1"
 LOCAL_ONLY=true
 cleanup_local_authorized_keys() { return 23; }
@@ -525,6 +538,7 @@ if cleanup_cluster_authorized_keys; then exit 0; else exit $?; fi
 }
 
 func TestUninstallSensorProxyAPICleanupRequiresCompleteInventoryAndRemovals(t *testing.T) {
+	t.Parallel()
 	for _, tc := range []struct {
 		name, inventory, actions string
 		success                  bool
@@ -580,6 +594,7 @@ if remove_proxmox_access; then exit 0; else exit $?; fi
 }
 
 func TestUninstallSensorProxyMainCannotHideAPIRemovalFailure(t *testing.T) {
+	t.Parallel()
 	body := `source "$1"
 disable_legacy_units() { :; }
 cleanup_cluster_authorized_keys() { :; }
@@ -651,6 +666,7 @@ const sensorProxyRecoveryKeys = "ssh-ed25519 AAAAkeep recovery-key\n" +
 	"restrict ssh-ed25519 AAAAkeep2 other # pulse-managed-key-not-a-marker\n"
 
 func TestUninstallSensorProxyRemoteKeyPayloadPreservesSharedTarget(t *testing.T) {
+	t.Parallel()
 	for _, kind := range []string{"regular", "symlink"} {
 		for _, phase := range []string{"success", "unchanged", "all_managed", "missing", "directory", "readlink", "mktemp", "output_open", "grep", "cmp", "chmod", "chown", "mv", "cleanup"} {
 			t.Run(kind+"/"+phase, func(t *testing.T) {
@@ -755,6 +771,7 @@ func TestUninstallSensorProxyRemoteKeyPayloadPreservesSharedTarget(t *testing.T)
 }
 
 func TestUninstallSensorProxyRemotePayloadFailureReachesMain(t *testing.T) {
+	t.Parallel()
 	dir := t.TempDir()
 	auth := filepath.Join(dir, "remote", "authorized_keys")
 	if err := os.MkdirAll(filepath.Dir(auth), 0700); err != nil {
@@ -793,6 +810,7 @@ if main; then exit 0; else exit $?; fi
 // Both shipped entrypoints must preserve unrelated access keys. All filesystem
 // operations below are real private-user operations; only faults are injected.
 func TestUninstallSensorProxyLocalKeyWritersPreserveRecovery(t *testing.T) {
+	t.Parallel()
 	for _, entry := range []struct{ name, script, function string }{
 		{"standalone", repoFile("scripts", "uninstall-sensor-proxy.sh"), "cleanup_local_authorized_keys"},
 		{"installer", repoFile("install.sh"), "remove_local_sensor_proxy_managed_keys"},
@@ -928,6 +946,7 @@ if ` + entry.function + `; then exit 0; else exit $?; fi
 }
 
 func TestUninstallSensorProxyLocalKeyWriterKeepsCallerResources(t *testing.T) {
+	t.Parallel()
 	for _, entry := range []struct{ name, script, function string }{
 		{"standalone", repoFile("scripts", "uninstall-sensor-proxy.sh"), "cleanup_local_authorized_keys"},
 		{"installer", repoFile("install.sh"), "remove_local_sensor_proxy_managed_keys"},
@@ -960,6 +979,7 @@ fi
 }
 
 func TestUninstallSensorProxyLocalKeyFailureReachesMain(t *testing.T) {
+	t.Parallel()
 	dir := t.TempDir()
 	keys := filepath.Join(dir, "authorized_keys")
 	const original = "ssh-ed25519 AAAAold # pulse-managed-key\n" + sensorProxyRecoveryKeys

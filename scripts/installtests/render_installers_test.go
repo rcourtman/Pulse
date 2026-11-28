@@ -45,6 +45,7 @@ func renderedInstallPowerShellFunction(t *testing.T, script, name string) string
 // pinned-key check compares it with: a rendered installer that compares the
 // key with itself skips every signature check.
 func TestRenderInstallersKeepSignatureVerificationEnabled(t *testing.T) {
+	t.Parallel()
 	if runtime.GOOS == "windows" {
 		t.Skip("rendered install.sh verification requires bash and ssh-keygen")
 	}
@@ -239,6 +240,7 @@ $InstallerSignatureNamespace = "pulse-install"
 }
 
 func TestRenderInstallersRefuseChangedSignaturePinTemplate(t *testing.T) {
+	t.Parallel()
 	installSH, err := os.ReadFile(repoFile("scripts", "install.sh"))
 	if err != nil {
 		t.Fatal(err)
@@ -260,6 +262,7 @@ func TestRenderInstallersRefuseChangedSignaturePinTemplate(t *testing.T) {
 		},
 	} {
 		t.Run(name, func(t *testing.T) {
+			t.Parallel()
 			changed := change(string(installSH))
 			if changed == string(installSH) {
 				t.Fatal("fixture did not change install.sh")

@@ -12,9 +12,11 @@ import (
 )
 
 func TestProviderMSPStartupFixturesStayLinuxOnly(t *testing.T) {
+	t.Parallel()
 	for _, platform := range []string{"linux", "windows", "darwin"} {
 		for _, name := range []string{"provider_msp_startup_test.go", "provider_msp_startup_command_test.go"} {
 			t.Run(platform+"/"+name, func(t *testing.T) {
+				t.Parallel()
 				ctx := build.Default
 				ctx.GOOS, ctx.GOARCH = platform, "amd64"
 				included, err := ctx.MatchFile(repoFile("scripts", "installtests"), name)
@@ -32,6 +34,7 @@ func TestProviderMSPStartupFixturesStayLinuxOnly(t *testing.T) {
 // Exercise the real command helper with separate child-process output streams.
 // Compose emits unset-variable warnings on stderr even when a read succeeds.
 func TestProviderMSPStartupCommandReadbackSeparatesStderr(t *testing.T) {
+	t.Parallel()
 	binary, err := os.Executable()
 	if err != nil {
 		t.Fatal(err)
@@ -47,6 +50,7 @@ func TestProviderMSPStartupCommandReadbackSeparatesStderr(t *testing.T) {
 		{"no_owned_resources", ""},
 	} {
 		t.Run(tc.name, func(t *testing.T) {
+			t.Parallel()
 			env := append(os.Environ(),
 				"PULSE_TEST_MSP_COMMAND_HELPER=emit",
 				"PULSE_TEST_MSP_COMMAND_STDOUT="+tc.stdout,
@@ -61,6 +65,7 @@ func TestProviderMSPStartupCommandReadbackSeparatesStderr(t *testing.T) {
 }
 
 func TestProviderMSPStartupCommandFailureRetainsBothStreams(t *testing.T) {
+	t.Parallel()
 	binary, err := os.Executable()
 	if err != nil {
 		t.Fatal(err)

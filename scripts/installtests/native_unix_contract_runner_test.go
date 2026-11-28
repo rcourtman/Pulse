@@ -25,6 +25,7 @@ import (
 // without recursively running the installer suite. Native CI supplies the
 // platform timing proof; these controls reject lost checks and false passes.
 func TestNativeUnixContractRunnerPartitionsWithoutDroppingChecks(t *testing.T) {
+	t.Parallel()
 	ctx, cancel := context.WithTimeout(context.Background(), 2*time.Minute)
 	defer cancel()
 	cmd := exec.CommandContext(ctx, "python3", "-I", "-S", repoFile("scripts", "tests", "test_native_installer_contract_runner.py"))
@@ -71,6 +72,7 @@ func TestInstallMCPTransport(t *testing.T) {
 	}
 	for _, tc := range cases {
 		t.Run(tc.name, func(t *testing.T) {
+			t.Parallel()
 			root := t.TempDir()
 			tools, downloads, destination := filepath.Join(root, "tools"), filepath.Join(root, "downloads"), filepath.Join(root, "install with spaces")
 			for _, path := range []string{tools, downloads, destination} {

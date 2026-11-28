@@ -28,6 +28,7 @@ import (
 )
 
 func TestAgentURLAdmissionRefusesUnsupportedOrUnexecutableValidator(t *testing.T) {
+	t.Parallel()
 	if runtime.GOOS == "windows" {
 		t.Skip("Unix installer")
 	}
@@ -97,6 +98,7 @@ EXIT_PREFLIGHT_FAILED=14
 }
 
 func TestContainerAgentCompatibilityWrapperDefaultsToUnifiedHostAndDockerMonitoring(t *testing.T) {
+	t.Parallel()
 	wrapperBytes, err := os.ReadFile(repoFile("scripts", "install-container-agent.sh"))
 	if err != nil {
 		t.Fatalf("read container-agent compatibility wrapper: %v", err)
@@ -119,6 +121,7 @@ func TestContainerAgentCompatibilityWrapperDefaultsToUnifiedHostAndDockerMonitor
 // still runs real curl through the complete shipped wrapper, including cleanup
 // and prefix nonexecution. Exact unscaled timing is separate one-off evidence.
 func TestContainerAgentCompatibilityWrapperBoundsStalledDownload(t *testing.T) {
+	t.Parallel()
 	realCurl, err := exec.LookPath("curl")
 	if err != nil {
 		t.Fatal("curl is required for wrapper transport proof")
@@ -208,6 +211,7 @@ exec "$WRAPPER_REAL_CURL" "${args[@]}"
 // Exercise the shipped remote bootstrap, not an extracted curl expression.
 // The downloaded script is inert: it records test-owned arguments and exits.
 func TestContainerAgentCompatibilityWrapperIgnoresAmbientCurlConfig(t *testing.T) {
+	t.Parallel()
 	if runtime.GOOS == "windows" {
 		t.Skip("Unix installer")
 	}
@@ -365,6 +369,7 @@ func assertContainerWrapperDownloadRemoved(t *testing.T, root string) {
 }
 
 func TestContainerAgentCompatibilityWrapperRejectsIncompleteDownloadBeforeExecution(t *testing.T) {
+	t.Parallel()
 	const prefix = "printf touched > \"$WRAPPER_MARKER\"\n"
 	for _, tc := range []struct {
 		name, body, diagnostic string
@@ -404,6 +409,7 @@ func TestContainerAgentCompatibilityWrapperRejectsIncompleteDownloadBeforeExecut
 }
 
 func TestContainerAgentCompatibilityWrapperPreservesRemoteArgumentsAndExit(t *testing.T) {
+	t.Parallel()
 	const body = "printf touched > \"$WRAPPER_MARKER\"\nprintf '%s\\0' \"$@\" > \"$WRAPPER_ARGS\"\nprintf '%s' \"$0\" > \"$WRAPPER_SOURCE\"\nexit 37\n"
 	for _, uninstall := range []bool{false, true} {
 		t.Run(fmt.Sprintf("uninstall=%t", uninstall), func(t *testing.T) {
@@ -442,6 +448,7 @@ func TestContainerAgentCompatibilityWrapperPreservesRemoteArgumentsAndExit(t *te
 }
 
 func TestContainerAgentCompatibilityWrapperRetainsExplicitTLSOptOut(t *testing.T) {
+	t.Parallel()
 	server := httptest.NewTLSServer(http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
 		_, _ = io.WriteString(w, "printf '%s\\0' \"$@\" > \"$WRAPPER_ARGS\"\n")
 	}))
@@ -472,6 +479,7 @@ func TestContainerAgentCompatibilityWrapperRetainsExplicitTLSOptOut(t *testing.T
 }
 
 func TestContainerAgentCompatibilityWrapperPrefersAdjacentInstaller(t *testing.T) {
+	t.Parallel()
 	cmd, root := containerAgentWrapperCommand(t, "--uninstall")
 	local := filepath.Join(root, "scripts with spaces", "install.sh")
 	if err := os.WriteFile(local, []byte("#!/bin/sh\nprintf '%s\\0' \"$@\" > \"$WRAPPER_ARGS\"\nexit 39\n"), 0o700); err != nil {
@@ -490,6 +498,7 @@ func TestContainerAgentCompatibilityWrapperPrefersAdjacentInstaller(t *testing.T
 }
 
 func TestInstallSHAllowsMissingTokenForOptionalAuth(t *testing.T) {
+	t.Parallel()
 	content, err := os.ReadFile(repoFile("scripts", "install.sh"))
 	if err != nil {
 		t.Fatalf("read install.sh: %v", err)
@@ -516,6 +525,7 @@ func TestInstallSHAllowsMissingTokenForOptionalAuth(t *testing.T) {
 }
 
 func TestInstallSHPersistsAndVerifiesServerFingerprint(t *testing.T) {
+	t.Parallel()
 	content, err := os.ReadFile(repoFile("scripts", "install.sh"))
 	if err != nil {
 		t.Fatalf("read install.sh: %v", err)
@@ -540,6 +550,7 @@ func TestInstallSHPersistsAndVerifiesServerFingerprint(t *testing.T) {
 }
 
 func TestInstallSHAutoDetectProxmoxKeepsRuntimeTypeUnpinned(t *testing.T) {
+	t.Parallel()
 	content, err := os.ReadFile(repoFile("scripts", "install.sh"))
 	if err != nil {
 		t.Fatalf("read install.sh: %v", err)
@@ -570,6 +581,7 @@ func TestInstallSHAutoDetectProxmoxKeepsRuntimeTypeUnpinned(t *testing.T) {
 }
 
 func TestInstallSHManualUpdatePreservesSelectedProxmoxSetup(t *testing.T) {
+	t.Parallel()
 	source, err := installShellSource()
 	if err != nil {
 		t.Fatal(err)
@@ -785,6 +797,7 @@ fixture_main "$@"
 }
 
 func TestInstallSHExplainsCommandExecutionForProxmoxLXCDockerInventory(t *testing.T) {
+	t.Parallel()
 	content, err := os.ReadFile(repoFile("scripts", "install.sh"))
 	if err != nil {
 		t.Fatalf("read install.sh: %v", err)
@@ -810,6 +823,7 @@ func TestInstallSHExplainsCommandExecutionForProxmoxLXCDockerInventory(t *testin
 }
 
 func TestInstallSHAcceptsLegacyBooleanFlagValues(t *testing.T) {
+	t.Parallel()
 	content, err := os.ReadFile(repoFile("scripts", "install.sh"))
 	if err != nil {
 		t.Fatalf("read install.sh: %v", err)
@@ -834,6 +848,7 @@ func TestInstallSHAcceptsLegacyBooleanFlagValues(t *testing.T) {
 }
 
 func TestInstallSHAgentDownloadIsServerVersionAware(t *testing.T) {
+	t.Parallel()
 	content, err := os.ReadFile(repoFile("scripts", "install.sh"))
 	if err != nil {
 		t.Fatalf("read install.sh: %v", err)
@@ -861,6 +876,7 @@ func TestInstallSHAgentDownloadIsServerVersionAware(t *testing.T) {
 // while the server /api/version reports "6.0.4", so the mismatch check must
 // strip a leading "v" before comparing and only warn on a genuine difference.
 func TestInstallSHAgentVersionMismatchIgnoresVPrefix(t *testing.T) {
+	t.Parallel()
 	harness := `
 set -euo pipefail
 log_warn() { echo "WARN:$*"; }
@@ -893,6 +909,7 @@ echo DONE
 }
 
 func TestInstallSHAgentServiceSecurityDefaults(t *testing.T) {
+	t.Parallel()
 	content, err := os.ReadFile(repoFile("scripts", "install.sh"))
 	if err != nil {
 		t.Fatalf("read install.sh: %v", err)
@@ -925,6 +942,7 @@ func TestInstallSHAgentServiceSecurityDefaults(t *testing.T) {
 }
 
 func TestInstallSHAllowsProxmoxCommandAgentLXCAttach(t *testing.T) {
+	t.Parallel()
 	content, err := os.ReadFile(repoFile("scripts", "install.sh"))
 	if err != nil {
 		t.Fatalf("read install.sh: %v", err)
@@ -949,6 +967,7 @@ func TestInstallSHAllowsProxmoxCommandAgentLXCAttach(t *testing.T) {
 // lxc-attach capability grant. A monitoring-only unit must not carry dormant
 // CAP_SETUID/CAP_SETGID authority for a future remote toggle.
 func TestInstallSHGrantsLXCAttachCapabilitiesOnlyForCommandPVEAgent(t *testing.T) {
+	t.Parallel()
 	content, err := os.ReadFile(repoFile("scripts", "install.sh"))
 	if err != nil {
 		t.Fatalf("read install.sh: %v", err)
@@ -975,6 +994,7 @@ func TestInstallSHGrantsLXCAttachCapabilitiesOnlyForCommandPVEAgent(t *testing.T
 }
 
 func TestRenderedSystemdUnitDoesNotPregrantCommandCapabilities(t *testing.T) {
+	t.Parallel()
 	for _, tc := range []struct {
 		name           string
 		enableCommands bool
@@ -1029,6 +1049,7 @@ render_systemd_agent_unit "` + unitPath + `" "/usr/local/bin/pulse-agent" "--url
 }
 
 func TestInstallSHPreflightChecksAgentDownloadArtifact(t *testing.T) {
+	t.Parallel()
 	var requestedDownloadPath string
 	var requestedDownloadArch string
 	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
@@ -1077,6 +1098,7 @@ func TestInstallSHPreflightChecksAgentDownloadArtifact(t *testing.T) {
 }
 
 func TestInstallSHPreflightFollowsAgentDownloadRedirect(t *testing.T) {
+	t.Parallel()
 	var requestedArtifactMethod string
 	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		switch r.URL.Path {
@@ -1119,6 +1141,7 @@ func TestInstallSHPreflightFollowsAgentDownloadRedirect(t *testing.T) {
 }
 
 func TestInstallSHPreflightRejectsChecksumOnlyOnRedirectResponse(t *testing.T) {
+	t.Parallel()
 	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		switch r.URL.Path {
 		case "/api/health":
@@ -1157,6 +1180,7 @@ func TestInstallSHPreflightRejectsChecksumOnlyOnRedirectResponse(t *testing.T) {
 }
 
 func TestInstallSHPreflightDoesNotRequireRoot(t *testing.T) {
+	t.Parallel()
 	content, err := os.ReadFile(repoFile("scripts", "install.sh"))
 	if err != nil {
 		t.Fatalf("read install.sh: %v", err)
@@ -1181,6 +1205,7 @@ func TestInstallSHPreflightDoesNotRequireRoot(t *testing.T) {
 }
 
 func TestBuildPlistProgramArgumentsUsesSharedExecArgs(t *testing.T) {
+	t.Parallel()
 	script := `
 ` + extractInstallShellFunction(t, "build_exec_arg_items") + `
 ` + extractInstallShellFunction(t, "xml_escape") + `
@@ -1250,6 +1275,7 @@ func TestBuildPlistProgramArgumentsUsesSharedExecArgs(t *testing.T) {
 // TestConnectionEnvRecovery verifies the canonical helper logic that parses
 // connection.env without using shell source (to prevent injection).
 func TestConnectionEnvRecovery(t *testing.T) {
+	t.Parallel()
 	cases := []struct {
 		name         string
 		content      string
@@ -1392,6 +1418,7 @@ func TestConnectionEnvRecovery(t *testing.T) {
 // TestAgentIDFileRecovery verifies the agent-id file lookup priority:
 // /var/lib/pulse-agent/agent-id > /boot/config/plugins/pulse-agent/agent-id
 func TestAgentIDFileRecovery(t *testing.T) {
+	t.Parallel()
 	cases := []struct {
 		name   string
 		files  map[string]string // relative path -> content
@@ -1465,6 +1492,7 @@ func TestAgentIDFileRecovery(t *testing.T) {
 }
 
 func TestInstallSHUsesHostnameOverrideForUninstallLookup(t *testing.T) {
+	t.Parallel()
 	content, err := os.ReadFile(repoFile("scripts", "install.sh"))
 	if err != nil {
 		t.Fatalf("read install.sh: %v", err)
@@ -1486,6 +1514,7 @@ func TestInstallSHUsesHostnameOverrideForUninstallLookup(t *testing.T) {
 }
 
 func TestInstallSHUrlEncodesHostnameLookupQuery(t *testing.T) {
+	t.Parallel()
 	content, err := os.ReadFile(repoFile("scripts", "install.sh"))
 	if err != nil {
 		t.Fatalf("read install.sh: %v", err)
@@ -1505,6 +1534,7 @@ func TestInstallSHUrlEncodesHostnameLookupQuery(t *testing.T) {
 }
 
 func TestInstallSHPersistsIdentityInConnectionEnv(t *testing.T) {
+	t.Parallel()
 	content, err := os.ReadFile(repoFile("scripts", "install.sh"))
 	if err != nil {
 		t.Fatalf("read install.sh: %v", err)
@@ -1532,6 +1562,7 @@ func TestInstallSHPersistsIdentityInConnectionEnv(t *testing.T) {
 }
 
 func TestInstallSHRecoversSavedStateForPartialUninstallContext(t *testing.T) {
+	t.Parallel()
 	content, err := os.ReadFile(repoFile("scripts", "install.sh"))
 	if err != nil {
 		t.Fatalf("read install.sh: %v", err)
@@ -1552,6 +1583,7 @@ func TestInstallSHRecoversSavedStateForPartialUninstallContext(t *testing.T) {
 }
 
 func TestInstallSHSupportsSavedStateUpdateMode(t *testing.T) {
+	t.Parallel()
 	content, err := os.ReadFile(repoFile("scripts", "install.sh"))
 	if err != nil {
 		t.Fatalf("read install.sh: %v", err)
@@ -1605,6 +1637,7 @@ func TestInstallSHSupportsSavedStateUpdateMode(t *testing.T) {
 }
 
 func TestInstallSHRetargetPreservesIdentityWithoutOldEndpointTrust(t *testing.T) {
+	t.Parallel()
 	stateDir := t.TempDir()
 	tokenPath := filepath.Join(stateDir, "token")
 	if err := os.WriteFile(tokenPath, []byte("deadbeef\n"), 0600); err != nil {
@@ -1674,6 +1707,7 @@ func TestInstallSHRetargetPreservesIdentityWithoutOldEndpointTrust(t *testing.T)
 }
 
 func TestInstallSHRetargetDoesNotRecoverLegacyServiceTrust(t *testing.T) {
+	t.Parallel()
 	script := `
 		PULSE_URL="https://new-pulse.example.test:7655"
 		PULSE_TOKEN=""
@@ -1759,6 +1793,7 @@ ENV
 }
 
 func TestInstallSHRecoversV5ProcessArgsForSavedStateUpdate(t *testing.T) {
+	t.Parallel()
 	script := `
 		fail() { echo "FAIL:$1"; exit 99; }
 		PULSE_URL=""
@@ -1854,6 +1889,7 @@ ARGS
 }
 
 func TestInstallSHRecoversV5ProcessArgsWithoutProcfs(t *testing.T) {
+	t.Parallel()
 	// running_agent_arg_stream prefers <proc_root>/<pid>/cmdline and only falls
 	// back to ps when that entry is missing. Point it at an empty proc root so
 	// the stubbed pid never resolves to an unrelated live process on a Linux
@@ -1948,6 +1984,7 @@ func TestInstallSHRecoversV5ProcessArgsWithoutProcfs(t *testing.T) {
 }
 
 func TestInstallSHIgnoresForeignProcessesNamedLikeTheAgent(t *testing.T) {
+	t.Parallel()
 	if runtime.GOOS != "linux" {
 		t.Skip("process identity is read from Linux procfs")
 	}
@@ -2018,6 +2055,7 @@ func TestInstallSHIgnoresForeignProcessesNamedLikeTheAgent(t *testing.T) {
 }
 
 func TestInstallSHRecoversV5FreeBSDRCServiceState(t *testing.T) {
+	t.Parallel()
 	rcScript := filepath.Join(t.TempDir(), "pulse-agent")
 	if err := os.WriteFile(rcScript, []byte(`#!/bin/sh
 command="/usr/local/bin/pulse-agent"
@@ -2106,6 +2144,7 @@ export PULSE_CACERT='/conf/pulse-ca.pem'
 }
 
 func TestInstallSHRejectsPartialRecoveredProcessConnectionState(t *testing.T) {
+	t.Parallel()
 	script := `
 		PULSE_URL=""
 		PULSE_TOKEN=""
@@ -2175,6 +2214,7 @@ ARGS
 }
 
 func TestInstallSHRecoversLegacyDefaultTokenFileForSavedStateUpdate(t *testing.T) {
+	t.Parallel()
 	stateDir := t.TempDir()
 	if err := os.WriteFile(filepath.Join(stateDir, "token"), []byte("deadbeef\n"), 0600); err != nil {
 		t.Fatalf("write legacy token file: %v", err)
@@ -2269,6 +2309,7 @@ ARGS
 }
 
 func TestInstallSHCombinesRecoveredProcessArgsAndEnvConnectionState(t *testing.T) {
+	t.Parallel()
 	script := `
 		PULSE_URL=""
 		PULSE_TOKEN=""
@@ -2342,6 +2383,7 @@ ENV
 }
 
 func TestInstallSHUpdateModeMergesExplicitURLWithRunningV5ProcessState(t *testing.T) {
+	t.Parallel()
 	script := `
 		fail() { echo "FAIL:$1"; exit 99; }
 		log_info() { :; }
@@ -2453,6 +2495,7 @@ ARGS
 }
 
 func TestInstallSHUsesCanonicalServiceLifecycleHelpers(t *testing.T) {
+	t.Parallel()
 	content, err := os.ReadFile(repoFile("scripts", "install.sh"))
 	if err != nil {
 		t.Fatalf("read install.sh: %v", err)
@@ -2479,6 +2522,7 @@ func TestInstallSHUsesCanonicalServiceLifecycleHelpers(t *testing.T) {
 }
 
 func TestInstallSHUsesCanonicalServiceTeardownHelpers(t *testing.T) {
+	t.Parallel()
 	content, err := os.ReadFile(repoFile("scripts", "install.sh"))
 	if err != nil {
 		t.Fatalf("read install.sh: %v", err)
@@ -2503,6 +2547,7 @@ func TestInstallSHUsesCanonicalServiceTeardownHelpers(t *testing.T) {
 }
 
 func TestWriteTrueNASBootstrapScriptUsesCanonicalRenderer(t *testing.T) {
+	t.Parallel()
 	content, err := os.ReadFile(repoFile("scripts", "install.sh"))
 	if err != nil {
 		t.Fatalf("read install.sh: %v", err)
@@ -2532,6 +2577,7 @@ func TestWriteTrueNASBootstrapScriptUsesCanonicalRenderer(t *testing.T) {
 }
 
 func TestTrueNASBootstrapRunsStandalone(t *testing.T) {
+	t.Parallel()
 	if runtime.GOOS == "windows" {
 		t.Skip("Unix bootstrap controls; no native FreeBSD acceptance is claimed")
 	}
@@ -2545,6 +2591,7 @@ func TestTrueNASBootstrapRunsStandalone(t *testing.T) {
 }
 
 func TestInstallSHUsesCanonicalQNAPBootstrapRenderer(t *testing.T) {
+	t.Parallel()
 	content, err := os.ReadFile(repoFile("scripts", "install.sh"))
 	if err != nil {
 		t.Fatalf("read install.sh: %v", err)
@@ -2570,6 +2617,7 @@ func TestInstallSHUsesCanonicalQNAPBootstrapRenderer(t *testing.T) {
 }
 
 func TestInstallSHUsesQNAPStateForUninstallRecovery(t *testing.T) {
+	t.Parallel()
 	content, err := os.ReadFile(repoFile("scripts", "install.sh"))
 	if err != nil {
 		t.Fatalf("read install.sh: %v", err)
@@ -2592,6 +2640,7 @@ func TestInstallSHUsesQNAPStateForUninstallRecovery(t *testing.T) {
 }
 
 func TestInstallSHAgentDiskHeadroomRejectsSharedLowSpaceFilesystem(t *testing.T) {
+	t.Parallel()
 	script := `
 		set -euo pipefail
 		log_error() { :; }
@@ -2626,6 +2675,7 @@ func TestInstallSHAgentDiskHeadroomRejectsSharedLowSpaceFilesystem(t *testing.T)
 }
 
 func TestInstallSHAgentDiskHeadroomAcceptsSeparateFilesystems(t *testing.T) {
+	t.Parallel()
 	script := `
 		set -euo pipefail
 		log_error() { :; }
@@ -2666,6 +2716,7 @@ func TestInstallSHAgentDiskHeadroomAcceptsSeparateFilesystems(t *testing.T) {
 }
 
 func TestInstallSHAgentDiskHeadroomResolvesMissingDirectories(t *testing.T) {
+	t.Parallel()
 	script := `
 		set -euo pipefail
 		log_error() { :; }
@@ -2698,6 +2749,7 @@ func TestInstallSHAgentDiskHeadroomResolvesMissingDirectories(t *testing.T) {
 // the agent binary download stages anything, and the --preflight-only mode must
 // report the same check.
 func TestInstallSHChecksDiskHeadroomBeforeDownload(t *testing.T) {
+	t.Parallel()
 	content, err := os.ReadFile(repoFile("scripts", "install.sh"))
 	if err != nil {
 		t.Fatalf("read install.sh: %v", err)
@@ -2730,6 +2782,7 @@ func TestInstallSHChecksDiskHeadroomBeforeDownload(t *testing.T) {
 }
 
 func TestInstallSHSetsAgentBinaryModeExplicitly(t *testing.T) {
+	t.Parallel()
 	content, err := os.ReadFile(repoFile("scripts", "install.sh"))
 	if err != nil {
 		t.Fatalf("read install.sh: %v", err)
@@ -2751,6 +2804,7 @@ func TestInstallSHSetsAgentBinaryModeExplicitly(t *testing.T) {
 // to an unrotated file on the RAM-backed root; the agent's own rotating writer
 // (--log-file) owns the agent log instead.
 func TestInstallSHWatchdogPathsUseRotatingAgentLog(t *testing.T) {
+	t.Parallel()
 	content, err := os.ReadFile(repoFile("scripts", "install.sh"))
 	if err != nil {
 		t.Fatalf("read install.sh: %v", err)
@@ -2783,6 +2837,7 @@ func TestInstallSHWatchdogPathsUseRotatingAgentLog(t *testing.T) {
 // install/upgrade, so the wrapper must elect one supervisor before killing or
 // starting an agent and must clean up only state that it owns.
 func TestInstallSHQNAPWatchdogIsSingleton(t *testing.T) {
+	t.Parallel()
 	content, err := os.ReadFile(repoFile("scripts", "install.sh"))
 	if err != nil {
 		t.Fatalf("read install.sh: %v", err)
@@ -2817,6 +2872,7 @@ func TestInstallSHQNAPWatchdogIsSingleton(t *testing.T) {
 }
 
 func TestRenderedQNAPWatchdogRejectsASecondSupervisor(t *testing.T) {
+	t.Parallel()
 	content, err := os.ReadFile(repoFile("scripts", "install.sh"))
 	if err != nil {
 		t.Fatalf("read install.sh: %v", err)
@@ -2941,6 +2997,7 @@ write_qnap_wrapper_script "$1" "$2" "$3" "$4" "$5"
 }
 
 func TestInstallSHUsesSharedServiceRenderers(t *testing.T) {
+	t.Parallel()
 	content, err := os.ReadFile(repoFile("scripts", "install.sh"))
 	if err != nil {
 		t.Fatalf("read install.sh: %v", err)
@@ -2966,6 +3023,7 @@ func TestInstallSHUsesSharedServiceRenderers(t *testing.T) {
 }
 
 func TestInstallSHPersistsRootlessContainerRuntimeServiceEnvironment(t *testing.T) {
+	t.Parallel()
 	content, err := os.ReadFile(repoFile("scripts", "install.sh"))
 	if err != nil {
 		t.Fatalf("read install.sh: %v", err)
@@ -3008,6 +3066,7 @@ func TestInstallSHPersistsRootlessContainerRuntimeServiceEnvironment(t *testing.
 }
 
 func TestInstallSHSafeProfileRootlessDiscoveryIsCollectorOwnedAndUnambiguous(t *testing.T) {
+	t.Parallel()
 	tmpDir, err := os.MkdirTemp("/tmp", "pulse-safe-rootless-*")
 	if err != nil {
 		t.Fatalf("mktemp dir: %v", err)
@@ -3106,6 +3165,7 @@ func TestInstallSHSafeProfileRootlessDiscoveryIsCollectorOwnedAndUnambiguous(t *
 }
 
 func TestInstallSHSafeProfileRejectsSymlinkedRootlessSocket(t *testing.T) {
+	t.Parallel()
 	tmpDir, err := os.MkdirTemp("/tmp", "psr-")
 	if err != nil {
 		t.Fatal(err)
@@ -3147,6 +3207,7 @@ func TestInstallSHSafeProfileRejectsSymlinkedRootlessSocket(t *testing.T) {
 }
 
 func TestInstallSHSafeProfileDefersDetectionWithoutDaemonProbe(t *testing.T) {
+	t.Parallel()
 	script := `
 		set -euo pipefail
 		DOCKER_EXPLICIT=false
@@ -3170,6 +3231,7 @@ func TestInstallSHSafeProfileDefersDetectionWithoutDaemonProbe(t *testing.T) {
 }
 
 func TestInstallSHSafeProfileResolvesRuntimeOnlyAfterCollectorProvisioning(t *testing.T) {
+	t.Parallel()
 	script := `
 		set -euo pipefail
 		SAFE_PROFILE_DOCKER_DETECTION_DEFERRED=true
@@ -3197,6 +3259,7 @@ func TestInstallSHSafeProfileResolvesRuntimeOnlyAfterCollectorProvisioning(t *te
 }
 
 func TestInstallSHRecoversExactRootlessPinWhileSocketIsOffline(t *testing.T) {
+	t.Parallel()
 	tmpDir := t.TempDir()
 	unitPath := filepath.Join(tmpDir, "pulse-agent.service")
 	rootlessRoot := filepath.Join(tmpDir, "run", "user")
@@ -3251,6 +3314,7 @@ func TestInstallSHRecoversExactRootlessPinWhileSocketIsOffline(t *testing.T) {
 }
 
 func TestInstallSHServiceEnvAccumulatorRendersRootlessSocketVariables(t *testing.T) {
+	t.Parallel()
 	script := `
 		APPLIED_SERVICE_ENV_KEYS="|"
 		SYSTEMD_ENV_LINES=""
@@ -3307,6 +3371,7 @@ func TestInstallSHServiceEnvAccumulatorRendersRootlessSocketVariables(t *testing
 // is alive, or the agent service gets podman variables pinned to a socket that
 // disappears when the session ends.
 func TestInstallSHIssue1647RootfulDockerOutranksRootlessPodmanSocket(t *testing.T) {
+	t.Parallel()
 	tmpDir, err := os.MkdirTemp("/tmp", "pulse-1647-*")
 	if err != nil {
 		t.Fatalf("mktemp dir: %v", err)
@@ -3370,6 +3435,7 @@ func TestInstallSHIssue1647RootfulDockerOutranksRootlessPodmanSocket(t *testing.
 }
 
 func TestInstallSHDiscoverSingleSocketMatch(t *testing.T) {
+	t.Parallel()
 	tmpDir, err := os.MkdirTemp("/tmp", "pulse-sock-*")
 	if err != nil {
 		t.Fatalf("mktemp socket dir: %v", err)
@@ -3396,6 +3462,7 @@ func TestInstallSHDiscoverSingleSocketMatch(t *testing.T) {
 }
 
 func TestInstallSHFreeBSDRendererUsesDaemonSupervisorPidfile(t *testing.T) {
+	t.Parallel()
 	content, err := os.ReadFile(repoFile("scripts", "install.sh"))
 	if err != nil {
 		t.Fatalf("read install.sh: %v", err)
@@ -3430,6 +3497,7 @@ func TestInstallSHFreeBSDRendererUsesDaemonSupervisorPidfile(t *testing.T) {
 // the completion hint must point at it. pfSense has no /var/log/messages, so
 // the old system-log hint is removed entirely rather than repointed.
 func TestInstallSHFreeBSDAgentLogsUseRotatingWriter(t *testing.T) {
+	t.Parallel()
 	content, err := os.ReadFile(repoFile("scripts", "install.sh"))
 	if err != nil {
 		t.Fatalf("read install.sh: %v", err)
@@ -3456,6 +3524,7 @@ func TestInstallSHFreeBSDAgentLogsUseRotatingWriter(t *testing.T) {
 // statements, not just the boot-file renderer. Service/process operations are
 // private fixture observations; file contents, modes, and moves are real.
 func TestAgentInstallerPreparesPfSenseBootBeforeStop(t *testing.T) {
+	t.Parallel()
 	if runtime.GOOS == "windows" {
 		t.Skip("Unix rc.d file modes and installer")
 	}
@@ -3818,6 +3887,7 @@ fixture_daemon() {
 // TestInstallSHFreeBSDBuildArgsPassesLogFile verifies the FreeBSD rc.d service
 // args actually carry --log-file once AGENT_LOG_FILE is set.
 func TestInstallSHFreeBSDBuildArgsPassesLogFile(t *testing.T) {
+	t.Parallel()
 	script := `
 		PULSE_URL="http://pulse.local:7655"
 		PULSE_TOKEN=""
@@ -3865,6 +3935,7 @@ func TestInstallSHFreeBSDBuildArgsPassesLogFile(t *testing.T) {
 }
 
 func TestInstallSHUsesCanonicalCompletionHelper(t *testing.T) {
+	t.Parallel()
 	content, err := os.ReadFile(repoFile("scripts", "install.sh"))
 	if err != nil {
 		t.Fatalf("read install.sh: %v", err)
@@ -3894,6 +3965,7 @@ func TestInstallSHUsesCanonicalCompletionHelper(t *testing.T) {
 }
 
 func TestInstallSHUsesCanonicalFreeBSDAgentEnablement(t *testing.T) {
+	t.Parallel()
 	content, err := os.ReadFile(repoFile("scripts", "install.sh"))
 	if err != nil {
 		t.Fatalf("read install.sh: %v", err)
@@ -3921,6 +3993,7 @@ func TestInstallSHUsesCanonicalFreeBSDAgentEnablement(t *testing.T) {
 }
 
 func TestInstallSHUsesCanonicalFreeBSDAgentTeardown(t *testing.T) {
+	t.Parallel()
 	content, err := os.ReadFile(repoFile("scripts", "install.sh"))
 	if err != nil {
 		t.Fatalf("read install.sh: %v", err)
@@ -3945,6 +4018,7 @@ func TestInstallSHUsesCanonicalFreeBSDAgentTeardown(t *testing.T) {
 }
 
 func TestInstallSHUsesCanonicalSysVEnablementHelper(t *testing.T) {
+	t.Parallel()
 	content, err := os.ReadFile(repoFile("scripts", "install.sh"))
 	if err != nil {
 		t.Fatalf("read install.sh: %v", err)
@@ -3989,6 +4063,7 @@ func unraidGoEntryShellFunctions(t *testing.T) string {
 // compound commands must be reconciled, not deleted along with unrelated work.
 // Removal must admit the written entry; unknown or unparseable input is kept.
 func TestInstallSHUnraidGoEntryReplacesOnlyPulseLaunches(t *testing.T) {
+	t.Parallel()
 	if runtime.GOOS == "windows" {
 		t.Skip("Unraid boot-file fixture needs bash")
 	}
@@ -4125,6 +4200,7 @@ func TestInstallSHUnraidGoEntryReplacesOnlyPulseLaunches(t *testing.T) {
 // logger would read it: it must return, release the pipe, run the next line
 // and start the wrapper. The planted foreground entry must hang the harness.
 func TestInstallSHUnraidGoEntryDoesNotBlockLaterBootLines(t *testing.T) {
+	t.Parallel()
 	if runtime.GOOS == "windows" {
 		t.Skip("Unraid boot-file fixture needs bash")
 	}
@@ -4243,6 +4319,7 @@ func TestInstallSHUnraidGoEntryDoesNotBlockLaterBootLines(t *testing.T) {
 // TestAPIDeregistrationCurl verifies the curl command sends the correct
 // JSON payload and headers to the canonical uninstall endpoint.
 func TestAPIDeregistrationCurl(t *testing.T) {
+	t.Parallel()
 	var (
 		mu         sync.Mutex
 		gotMethod  string
@@ -4302,6 +4379,7 @@ func TestAPIDeregistrationCurl(t *testing.T) {
 }
 
 func TestAPIDeregistrationCurlWithoutToken(t *testing.T) {
+	t.Parallel()
 	var (
 		mu         sync.Mutex
 		gotMethod  string
@@ -4384,6 +4462,7 @@ func assertCallerPythonModulesUnused(t *testing.T, dir string) {
 // shell is in, often a shared one such as /tmp. "python3 -" and "python3 -c"
 // search that directory before the standard library unless -I is given.
 func TestInstallerInlinePythonStartsIsolated(t *testing.T) {
+	t.Parallel()
 	invocation := regexp.MustCompile(`\bpython3[ \t]+-\S*`)
 	for _, script := range []string{
 		repoFile("install.sh"),
@@ -4405,6 +4484,7 @@ func TestInstallerInlinePythonStartsIsolated(t *testing.T) {
 }
 
 func TestInstallSHTrueNASTaskInventoryIgnoresCallerPythonModules(t *testing.T) {
+	t.Parallel()
 	if runtime.GOOS == "windows" {
 		t.Skip("Unix installer")
 	}
@@ -4628,6 +4708,7 @@ func extractInstallShellSection(t *testing.T, startMarker string, endMarker stri
 }
 
 func TestPlainHTTPInstallAutoEnablesInsecure(t *testing.T) {
+	t.Parallel()
 	script := `
 		log_info() { :; }
 ` + extractInstallShellFunction(t, "pulse_url_uses_plain_http") + `
@@ -4648,6 +4729,7 @@ func TestPlainHTTPInstallAutoEnablesInsecure(t *testing.T) {
 }
 
 func TestHTTPSInstallKeepsInsecureDisabledByDefault(t *testing.T) {
+	t.Parallel()
 	script := `
 		log_info() { :; }
 ` + extractInstallShellFunction(t, "pulse_url_uses_plain_http") + `
@@ -4668,6 +4750,7 @@ func TestHTTPSInstallKeepsInsecureDisabledByDefault(t *testing.T) {
 }
 
 func TestBuildExecArgsArrayPersistsInsecureForPlainHTTPInstall(t *testing.T) {
+	t.Parallel()
 	script := `
 		log_info() { :; }
 ` + extractInstallShellFunction(t, "pulse_url_uses_plain_http") + `
@@ -4716,6 +4799,7 @@ func TestBuildExecArgsArrayPersistsInsecureForPlainHTTPInstall(t *testing.T) {
 }
 
 func TestBuildExecArgsWithoutTokenOmitsPersistedToken(t *testing.T) {
+	t.Parallel()
 	script := `
 ` + extractInstallShellFunction(t, "build_exec_arg_items") + `
 ` + extractInstallShellFunction(t, "join_exec_arg_items") + `
@@ -4760,6 +4844,7 @@ func TestBuildExecArgsWithoutTokenOmitsPersistedToken(t *testing.T) {
 }
 
 func TestStateDirFlagIsAcceptedByInstallerParser(t *testing.T) {
+	t.Parallel()
 	script := `
 		fail() { echo "FAIL:$1"; exit 99; }
 		PULSE_URL=""
@@ -4816,6 +4901,7 @@ func TestStateDirFlagIsAcceptedByInstallerParser(t *testing.T) {
 }
 
 func TestInstallSHCustomStateDirOwnsTokenAndEnrollmentContinuity(t *testing.T) {
+	t.Parallel()
 	stateDir := filepath.Join(t.TempDir(), "custom-state")
 	if err := os.MkdirAll(stateDir, 0755); err != nil {
 		t.Fatal(err)
@@ -4874,6 +4960,7 @@ func TestInstallSHCustomStateDirOwnsTokenAndEnrollmentContinuity(t *testing.T) {
 }
 
 func TestInstallSHExplicitCustomStateNeverFallsBackToDefaultInstance(t *testing.T) {
+	t.Parallel()
 	root := t.TempDir()
 	customState := filepath.Join(root, "custom")
 	defaultState := filepath.Join(root, "default")
@@ -4924,6 +5011,7 @@ func TestInstallSHExplicitCustomStateNeverFallsBackToDefaultInstance(t *testing.
 }
 
 func TestInstallSHSavedInstallerDiscoversItsCustomStateDir(t *testing.T) {
+	t.Parallel()
 	stateDir := filepath.Join(t.TempDir(), "saved custom state")
 	if err := os.MkdirAll(stateDir, 0700); err != nil {
 		t.Fatal(err)
@@ -4962,6 +5050,7 @@ func TestInstallSHSavedInstallerDiscoversItsCustomStateDir(t *testing.T) {
 }
 
 func TestInstallSHDiscoversCustomStateDirFromGeneratedSystemdUnit(t *testing.T) {
+	t.Parallel()
 	for _, commandsEnabled := range []bool{false, true} {
 		t.Run(map[bool]string{false: "commands_disabled", true: "commands_enabled"}[commandsEnabled], func(t *testing.T) {
 			root := t.TempDir()
@@ -5074,6 +5163,7 @@ ExecStart=/usr/local/bin/pulse-agent --url https://custom.example --token-file `
 }
 
 func TestInstallSHDiscoversCustomStateDirFromGeneratedLaunchdPlist(t *testing.T) {
+	t.Parallel()
 	root := t.TempDir()
 	customState := filepath.Join(root, "custom & state")
 	if err := os.MkdirAll(customState, 0700); err != nil {
@@ -5164,6 +5254,7 @@ func TestInstallSHDiscoversCustomStateDirFromGeneratedLaunchdPlist(t *testing.T)
 }
 
 func TestInstallSHConnectionEnvPersistsCanonicalStateDirWithoutTokenValue(t *testing.T) {
+	t.Parallel()
 	stateDir := filepath.Join(t.TempDir(), "state")
 	script := `
 		set -euo pipefail
@@ -5217,6 +5308,7 @@ func TestInstallSHConnectionEnvPersistsCanonicalStateDirWithoutTokenValue(t *tes
 }
 
 func TestInstallSHStateWritesReplaceSymlinksAtomically(t *testing.T) {
+	t.Parallel()
 	stateDir := filepath.Join(t.TempDir(), "state")
 	if err := os.MkdirAll(stateDir, 0700); err != nil {
 		t.Fatal(err)
@@ -5299,6 +5391,7 @@ func TestInstallSHStateWritesReplaceSymlinksAtomically(t *testing.T) {
 }
 
 func TestInstallSHLeastPrivilegeLifecycleStateIsRootBoundarySeparated(t *testing.T) {
+	t.Parallel()
 	root := t.TempDir()
 	stateDir := filepath.Join(root, "collector-state")
 	lifecycleDir := filepath.Join(root, "root-lifecycle")
@@ -5388,6 +5481,7 @@ func TestInstallSHLeastPrivilegeLifecycleStateIsRootBoundarySeparated(t *testing
 }
 
 func TestInstallSHFreshPreflightIgnoresUnsearchableSavedLifecycle(t *testing.T) {
+	t.Parallel()
 	if os.Geteuid() == 0 {
 		t.Skip("requires real non-root directory traversal checks")
 	}
@@ -5490,6 +5584,7 @@ func TestInstallSHFreshPreflightIgnoresUnsearchableSavedLifecycle(t *testing.T) 
 }
 
 func TestInstallSHSavedInstallerTamperAndUntrustedStateFailClosed(t *testing.T) {
+	t.Parallel()
 	root := t.TempDir()
 	lifecycleDir := filepath.Join(root, "lifecycle")
 	if err := os.MkdirAll(lifecycleDir, 0700); err != nil {
@@ -5582,6 +5677,7 @@ func TestInstallSHSavedInstallerTamperAndUntrustedStateFailClosed(t *testing.T) 
 }
 
 func TestInstallSHInstallerFileSHA256FallsBackToFreeBSDsha256(t *testing.T) {
+	t.Parallel()
 	contents := []byte("pulse-freebsd-checksum-fixture")
 	file := filepath.Join(t.TempDir(), "payload.bin")
 	if err := os.WriteFile(file, contents, 0600); err != nil {
@@ -5615,6 +5711,7 @@ func TestInstallSHInstallerFileSHA256FallsBackToFreeBSDsha256(t *testing.T) {
 }
 
 func TestInstallSHPrivilegedHelperStateRemovalRequiresExactLifecycleAuthority(t *testing.T) {
+	t.Parallel()
 	for _, tc := range []struct {
 		name       string
 		authority  func(string) string
@@ -5661,6 +5758,7 @@ func TestInstallSHPrivilegedHelperStateRemovalRequiresExactLifecycleAuthority(t 
 }
 
 func TestInstallSHSafeProfileStateRemovalRequiresExactLifecycleAuthority(t *testing.T) {
+	t.Parallel()
 	for _, tc := range []struct {
 		name       string
 		authority  func(string) string
@@ -5707,6 +5805,7 @@ func TestInstallSHSafeProfileStateRemovalRequiresExactLifecycleAuthority(t *test
 }
 
 func TestInstallSHFullUninstallRemovesRuntimeStateOnlyAfterServerConfirmation(t *testing.T) {
+	t.Parallel()
 	content, err := os.ReadFile(repoFile("scripts", "install.sh"))
 	if err != nil {
 		t.Fatalf("read install.sh: %v", err)
@@ -5724,6 +5823,7 @@ func TestInstallSHFullUninstallRemovesRuntimeStateOnlyAfterServerConfirmation(t 
 }
 
 func TestInstallSHLegacyCollectorOwnedTokenReaderFailsClosed(t *testing.T) {
+	t.Parallel()
 	root := t.TempDir()
 	stateDir := filepath.Join(root, "collector-state")
 	if err := os.MkdirAll(stateDir, 0700); err != nil {
@@ -5768,6 +5868,7 @@ func TestInstallSHLegacyCollectorOwnedTokenReaderFailsClosed(t *testing.T) {
 }
 
 func TestInstallSHCurlTokenTransportKeepsSecretOutOfArgv(t *testing.T) {
+	t.Parallel()
 	recordDir := t.TempDir()
 	argsPath := filepath.Join(recordDir, "args")
 	configPath := filepath.Join(recordDir, "config")
@@ -5812,6 +5913,7 @@ func TestInstallSHCurlTokenTransportKeepsSecretOutOfArgv(t *testing.T) {
 }
 
 func TestSetupUpdateCommandHonorsRCChannelAndCustomPaths(t *testing.T) {
+	t.Parallel()
 	tmpDir := t.TempDir()
 	updatePath := filepath.Join(tmpDir, "update")
 	profilePath := filepath.Join(tmpDir, "profile")
@@ -5888,6 +5990,7 @@ func TestSetupUpdateCommandHonorsRCChannelAndCustomPaths(t *testing.T) {
 }
 
 func TestSetupUpdateCommandUsesConfiguredInstallerRepo(t *testing.T) {
+	t.Parallel()
 	tmpDir := t.TempDir()
 	updatePath := filepath.Join(tmpDir, "update")
 	profilePath := filepath.Join(tmpDir, "profile")
@@ -5928,6 +6031,7 @@ func TestSetupUpdateCommandUsesConfiguredInstallerRepo(t *testing.T) {
 }
 
 func TestSetupUpdateCommandFailsWhenInstallerDownloadFails(t *testing.T) {
+	t.Parallel()
 	tmpDir := t.TempDir()
 	updatePath := filepath.Join(tmpDir, "update")
 	profilePath := filepath.Join(tmpDir, "profile")
@@ -5970,6 +6074,7 @@ func TestSetupUpdateCommandFailsWhenInstallerDownloadFails(t *testing.T) {
 }
 
 func TestResolveInstallScriptDownloadURLUsesForcedVersion(t *testing.T) {
+	t.Parallel()
 	script := `
 		GITHUB_REPO="rcourtman/Pulse"
 		FORCE_VERSION="v1.2.3"
@@ -5994,6 +6099,7 @@ func TestResolveInstallScriptDownloadURLUsesForcedVersion(t *testing.T) {
 // Run the production selectors with bounded, offline transport doubles. This
 // does not run installer main, mutate services or establish native acceptance.
 func TestRootInstallReleaseSelectionRejectsChartAndUnknownMetadata(t *testing.T) {
+	t.Parallel()
 	out, err := exec.Command("python3", repoFile("scripts", "tests", "test_server_release_selection.py"), "-v").CombinedOutput()
 	if err != nil {
 		t.Fatalf("server release selection controls: %v\n%s", err, out)
@@ -6003,6 +6109,7 @@ func TestRootInstallReleaseSelectionRejectsChartAndUnknownMetadata(t *testing.T)
 // Exercise installer main only with confined transport and mutation doubles.
 // In particular, a mistaken remove choice exits before any real removal code.
 func TestRootInstallExistingMenuRequiresExactAutomaticIntent(t *testing.T) {
+	t.Parallel()
 	ctx, cancel := context.WithTimeout(context.Background(), 30*time.Second)
 	defer cancel()
 	cmd := exec.CommandContext(ctx, "python3", repoFile("scripts", "tests", "test_server_update_menu.py"), "-v")
@@ -6016,6 +6123,7 @@ func TestRootInstallExistingMenuRequiresExactAutomaticIntent(t *testing.T) {
 // Execute the real staging and container-bootstrap functions with confined
 // transports/host commands and real fixture signatures, never a live LXC.
 func TestRootInstallTemporaryInputsRemainPrivateAndAuthenticated(t *testing.T) {
+	t.Parallel()
 	ctx, cancel := context.WithTimeout(context.Background(), 45*time.Second)
 	defer cancel()
 	// Keep the existing deadline and controlling session, but use the shared
@@ -6090,6 +6198,7 @@ func TestRootInstallServiceDiscoveryFailsClosedWithoutShortReads(t *testing.T) {
 }
 
 func TestRootInstallStableReleaseTagRejectsPrereleaseShapes(t *testing.T) {
+	t.Parallel()
 	script := `
 ` + extractRootInstallShellFunction(t, "is_stable_release_tag") + `
 		if ! is_stable_release_tag v5.1.29; then
@@ -6121,6 +6230,7 @@ func TestRootInstallStableReleaseTagRejectsPrereleaseShapes(t *testing.T) {
 }
 
 func TestResolveLatestReleaseTagForStableChannelSkipsPrereleaseShapedTags(t *testing.T) {
+	t.Parallel()
 	tmpDir := t.TempDir()
 	timeoutPath := filepath.Join(tmpDir, "timeout")
 	curlPath := filepath.Join(tmpDir, "curl")
@@ -6168,6 +6278,7 @@ exit 1
 }
 
 func TestResolveLatestReleaseTagForStableChannelRejectsPrereleaseRedirect(t *testing.T) {
+	t.Parallel()
 	script := `
 		GITHUB_REPO="rcourtman/Pulse"
 		curl() { return 1; }
@@ -6193,6 +6304,7 @@ func TestResolveLatestReleaseTagForStableChannelRejectsPrereleaseRedirect(t *tes
 }
 
 func TestResolveInstallScriptDownloadURLUsesStableReleaseTag(t *testing.T) {
+	t.Parallel()
 	tmpDir := t.TempDir()
 	timeoutPath := filepath.Join(tmpDir, "timeout")
 	curlPath := filepath.Join(tmpDir, "curl")
@@ -6246,6 +6358,7 @@ exit 1
 }
 
 func TestResolveInstallScriptDownloadURLUsesRCReleaseTag(t *testing.T) {
+	t.Parallel()
 	tmpDir := t.TempDir()
 	timeoutPath := filepath.Join(tmpDir, "timeout")
 	curlPath := filepath.Join(tmpDir, "curl")
@@ -6294,6 +6407,7 @@ exit 1
 }
 
 func TestInstallAdditionalAgentBinariesCopiesLocalExtrasWithoutNetwork(t *testing.T) {
+	t.Parallel()
 	tmpDir := t.TempDir()
 	sourceDir := filepath.Join(tmpDir, "source")
 	installDir := filepath.Join(tmpDir, "opt", "pulse")
@@ -6338,6 +6452,7 @@ func TestInstallAdditionalAgentBinariesCopiesLocalExtrasWithoutNetwork(t *testin
 }
 
 func TestInstallAdditionalAgentBinariesSkipsNetworkWhenLocalExtrasAreMissing(t *testing.T) {
+	t.Parallel()
 	tmpDir := t.TempDir()
 	sourceDir := filepath.Join(tmpDir, "source")
 	installDir := filepath.Join(tmpDir, "opt", "pulse")
@@ -6375,6 +6490,7 @@ func TestInstallAdditionalAgentBinariesSkipsNetworkWhenLocalExtrasAreMissing(t *
 }
 
 func TestInstallSHRequiresPinnedSignatureVerificationForReleaseDownloads(t *testing.T) {
+	t.Parallel()
 	content, err := os.ReadFile(repoFile("scripts", "install.sh"))
 	if err != nil {
 		t.Fatalf("read install.sh: %v", err)
@@ -6398,6 +6514,7 @@ func TestInstallSHRequiresPinnedSignatureVerificationForReleaseDownloads(t *test
 }
 
 func TestInstallSHOfflineInstallerAndUninstallUseAuthenticatedLifecycleTransport(t *testing.T) {
+	t.Parallel()
 	content, err := os.ReadFile(repoFile("scripts", "install.sh"))
 	if err != nil {
 		t.Fatal(err)
@@ -6425,6 +6542,7 @@ func TestInstallSHOfflineInstallerAndUninstallUseAuthenticatedLifecycleTransport
 }
 
 func TestInstallSHOfflineInstallerRequiresValidServedSignature(t *testing.T) {
+	t.Parallel()
 	if _, err := exec.LookPath("ssh-keygen"); err != nil {
 		t.Skip("ssh-keygen is required for SSH signature verification")
 	}
@@ -6542,6 +6660,7 @@ printf '%s\n' "${PULSE_TEST_INSTALLER_SIGNATURE:?}"
 }
 
 func TestBuildContainerInstallCommandPreservesForcedVersion(t *testing.T) {
+	t.Parallel()
 	script := `
 		FORCE_VERSION="v1.2.3"
 		FORCE_CHANNEL=""
@@ -6569,6 +6688,7 @@ func TestBuildContainerInstallCommandPreservesForcedVersion(t *testing.T) {
 }
 
 func TestBuildContainerInstallCommandPreservesExplicitAutoUpdateDisable(t *testing.T) {
+	t.Parallel()
 	script := `
 		FORCE_VERSION="v1.2.3"
 		FORCE_CHANNEL=""
@@ -6596,6 +6716,7 @@ func TestBuildContainerInstallCommandPreservesExplicitAutoUpdateDisable(t *testi
 }
 
 func TestBuildContainerInstallCommandPassesArchiveToContainer(t *testing.T) {
+	t.Parallel()
 	script := `
 		FORCE_VERSION=""
 		FORCE_CHANNEL=""
@@ -6624,6 +6745,7 @@ func TestBuildContainerInstallCommandPassesArchiveToContainer(t *testing.T) {
 }
 
 func TestBuildContainerInstallCommandQuotesArchivePath(t *testing.T) {
+	t.Parallel()
 	script := `
 		FORCE_VERSION=""
 		FORCE_CHANNEL=""
@@ -6652,6 +6774,7 @@ func TestBuildContainerInstallCommandQuotesArchivePath(t *testing.T) {
 }
 
 func TestBuildContainerInstallCommandPreservesRCChannel(t *testing.T) {
+	t.Parallel()
 	script := `
 		FORCE_VERSION=""
 		FORCE_CHANNEL="rc"
@@ -6679,6 +6802,7 @@ func TestBuildContainerInstallCommandPreservesRCChannel(t *testing.T) {
 }
 
 func TestBuildContainerInstallCommandIgnoresHostConfiguredRCChannelForFreshLXCInstall(t *testing.T) {
+	t.Parallel()
 	configDir := t.TempDir()
 	if err := os.WriteFile(filepath.Join(configDir, "system.json"), []byte(`{"updateChannel":"rc"}`), 0644); err != nil {
 		t.Fatalf("write system.json: %v", err)
@@ -6712,6 +6836,7 @@ func TestBuildContainerInstallCommandIgnoresHostConfiguredRCChannelForFreshLXCIn
 }
 
 func TestPrintContainerRecoveryCommandPreservesForcedVersion(t *testing.T) {
+	t.Parallel()
 	script := `
 		FORCE_VERSION="v1.2.3"
 		FORCE_CHANNEL=""
@@ -6741,6 +6866,7 @@ func TestPrintContainerRecoveryCommandPreservesForcedVersion(t *testing.T) {
 }
 
 func TestPrintContainerRecoveryCommandPreservesExplicitAutoUpdateDisable(t *testing.T) {
+	t.Parallel()
 	script := `
 		FORCE_VERSION="v1.2.3"
 		FORCE_CHANNEL=""
@@ -6770,6 +6896,7 @@ func TestPrintContainerRecoveryCommandPreservesExplicitAutoUpdateDisable(t *test
 }
 
 func TestPrintContainerRecoveryCommandPreservesRCChannel(t *testing.T) {
+	t.Parallel()
 	script := `
 		FORCE_VERSION=""
 		FORCE_CHANNEL="rc"
@@ -6799,6 +6926,7 @@ func TestPrintContainerRecoveryCommandPreservesRCChannel(t *testing.T) {
 }
 
 func TestResolveReleaseAssetBaseURLUsesLatestRelease(t *testing.T) {
+	t.Parallel()
 	script := `
 		GITHUB_REPO="rcourtman/Pulse"
 		LATEST_RELEASE="v1.2.3"
@@ -6819,6 +6947,7 @@ func TestResolveReleaseAssetBaseURLUsesLatestRelease(t *testing.T) {
 }
 
 func TestDownloadAutoUpdateScriptUsesSelectedReleaseAssets(t *testing.T) {
+	t.Parallel()
 	tmpDir := t.TempDir()
 	curlPath := filepath.Join(tmpDir, "curl")
 	sshKeygenPath := filepath.Join(tmpDir, "ssh-keygen")
@@ -6909,6 +7038,7 @@ exit 0
 }
 
 func TestPulseAutoUpdatePerformUpdateUsesVersionedInstallerURL(t *testing.T) {
+	t.Parallel()
 	// Load the complete helper, not an extracted perform_update with a stale
 	// hand-written dependency list. Its real state/version gates must precede
 	// the URL check. Transport, signature verification and the manager remain
@@ -7093,6 +7223,7 @@ fi
 }
 
 func TestPulseAutoUpdateResolveInstallScriptURLUsesConfiguredRepo(t *testing.T) {
+	t.Parallel()
 	script := `
 		GITHUB_REPO="example/pulse-fork"
 ` + extractAutoUpdateFunction(t, "resolve_install_script_url") + `
@@ -7109,6 +7240,7 @@ func TestPulseAutoUpdateResolveInstallScriptURLUsesConfiguredRepo(t *testing.T) 
 }
 
 func TestRepoDockerDocsURLUsesConfiguredRepo(t *testing.T) {
+	t.Parallel()
 	script := `
 		GITHUB_REPO="example/pulse-fork"
 		LATEST_RELEASE="v9.9.9"
@@ -7130,6 +7262,7 @@ func TestRepoDockerDocsURLUsesConfiguredRepo(t *testing.T) {
 }
 
 func TestRepoDockerDocsURLFallsBackToReleaseLandingPageWhenVersionUnknown(t *testing.T) {
+	t.Parallel()
 	script := `
 		GITHUB_REPO="example/pulse-fork"
 		get_latest_release_from_redirect() { return 1; }
@@ -7157,6 +7290,7 @@ func TestRepoDockerDocsURLFallsBackToReleaseLandingPageWhenVersionUnknown(t *tes
 }
 
 func TestRepoDockerImageRefUsesConfiguredImageRepo(t *testing.T) {
+	t.Parallel()
 	script := `
 		DOCKER_IMAGE_REPO="example/pulse-enterprise"
 ` + extractRootInstallShellFunction(t, "repo_docker_image_ref") + `
@@ -7173,6 +7307,7 @@ func TestRepoDockerImageRefUsesConfiguredImageRepo(t *testing.T) {
 }
 
 func TestCheckDockerEnvironmentUsesConfiguredImageAndDocs(t *testing.T) {
+	t.Parallel()
 	script := `
 		GITHUB_REPO="example/pulse-fork"
 		LATEST_RELEASE="v9.9.9"
@@ -7204,6 +7339,7 @@ func TestCheckDockerEnvironmentUsesConfiguredImageAndDocs(t *testing.T) {
 }
 
 func TestBuildPrintedManagementCommandPreservesRCChannel(t *testing.T) {
+	t.Parallel()
 	script := `
 		GITHUB_REPO="rcourtman/Pulse"
 		FORCE_VERSION=""
@@ -7236,6 +7372,7 @@ func TestBuildPrintedManagementCommandPreservesRCChannel(t *testing.T) {
 }
 
 func TestRootPrintCompletionRevealsBootstrapTokenThroughCLI(t *testing.T) {
+	t.Parallel()
 	tmpDir := t.TempDir()
 	configDir := filepath.Join(tmpDir, "config")
 	installDir := filepath.Join(tmpDir, "install")
@@ -7308,6 +7445,7 @@ printf 'Data: %s\n' "$PULSE_DATA_DIR"
 }
 
 func TestBuildPrintedManagementCommandPreservesForcedVersion(t *testing.T) {
+	t.Parallel()
 	script := `
 		GITHUB_REPO="rcourtman/Pulse"
 		FORCE_VERSION="v1.2.3"
@@ -7336,6 +7474,7 @@ func TestBuildPrintedManagementCommandPreservesForcedVersion(t *testing.T) {
 }
 
 func TestBuildPrintedManagementCommandUsesConfiguredHelperPath(t *testing.T) {
+	t.Parallel()
 	script := `
 		GITHUB_REPO="rcourtman/Pulse"
 		FORCE_VERSION=""
@@ -7357,6 +7496,7 @@ func TestBuildPrintedManagementCommandUsesConfiguredHelperPath(t *testing.T) {
 }
 
 func TestSelectedUpdateChannelTreatsPrereleaseVersionAsRC(t *testing.T) {
+	t.Parallel()
 	script := `
 		FORCE_CHANNEL=""
 		FORCE_VERSION="v1.2.3-rc.4"
@@ -7376,6 +7516,7 @@ func TestSelectedUpdateChannelTreatsPrereleaseVersionAsRC(t *testing.T) {
 }
 
 func TestResolveTargetReleaseIgnoresHostConfiguredRCChannelForFreshLXCInstall(t *testing.T) {
+	t.Parallel()
 	tmpDir := t.TempDir()
 	configDir := filepath.Join(tmpDir, "config")
 	if err := os.MkdirAll(configDir, 0755); err != nil {
@@ -7438,6 +7579,7 @@ exit 1
 }
 
 func TestSetupAutoUpdatesCreatesSystemJSONWithSelectedChannel(t *testing.T) {
+	t.Parallel()
 	tmpDir := t.TempDir()
 	configDir := filepath.Join(tmpDir, "config")
 	installDir := filepath.Join(tmpDir, "install")
@@ -7499,6 +7641,7 @@ func TestSetupAutoUpdatesCreatesSystemJSONWithSelectedChannel(t *testing.T) {
 }
 
 func TestSetupAutoUpdatesConfiguresInstalledAutoUpdateRepo(t *testing.T) {
+	t.Parallel()
 	tmpDir := t.TempDir()
 	configDir := filepath.Join(tmpDir, "config")
 	systemdDir := filepath.Join(tmpDir, "systemd")
@@ -7591,6 +7734,7 @@ func TestSetupAutoUpdatesConfiguresInstalledAutoUpdateRepo(t *testing.T) {
 }
 
 func TestSetupAutoUpdatesTreatsPrereleaseVersionAsRCChannel(t *testing.T) {
+	t.Parallel()
 	tmpDir := t.TempDir()
 	configDir := filepath.Join(tmpDir, "config")
 	installDir := filepath.Join(tmpDir, "install")
@@ -7646,6 +7790,7 @@ func TestSetupAutoUpdatesTreatsPrereleaseVersionAsRCChannel(t *testing.T) {
 }
 
 func TestSetupAutoUpdatesPreservesRCChannelWhenUpdatingExistingConfig(t *testing.T) {
+	t.Parallel()
 	tmpDir := t.TempDir()
 	configDir := filepath.Join(tmpDir, "config")
 	installDir := filepath.Join(tmpDir, "install")
@@ -7903,6 +8048,7 @@ func TestInstallSHRegistrationRetryWindowOutlastsFirstReportCycle(t *testing.T) 
 }
 
 func TestInstallSHRejectedCredentialPreventsSuccessfulCompletion(t *testing.T) {
+	t.Parallel()
 	completeFlow := extractInstallShellFunction(t, "complete_installation_flow")
 	script := `
 		EXIT_AUTH_REJECTED=18
@@ -7938,6 +8084,7 @@ func TestInstallSHRejectedCredentialPreventsSuccessfulCompletion(t *testing.T) {
 // the agent's proxmox-<type>-registration-blocked marker and prints the denial
 // in its own output instead of leaving it buried in the agent journal (#1644).
 func TestInstallSHSurfacesBlockedProxmoxRegistration(t *testing.T) {
+	t.Parallel()
 	logInfo := extractInstallShellFunction(t, "log_info")
 	logWarn := extractInstallShellFunction(t, "log_warn")
 	logError := extractInstallShellFunction(t, "log_error")
@@ -8115,6 +8262,7 @@ func writeMarker(t *testing.T, stateDir, name, contents string) {
 // TestInstallSHWarnAgentTokenRejectedIsActionable pins the actionable recovery
 // copy the installer prints when the server rejects the agent's token.
 func TestInstallSHWarnAgentTokenRejectedIsActionable(t *testing.T) {
+	t.Parallel()
 	logWarn := extractInstallShellFunction(t, "log_warn")
 	warnFn := extractInstallShellFunction(t, "warn_agent_token_rejected")
 
@@ -8148,6 +8296,7 @@ func TestInstallSHWarnAgentTokenRejectedIsActionable(t *testing.T) {
 // pulse-agent-prod) every install, upgrade, and wrapper restart silently took
 // down the other agent too.
 func TestInstallSHAgentKillPatternsExcludeSiblingAgents(t *testing.T) {
+	t.Parallel()
 	content, err := os.ReadFile(repoFile("scripts", "install.sh"))
 	if err != nil {
 		t.Fatalf("read install.sh: %v", err)
@@ -8173,6 +8322,7 @@ func TestInstallSHAgentKillPatternsExcludeSiblingAgents(t *testing.T) {
 // line, so the same engine is exercised here against the two command lines a
 // dual-agent host actually presents.
 func TestInstallSHAgentKillPatternSparesSiblingAgent(t *testing.T) {
+	t.Parallel()
 	const (
 		targetCmd  = "/usr/local/bin/pulse-agent --url http://192.168.0.113:7655 --interval 30s"
 		siblingCmd = "/usr/local/bin/pulse-agent-prod --url http://192.168.0.220:7655 --interval 30s"
@@ -8215,6 +8365,7 @@ func TestInstallSHAgentKillPatternSparesSiblingAgent(t *testing.T) {
 // wrapper is a watchdog it can respawn the agent during the install window
 // using the previous binary and arguments.
 func TestInstallSHUnraidStopsWatchdogBeforeAgent(t *testing.T) {
+	t.Parallel()
 	content, err := os.ReadFile(repoFile("scripts", "install.sh"))
 	if err != nil {
 		t.Fatalf("read install.sh: %v", err)
@@ -8248,6 +8399,7 @@ func TestInstallSHUnraidStopsWatchdogBeforeAgent(t *testing.T) {
 // pattern discriminates, so stopping this agent's supervisor never stops a
 // co-installed agent's supervisor on the same host.
 func TestInstallSHWatchdogKillPatternSparesSiblingWrapper(t *testing.T) {
+	t.Parallel()
 	const (
 		targetCmd  = "bash /boot/config/plugins/pulse-agent/start-pulse-agent.sh"
 		siblingCmd = "bash /boot/config/plugins/pulse-agent-prod/start-pulse-agent-prod.sh"
@@ -8288,6 +8440,7 @@ func TestInstallSHWatchdogKillPatternSparesSiblingWrapper(t *testing.T) {
 // pattern leaves the dot as a wildcard and the far end unbounded, so it also
 // matches a .bak copy of the wrapper or an editor session holding it open.
 func TestInstallSHWrapperKillsAreBoundedEverywhere(t *testing.T) {
+	t.Parallel()
 	content, err := os.ReadFile(repoFile("scripts", "install.sh"))
 	if err != nil {
 		t.Fatalf("read install.sh: %v", err)
@@ -8318,6 +8471,7 @@ func TestInstallSHWrapperKillsAreBoundedEverywhere(t *testing.T) {
 // is a watchdog, so stopping the agent while its wrapper still loops merely
 // races the respawn. Every branch that stops both must stop the wrapper first.
 func TestInstallSHStopsWrapperBeforeAgentInEveryBranch(t *testing.T) {
+	t.Parallel()
 	content, err := os.ReadFile(repoFile("scripts", "install.sh"))
 	if err != nil {
 		t.Fatalf("read install.sh: %v", err)
@@ -8356,6 +8510,7 @@ func TestInstallSHStopsWrapperBeforeAgentInEveryBranch(t *testing.T) {
 // cosmetic annoyance: the warning is the only client-side signal that a stale
 // agent was downloaded, and one that cries wolf gets skipped the time it counts.
 func TestInstallSHVersionMismatchWarningIgnoresBuildMetadata(t *testing.T) {
+	t.Parallel()
 	content, err := os.ReadFile(repoFile("scripts", "install.sh"))
 	if err != nil {
 		t.Fatalf("read install.sh: %v", err)
@@ -8407,6 +8562,7 @@ func TestInstallSHVersionMismatchWarningIgnoresBuildMetadata(t *testing.T) {
 // paths, update-time preservation of the profile, and no ambient capability
 // grant. Silently falling back to root on unsupported platforms is forbidden.
 func TestInstallSHLeastPrivilegeProfile(t *testing.T) {
+	t.Parallel()
 	content, err := os.ReadFile(repoFile("scripts", "install.sh"))
 	if err != nil {
 		t.Fatalf("read install.sh: %v", err)
@@ -8450,6 +8606,7 @@ func TestInstallSHLeastPrivilegeProfile(t *testing.T) {
 // least-privilege profile may hand that file to the service account. Only the
 // mutable state directory belongs to it.
 func TestInstallSHLeastPrivilegeProfilesKeepCollectorBinaryRootOwned(t *testing.T) {
+	t.Parallel()
 	for _, helper := range []string{"false", "true"} {
 		t.Run("helper="+helper, func(t *testing.T) {
 			root := t.TempDir()
@@ -8488,6 +8645,7 @@ func TestInstallSHLeastPrivilegeProfilesKeepCollectorBinaryRootOwned(t *testing.
 }
 
 func TestInstallSHTypedPrivilegedHelperUnits(t *testing.T) {
+	t.Parallel()
 	root := t.TempDir()
 	socketUnit := filepath.Join(root, "pulse-agent-helper.socket")
 	serviceUnit := filepath.Join(root, "pulse-agent-helper.service")
@@ -8553,6 +8711,7 @@ func TestInstallSHTypedPrivilegedHelperUnits(t *testing.T) {
 }
 
 func TestInstallSHTypedPrivilegedHelperProfileIsOptInAndFailClosed(t *testing.T) {
+	t.Parallel()
 	content, err := os.ReadFile(repoFile("scripts", "install.sh"))
 	if err != nil {
 		t.Fatalf("read install.sh: %v", err)
@@ -8595,6 +8754,7 @@ func TestInstallSHTypedPrivilegedHelperProfileIsOptInAndFailClosed(t *testing.T)
 }
 
 func TestInstallSHTypedPrivilegeHelperUpdateFilesystemBoundary(t *testing.T) {
+	t.Parallel()
 	content, err := os.ReadFile(repoFile("scripts", "install.sh"))
 	if err != nil {
 		t.Fatalf("read install.sh: %v", err)
@@ -8618,6 +8778,7 @@ func TestInstallSHTypedPrivilegeHelperUpdateFilesystemBoundary(t *testing.T) {
 }
 
 func TestInstallSHActionRunnerIsSeparateOptInLifecycle(t *testing.T) {
+	t.Parallel()
 	content, err := os.ReadFile(repoFile("scripts", "install.sh"))
 	if err != nil {
 		t.Fatalf("read install.sh: %v", err)
@@ -8675,6 +8836,7 @@ func TestInstallSHActionRunnerIsSeparateOptInLifecycle(t *testing.T) {
 }
 
 func TestInstallSHActionRunnerConfigBindsKnownAgentIDImmediately(t *testing.T) {
+	t.Parallel()
 	root := t.TempDir()
 	envFile := filepath.Join(root, "runner.env")
 	script := `
@@ -8739,6 +8901,7 @@ write_action_runner_config
 }
 
 func TestInstallSHActionRunnerConfigFailureLeavesOnlyCompleteFiles(t *testing.T) {
+	t.Parallel()
 	for _, test := range []struct {
 		name            string
 		failPattern     string
@@ -8972,6 +9135,7 @@ cancel_pending_action_runner_credential "agent-1" "host.local" "` + token + `"
 }
 
 func TestInstallSHActionRunnerDirectIdentityOverridesStaleCollectorFile(t *testing.T) {
+	t.Parallel()
 	stateDir := t.TempDir()
 	mustWrite(t, filepath.Join(stateDir, "agent-id"), "stale-agent-id\n")
 	script := `
@@ -9056,6 +9220,7 @@ if grep -q 'PULSE_AGENT_RUNNER_AGENT_ID_FILE' "$ACTION_RUNNER_ENV_FILE"; then ex
 }
 
 func TestInstallSHSafeProfileLifecycleUsesVerifiedInstallFilesystemStage(t *testing.T) {
+	t.Parallel()
 	root := t.TempDir()
 	legacy := filepath.Join(root, "pulse-agent")
 	tmpSource := filepath.Join(root, "download.tmp")
@@ -9102,6 +9267,7 @@ resolved=$(collector_lifecycle_binary)
 }
 
 func TestInstallSHActionRunnerReadinessRequiresCurrentActivationNonce(t *testing.T) {
+	t.Parallel()
 	root := t.TempDir()
 	healthPath := filepath.Join(root, "health.json")
 	currentNonce := strings.Repeat("a", 64)
@@ -9157,6 +9323,7 @@ action_runner_health_matches_activation "agent-1" "` + nonce + `"
 }
 
 func TestInstallSHActionRunnerPostCommitReadinessFailureRetainsReplacement(t *testing.T) {
+	t.Parallel()
 	for _, test := range []struct {
 		name                  string
 		cancelBody            string
@@ -9417,6 +9584,7 @@ provision_action_runner
 }
 
 func TestInstallSHActionRunnerAtomicCancelUsesPrivateGoTransportAndRequires204(t *testing.T) {
+	t.Parallel()
 	const token = "runner-cancel-secret"
 	root := t.TempDir()
 	runnerBinary := buildPulseAgentRunnerLifecycleBinary(t, root)
@@ -9484,6 +9652,7 @@ cancel_pending_action_runner_credential "agent-1" "host-1.local" "` + token + `"
 }
 
 func TestInstallSHActionRunnerSelfRevokeUsesPrivateCredential(t *testing.T) {
+	t.Parallel()
 	const token = "runner-secret-that-must-not-appear-in-output"
 	var gotAuthorization string
 	var gotMethod string
@@ -9551,6 +9720,7 @@ printf 'revoked\n'
 }
 
 func TestInstallSHActionRunnerUninstallRetainsRecoveryMaterialWhenRevokeIsUnconfirmed(t *testing.T) {
+	t.Parallel()
 	root := t.TempDir()
 	paths := []string{
 		filepath.Join(root, "bin", "pulse-agent-runner"),
@@ -9696,6 +9866,7 @@ reduce_safe_profile_collector_authority
 // Pinning hostname -f renamed Proxmox hosts to their FQDN while every
 // root-profile host kept its short system hostname.
 func TestInstallSHSafeProfileHostnameKeepsSystemHostname(t *testing.T) {
+	t.Parallel()
 	script := `
 set -euo pipefail
 hostname() {
@@ -9787,6 +9958,7 @@ printf 'forged success rejected\n'
 }
 
 func TestInstallSHRendersHardenedActionRunnerUnit(t *testing.T) {
+	t.Parallel()
 	root := t.TempDir()
 	unitPath := filepath.Join(root, "pulse-agent-runner.service")
 	script := `
@@ -9831,6 +10003,7 @@ func TestInstallSHRendersHardenedActionRunnerUnit(t *testing.T) {
 }
 
 func TestInstallSHTypedPrivilegedHelperProtectsCredentialsAfterStateChown(t *testing.T) {
+	t.Parallel()
 	stateDir := t.TempDir()
 	credentialDir := t.TempDir()
 	legacyToken := filepath.Join(stateDir, "token")
@@ -9881,6 +10054,7 @@ func TestInstallSHTypedPrivilegedHelperProtectsCredentialsAfterStateChown(t *tes
 // macOS has no root group. Exercise both shared lifecycle writes with a
 // chown stub that accepts only portable numeric superuser ownership.
 func TestInstallSHLifecyclePortableRootOwnership(t *testing.T) {
+	t.Parallel()
 	script := `set -euo pipefail
 LEAST_PRIVILEGE=false
 TMP_FILES=()
@@ -9923,6 +10097,7 @@ func agentIDRecoveryShell(t *testing.T, binaryPath, root, path string) string {
 }
 
 func TestInstallSHLegacyAgentIDRecoveryAccountsForEveryByte(t *testing.T) {
+	t.Parallel()
 	root := t.TempDir()
 	cases := []struct {
 		name string
@@ -9967,6 +10142,7 @@ func TestInstallSHLegacyAgentIDRecoveryAccountsForEveryByte(t *testing.T) {
 // Run the production Unix removal gate through private state/service/transport
 // doubles. Native platform installation and actual transport remain separate.
 func TestInstallSHUninstallRetainsCredentialsWhenSavedURLIsMissing(t *testing.T) {
+	t.Parallel()
 	ctx, cancel := context.WithTimeout(context.Background(), time.Minute)
 	defer cancel()
 	cmd := exec.CommandContext(ctx, "python3", repoFile("scripts", "installtests", "agent_uninstall_state.py"), "-v")
@@ -9999,6 +10175,7 @@ func TestInstallSHUninstallRetainsCredentialsWhenSavedURLIsMissing(t *testing.T)
 }
 
 func TestInstallSHSystemdTeardownRequiresObservedQuiescence(t *testing.T) {
+	t.Parallel()
 	runParallelPythonFixtureControls(t, repoFile("scripts", "installtests", "agent_systemd_teardown.py"), "AgentSystemdTeardown", []string{
 		"test_unknown_read_stop_and_disable_retain_every_artifact",
 		"test_unsettled_or_unknown_states_never_authorise_deletion",
@@ -10022,6 +10199,7 @@ func TestInstallSHSystemdTeardownRequiresObservedQuiescence(t *testing.T) {
 }
 
 func TestInstallSHOpenRCTeardownRequiresObservedQuiescence(t *testing.T) {
+	t.Parallel()
 	if runtime.GOOS == "windows" {
 		t.Skip("Unix shell/OpenRC controls; Windows has its own native SCM gate")
 	}
@@ -10042,6 +10220,7 @@ func TestInstallSHOpenRCTeardownRequiresObservedQuiescence(t *testing.T) {
 }
 
 func TestInstallSHLegacyTeardownRequiresObservedQuiescence(t *testing.T) {
+	t.Parallel()
 	if runtime.GOOS == "windows" {
 		t.Skip("Unix rc.d/SysV controls; Windows has its own native SCM gate")
 	}
@@ -10069,6 +10248,7 @@ func TestInstallSHLegacyTeardownRequiresObservedQuiescence(t *testing.T) {
 }
 
 func TestInstallSHUpstartTeardownRequiresObservedQuiescence(t *testing.T) {
+	t.Parallel()
 	if runtime.GOOS == "windows" {
 		t.Skip("DSM Upstart shell controls; Windows has its own native SCM gate")
 	}
@@ -10094,6 +10274,7 @@ func TestInstallSHUpstartTeardownRequiresObservedQuiescence(t *testing.T) {
 }
 
 func TestInstallSHTrueNASScaleBootTasksRetireBeforeRecoveryErasure(t *testing.T) {
+	t.Parallel()
 	if runtime.GOOS == "windows" {
 		t.Skip("TrueNAS SCALE shell controls; Windows has its own native SCM gate")
 	}
@@ -10121,6 +10302,7 @@ func TestInstallSHTrueNASScaleBootTasksRetireBeforeRecoveryErasure(t *testing.T)
 }
 
 func TestInstallSHNASBootOwnersQuiesceBeforeRecoveryErasure(t *testing.T) {
+	t.Parallel()
 	if runtime.GOOS == "windows" {
 		t.Skip("Unix NAS shell controls; Windows retains its separate native SCM gate")
 	}
@@ -10162,6 +10344,7 @@ func TestInstallSHNASBootOwnersQuiesceBeforeRecoveryErasure(t *testing.T) {
 // the foreground wrapper line. Stopping the watchdog would release it to run
 // the rest of go from memory, so it must read as an unknown boot owner.
 func TestInstallSHNASRemovalTreatsLiveUnraidGoShellAsUnknownOwner(t *testing.T) {
+	t.Parallel()
 	if runtime.GOOS == "windows" {
 		t.Skip("Unix NAS process observation needs bash")
 	}
@@ -10232,6 +10415,7 @@ func TestInstallSHNASRemovalTreatsLiveUnraidGoShellAsUnknownOwner(t *testing.T) 
 // server-registration observations are doubles: no service, installer download
 // or customer state is operated by these tests.
 func TestAgentInstallerStartupCompletion(t *testing.T) {
+	t.Parallel()
 	if runtime.GOOS == "windows" {
 		t.Skip("Unix installer startup completion")
 	}
@@ -10393,6 +10577,7 @@ func agentStartupObservationExit(ok bool) int {
 // owner's choice without being told again, and --disable-failure-logs must be
 // able to take it back, or the only way off would be to edit the service file.
 func TestInstallSHKeepsFailureLogsChoiceAcrossUpdates(t *testing.T) {
+	t.Parallel()
 	for _, tc := range []struct {
 		name        string
 		explicit    string
@@ -10479,6 +10664,7 @@ ARGS
 // Both spellings must mark the choice as named by this run. Without that mark
 // --disable-failure-logs would be undone by the recovered service argument.
 func TestInstallSHFailureLogsFlagsNameTheChoice(t *testing.T) {
+	t.Parallel()
 	content, err := os.ReadFile(repoFile("scripts", "install.sh"))
 	if err != nil {
 		t.Fatalf("read install.sh: %v", err)

@@ -21,6 +21,7 @@ sleep() { SECONDS=$((SECONDS + $1)); }
 `
 
 func TestAutoUpdateFixtureClockExcludesWallTime(t *testing.T) {
+	t.Parallel()
 	cmd := exec.Command("bash", "-c", autoUpdateFixtureClock+`
 set -eu
 before=$SECONDS
@@ -117,6 +118,7 @@ func nativeHarnessControlResults(output string) (map[string]string, error) {
 }
 
 func TestAutoUpdateNativeControlResultsRetainInterleavedPhaseVerdicts(t *testing.T) {
+	t.Parallel()
 	const header = "test_fixture (__main__.NativeContracts.test_fixture) ... "
 	for _, verdict := range []string{"ok", "skipped 'Linux-only fixture'"} {
 		for _, phases := range []string{"", "NATIVE_UPDATER_PHASE=forward\nNATIVE_UPDATER_PHASE=manual-reverse\n"} {
@@ -142,6 +144,7 @@ func TestAutoUpdateNativeControlResultsRetainInterleavedPhaseVerdicts(t *testing
 // The standalone helper passes an explicit name to the installer. Exercise
 // that producer and its real entry/handoff, not just installer discovery.
 func TestAutoUpdateServiceDiscoveryAndInstallerHandoff(t *testing.T) {
+	t.Parallel()
 	ctx, cancel := context.WithTimeout(context.Background(), 45*time.Second)
 	defer cancel()
 	cmd := exec.CommandContext(ctx, "python3", repoFile("scripts", "tests", "test_server_service_discovery.py"), "-v",
@@ -167,6 +170,7 @@ func TestAutoUpdateServiceDiscoveryAndInstallerHandoff(t *testing.T) {
 }
 
 func TestAutoUpdateDownloadFailures(t *testing.T) {
+	t.Parallel()
 	ctx, cancel := context.WithTimeout(context.Background(), 45*time.Second)
 	defer cancel()
 	cmd := exec.CommandContext(ctx, "python3", repoFile("scripts", "tests", "test_auto_update_service_state.py"), "-v", "UpdateDownloads")
@@ -189,6 +193,7 @@ func TestAutoUpdateDownloadFailures(t *testing.T) {
 // Competing invocations use the same real installation-directory lock, even
 // through an alias. No host manager, network or published installer is used.
 func TestAutoUpdateTransactionLock(t *testing.T) {
+	t.Parallel()
 	ctx, cancel := context.WithTimeout(context.Background(), 30*time.Second)
 	defer cancel()
 	cmd := exec.CommandContext(ctx, "python3", repoFile("scripts", "tests", "test_auto_update_service_state.py"), "-v", "UpdateTransactionLock")
@@ -224,6 +229,7 @@ func TestAutoUpdateTransactionLock(t *testing.T) {
 // Service-state admission is independent of the signed/metadata transaction
 // matrix below; no native service or published input is used by this fixture.
 func TestAutoUpdateServiceStateFailsClosed(t *testing.T) {
+	t.Parallel()
 	runParallelPythonFixtureControls(t, repoFile("scripts", "tests", "test_auto_update_service_state.py"), "UpdateServiceState", []string{
 		"test_manager_double_retains_exact_calls_phases_and_state",
 		"test_fixture_timeout_retains_partial_output_and_owned_cleanup",
@@ -242,6 +248,7 @@ func TestAutoUpdateServiceStateFailsClosed(t *testing.T) {
 // Real timeout/elapsed-clock controls operate only an ordinary-user manager
 // and its owned pipe-holding child, not systemd or an installed Pulse instance.
 func TestAutoUpdateServiceDeadlines(t *testing.T) {
+	t.Parallel()
 	runParallelPythonFixtureControls(t, repoFile("scripts", "tests", "test_auto_update_service_state.py"), "UpdateServiceDeadlines", []string{
 		"test_slow_reads_count_toward_one_polling_budget",
 		"test_complete_active_response_after_deadline_is_uncertain",
@@ -260,6 +267,7 @@ func TestAutoUpdateServiceDeadlines(t *testing.T) {
 // on native platforms. Keep the full stream and all cases mandatory; discovery
 // still admits at most Go's existing parallel budget and rejects skips.
 func TestAutoUpdateLogSinkFailures(t *testing.T) {
+	t.Parallel()
 	required := []string{
 		"test_fixture_protocol_keeps_missing_empty_partial_and_complete_counter_distinct",
 		"test_fixture_timeout_cannot_be_hidden_by_interrupted_protocol_writes",
@@ -285,6 +293,7 @@ func TestAutoUpdateLogSinkFailures(t *testing.T) {
 // transactions must not spend one cumulative watchdog. Discovery admits future
 // controls too, while the required inventory prevents losing an existing case.
 func TestAutoUpdateRunningExecutableIdentity(t *testing.T) {
+	t.Parallel()
 	if runtime.GOOS != "linux" {
 		t.Skip("Linux /proc executable identity; portable transaction controls remain required")
 	}
@@ -332,6 +341,7 @@ func extractAutoUpdateServiceFunctions(t *testing.T) string {
 // pattern used for Pulse RCs (`-rc.N`), betas (`-beta.N`), alphas, nightlies,
 // etc. The unattended updater must refuse these on the stable channel.
 func TestIsPrereleaseTagRecognizesPrereleases(t *testing.T) {
+	t.Parallel()
 	cases := []string{
 		"v6.0.0-rc.2",
 		"v5.1.28-rc.3",
@@ -365,6 +375,7 @@ echo $?
 // tags - the only thing the unattended stable updater should ever accept -
 // are not flagged.
 func TestIsPrereleaseTagAcceptsStableTags(t *testing.T) {
+	t.Parallel()
 	cases := []string{
 		"v5.1.28",
 		"v5.1.27",
@@ -396,6 +407,7 @@ echo $?
 // treated as a prerelease - callers should refuse to act on it rather than
 // proceed with an unrecognized tag.
 func TestIsPrereleaseTagFailsClosed(t *testing.T) {
+	t.Parallel()
 	cases := []string{
 		"",
 		"latest",
@@ -433,6 +445,7 @@ echo $?
 // before touching the installer. This is the last line of defense against
 // the 2026-04-16 incident recurring.
 func TestPerformUpdateRefusesPrereleaseTag(t *testing.T) {
+	t.Parallel()
 	script := `
 set -u
 GITHUB_REPO="rcourtman/Pulse"
@@ -479,6 +492,7 @@ fi
 // causes the function to return empty. This was the suspected trigger for
 // the 2026-04-16 jump from 5.1.27 to 6.0.0-rc.2.
 func TestGetLatestStableVersionRefusesPrereleaseFlag(t *testing.T) {
+	t.Parallel()
 	script := `
 set -u
 GITHUB_REPO="rcourtman/Pulse"
@@ -517,6 +531,7 @@ echo "RESULT=[$result]"
 // prerelease (e.g. during a brief window where the flag was miswritten),
 // the function still refuses.
 func TestGetLatestStableVersionRefusesPrereleaseShapedTag(t *testing.T) {
+	t.Parallel()
 	script := `
 set -u
 GITHUB_REPO="rcourtman/Pulse"
@@ -551,6 +566,7 @@ echo "RESULT=[$result]"
 // TestGetLatestStableVersionAcceptsStable asserts the happy path: a stable
 // tag with prerelease=false flows through unchanged.
 func TestGetLatestStableVersionAcceptsStable(t *testing.T) {
+	t.Parallel()
 	script := `
 set -u
 GITHUB_REPO="rcourtman/Pulse"
@@ -592,6 +608,7 @@ echo "RESULT=[$result]"
 // release ships. Draft releases, metadata-flagged prereleases, and
 // prerelease- or non-semver-shaped tags (helm-chart-*) must all be ignored.
 func TestGetLatestStableVersionPrefersHighestVersion(t *testing.T) {
+	t.Parallel()
 	script := `
 set -u
 GITHUB_REPO="rcourtman/Pulse"
@@ -659,6 +676,7 @@ echo "RESULT=[$result]"
 // "Pulse vX" binary is not flagged. The community auto-update flow must never
 // reinstall the public build over a paid Pro runtime.
 func TestInstalledBinaryIsPulseProGuard(t *testing.T) {
+	t.Parallel()
 	fn := extractAutoUpdateFunction(t, "installed_binary_is_pulse_pro")
 
 	cases := []struct {
@@ -719,6 +737,7 @@ func TestInstalledBinaryIsPulseProGuard(t *testing.T) {
 // ExecCondition=systemctl is-active, so a service left stopped would also
 // disable every future unattended run.
 func TestPerformUpdateRestartsServiceWhenInstallerFails(t *testing.T) {
+	t.Parallel()
 	script := `
 set -uo pipefail
 TMP=$(mktemp -d)
@@ -819,6 +838,7 @@ echo "VERSION:$(tr -d '\r\n' < "$INSTALL_DIR/VERSION")"
 // backstop behind the #1630 fix: a service that was inactive before the
 // update is left alone, and a service that was active is started again.
 func TestEnsureServiceRestartedHonorsPriorServiceState(t *testing.T) {
+	t.Parallel()
 	script := `
 set -uo pipefail
 SERVICE_UP="no"
@@ -869,6 +889,7 @@ echo "SERVICE:$SERVICE_UP"
 // aborts with "installer_tmp: unbound variable" after a *successful* update,
 // leaving pulse-update.service failed even though the install worked.
 func TestPerformUpdateDoesNotLeakReturnTrap(t *testing.T) {
+	t.Parallel()
 	script := `
 set -uo pipefail
 TMP=$(mktemp -d)
@@ -1121,19 +1142,23 @@ func TestAutoUpdateBackupTransaction(t *testing.T) {
 		{name: "successful_update", success: true},
 	}
 	t.Run("new_service_failure", func(t *testing.T) {
+		t.Parallel()
 		runAutoUpdateTransactionScenario(t, fixture, "", "service_failure", "", "true", false, false, false, false)
 	})
 	for _, tc := range cases {
 		for _, active := range []string{"true", "false"} {
 			t.Run(tc.name+"/prior_active_"+active, func(t *testing.T) {
+				t.Parallel()
 				runAutoUpdateTransactionScenario(t, fixture, tc.fault, tc.outcome, tc.layout, active, tc.noVersion, tc.preflight, tc.retained, tc.success)
 			})
 		}
 	}
 	t.Run("restored_service_start_failure", func(t *testing.T) {
+		t.Parallel()
 		runAutoUpdateTransactionScenario(t, fixture, "restart", "failure", "", "true", false, false, true, false)
 	})
 	t.Run("restored_service_liveness_failure", func(t *testing.T) {
+		t.Parallel()
 		runAutoUpdateTransactionScenario(t, fixture, "restart_liveness", "failure", "", "true", false, false, true, false)
 	})
 }
@@ -1410,6 +1435,7 @@ printf 'TRANSACTION_ASSERTIONS_PASSED\n'
 // Stable admission is object-bound, not a line-oriented tag/flag accumulator.
 // Each fixture runs the real selector with local transport stubs only.
 func TestAutoUpdateReleaseMetadataAdmission(t *testing.T) {
+	t.Parallel()
 	const stable = `{"tag_name":"v6.5.0","draft":false,"prerelease":false}`
 	cases := []struct {
 		name, list, latest, want string
@@ -1438,6 +1464,7 @@ func TestAutoUpdateReleaseMetadataAdmission(t *testing.T) {
 	}
 	for _, tc := range cases {
 		t.Run(tc.name, func(t *testing.T) {
+			t.Parallel()
 			dir := t.TempDir()
 			for name, data := range map[string]string{"list": tc.list, "latest": tc.latest} {
 				if err := os.WriteFile(filepath.Join(dir, name), []byte(data), 0o600); err != nil {
@@ -1493,6 +1520,7 @@ get_latest_stable_version
 }
 
 func TestAutoUpdateReleaseMetadataRequiresParserBeforeTransport(t *testing.T) {
+	t.Parallel()
 	script := `set -euo pipefail
 command() { if [[ "$*" == '-v jq' ]]; then return 1; fi; builtin command "$@"; }
 log() { printf '%s\n' "$*" >&2; }
@@ -1510,6 +1538,7 @@ result=$(get_latest_stable_version)
 // These controls exercise actual same-directory writes with no manager or
 // production access. Both real optional callers retain their nonfatal policy.
 func TestInstallAutoUpdateAssetPublication(t *testing.T) {
+	t.Parallel()
 	if runtime.GOOS == "windows" {
 		t.Skip("Unix server installer filesystem controls")
 	}

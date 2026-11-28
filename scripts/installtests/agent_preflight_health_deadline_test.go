@@ -31,6 +31,7 @@ import (
 // service inventory is doubled; no binary is downloaded, installed or run.
 // Stalls use the production ten-second budget, not an accelerated curl double.
 func TestAgentInstallerPreflightHealthDeadline(t *testing.T) {
+	t.Parallel()
 	for _, mode := range []string{"healthy", "redirect", "http-error", "untrusted-ca", "stalled-headers", "stalled-body", "redirect-budget", "metadata-http-error", "configured-url", "explicit-insecure", "typed-artifacts", "environment-proxy"} {
 		t.Run(mode, func(t *testing.T) {
 			t.Parallel()

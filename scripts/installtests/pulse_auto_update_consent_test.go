@@ -62,6 +62,7 @@ exit "$PULSE_TEST_TIMER_EXIT"
 }
 
 func TestAutoUpdateRequiresVerifiedCommunityEdition(t *testing.T) {
+	t.Parallel()
 	cases := []struct {
 		name, body, legacy string
 		status             int // Pro=0, verified community=1, unknown=2.
@@ -89,6 +90,7 @@ func TestAutoUpdateRequiresVerifiedCommunityEdition(t *testing.T) {
 	}
 	for _, tc := range cases {
 		t.Run(tc.name, func(t *testing.T) {
+			t.Parallel()
 			dir := t.TempDir()
 			if err := os.Mkdir(filepath.Join(dir, "bin"), 0700); err != nil {
 				t.Fatal(err)
@@ -132,6 +134,7 @@ printf 'STATUS=%s\n' "$status"
 }
 
 func TestAutoUpdateEditionProbeHasHardDeadline(t *testing.T) {
+	t.Parallel()
 	dir := t.TempDir()
 	if err := os.Mkdir(filepath.Join(dir, "bin"), 0700); err != nil {
 		t.Fatal(err)
@@ -155,6 +158,7 @@ printf 'STATUS=%s\n' "$status"
 }
 
 func TestAutoUpdateEditionGateStopsMainBeforeDownloads(t *testing.T) {
+	t.Parallel()
 	if _, err := os.Stat("/.dockerenv"); err == nil {
 		t.Fatal("edition main-flow proof requires a non-Docker environment")
 	}
@@ -175,6 +179,7 @@ func TestAutoUpdateEditionGateStopsMainBeforeDownloads(t *testing.T) {
 		{"missing_binary", "", 1, false},
 	} {
 		t.Run(tc.name, func(t *testing.T) {
+			t.Parallel()
 			dir := t.TempDir()
 			if err := os.Mkdir(filepath.Join(dir, "bin"), 0700); err != nil {
 				t.Fatal(err)
@@ -217,6 +222,7 @@ main
 }
 
 func TestAutoUpdateRequiresCompleteTopLevelConsent(t *testing.T) {
+	t.Parallel()
 	if _, err := exec.LookPath("jq"); err != nil {
 		t.Fatal("jq is required to execute the unattended-update consent checks")
 	}
@@ -250,6 +256,7 @@ func TestAutoUpdateRequiresCompleteTopLevelConsent(t *testing.T) {
 	}
 	for _, tc := range cases {
 		t.Run(tc.name, func(t *testing.T) {
+			t.Parallel()
 			dir := t.TempDir()
 			if err := os.WriteFile(filepath.Join(dir, "system.json"), []byte(tc.config), 0600); err != nil {
 				t.Fatal(err)
@@ -283,8 +290,10 @@ echo ADMITTED
 }
 
 func TestAutoUpdateConsentKeepsTimerAndParserBoundaries(t *testing.T) {
+	t.Parallel()
 	for _, scenario := range []string{"missing_config_enabled_timer", "disabled_timer", "missing_jq", "nonregular_config"} {
 		t.Run(scenario, func(t *testing.T) {
+			t.Parallel()
 			dir := t.TempDir()
 			script := `set -eu
 log() { printf '%s\n' "$*"; }
@@ -328,6 +337,7 @@ log() { printf '%s\n' "$*"; }
 }
 
 func TestAutoUpdateTimerEnablementNeedsConfirmedRead(t *testing.T) {
+	t.Parallel()
 	updater, err := filepath.Abs(filepath.Join("..", "pulse-auto-update.sh"))
 	if err != nil {
 		t.Fatal(err)
@@ -428,6 +438,7 @@ curl() { echo UNEXPECTED_NETWORK; exit 99; }
 }
 
 func TestAutoUpdateTimerEnablementHasHardDeadline(t *testing.T) {
+	t.Parallel()
 	dir := t.TempDir()
 	ctx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
 	defer cancel()
@@ -501,6 +512,7 @@ func waitForAutoUpdateTimerExit(readStat func() ([]byte, error), deadline time.T
 }
 
 func TestAutoUpdateTimerExitObservation(t *testing.T) {
+	t.Parallel()
 	for _, tc := range []struct {
 		name   string
 		states []string
@@ -516,6 +528,7 @@ func TestAutoUpdateTimerExitObservation(t *testing.T) {
 		{name: "missing_state", states: []string{"42 (sleep) "}, want: "invalid manager state"},
 	} {
 		t.Run(tc.name, func(t *testing.T) {
+			t.Parallel()
 			reads := 0
 			err := waitForAutoUpdateTimerExit(func() ([]byte, error) {
 				reads++
@@ -533,6 +546,7 @@ func TestAutoUpdateTimerExitObservation(t *testing.T) {
 		})
 	}
 	t.Run("expired_deadline", func(t *testing.T) {
+		t.Parallel()
 		err := waitForAutoUpdateTimerExit(func() ([]byte, error) {
 			t.Fatal("must not accept a late observation")
 			return nil, os.ErrNotExist
@@ -542,6 +556,7 @@ func TestAutoUpdateTimerExitObservation(t *testing.T) {
 		}
 	})
 	t.Run("late_terminal_observation", func(t *testing.T) {
+		t.Parallel()
 		err := waitForAutoUpdateTimerExit(func() ([]byte, error) {
 			time.Sleep(5 * time.Millisecond)
 			return nil, os.ErrNotExist
@@ -553,6 +568,7 @@ func TestAutoUpdateTimerExitObservation(t *testing.T) {
 }
 
 func TestAutoUpdateTimerExitRejectsLiveManager(t *testing.T) {
+	t.Parallel()
 	if runtime.GOOS != "linux" {
 		t.Skip("live-process state control requires Linux /proc")
 	}
@@ -582,6 +598,7 @@ func TestAutoUpdateTimerExitRejectsLiveManager(t *testing.T) {
 // VERSION is deliberately plausible in every fixture. Neither it nor a legacy
 // executable can rescue a present primary whose own version evidence is bad.
 func TestAutoUpdateVersionNeedsSuccessfulExecutable(t *testing.T) {
+	t.Parallel()
 	for _, tc := range []struct {
 		name, body, legacy, want string
 		nonExecutable, directory bool
@@ -603,6 +620,7 @@ func TestAutoUpdateVersionNeedsSuccessfulExecutable(t *testing.T) {
 		{name: "primary_directory", directory: true, legacy: "echo 'Pulse v6.5.0'"},
 	} {
 		t.Run(tc.name, func(t *testing.T) {
+			t.Parallel()
 			dir := t.TempDir()
 			if err := os.Mkdir(filepath.Join(dir, "bin"), 0700); err != nil {
 				t.Fatal(err)
@@ -644,6 +662,7 @@ func TestAutoUpdateVersionNeedsSuccessfulExecutable(t *testing.T) {
 }
 
 func TestAutoUpdateVersionProbeHasHardDeadline(t *testing.T) {
+	t.Parallel()
 	dir := t.TempDir()
 	if err := os.Mkdir(filepath.Join(dir, "bin"), 0700); err != nil {
 		t.Fatal(err)

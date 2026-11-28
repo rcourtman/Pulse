@@ -10,6 +10,7 @@ import (
 )
 
 func TestRootInstallSystemdUnitPublication(t *testing.T) {
+	t.Parallel()
 	if runtime.GOOS == "windows" {
 		t.Skip("Unix installer and confined filesystem controls")
 	}

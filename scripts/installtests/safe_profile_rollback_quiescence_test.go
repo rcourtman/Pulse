@@ -103,12 +103,14 @@ printf 'runner-independent\n' > "$ACTION_RUNNER_SENTINEL"
 }
 
 func TestSafeProfileRollbackRefusesUnconfirmedQuiescenceBeforeRestoration(t *testing.T) {
+	t.Parallel()
 	for _, unit := range []string{"pulse-agent.service", "pulse-agent-helper.socket", "pulse-agent-helper.service"} {
 		for _, fault := range []string{
 			"stop-refused", "stop-timeout", "stop-ignored", "disable-refused", "disable-timeout",
 			"read-refused", "read-timeout", "read-empty", "read-incomplete", "read-diagnostic",
 		} {
 			t.Run(unit+"/"+fault, func(t *testing.T) {
+				t.Parallel()
 				root := t.TempDir()
 				harness := safeProfileRollbackQuiescenceHarness(t, root)
 				prepareSafeProfileRollback(t, harness)
@@ -147,6 +149,7 @@ fi
 }
 
 func TestSafeProfileRollbackExitTrapRetainsOriginalFailureAndSnapshot(t *testing.T) {
+	t.Parallel()
 	root := t.TempDir()
 	harness := safeProfileRollbackQuiescenceHarness(t, root)
 	prepareSafeProfileRollback(t, harness)
@@ -181,8 +184,10 @@ exit 23
 }
 
 func TestSafeProfileRollbackRechecksEarlierUnitsBeforeRestoration(t *testing.T) {
+	t.Parallel()
 	for _, unit := range []string{"pulse-agent.service", "pulse-agent-helper.socket"} {
 		t.Run(unit, func(t *testing.T) {
+			t.Parallel()
 			root := t.TempDir()
 			harness := safeProfileRollbackQuiescenceHarness(t, root)
 			prepareSafeProfileRollback(t, harness)
@@ -205,8 +210,10 @@ if safe_profile_restore_transaction "$transaction" reactivation-control; then ex
 }
 
 func TestSafeProfileRollbackQuiescentControlRestoresSavedProfile(t *testing.T) {
+	t.Parallel()
 	for _, absentHelper := range []bool{false, true} {
 		t.Run(map[bool]string{false: "helper present", true: "helper absent"}[absentHelper], func(t *testing.T) {
+			t.Parallel()
 			root := t.TempDir()
 			harness := safeProfileRollbackQuiescenceHarness(t, root)
 			if absentHelper {
