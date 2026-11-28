@@ -119,32 +119,26 @@ func TestMetricsHistoryCleanupLoggingDoesNotBlockHistory(t *testing.T) {
 			t.Fatal("cleanup did not emit the expiry diagnostic")
 		}
 
-		var before, after []MetricPoint
-		var written bool
+		// Trying the lock first also makes the adverse case fail without
+		// leaving the reader or writer stuck behind the gated logger.
+		if !history.mu.TryLock() {
+			t.Fatal("expiry diagnostic still owns the History lock needed by poll writers and chart readers")
+		}
+		_, retained := history.guestMetrics["expired"]
+		history.mu.Unlock()
+		if retained {
+			t.Error("expired entry was still present when its removal was logged")
+		}
+
 		m := &Monitor{metricsHistory: history}
-		go func() {
-			before = m.GetNodeMetricsForChart("live", "cpu", time.Hour)
-		}()
-		synctest.Wait()
+		before := m.GetNodeMetricsForChart("live", "cpu", time.Hour)
 		if len(before) != 1 || before[0].Value != 7 {
 			t.Error("chart could not read the retained point while cleanup was logging")
 		}
-		go func() {
-			history.AddNodeMetric("live", "cpu", 42, time.Now())
-			written = true
-			after = m.GetNodeMetricsForChart("live", "cpu", time.Hour)
-		}()
-		synctest.Wait()
-		if !written || len(after) != 2 || after[0].Value != 7 || after[1].Value != 42 {
+		history.AddNodeMetric("live", "cpu", 42, time.Now())
+		after := m.GetNodeMetricsForChart("live", "cpu", time.Hour)
+		if len(after) != 2 || after[0].Value != 7 || after[1].Value != 42 {
 			t.Error("node sample write and chart read did not finish while cleanup was logging")
-		}
-		if !history.mu.TryRLock() {
-			t.Fatal("history remained locked after the sweep")
-		}
-		_, retained := history.guestMetrics["expired"]
-		history.mu.RUnlock()
-		if retained {
-			t.Error("expired entry was still present when its removal was logged")
 		}
 	})
 }
