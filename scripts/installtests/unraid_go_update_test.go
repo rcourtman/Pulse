@@ -21,7 +21,7 @@ func TestInstallSHUnraidBootReplacementPreservesUnrelatedJobs(t *testing.T) {
 	if err != nil {
 		t.Fatalf("Unraid boot replacement controls: %v\n%s", err, output)
 	}
-	if !strings.Contains(string(output), "Ran 20 tests in ") ||
+	if !strings.Contains(string(output), "Ran 22 tests in ") ||
 		!strings.Contains(string(output), "\nOK\n") || strings.Contains(string(output), "skipped") {
 		t.Fatalf("incomplete Unraid boot replacement controls:\n%s", output)
 	}

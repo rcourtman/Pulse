@@ -4421,70 +4421,166 @@ render_unraid_go_launch() {
 # without execution before replacing the original. Normalise CRLF as Unraid's
 # fromdos does, but do not turn an incomplete last line into admitted content.
 write_unraid_go_entry() {
-    local go_script="$1" wrapper_script="$2" runtime_binary="$3"
+    local go_script="$1" wrapper_script="$2" runtime_binary="$3" mode="${4:-write}"
     local STATE_DIR="${2%/start-pulse-agent.sh}" INSTALL_DIR="${3%/*}" BINARY_NAME="${3##*/}"
-    local parent="" staging="" prior="" size="" last="" prefixes="" prefix="" existed=false
-    [[ "$go_script" == /* && "$wrapper_script" == /*/start-pulse-agent.sh && "$runtime_binary" == /*/* &&
+    local parent="" staging="" prior="" size="" last="" prefixes="" prefix="" existed=false expected_launch=""
+    UNRAID_GO_FAILURE_REASON=""
+    if [[ "$mode" != write && "$mode" != preflight ]]; then
+        UNRAID_GO_FAILURE_REASON="invalid Unraid boot setup mode"
+        return 1
+    fi
+    if ! [[ "$go_script" == /* && "$wrapper_script" == /*/start-pulse-agent.sh && "$runtime_binary" == /*/* &&
        "$go_script$wrapper_script$runtime_binary" != *$'\n'* &&
        "$go_script$wrapper_script$runtime_binary" != *$'\r'* &&
-       "$wrapper_script$runtime_binary" != *[\$\`\"\\]* ]] || return 1
-    parent=$(dirname "$go_script") || return 1
-    [[ -d "$parent" && ! -L "$parent" && "$(portable_path_uid "$parent")" == "$(id -u)" ]] || return 1
+       "$wrapper_script$runtime_binary" != *[\$\`\"\\]* ]]; then
+        UNRAID_GO_FAILURE_REASON="invalid Unraid boot or wrapper path"
+        return 1
+    fi
+    parent=$(dirname "$go_script") || { UNRAID_GO_FAILURE_REASON="could not resolve parent directory for ${go_script}"; return 1; }
+    if ! [[ -d "$parent" && ! -L "$parent" && "$(portable_path_uid "$parent")" == "$(id -u)" ]]; then
+        UNRAID_GO_FAILURE_REASON="boot directory ${parent} is missing, linked, or not owned by the current user"
+        return 1
+    fi
     for prior in "$go_script".pulse-setup.* "$go_script".pulse-removal.*; do
-        [[ ! -e "$prior" && ! -L "$prior" ]] || return 1
+        if [[ -e "$prior" || -L "$prior" ]]; then
+            UNRAID_GO_FAILURE_REASON="a previous staging or removal directory (${go_script}.pulse-setup.* or .pulse-removal.*) already exists"
+            return 1
+        fi
     done
     if [[ -e "$go_script" || -L "$go_script" ]]; then
-        nas_agent_removal_file_safe "$go_script" || return 1
-        size=$(wc -c < "$go_script") || return 1
-        [[ "$size" =~ ^[[:space:]]*([0-9]+)[[:space:]]*$ && ${BASH_REMATCH[1]} -le 1048576 ]] || return 1
+        if ! nas_agent_removal_file_safe "$go_script"; then
+            UNRAID_GO_FAILURE_REASON="${go_script} is not a readable regular file owned by the current user"
+            return 1
+        fi
+        size=$(wc -c < "$go_script") || { UNRAID_GO_FAILURE_REASON="could not read size of ${go_script}"; return 1; }
+        if ! [[ "$size" =~ ^[[:space:]]*([0-9]+)[[:space:]]*$ && ${BASH_REMATCH[1]} -le 1048576 ]]; then
+            UNRAID_GO_FAILURE_REASON="${go_script} exceeds the 1 MiB safety limit"
+            return 1
+        fi
         if (( ${BASH_REMATCH[1]} > 0 )); then
-            last=$(tail -c 1 "$go_script" && printf x) || return 1
-            [[ "$last" == $'\nx' ]] || return 1
+            last=$(tail -c 1 "$go_script" && printf x) || { UNRAID_GO_FAILURE_REASON="could not read end of ${go_script}"; return 1; }
+            if [[ "$last" != $'\nx' ]]; then
+                UNRAID_GO_FAILURE_REASON="${go_script} does not end with a newline"
+                return 1
+            fi
         fi
         existed=true
     fi
-    staging=$(mktemp -d "$go_script.pulse-setup.XXXXXX") || return 1
+    if [[ "$mode" == preflight ]]; then
+        staging=$(mktemp -d) || { UNRAID_GO_FAILURE_REASON="could not create temporary validation directory"; return 1; }
+    else
+        staging=$(mktemp -d "$go_script.pulse-setup.XXXXXX") || { UNRAID_GO_FAILURE_REASON="could not create staging directory beside ${go_script}"; return 1; }
+    fi
     # mktemp requests a private directory where supported. Unraid boot media
     # can be FAT: do not require chmod or executable go files there. rc.local
-    # runs go through bash, and all staging remains on the same boot volume.
+    # runs go through bash, and write-mode staging stays on the boot volume.
     if [[ "$existed" == true ]]; then
-        cp -p "$go_script" "$staging/original" || return 1
-        LC_ALL=C awk '{ sub(/\r$/, ""); print }' "$staging/original" > "$staging/normalised" || return 1
-        prefixes=$(filter_nas_agent_boot_file Unraid "$staging/normalised" boundaries) || return 1
+        if [[ "$mode" == preflight ]]; then
+            if ! cp "$go_script" "$staging/original"; then
+                UNRAID_GO_FAILURE_REASON="failed to copy ${go_script} for validation"
+                rm -rf -- "$staging"
+                return 1
+            fi
+        else
+            if ! cp -p "$go_script" "$staging/original"; then
+                UNRAID_GO_FAILURE_REASON="failed to stage ${go_script}"
+                return 1
+            fi
+        fi
+        if ! LC_ALL=C awk '{ sub(/\r$/, ""); print }' "$staging/original" > "$staging/normalised"; then
+            UNRAID_GO_FAILURE_REASON="failed to normalise line endings in ${go_script}"
+            [[ "$mode" != preflight ]] || rm -rf -- "$staging"
+            return 1
+        fi
+        if ! prefixes=$(filter_nas_agent_boot_file Unraid "$staging/normalised" boundaries); then
+            expected_launch=$(render_unraid_go_launch "$wrapper_script" 2>/dev/null | tr -d '\n' || true)
+            UNRAID_GO_FAILURE_REASON="${go_script} contains a custom, compound, or unrecognized Pulse Agent entry (expected: ${expected_launch})"
+            [[ "$mode" != preflight ]] || rm -rf -- "$staging"
+            return 1
+        fi
         # An exact launch inside a heredoc, quote, compound or continued line
         # is not an owned top-level command. Parse each bounded prefix without
         # execution; even a successful parse with a heredoc warning is unsure.
         while IFS= read -r prefix; do
             [[ -n "$prefix" ]] || continue
-            [[ "$prefix" =~ ^[0-9]+$ ]] || return 1
-            head -n "$prefix" "$staging/normalised" > "$staging/prefix" || return 1
-            [[ "$(tail -n 1 "$staging/prefix")" != *\\ ]] || return 1
-            bash -n "$staging/prefix" > "$staging/parse-errors" 2>&1 || return 1
-            [[ ! -s "$staging/parse-errors" ]] || return 1
+            if ! [[ "$prefix" =~ ^[0-9]+$ ]] ||
+               ! head -n "$prefix" "$staging/normalised" > "$staging/prefix" ||
+               [[ "$(tail -n 1 "$staging/prefix")" == *\\ ]] ||
+               ! bash -n "$staging/prefix" > "$staging/parse-errors" 2>&1 ||
+               [[ -s "$staging/parse-errors" ]]; then
+                UNRAID_GO_FAILURE_REASON="${go_script} has a Pulse Agent entry inside a compound, quoted, or continued shell block, or has a shell syntax error"
+                [[ "$mode" != preflight ]] || rm -rf -- "$staging"
+                return 1
+            fi
         done <<< "$prefixes"
-        filter_nas_agent_boot_file Unraid "$staging/normalised" filter > "$staging/updated" || return 1
-        # Preserve the boot file's mode on replacement; FAT may ignore modes.
-        cp -p "$staging/original" "$staging/ready" || return 1
+        if ! filter_nas_agent_boot_file Unraid "$staging/normalised" filter > "$staging/updated"; then
+            UNRAID_GO_FAILURE_REASON="failed to filter existing Pulse Agent entry in ${go_script}"
+            [[ "$mode" != preflight ]] || rm -rf -- "$staging"
+            return 1
+        fi
+        if [[ "$mode" != preflight ]]; then
+            # Preserve the boot file's mode on replacement; FAT may ignore modes.
+            if ! cp -p "$staging/original" "$staging/ready"; then
+                UNRAID_GO_FAILURE_REASON="failed to prepare replacement file for ${go_script}"
+                return 1
+            fi
+        fi
     else
-        printf '#!/bin/bash\n' > "$staging/updated" || return 1
-        printf '' > "$staging/ready" || return 1
+        if ! printf '#!/bin/bash\n' > "$staging/updated"; then
+            UNRAID_GO_FAILURE_REASON="failed to prepare new ${go_script}"
+            [[ "$mode" != preflight ]] || rm -rf -- "$staging"
+            return 1
+        fi
+        if [[ "$mode" != preflight ]]; then
+            if ! printf '' > "$staging/ready"; then
+                UNRAID_GO_FAILURE_REASON="failed to prepare replacement file for ${go_script}"
+                return 1
+            fi
+        fi
     fi
-    { printf '# Pulse Agent\n' && render_unraid_go_launch "$wrapper_script"; } >> "$staging/updated" || return 1
-    bash -n "$staging/updated" > "$staging/parse-errors" 2>&1 || return 1
-    [[ ! -s "$staging/parse-errors" ]] || return 1
-    cat "$staging/updated" > "$staging/ready" || return 1
-    cmp -s "$staging/ready" "$staging/updated" || return 1
+    if ! { printf '# Pulse Agent\n' && render_unraid_go_launch "$wrapper_script"; } >> "$staging/updated"; then
+        UNRAID_GO_FAILURE_REASON="failed to render Pulse Agent boot entry for ${go_script}"
+        [[ "$mode" != preflight ]] || rm -rf -- "$staging"
+        return 1
+    fi
+    if ! bash -n "$staging/updated" > "$staging/parse-errors" 2>&1 || [[ -s "$staging/parse-errors" ]]; then
+        UNRAID_GO_FAILURE_REASON="updated ${go_script} failed bash syntax check"
+        [[ "$mode" != preflight ]] || rm -rf -- "$staging"
+        return 1
+    fi
+    if [[ "$mode" == preflight ]]; then
+        rm -rf -- "$staging"
+        return 0
+    fi
+    if ! cat "$staging/updated" > "$staging/ready" || ! cmp -s "$staging/ready" "$staging/updated"; then
+        UNRAID_GO_FAILURE_REASON="failed to stage updated ${go_script}"
+        return 1
+    fi
     if [[ "$existed" == true ]]; then
-        nas_agent_removal_file_safe "$go_script" && cmp -s "$go_script" "$staging/original" || return 1
-        mv -- "$staging/ready" "$go_script" || return 1
+        if ! nas_agent_removal_file_safe "$go_script" || ! cmp -s "$go_script" "$staging/original"; then
+            UNRAID_GO_FAILURE_REASON="${go_script} changed while staging the update"
+            return 1
+        fi
+        if ! mv -- "$staging/ready" "$go_script"; then
+            UNRAID_GO_FAILURE_REASON="failed to replace ${go_script}"
+            return 1
+        fi
     else
         # FAT need not support hard links or mv -n. Refuse a concurrent file
         # or link; a failed first write retains the complete staged candidate.
-        (set -o noclobber; cat "$staging/ready" > "$go_script") || return 1
+        if ! (set -o noclobber; cat "$staging/ready" > "$go_script"); then
+            UNRAID_GO_FAILURE_REASON="failed to create ${go_script}"
+            return 1
+        fi
     fi
-    nas_agent_removal_file_safe "$go_script" && cmp -s "$go_script" "$staging/updated" || return 1
-    rm -f -- "$staging/original" "$staging/normalised" "$staging/prefix" "$staging/parse-errors" "$staging/updated" "$staging/ready" || return 1
-    rmdir -- "$staging"
+    if ! nas_agent_removal_file_safe "$go_script" || ! cmp -s "$go_script" "$staging/updated"; then
+        UNRAID_GO_FAILURE_REASON="verification readback of ${go_script} failed"
+        return 1
+    fi
+    if ! rm -f -- "$staging/original" "$staging/normalised" "$staging/prefix" "$staging/parse-errors" "$staging/updated" "$staging/ready" || ! rmdir -- "$staging"; then
+        UNRAID_GO_FAILURE_REASON="failed to clean up staging directory for ${go_script}"
+        return 1
+    fi
 }
 
 write_qnap_wrapper_script() {
@@ -8220,6 +8316,14 @@ if [[ -f /etc/unraid-version ]]; then
     build_exec_args
     build_exec_args_array
 
+    WRAPPER_SCRIPT="${UNRAID_STORAGE_DIR}/start-pulse-agent.sh"
+
+    # Validate /boot/config/go before stopping existing agents so a custom or
+    # unreconciled boot file fails cleanly without leaving the agent stopped.
+    if ! write_unraid_go_entry "$GO_SCRIPT" "$WRAPPER_SCRIPT" "$RUNTIME_BINARY" preflight; then
+        fail "Unraid boot setup cannot update ${GO_SCRIPT}: ${UNRAID_GO_FAILURE_REASON:-boot file check failed}. The existing agent was not stopped. Reconcile ${GO_SCRIPT} before retrying." "$EXIT_GENERAL"
+    fi
+
     # Kill any existing pulse agents.
     log_info "Stopping any existing pulse agents..."
     # Stop the supervisor before the agent it supervises. The wrapper is a
@@ -8303,7 +8407,7 @@ EOF
     if write_unraid_go_entry "$GO_SCRIPT" "$WRAPPER_SCRIPT" "$RUNTIME_BINARY"; then
         log_info "Added startup entry to ${GO_SCRIPT}..."
     else
-        fail "Unraid boot setup was not confirmed; agent recovery files and any go.pulse-setup staging were retained. The agent may already be stopped. Reconcile the boot file before retrying; no automatic restart was attempted." "$EXIT_GENERAL"
+        fail "Unraid boot setup was not confirmed (${UNRAID_GO_FAILURE_REASON:-boot update failed}); agent recovery files and any go.pulse-setup staging were retained. The agent may already be stopped. Reconcile the boot file before retrying; no automatic restart was attempted." "$EXIT_GENERAL"
     fi
 
     # Start the agent now using the wrapper script (includes watchdog)
