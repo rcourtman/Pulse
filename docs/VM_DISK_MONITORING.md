@@ -415,6 +415,15 @@ working Machines view does not prove that the QEMU-only path recovered. Use
 [existing Machines readings](#use-existing-machines-readings-without-changing-the-guest)
 only with those distinctions, without installing another agent.
 
+Linked physical disks shown in a guest drawer follow the same freshness rules
+when their host agent or Proxmox source stops updating. Clear stale disks switch
+from **Healthy** to an amber **Stale** verdict, while **Replace Now** and
+**Needs Attention** disks keep their fault verdict beside an inline amber
+**Stale data** cue. Retained temperatures stay muted as last-known values
+without triggering live **Running Hot**, and opening the disk drawer displays an
+inline stale-readings warning and defers temperature and SMART history charts
+until live reporting recovers.
+
 Use normally collected observations and the guest's established filesystem
 view for capacity decisions. Do not run Diagnostics, guest-agent probes,
 a backup or a restart to turn an unknown reading into a number. Do not bypass a

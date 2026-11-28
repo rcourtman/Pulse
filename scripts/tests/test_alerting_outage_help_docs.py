@@ -439,10 +439,64 @@ class AlertingOutageHelpDocsTest(unittest.TestCase):
             "TrueNAS (including protection and Health Alerts)",
             "Kubernetes (including inventory, record drawers, and Active Alerts)",
             "VMware (including Health Signals and Activity)",
-            "amber **Stale data** cue and expanded-drawer notice while preserving worse Offline, Degraded, or alert severity states",
+            "Physical Disks (Storage tables, **Physical Disks & SMART** cards, linked pool and guest physical disks, and disk drawers)",
+            "amber **Stale data** cue (or amber **Stale** verdict for clear stale disks) and expanded-drawer notice while preserving worse Offline, Degraded, Replace Now, Needs Attention, or alert severity states",
+            "Stale physical disk temperatures and SSD life stay muted as last known without triggering live **Running Hot**, and temperature or SMART history charts defer until live reporting recovers.",
         ):
             with self.subTest(flow_phrase=phrase):
                 self.assertIn(phrase, flow_doc)
+
+    def test_vm_disk_and_zfs_help_align_with_physical_disk_stale_reading_cues(
+        self,
+    ) -> None:
+        guest_disks_src = (
+            ROOT / "frontend-modern/src/components/Workloads/GuestPhysicalDisks.tsx"
+        ).read_text(encoding="utf-8")
+        pool_detail_src = (
+            ROOT
+            / "frontend-modern/src/features/storageBackups/storagePoolDetailPresentation.ts"
+        ).read_text(encoding="utf-8")
+        disk_drawer_src = (
+            ROOT / "frontend-modern/src/components/Storage/DiskDrawerOverview.tsx"
+        ).read_text(encoding="utf-8")
+        disk_pres_src = (
+            ROOT / "frontend-modern/src/features/storageBackups/diskPresentation.ts"
+        ).read_text(encoding="utf-8")
+
+        self.assertIn("data-disk-stale-cue", guest_disks_src)
+        self.assertIn("getPhysicalDiskStaleDetail", guest_disks_src)
+        self.assertIn("extractPhysicalDiskFreshness", pool_detail_src)
+        self.assertIn("getPhysicalDiskStaleDetail", pool_detail_src)
+        self.assertIn('data-testid="disk-drawer-stale-notice"', disk_drawer_src)
+        self.assertIn("label: 'Stale'", disk_pres_src)
+        self.assertIn("Replace Now", disk_pres_src)
+        self.assertIn("Needs Attention", disk_pres_src)
+
+        vm_doc = (ROOT / "docs/VM_DISK_MONITORING.md").read_text(encoding="utf-8")
+        vm_mirror = (
+            ROOT / "frontend-modern/public/docs/VM_DISK_MONITORING.md"
+        ).read_text(encoding="utf-8")
+        self.assertEqual(vm_doc, vm_mirror)
+        vm_norm = " ".join(vm_doc.split())
+        for phrase in (
+            "Linked physical disks shown in a guest drawer follow the same freshness rules when their host agent or Proxmox source stops updating.",
+            "Clear stale disks switch from **Healthy** to an amber **Stale** verdict, while **Replace Now** and **Needs Attention** disks keep their fault verdict beside an inline amber **Stale data** cue.",
+            "Retained temperatures stay muted as last-known values without triggering live **Running Hot**, and opening the disk drawer displays an inline stale-readings warning and defers temperature and SMART history charts until live reporting recovers.",
+        ):
+            with self.subTest(doc="VM_DISK_MONITORING.md", phrase=phrase):
+                self.assertIn(phrase, vm_norm)
+
+        zfs_doc = (ROOT / "docs/ZFS_MONITORING.md").read_text(encoding="utf-8")
+        zfs_mirror = (
+            ROOT / "frontend-modern/public/docs/ZFS_MONITORING.md"
+        ).read_text(encoding="utf-8")
+        self.assertEqual(zfs_doc, zfs_mirror)
+        zfs_norm = " ".join(zfs_doc.split())
+        for phrase in (
+            "When a linked physical disk's host agent or Proxmox source goes stale, pool member details keep its retained temperature muted as a last-known reading without triggering live **Running Hot**, and clear the stale cue automatically once live reporting resumes.",
+        ):
+            with self.subTest(doc="ZFS_MONITORING.md", phrase=phrase):
+                self.assertIn(phrase, zfs_norm)
 
 
 if __name__ == "__main__":
