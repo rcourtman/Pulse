@@ -2,8 +2,16 @@ package config
 
 import (
 	"bytes"
+	"crypto/aes"
+	"crypto/cipher"
+	"crypto/rand"
+	"crypto/sha256"
 	"encoding/base64"
+	"io"
+	"reflect"
 	"testing"
+
+	"golang.org/x/crypto/pbkdf2"
 )
 
 // Internal tests for unexported functions in export.go
@@ -336,5 +344,81 @@ func TestImportConfig_InvalidJSON(t *testing.T) {
 	err = cp.ImportConfig(encoded, "test-pass")
 	if err == nil {
 		t.Error("expected error for invalid JSON")
+	}
+}
+
+func TestExportPBKDF2ProductionDefaultsAndTestOverrideGuard(t *testing.T) {
+	// Non-test executables must always use full production PBKDF2 iterations,
+	// even if PULSE_TEST_EXPORT_PBKDF2_ITERATIONS is present in the environment.
+	for _, executable := range []string{"/usr/local/bin/pulse", "pulse", "pulse.exe", "/opt/pulse/pulse-server"} {
+		if got := resolveExportPBKDF2Iterations(executable, "1000"); got != currentExportPBKDF2Iterations {
+			t.Fatalf("resolveExportPBKDF2Iterations(%q, \"1000\") = %d, want %d", executable, got, currentExportPBKDF2Iterations)
+		}
+	}
+
+	// Out-of-range or malformed test overrides must fall back to production defaults.
+	for _, raw := range []string{"", "   ", "abc", "0", "-1", "999", "600001"} {
+		if got := resolveExportPBKDF2Iterations("/tmp/config.test", raw); got != currentExportPBKDF2Iterations {
+			t.Fatalf("resolveExportPBKDF2Iterations(.test, %q) = %d, want %d", raw, got, currentExportPBKDF2Iterations)
+		}
+	}
+
+	// Valid bounded overrides apply only to Go test binaries.
+	for _, executable := range []string{"/tmp/config.test", `C:\temp\config.test.exe`} {
+		if got := resolveExportPBKDF2Iterations(executable, "1000"); got != 1000 {
+			t.Fatalf("resolveExportPBKDF2Iterations(%q, \"1000\") = %d, want 1000", executable, got)
+		}
+	}
+
+	// Explicitly exercise real production 600,000-iteration encryption/decryption
+	// and 100,000-iteration legacy fallback with the test override cleared.
+	t.Setenv("PULSE_TEST_EXPORT_PBKDF2_ITERATIONS", "")
+	if got := exportPBKDF2Iterations(); got != currentExportPBKDF2Iterations {
+		t.Fatalf("default exportPBKDF2Iterations() = %d, want %d", got, currentExportPBKDF2Iterations)
+	}
+	wantDecrypt := []int{currentExportPBKDF2Iterations, legacyExportPBKDF2Iterations}
+	if got := decryptExportPBKDF2Iterations(); !reflect.DeepEqual(got, wantDecrypt) {
+		t.Fatalf("default decryptExportPBKDF2Iterations() = %v, want %v", got, wantDecrypt)
+	}
+
+	plaintext := []byte(`{"version":"4.4","production_kdf":true}`)
+	passphrase := "production-kdf-check"
+	encrypted, err := encryptWithPassphrase(plaintext, passphrase)
+	if err != nil {
+		t.Fatalf("encryptWithPassphrase (production iterations) failed: %v", err)
+	}
+	decrypted, err := decryptWithPassphrase(encrypted, passphrase)
+	if err != nil {
+		t.Fatalf("decryptWithPassphrase (production iterations) failed: %v", err)
+	}
+	if !bytes.Equal(decrypted, plaintext) {
+		t.Fatalf("production roundtrip mismatch: got %q, want %q", decrypted, plaintext)
+	}
+
+	// Construct a real 100,000-iteration legacy payload and confirm fallback decrypts it.
+	salt := make([]byte, 32)
+	if _, err := io.ReadFull(rand.Reader, salt); err != nil {
+		t.Fatalf("generate legacy salt: %v", err)
+	}
+	legacyKey := pbkdf2.Key([]byte(passphrase), salt, legacyExportPBKDF2Iterations, 32, sha256.New)
+	block, err := aes.NewCipher(legacyKey)
+	if err != nil {
+		t.Fatalf("legacy cipher: %v", err)
+	}
+	gcm, err := cipher.NewGCM(block)
+	if err != nil {
+		t.Fatalf("legacy gcm: %v", err)
+	}
+	nonce := make([]byte, gcm.NonceSize())
+	if _, err := io.ReadFull(rand.Reader, nonce); err != nil {
+		t.Fatalf("generate legacy nonce: %v", err)
+	}
+	legacyCiphertext := append(salt, gcm.Seal(nonce, nonce, plaintext, nil)...)
+	legacyDecrypted, err := decryptWithPassphrase(legacyCiphertext, passphrase)
+	if err != nil {
+		t.Fatalf("decryptWithPassphrase (legacy 100000 iterations) failed: %v", err)
+	}
+	if !bytes.Equal(legacyDecrypted, plaintext) {
+		t.Fatalf("legacy roundtrip mismatch: got %q, want %q", legacyDecrypted, plaintext)
 	}
 }

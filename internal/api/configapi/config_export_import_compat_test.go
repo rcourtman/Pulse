@@ -27,6 +27,8 @@ const (
 )
 
 func TestHandleImportConfigAcceptsLegacyVersion40Bundle(t *testing.T) {
+	// Exercise real production 600,000-iteration export and 100,000-iteration legacy fallback.
+	t.Setenv("PULSE_TEST_EXPORT_PBKDF2_ITERATIONS", "")
 	targetDir := t.TempDir()
 	t.Setenv("PULSE_DATA_DIR", targetDir)
 

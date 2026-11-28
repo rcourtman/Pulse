@@ -9,6 +9,9 @@ import (
 	"encoding/json"
 	"fmt"
 	"io"
+	"os"
+	"strconv"
+	"strings"
 	"time"
 
 	"github.com/rcourtman/pulse-go-rewrite/internal/alerts"
@@ -20,6 +23,7 @@ import (
 const (
 	currentExportPBKDF2Iterations = 600000
 	legacyExportPBKDF2Iterations  = 100000
+	minTestExportPBKDF2Iterations = 1000
 )
 
 // ExportData contains all configuration data for export
@@ -311,6 +315,37 @@ func (c *ConfigPersistence) ImportConfigWithOptions(encryptedData string, passph
 	return nil
 }
 
+func exportPBKDF2Iterations() int {
+	return resolveExportPBKDF2Iterations(os.Args[0], os.Getenv("PULSE_TEST_EXPORT_PBKDF2_ITERATIONS"))
+}
+
+func resolveExportPBKDF2Iterations(executable, raw string) int {
+	if !isGoTestExecutable(executable) {
+		return currentExportPBKDF2Iterations
+	}
+	trimmed := strings.TrimSpace(raw)
+	if trimmed == "" {
+		return currentExportPBKDF2Iterations
+	}
+	iterations, err := strconv.Atoi(trimmed)
+	if err != nil || iterations < minTestExportPBKDF2Iterations || iterations > currentExportPBKDF2Iterations {
+		return currentExportPBKDF2Iterations
+	}
+	return iterations
+}
+
+func decryptExportPBKDF2Iterations() []int {
+	iterations := exportPBKDF2Iterations()
+	if iterations != currentExportPBKDF2Iterations {
+		return []int{iterations}
+	}
+	return []int{currentExportPBKDF2Iterations, legacyExportPBKDF2Iterations}
+}
+
+func isGoTestExecutable(executable string) bool {
+	return strings.HasSuffix(executable, ".test") || strings.HasSuffix(executable, ".test.exe")
+}
+
 // encryptWithPassphrase encrypts data using a passphrase-derived key
 func encryptWithPassphrase(plaintext []byte, passphrase string) ([]byte, error) {
 	// Generate salt
@@ -320,7 +355,7 @@ func encryptWithPassphrase(plaintext []byte, passphrase string) ([]byte, error) 
 	}
 
 	// Derive key from passphrase using PBKDF2
-	key := pbkdf2.Key([]byte(passphrase), salt, currentExportPBKDF2Iterations, 32, sha256.New)
+	key := pbkdf2.Key([]byte(passphrase), salt, exportPBKDF2Iterations(), 32, sha256.New)
 
 	// Create cipher
 	block, err := aes.NewCipher(key)
@@ -363,7 +398,7 @@ func decryptWithPassphrase(ciphertext []byte, passphrase string) ([]byte, error)
 
 	// Derive key from passphrase
 	var lastErr error
-	for _, iterations := range []int{currentExportPBKDF2Iterations, legacyExportPBKDF2Iterations} {
+	for _, iterations := range decryptExportPBKDF2Iterations() {
 		key := pbkdf2.Key([]byte(passphrase), salt, iterations, 32, sha256.New)
 
 		block, err := aes.NewCipher(key)
