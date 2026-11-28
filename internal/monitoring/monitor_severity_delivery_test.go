@@ -26,6 +26,7 @@ func TestMonitorSeverityDelivery(t *testing.T) {
 		{30, 0, "routing"}, {30, 0, "metric"}, {30, 0, "health"},
 	} {
 		t.Run(fmt.Sprintf("%s/cooldown%d/group%d", tc.policy, tc.cooldown, tc.group), func(t *testing.T) {
+			t.Parallel()
 			requests := make(chan string, 20)
 			server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 				var payload struct {

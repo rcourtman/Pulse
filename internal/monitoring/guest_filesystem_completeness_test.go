@@ -68,6 +68,7 @@ func TestVMFilesystemIncompletePollingPreservesHistoryAndBreach(t *testing.T) {
 		{"node-case-type", "node", `{"mountpoint":"/data","type":"ext4","TYPE":"tmpfs","disk":[{"dev":"/dev/vdb1"}],"total-bytes":9000,"used-bytes":8820}`},
 	} {
 		t.Run(tc.name, func(t *testing.T) {
+			t.Parallel()
 			var phase, fsCalls atomic.Int32
 			server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 				w.Header().Set("Content-Type", "application/json")

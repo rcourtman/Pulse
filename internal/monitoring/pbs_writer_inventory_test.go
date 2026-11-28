@@ -46,6 +46,7 @@ func TestPBSWriterInventoryDoesNotInventTerminalFailure(t *testing.T) {
 				{"partial-response", `{"data":[]}`, http.StatusPartialContent},
 			} {
 				t.Run(kind+"/"+family+"/"+invalid.name, func(t *testing.T) {
+					t.Parallel()
 					f := newPBSPosturePollFixture(t, 2, kind)
 					var phase atomic.Int32
 					var writes atomic.Int32

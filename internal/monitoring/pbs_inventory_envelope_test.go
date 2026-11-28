@@ -39,6 +39,7 @@ func TestPBSMissingInventoryArrayRetainsUnreadScope(t *testing.T) {
 			for _, body := range []string{`null`, `{}`, `{"data":null}`} {
 				for _, warm := range []bool{false, true} {
 					t.Run(fmt.Sprintf("%s/%s/%s/warm=%t", kind, stage, body, warm), func(t *testing.T) {
+						t.Parallel()
 						f := newPBSNamespaceContinuityFixture(t, kind)
 						if warm {
 							f.collect(t, true, nil)

@@ -30,6 +30,7 @@ func TestPBSWholeInventoryResponseRetainsEvidence(t *testing.T) {
 			for name, body := range bodies {
 				for _, warm := range []bool{false, true} {
 					t.Run(fmt.Sprintf("%s/%s/%s/warm=%t", kind, stage, name, warm), func(t *testing.T) {
+						t.Parallel()
 						f := newPBSNamespaceContinuityFixture(t, kind)
 						if warm {
 							f.collect(t, true, nil)

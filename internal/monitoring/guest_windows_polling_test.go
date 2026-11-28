@@ -42,6 +42,7 @@ func testGuestWindowsMeminfoPolling(t *testing.T) {
 	for _, kind := range []string{"client", "cluster-client"} {
 		for _, path := range []string{"cluster", "node"} {
 			t.Run(kind+"/"+path, func(t *testing.T) {
+				t.Parallel()
 				const mib = uint64(1024 * 1024)
 				var poll, fileReads, fsReads, configReads atomic.Int32
 				var locked, slowLockCheck atomic.Bool

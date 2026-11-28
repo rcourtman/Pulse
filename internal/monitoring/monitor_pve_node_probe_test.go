@@ -22,10 +22,12 @@ import (
 // reports both members online. Public reads initiate later ordinary recovery;
 // no guest command, backup, credential change or guest fence is exercised.
 func TestClusterNodeProbeEndpointProjection(t *testing.T) {
+	t.Parallel()
 	testClusterNodeProbeEndpointProjection(t, http.StatusInternalServerError, "QEMU guest agent is not running", true)
 }
 
 func TestClusterNodeInventoryEndpointProjection(t *testing.T) {
+	t.Parallel()
 	for _, tc := range []struct {
 		name, body string
 		complete   bool
@@ -34,7 +36,10 @@ func TestClusterNodeInventoryEndpointProjection(t *testing.T) {
 		{"duplicate", `{"data":{},"data":[]}`, true},
 		{"truncated", `{"data":[{"node":"member","status":"online"}]}`, false},
 	} {
-		t.Run(tc.name, func(t *testing.T) { testClusterNodeProbeEndpointProjection(t, http.StatusOK, tc.body, tc.complete) })
+		t.Run(tc.name, func(t *testing.T) {
+			t.Parallel()
+			testClusterNodeProbeEndpointProjection(t, http.StatusOK, tc.body, tc.complete)
+		})
 	}
 }
 

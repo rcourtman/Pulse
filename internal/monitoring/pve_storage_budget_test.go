@@ -124,6 +124,7 @@ func TestPVEStorageBudgetPublishesAcceptedListings(t *testing.T) {
 		for _, phase := range []string{"content/node-a/tail", "storage/node-b", "content/node-b/local", "retry", "assignment"} {
 			for _, cold := range []bool{false, true} {
 				t.Run(fmt.Sprintf("%s/%s/cold=%t", kind, phase, cold), func(t *testing.T) {
+					t.Parallel()
 					f, c := newStorageBudgetFixture(t, kind)
 					pollStorageBudget(t, f, c, context.Background())
 					before := f.points(t)
