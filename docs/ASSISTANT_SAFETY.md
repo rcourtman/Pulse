@@ -18,19 +18,25 @@ Every tool call uses the shared `agentcapabilities` classification.
 | `resolve` | Discovery and query tools that find resources |
 | `read` | Read-only tools such as logs, metrics, status and config |
 | `write` | Tools that change Pulse state or infrastructure through governed operations |
-| `user_input` | Interactive tools that ask you something |
+| `user_input` | Retired interactive prompt classification (`pulse_question` is no longer offered by any profile and is refused if called) |
 
-`ClassifyToolCall` delegates to the shared classifier. A write classification
-is not proof that infrastructure executed or that an action succeeded.
-Canonical planning itself can persist Pulse state without changing a resource.
+`ClassifyToolCall` delegates to the shared classifier, and unknown tool names
+default to `write` so newly introduced tools cannot bypass governed-action
+checks accidentally. A write classification is not proof that infrastructure
+executed or that an action succeeded. Canonical planning itself can persist
+Pulse state without changing a resource.
 
 ## Enforced authority
 
 Execution profiles and tool permissions limit the capabilities available to a
 run. The canonical action lifecycle validates the target, capability, parameters,
 actor and current policy. It persists the action plan and requires the applicable
-approval before execution. The model cannot grant itself permission by describing
-a change as safe or by performing an unrelated read first.
+approval before execution. Raw command execution is retired
+(`raw_command_retired`, HTTP `410`) in favor of advertised typed resource
+actions, and callers whose Pulse role cannot run actions receive a host-command
+authority refusal rather than host-command access. The model cannot grant itself
+permission by describing a change as safe or by performing an unrelated read
+first.
 
 Turn, evidence and cost budgets remain explicit bounds. Scheduling, tenant and
 actor identity, idempotency and execution verification belong to their owning
@@ -52,12 +58,14 @@ was resolved.
 
 ## Model responsibility and limits
 
-The model chooses when to read, ask, plan or conclude within the available
-capabilities and explicit budgets. Assistant does not require an unrelated read
-after every write, infer verification from a call sequence, or rewrite saved
-answers because they contain lifecycle words. Model conclusions can still be
-wrong. Regression tests, real-model qualification and independent observations
-are needed to assess useful diagnosis and verified customer outcomes.
+The model chooses when to read, plan or conclude within the available
+capabilities and explicit budgets. Interactive `pulse_question` prompts are
+retired alongside the in-app web chat window. Assistant does not require an
+unrelated read after every write, infer verification from a call sequence, or
+rewrite saved answers because they contain lifecycle words. Model conclusions
+can still be wrong. Regression tests, real-model qualification and independent
+observations are needed to assess useful diagnosis and verified customer
+outcomes.
 
 The wider Patrol and Assistant redesign remains under qualification. Local
 fixture results do not establish reliability across customer environments.

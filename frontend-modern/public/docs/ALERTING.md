@@ -201,6 +201,16 @@ retry delays:
   the readings you need in **Machines**. Check **Docker** hosts separately:
   container reports use their own stream and can stall even while machine
   reports keep arriving from the same agent.
+- **Platform alert tables:** Across Docker (**Active Alerts**), Kubernetes
+  (**Active Alerts**), TrueNAS (**Health Alerts**), and VMware (**Health
+  Signals**), rows whose provider or agent stopped reporting show an amber
+  **Stale data** cue beneath the resource name while keeping their
+  **Critical**, **Warning**, or **Info** severity indicator visible. Expanding
+  the row displays a warning notice stating that the alert reflects the last
+  report received and may no longer be current, along with the last collection
+  error when recorded. The cue clears automatically once live reporting
+  resumes. A stale alert entry does not prove the condition is still active or
+  that it cleared, and acknowledging an alert does not restore collection.
 - **Alert rule evaluation:** If a threshold alert is already open,
   [check whether it was reevaluated](#check-whether-an-open-threshold-alert-was-reevaluated)
   through `GET /api/alerts/active` without changing a rule or forcing an alert.
