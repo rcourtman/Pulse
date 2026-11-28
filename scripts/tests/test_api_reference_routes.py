@@ -115,6 +115,21 @@ ROUTE_ANCHORS = [
     ("`PUT /api/notifications/email` (admin, `settings:write`)",
      "internal/api/alerting/notifications.go",
      'case path == "/email" && r.Method == http.MethodPut:\n\t\tif !requireAnyScope(config.ScopeSettingsWrite'),
+    ("`POST /api/updates/rollback` (`settings:write`)",
+     "internal/api/router_routes_registration.go",
+     'r.mux.HandleFunc("/api/updates/rollback", RequireAdmin(r.config, RequireScope(config.ScopeSettingsWrite, updateHandlers.HandleRollbackUpdate)))'),
+    ("`GET /api/updates/release-notes` (authenticated, `monitoring:read`)",
+     "internal/api/router_routes_registration.go",
+     'r.mux.HandleFunc("/api/updates/release-notes", RequireAuth(r.config, RequireScope(config.ScopeMonitoringRead, updateHandlers.HandleGetReleaseNotes)))'),
+    ("`GET /api/updates/release-notes/assets/{tag}/{name}` (authenticated, `monitoring:read`)",
+     "internal/api/router_routes_registration.go",
+     'r.mux.HandleFunc("/api/updates/release-notes/assets/", RequireAuth(r.config, RequireScope(config.ScopeMonitoringRead, updateHandlers.HandleGetReleaseNoteImage)))'),
+    ("`POST /api/auto-unregister`",
+     "internal/api/router_routes_registration.go",
+     'r.mux.HandleFunc("/api/auto-unregister", r.configHandlers.HandleAutoUnregister)'),
+    ("`GET /api/agent/capabilities`",
+     "internal/api/router_routes_monitoring.go",
+     'r.mux.HandleFunc("/api/agent/capabilities", HandleAgentCapabilitiesManifest)'),
 ]
 
 
@@ -294,6 +309,54 @@ class APIReferenceRoutesTest(unittest.TestCase):
         )
         self.assertIn("The reason is required and is at most 240 characters.", suppress)
         self.assertEqual(read("frontend-modern/public/docs/API.md"), self.doc)
+
+    def test_updates_auto_unregister_and_agent_capabilities_contracts_match_runtime(self) -> None:
+        updates_src = read("internal/api/updates.go")
+        setup_src = read("internal/api/configapi/config_setup_handlers.go")
+        caps_src = read("internal/api/agent_capabilities.go")
+        auto_update_doc = read("docs/AUTO_UPDATE.md")
+
+        for token in (
+            "r.Body = http.MaxBytesReader(w, r.Body, 8*1024)",
+            'w.Header().Set("Cache-Control", "no-store")',
+            'w.Header().Set("X-Cache", "HIT")',
+            'w.Header().Set("Cache-Control", "no-cache, no-transform")',
+            'w.Header().Set("X-Accel-Buffering", "no")',
+            'w.Header().Set("Cache-Control", "private, max-age=86400, immutable")',
+            "Limit: 50, // Default limit",
+        ):
+            self.assertIn(token, updates_src)
+
+        for token in (
+            "http.MaxBytesReader(w, r.Body, 64*1024)",
+            'http.Error(w, "source must be \'script\'", http.StatusBadRequest)',
+            'http.Error(w, "Pulse setup token required", http.StatusUnauthorized)',
+            'http.Error(w, "Invalid or expired setup token", http.StatusUnauthorized)',
+        ):
+            self.assertIn(token, setup_src)
+
+        self.assertIn('w.Header().Set("Cache-Control", "public, max-age=300")', caps_src)
+
+        prose = " ".join(self.doc.split())
+        for phrase in (
+            "strict JSON body up to 8 KiB (`{\"downloadUrl\": \"...\", \"allowDowngrade\": false}`)",
+            "restores the retained managed backup recorded on an update history entry using a strict JSON body up to 8 KiB (`{\"eventId\": \"<event_id>\"}`)",
+            "rate-limited per client IP with a 5-second cache (`X-Cache: HIT` or `MISS`)",
+            "`text/event-stream`, `Cache-Control: no-cache, no-transform`, `X-Accel-Buffering: no`",
+            "optional `limit`, default `50`, and `status` filter",
+            "available to non-admin authenticated users for the What's New card",
+            "`Cache-Control: private, max-age=86400, immutable`",
+            "64 KiB body limit",
+            "`source` set to `\"script\"`",
+            "`401` (`Pulse setup token required`)",
+            "`401` (`Invalid or expired setup token`)",
+            "`Cache-Control: public, max-age=300`",
+        ):
+            self.assertIn(phrase, prose)
+
+        self.assertIn("`POST /api/updates/rollback` (admin `settings:write`, JSON `{\"eventId\": \"<event_id>\"}`)", auto_update_doc)
+        self.assertEqual(read("frontend-modern/public/docs/API.md"), self.doc)
+        self.assertEqual(read("frontend-modern/public/docs/AUTO_UPDATE.md"), auto_update_doc)
 
     def test_negative_controls_fail_when_reference_or_code_drift(self) -> None:
         # An invented scope on a route line is reported.

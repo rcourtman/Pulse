@@ -1038,6 +1038,22 @@ Success responses now carry the canonical stored identity and caller boundary
 back to the installer or runtime-side Unified Agent:
 `{"status":"success","action":"use_token","type":"pve|pbs","source":"agent|script","host":"https://...","nodeId":"<stored-name>","nodeName":"<stored-name>",...}`.
 
+### Auto-Unregister (Public)
+`POST /api/auto-unregister`
+Removes a Proxmox VE or PBS node during setup-script teardown using the
+temporary setup token carried in the JSON `authToken` field (64 KiB body
+limit). Requires `source` set to `"script"`, `type` (`pve` or `pbs`), `host`,
+and `serverName`, and accepts an optional canonical Pulse-managed `tokenId`.
+Missing `authToken` returns `401` (`Pulse setup token required`) and invalid or
+expired tokens return `401` (`Invalid or expired setup token`).
+
+### Agent Capabilities Manifest (Public)
+`GET /api/agent/capabilities`
+Returns the cacheable JSON discovery manifest (`Cache-Control: public, max-age=300`)
+listing Pulse's agent-accessible API capabilities. The manifest itself requires
+no credentials so agents can inspect available operations before enrolling,
+while every underlying endpoint enforces its own authentication and scopes.
+
 ### Agent Install Command
 `POST /api/agent-install-command` (admin, `settings:write`)
 Mints an install token for an agent. `type` is `host`, `pve` or `pbs`.
@@ -1653,7 +1669,10 @@ workers. Under `POLL_TASK_WORKERS`, a confirmed removal releases a claim still
 waiting in `waiting_for_slot` without starting provider setup or changing the
 concurrency limit so another due target can proceed, preserving any explicit
 replacement's due time while an already-admitted `running` poll keeps its claim
-until it returns. Check the other paths separately with
+until it returns. Both local per-monitor workers and the process dispatcher
+also re-check claim retirement at the execution boundary before provider setup,
+so a target removed or replaced after dequeue or slot admission skips starting
+an obsolete poll while preserving any explicit replacement's own due time. Check the other paths separately with
 [System Health](#system-health), [Active alerts](#active-alerts),
 [missing-data checks](FAQ.md#no-data-showing) and
 [outage detection](ALERTING.md#detect-an-outage-of-pulse-itself). Do not
@@ -1661,18 +1680,38 @@ reset breakers, toggle adaptive polling or restart Pulse just to gather a
 reading.
 
 ### Updates (Admin)
-- `GET /api/updates/check`
-- `POST /api/updates/apply`
-- `GET /api/updates/status`
-- `GET /api/updates/stream`
-- `GET /api/updates/plan?version=X.Y.Z` (optional `channel`, accepts `v` prefix):
+- `GET /api/updates/check` (`settings:read`): checks available server releases
+  (`Cache-Control: no-store`). Accepts optional `channel` (`stable` or `rc`)
+  and boolean `force` query parameters.
+- `POST /api/updates/apply` (`settings:write`): starts an in-app server update
+  using a strict JSON body up to 8 KiB (`{"downloadUrl": "...", "allowDowngrade": false}`)
+  and optional `?channel=stable|rc`. Runs the readiness checks first and
+  returns `409` when readiness is `blocked`, an update is already in progress,
+  or the target cannot be applied for the current channel, version, or
+  deployment.
+- `POST /api/updates/rollback` (`settings:write`): restores the retained
+  managed backup recorded on an update history entry using a strict JSON body
+  up to 8 KiB (`{"eventId": "<event_id>"}`). Returns `400` on missing or
+  invalid `eventId`, `404` when the history entry does not exist, and `409`
+  when an update is in progress, no retained managed backup exists, or the
+  server runs in Docker.
+- `GET /api/updates/status` (`settings:read`): returns current update progress,
+  rate-limited per client IP with a 5-second cache (`X-Cache: HIT` or `MISS`).
+- `GET /api/updates/stream` (`settings:read`): Server-Sent Events stream of
+  update progress (`text/event-stream`, `Cache-Control: no-cache, no-transform`,
+  `X-Accel-Buffering: no`) retaining token stream authority.
+- `GET /api/updates/plan?version=X.Y.Z` (`settings:read`, optional `channel`, accepts `v` prefix):
   returns the deployment update plan and `readiness` (`ready`, `attention`, or
   `blocked`) with per-check results (`server-update-path`, `agent-continuity`,
   `agent-migration-security`, `agent-token-scopes`, and
   `container-data-persistence` when a Docker server stores its data directory
   on the container's ephemeral root filesystem).
-- `GET /api/updates/history`
-- `GET /api/updates/history/entry?id=<event_id>`
+- `GET /api/updates/history` (`settings:read`): lists recorded update history
+  entries (optional `limit`, default `50`, and `status` filter, returning `503`
+  when update history is unavailable).
+- `GET /api/updates/history/entry?id=<event_id>` (`settings:read`): returns one
+  update history entry (`400` without `id`, `404` if not found, `503` if
+  unavailable).
 - `GET /api/updates/pro-runtime` (`settings:read`): whether this community build
   can switch to the Pulse Pro runtime. The license server decides eligibility;
   `reason` explains a switch that is not offered (`not_activated`,
@@ -1682,6 +1721,14 @@ reading.
   Pro runtime in place through the same verified, backed-up apply as an update
   (systemd and Proxmox LXC installs only). Returns `409` when no in-place switch
   is offered.
+- `GET /api/updates/release-notes` (authenticated, `monitoring:read`): returns
+  the published GitHub release notes for the currently running release version
+  (available to non-admin authenticated users for the What's New card, returning
+  `404` on development or source builds).
+- `GET /api/updates/release-notes/assets/{tag}/{name}` (authenticated, `monitoring:read`):
+  serves a PNG release-note screenshot for the currently running release tag
+  (`Cache-Control: private, max-age=86400, immutable`, returning `404` for
+  development builds, source builds, or mismatched tags).
 
 ### Infrastructure Updates
 - `GET /api/infra-updates` (requires `monitoring:read`)

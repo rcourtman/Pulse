@@ -298,6 +298,10 @@ is not zero):
   without starting provider setup or changing the worker limit so another due
   target can run, preserving any explicit replacement's due time while
   already-admitted `stage="running"` polls keep their claim until they return.
+  Both default per-monitor workers and the process dispatcher also check claim
+  retirement again at the execution boundary before provider setup, so a target
+  removed or replaced after dequeue or slot admission skips starting an
+  obsolete poll while keeping any saved replacement's own due time.
   A stopped scheduler drops out of
   `pulse_scheduler_queued_poll_overdue_seconds` even if a blocked worker has
   not returned yet, so keep checking
