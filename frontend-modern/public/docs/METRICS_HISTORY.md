@@ -103,6 +103,27 @@ inspection. When reporting a display disagreement, keep the panel, time,
 range, labels and relevant values with consistent private aliases; do not
 share raw responses, credentials or a full network export.
 
+### Zoom and custom time windows
+
+On desktop, click and drag horizontally across a drawer chart to highlight a
+synchronized time selection across every panel in the drawer. Releasing the
+pointer zooms all panels to that exact window, down to a minimum span of 1
+minute. Press **Escape** while dragging to cancel without closing the drawer.
+
+For keyboard use or exact timestamps, click **Select time window** to open the
+**Start** and **End** editor and choose **Apply** (or **Cancel** / **Escape**).
+When a local time falls in a daylight-saving fallback overlap, Pulse offers a
+timezone-offset selector for that endpoint. **Select time window** stays
+available even when the current preset has no stored readings, so you can jump
+directly to an older period. Custom drawer windows must be between 1 minute and
+365 days and cannot end in the future.
+
+While zoomed, the toolbar shows the active window summary and **Reset zoom**.
+Live 30-second background polling and live fallback readings pause so the pinned
+window stays stable while you inspect it. Double-click a chart, click **Reset
+zoom**, or choose a preset in **History range** to return to live preset
+polling.
+
 ### Proxmox live migration and VMID reuse
 
 When a Proxmox VE guest migrates to another node in the same cluster, Pulse
@@ -255,8 +276,9 @@ These endpoints require authentication with the `monitoring:read` scope.
 - `resourceId` (required): the source identifier used by that chart, not its
   display name (for Proxmox guests this is normally `instance:node:vmid`)
 - `metric` (optional): `cpu`, `memory`, `disk`, etc. Omit to return all metrics for the resource.
-- `range` (optional): Positive whole days (for example `7d`, `90d`) or a duration like `30m` or `24h`. Omitted or blank defaults to `24h`. Maximum `365d` (`8760h`) per request on every plan; invalid or longer ranges return `400`. This is a read limit, not a retention setting.
-- `maxPoints` (optional): Downsample to a target number of points
+- `range` (optional): Positive whole days (for example `7d`, `90d`) or a duration like `30m` or `24h`. Omitted or blank defaults to `24h`. Maximum `365d` (`8760h`) per request on every plan. Invalid or longer ranges return `400`. This is a read limit, not a retention setting.
+- `start` and `end` (optional, mutually exclusive with `range`): Positive integer Unix-millisecond timestamps defining an exact custom window. Both must be provided once when either is supplied, `end` must be greater than `start`, the span must be between `1s` and `365d`, and `end` cannot be in the future. Combining `start`/`end` with `range` or violating these bounds returns `400`.
+- `maxPoints` (optional): Downsample to a target number of points within the requested range or custom window.
 
 For a one-off check, open the affected resource's History panel in your signed-in
 Pulse browser. If an API read is needed, use the path and query from that
@@ -287,7 +309,9 @@ share only the relevant manually redacted error and bounded observations.
 
 With `metric=cpu` (or another explicit metric), the response has a `points`
 array. Omitting `metric` instead returns a `metrics` object keyed by metric
-name, not the same single-series shape. Inspect timestamps and `source` too:
+name, not the same single-series shape. Responses include resolved `start` and
+`end` Unix-millisecond bounds, with `range` set to `"custom"` when queried with
+`start` and `end`. Inspect timestamps and `source` too:
 `store` is persisted history; `memory` or `live` fallback does not establish
 durable historical coverage. An HTTP 200 with no points proves neither zero
 usage nor successful collection, and a non-zero current value does not prove
