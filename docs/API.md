@@ -1264,11 +1264,12 @@ For an existing incident whose notifications should be paused without clearing
 it, use the snooze and unsnooze endpoints below.
 
 - `GET /api/alerts/config`
-- `PUT /api/alerts/config` (up to 1 MiB JSON object): replaces only the
-  top-level keys the body carries. Any omitted top-level key keeps its stored
-  value, and the merged config is normalized as before. Updates carrying more
-  than 500 `customRules`, more than 100 `filterConditions.filters` on a custom
-  rule, or more than 100 `schedule.escalation.levels` are rejected with `400`.
+- `PUT /api/alerts/config` — replaces only the top-level keys the body
+  carries; a key left out keeps its stored value, and the merged config is
+  normalized as before. The body must be a JSON object.
+  Request bodies are limited to 1 MiB, and updates carrying more than 500
+  `customRules`, more than 100 `filterConditions.filters` on a custom rule, or
+  more than 100 `schedule.escalation.levels` are rejected with `400`.
 - `GET /api/alerts/intent-policies` (`monitoring:read`)
 - `PUT /api/alerts/intent-policies` (`monitoring:write`)
 - `POST /api/alerts/intent-policies/preview` (`monitoring:read`)

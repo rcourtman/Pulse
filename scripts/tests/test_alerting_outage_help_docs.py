@@ -611,8 +611,7 @@ class AlertingOutageHelpDocsTest(unittest.TestCase):
         self.assertEqual(api_doc, api_mirror)
         api_norm = " ".join(api_doc.split())
         for phrase in (
-            "`PUT /api/alerts/config` (up to 1 MiB JSON object)",
-            "more than 500 `customRules`, more than 100 `filterConditions.filters` on a custom rule, or more than 100 `schedule.escalation.levels` are rejected with `400`",
+            "Request bodies are limited to 1 MiB, and updates carrying more than 500 `customRules`, more than 100 `filterConditions.filters` on a custom rule, or more than 100 `schedule.escalation.levels` are rejected with `400`",
             "`POST /api/alerts/incidents/note` (up to 8 KiB JSON body:",
             "`POST /api/alerts/bulk/acknowledge` (up to 1 MiB JSON body: `{ \"alertIdentifiers\": [\"alert-id-1\", ...] }`, up to 16,384 identifiers)",
             "ignores any client-supplied `user` field",
