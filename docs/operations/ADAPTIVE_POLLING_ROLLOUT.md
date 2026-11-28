@@ -62,7 +62,11 @@ already taken (`pulse_scheduler_claimed_poll_overdue_seconds`, including while
 occupied in panic recovery logging). Under `POLL_TASK_WORKERS`, removing a
 target releases a claim still waiting for a worker slot without starting
 provider setup so other due targets are not held behind it, while an
-already-admitted poll still finishes before releasing its claim.
+already-admitted poll still finishes before releasing its claim. Both local
+per-monitor workers and the process dispatcher also check claim retirement at
+the execution boundary before provider setup, skipping obsolete polls retired
+after dequeue or slot admission while preserving any explicit replacement's due
+time.
 See [where a poll stopped progressing](../monitoring/ADAPTIVE_POLLING.md#check-where-a-poll-stopped-progressing)
 before interpreting a flat result or changing the cadence again. An open
 breaker is a backoff state, not proof of a new regression.

@@ -665,10 +665,11 @@ intended Pulse destination:
   verification on a saved connection. To update a changed certificate pin,
   verify the new fingerprint independently and edit the saved connection as an
   administrator.
-- **Command-enabled install tokens:** when an API token requests an agent
-  install token with remote commands enabled, Pulse requires `agent:exec` on
-  the calling token in addition to `settings:write`, so a settings-only token
-  cannot mint a command-capable credential.
+
+**Command-enabled install tokens:** when an API token requests an agent
+install token with remote commands enabled, Pulse requires `agent:exec` on
+the calling token in addition to `settings:write`, so a settings-only token
+cannot mint a command-capable credential.
 
 Manage long-lived tokens in **Settings → API Access**, in the **Security** group,
 using the [API token guidance](docs/CONFIGURATION.md#-api-tokens). The legacy

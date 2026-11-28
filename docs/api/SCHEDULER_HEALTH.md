@@ -290,7 +290,11 @@ a confirmed removal also retires a claim still waiting for a process worker
 slot (`stage="waiting_for_slot"`): the dispatcher releases that claim without
 starting provider setup or changing the concurrency cap and moves on to
 another due target, preserving any explicit replacement's due time while an
-already-admitted `stage="running"` poll keeps its claim until it returns.
+already-admitted `stage="running"` poll keeps its claim until it returns. Both
+local per-monitor workers and the process dispatcher also check claim
+retirement at the execution boundary before provider setup, so retirement after
+dequeue or slot admission skips starting an obsolete poll while keeping the
+replacement's own due time.
 
 If no result advanced, read `retry.after` beside the later snapshot's
 `updatedAt`. For an `open` or `half_open` breaker, `retryAt` is the earliest

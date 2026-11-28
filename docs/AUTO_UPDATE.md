@@ -433,7 +433,7 @@ rollback shortcut. An image change alone is not a data rollback.
 
 ## Update History
 
-History entries are stored in `update-history.jsonl` under the Pulse data directory (`/etc/pulse` or `/data`), and exposed via `GET /api/updates/history` (admin auth required).
+History entries are stored in `update-history.jsonl` under the Pulse data directory (`/etc/pulse` or `/data`), and exposed via `GET /api/updates/history` and `GET /api/updates/history/entry?id=<event_id>` (admin `settings:read`). In-app rollback from a retained managed backup calls `POST /api/updates/rollback` (admin `settings:write`, JSON `{"eventId": "<event_id>"}`), rejecting Docker installs, missing backups, or concurrent updates with HTTP `409`.
 
 Systemd/LXC update runs write detailed logs to `/var/log/pulse/update-<timestamp>.log`.
 

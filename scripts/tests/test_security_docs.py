@@ -460,6 +460,11 @@ class SecurityDocsTest(unittest.TestCase):
             with self.subTest(phrase=phrase):
                 self.assertIn(phrase, guide)
 
+        # Keep the two-bullet list shape expected by registrationSecurityGuide.test.ts.
+        bullet_lines = [line for line in section.splitlines() if line.startswith("- ")]
+        self.assertEqual(len(bullet_lines), 2)
+        self.assertEqual(DOC.read_bytes(), (ROOT / "frontend-modern/public/docs/SECURITY.md").read_bytes())
+
 
 if __name__ == "__main__":
     unittest.main()

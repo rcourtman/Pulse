@@ -212,7 +212,10 @@ When expected results stop, check the two claimed-poll stages on successive scra
   without starting provider setup or changing the `POLL_TASK_WORKERS` limit
   and moves on to another due target. An explicit replacement keeps its own
   due time, while a poll already admitted to `running` keeps its claim until
-  it returns.
+  it returns. Both local per-monitor workers and the process dispatcher also
+  re-check claim retirement at the execution boundary before provider setup, so
+  a target removed or replaced after dequeue or slot admission skips starting
+  an obsolete poll while keeping the replacement's own schedule.
 - `running`: a worker took the poll but has not returned, including task
   preparation, provider calls, rescheduling and recovery logging. A worker
   stays visible in this stage while occupied in panic recovery logging even

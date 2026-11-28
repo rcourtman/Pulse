@@ -232,6 +232,7 @@ class WatchdogHelpDocsTest(unittest.TestCase):
             "if !limiter.acquireClaim(ctx, m.taskQueue, task) {",
             "retired := q.watchClaimRetirement(task)",
             "if ctx.Err() != nil || !q.canStartClaim(task) {",
+            "if ctx.Err() != nil || !m.taskQueue.canStartClaim(task) {",
         ):
             with self.subTest(retired_claim_worker_token=token):
                 self.assertIn(token, workers_src)
@@ -251,6 +252,7 @@ class WatchdogHelpDocsTest(unittest.TestCase):
                 (
                     'Under POLL_TASK_WORKERS, a confirmed removal releases a claim still waiting under stage="waiting_for_slot" without starting provider setup or changing the worker limit so another due target can run',
                     'preserving any explicit replacement\'s due time while already-admitted stage="running" polls keep their claim until they return',
+                    "Both default per-monitor workers and the process dispatcher also check claim retirement again at the execution boundary before provider setup, so a target removed or replaced after dequeue or slot admission skips starting an obsolete poll while keeping any saved replacement's own due time",
                 ),
             ),
             (
@@ -258,6 +260,7 @@ class WatchdogHelpDocsTest(unittest.TestCase):
                 (
                     "If the connection or check is removed while its claim is still waiting for a slot, the dispatcher releases the retired claim without starting provider setup or changing the POLL_TASK_WORKERS limit and moves on to another due target",
                     "An explicit replacement keeps its own due time, while a poll already admitted to running keeps its claim until it returns",
+                    "Both local per-monitor workers and the process dispatcher also re-check claim retirement at the execution boundary before provider setup, so a target removed or replaced after dequeue or slot admission skips starting an obsolete poll while keeping the replacement's own schedule",
                 ),
             ),
             (
@@ -265,6 +268,25 @@ class WatchdogHelpDocsTest(unittest.TestCase):
                 (
                     'Under POLL_TASK_WORKERS, a confirmed removal also retires a claim still waiting for a process worker slot (stage="waiting_for_slot"): the dispatcher releases that claim without starting provider setup or changing the concurrency cap and moves on to another due target',
                     'preserving any explicit replacement\'s due time while an already-admitted stage="running" poll keeps its claim until it returns',
+                    "Both local per-monitor workers and the process dispatcher also check claim retirement at the execution boundary before provider setup, so retirement after dequeue or slot admission skips starting an obsolete poll while keeping the replacement's own due time",
+                ),
+            ),
+            (
+                "docs/monitoring/ADAPTIVE_POLLING.md",
+                (
+                    "Both local per-monitor workers and the process dispatcher also re-check claim retirement at the execution boundary before provider setup, so a target removed or replaced after dequeue or slot admission skips starting an obsolete poll and preserves the replacement's own due time",
+                ),
+            ),
+            (
+                "docs/operations/ADAPTIVE_POLLING_ROLLOUT.md",
+                (
+                    "Both local per-monitor workers and the process dispatcher also check claim retirement at the execution boundary before provider setup, skipping obsolete polls retired after dequeue or slot admission while preserving any explicit replacement's due time",
+                ),
+            ),
+            (
+                "docs/API.md",
+                (
+                    "Both local per-monitor workers and the process dispatcher also re-check claim retirement at the execution boundary before provider setup, so a target removed or replaced after dequeue or slot admission skips starting an obsolete poll while preserving any explicit replacement's own due time",
                 ),
             ),
         )
