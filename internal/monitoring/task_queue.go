@@ -28,7 +28,9 @@ type scheduledTaskEntry struct {
 	task         ScheduledTask // queued task, or the explicit successor of a claim
 	index        int           // -1 while a worker owns the entry
 	followup     claimFollowup
-	keepSchedule bool // queued intent set by an explicit edit or a worker's retry
+	keepSchedule bool          // queued intent set by an explicit edit or a worker's retry
+	claimRetired bool          // sticky until completion, even if an explicit replacement arrives
+	retirement   chan struct{} // allocated only for a process dispatcher that has to wait
 }
 
 // Keep the existing type and name strings as separate fields. Routine plan
@@ -208,6 +210,35 @@ func (q *TaskQueue) refreshAvailabilitySchedule(localTasks map[string]ScheduledT
 	}
 }
 
+func (q *TaskQueue) liveClaimLocked(task ScheduledTask) *scheduledTaskEntry {
+	entry := q.entries[taskQueueKey{task.InstanceType, task.InstanceName}]
+	if entry == nil || entry.index >= 0 || entry.claimRetired {
+		return nil
+	}
+	return entry
+}
+
+// watchClaimRetirement also detects removal before the dispatcher began
+// waiting. A nil result means the claim can no longer start.
+func (q *TaskQueue) watchClaimRetirement(task ScheduledTask) <-chan struct{} {
+	q.mu.Lock()
+	defer q.mu.Unlock()
+	entry := q.liveClaimLocked(task)
+	if entry == nil {
+		return nil
+	}
+	if entry.retirement == nil {
+		entry.retirement = make(chan struct{})
+	}
+	return entry.retirement
+}
+
+func (q *TaskQueue) canStartClaim(task ScheduledTask) bool {
+	q.mu.Lock()
+	defer q.mu.Unlock()
+	return q.liveClaimLocked(task) != nil
+}
+
 // completeClaim returns ownership and optionally queues its successor in the
 // same critical section. An explicit edit or removal made during the claim
 // takes precedence over the returning worker's normal schedule.
@@ -236,6 +267,8 @@ func (q *TaskQueue) completeClaim(task, next ScheduledTask, reschedule pollResch
 		return
 	}
 	entry.followup = followWorkerSchedule
+	entry.claimRetired = false
+	entry.retirement = nil
 	previous, hadHead := q.headTimeLocked()
 	q.pushLocked(entry)
 	q.wakeEarlierHeadLocked(previous, hadHead)
@@ -268,6 +301,12 @@ func (q *TaskQueue) Remove(instanceType InstanceType, instance string) {
 func (q *TaskQueue) removeLocked(key taskQueueKey, entry *scheduledTaskEntry) {
 	if entry.index < 0 {
 		entry.followup = dropWorkerSchedule
+		if !entry.claimRetired {
+			entry.claimRetired = true
+			if entry.retirement != nil {
+				close(entry.retirement)
+			}
+		}
 		return
 	}
 	heap.Remove(&q.heap, entry.index)
