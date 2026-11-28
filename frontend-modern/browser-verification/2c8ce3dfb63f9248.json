@@ -1,0 +1,50 @@
+{
+  "version": 1,
+  "base_sha": "c551062b59cce403e49e544c2d2089aac0a550c7",
+  "verified_at": "2026-11-28T06:01:11Z",
+  "result": "passed",
+  "changed_paths": [
+    "frontend-modern/src/features/standalone/AgentsMachinesTable.tsx",
+    "frontend-modern/src/features/standalone/HostIdentityConflictNotice.tsx",
+    "frontend-modern/src/features/standalone/StandalonePageSurface.tsx",
+    "frontend-modern/src/features/standalone/StandaloneVirtualMachinesTable.tsx",
+    "frontend-modern/src/features/standalone/agentMachineTableModel.ts",
+    "frontend-modern/src/features/standalone/standaloneStaleness.ts",
+    "frontend-modern/src/features/standalone/standaloneVmTableModel.ts"
+  ],
+  "content_sha256": {
+    "frontend-modern/src/features/standalone/AgentsMachinesTable.tsx": "750c35e9a473ba5ab78a7b4097724e80e42c6f428664811f34ca22ec68c70de3",
+    "frontend-modern/src/features/standalone/HostIdentityConflictNotice.tsx": "5931f64a575d508a6bd787bd8257dbcf6374fa9ef5a59998ea62cee231104ee1",
+    "frontend-modern/src/features/standalone/StandalonePageSurface.tsx": "47ce5671060800a56abece2cf0b6fd041ee67539bf81ba083c8c52d35fd352e0",
+    "frontend-modern/src/features/standalone/StandaloneVirtualMachinesTable.tsx": "9cb8317caec095c879d076f09199ea71a2aace8d9571829ab1fe4ed2f5082c2c",
+    "frontend-modern/src/features/standalone/agentMachineTableModel.ts": "9f049abd061a6714e900f55854c275ff35c02a68d6c8a279721eda852e50fcb2",
+    "frontend-modern/src/features/standalone/standaloneStaleness.ts": "88ff3d292958685315d7f6bd9db73c5d02e77d962800a7b61fcf027fc282b5c0",
+    "frontend-modern/src/features/standalone/standaloneVmTableModel.ts": "993e3bc07a9bd1b7e36c397dd9deb757e28027bf4f2a8524012d78f65c4b813e"
+  },
+  "routes": [
+    "/standalone/machines",
+    "/standalone/vms"
+  ],
+  "viewports": [
+    {
+      "width": 1440,
+      "height": 940
+    },
+    {
+      "width": 360,
+      "height": 820
+    }
+  ],
+  "states": [
+    "final built production bundle served locally via pulse-worker-browser against a deterministic mocked Pulse estate (healthy host, backend telemetry_stale host with sourceStatus.agent error, offline host, and standalone VMs on both healthy and stale hosts; /api/version channel rc to enable preview /standalone/vms), compared side-by-side against unmodified base c551062b59cce403e49e544c2d2089aac0a550c7 across all captures",
+    "Desktop Light Chromium (1440x940) on /standalone/machines: before showed 0 stale banners, 0 inline stale cues, Healthy (2) / Degraded (0) with green status dot on the stale host; after renders amber table-level banner naming the stale host and last-report age, moves it to Healthy (1) / Degraded (1) with amber status dot, shows compact Stale · <age> inline cue beneath the machine name, and preserves offline danger styling",
+    "Desktop Light Chromium (1440x940) on /standalone/vms: before showed 0 stale banners and healthy green Running status for VMs hosted on the stale machine; after renders amber table-level banner naming the stale host, moves the affected VM into Attention with amber Running stale · <age> status, and leaves VMs on healthy hosts green",
+    "Touch Phone Dark WebKit (360x820) on /standalone/machines and /standalone/vms: verified dark-theme contrast, compact phone Stale / Running · stale copy, 0px horizontal overflow, and readable stacked amber banners and row drawers",
+    "Live recovery pass on both Desktop Light (1440x940) and Touch Phone Dark (360x820): when the stale machine resumes reporting fresh telemetry, banners, row cues, and drawer notices clear cleanly with 0 console errors, 0 page errors, and 0 HTTP >= 400 responses across all runs"
+  ],
+  "interactions": [
+    "clicked the stale machine row on /standalone/machines in both 1440x940 Chromium and 360x820 WebKit and verified the expanded detail row renders the amber inline stale notice with backend source error detail",
+    "navigated to /standalone/vms, clicked the VM hosted on the stale machine in both 1440x940 Chromium and 360x820 WebKit, and verified the expanded detail row renders the amber parent-host stale notice explaining that metrics are last-known values",
+    "triggered live state recovery on /standalone/machines and verified Healthy/Degraded filter counts return to normal and stale banners and inline cues disappear"
+  ]
+}

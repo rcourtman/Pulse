@@ -22,6 +22,7 @@ import { StackedDiskBar } from '@/components/Workloads/StackedDiskBar';
 import { StackedMemoryBar } from '@/components/Workloads/StackedMemoryBar';
 import { ActionIconButton } from '@/components/shared/Button';
 import { ColumnPicker } from '@/components/shared/ColumnPicker';
+import { InlineNotice } from '@/components/shared/InlineNotice';
 import { StatusDot } from '@/components/shared/StatusDot';
 import { TemperatureGauge } from '@/components/shared/TemperatureGauge';
 import { ResourceNameWithWebInterfaceLink } from '@/components/shared/WebInterfaceLink';
@@ -43,6 +44,7 @@ import {
 import {
   PlatformWindowedRows,
   PLATFORM_HEALTH_FILTER_OPTIONS,
+  PlatformResponsiveTableLabel,
   PlatformTableEmptyState,
   PlatformTableMetricFallback,
   PlatformTableRelativeTimeValue,
@@ -122,7 +124,12 @@ import {
   type AgentMachineTemperatureDetailSection,
   type AgentMachineTemperatureMetric,
 } from './agentMachineTableModel';
-import { getStandaloneResourceStatusIndicator } from './standalonePageModel';
+import {
+  describeStaleStandaloneMachines,
+  getStandaloneMachineStaleness,
+  getStandaloneMachineStatusIndicator,
+  hasExplicitBackendAgentStaleness,
+} from './standaloneStaleness';
 
 type MetricFallbackReason = {
   label: string;
@@ -143,6 +150,26 @@ const compactUnraidArrayReason = (message: string): string => {
 
 const hasPositiveTemperature = (celsius: number | undefined): celsius is number =>
   typeof celsius === 'number' && Number.isFinite(celsius) && celsius > 0;
+
+const TooltipSectionHeading: Component<{ title: string }> = (props) => (
+  <div class="mb-1 border-b border-border pb-1 font-semibold text-muted">{props.title}</div>
+);
+
+const TooltipOverflowNote: Component<{ count: number; noun: string }> = (props) => (
+  <Show when={props.count > 0}>
+    <div class="border-t border-border pt-1 text-[9px] text-muted">
+      +{props.count} more {props.noun}
+    </div>
+  </Show>
+);
+
+const TooltipMoreBadge: Component<{ count: number }> = (props) => (
+  <Show when={props.count > 0}>
+    <span class="rounded-sm border border-border px-1.5 py-0.5 text-[9px] text-muted">
+      +{props.count}
+    </span>
+  </Show>
+);
 
 const AgentMachineMetricTooltip: Component<{
   triggerDataAttribute: string;
@@ -274,9 +301,7 @@ const AgentMachineTemperatureCell: Component<{
       <For each={props.sections}>
         {(section) => (
           <section>
-            <div class="mb-1 border-b border-border pb-1 font-semibold text-muted">
-              {section.heading}
-            </div>
+            <TooltipSectionHeading title={section.heading} />
             <div class="space-y-0.5">
               <For each={section.rows}>
                 {(row) => (
@@ -354,11 +379,7 @@ const AgentMachineNetworkInterfacesList: Component<{
                     </span>
                   )}
                 </For>
-                <Show when={iface.addresses.length > maxAddressesPerInterface()}>
-                  <span class="rounded-sm border border-border px-1.5 py-0.5 text-[9px] text-muted">
-                    +{iface.addresses.length - maxAddressesPerInterface()}
-                  </span>
-                </Show>
+                <TooltipMoreBadge count={iface.addresses.length - maxAddressesPerInterface()} />
               </div>
             </Show>
             <Show
@@ -388,11 +409,7 @@ const AgentMachineNetworkInterfacesList: Component<{
           </div>
         )}
       </For>
-      <Show when={hiddenInterfaceCount() > 0}>
-        <div class="border-t border-border pt-1 text-[9px] text-muted">
-          +{hiddenInterfaceCount()} more interfaces
-        </div>
-      </Show>
+      <TooltipOverflowNote count={hiddenInterfaceCount()} noun="interfaces" />
     </div>
   );
 };
@@ -425,9 +442,7 @@ const AgentMachineNetworkCell: Component<{
       }
     >
       <section>
-        <div class="mb-1 border-b border-border pb-1 font-semibold text-muted">
-          Network Interfaces
-        </div>
+        <TooltipSectionHeading title="Network Interfaces" />
         <AgentMachineNetworkInterfacesList interfaces={props.interfaces} />
       </section>
     </AgentMachineMetricTooltip>
@@ -477,7 +492,7 @@ const AgentMachineIpCell: Component<{
       }
     >
       <section>
-        <div class="mb-1 border-b border-border pb-1 font-semibold text-muted">IP Addresses</div>
+        <TooltipSectionHeading title="IP Addresses" />
         <Show
           when={shownIps().length > 0}
           fallback={<div class="text-[9px] text-muted">{getWorkloadsGuestNetworkEmptyState()}</div>}
@@ -493,19 +508,13 @@ const AgentMachineIpCell: Component<{
                 </span>
               )}
             </For>
-            <Show when={hiddenIpCount() > 0}>
-              <span class="rounded-sm border border-border px-1.5 py-0.5 text-[9px] text-muted">
-                +{hiddenIpCount()}
-              </span>
-            </Show>
+            <TooltipMoreBadge count={hiddenIpCount()} />
           </div>
         </Show>
       </section>
       <Show when={props.interfaces.length > 0}>
         <section>
-          <div class="mb-1 border-b border-border pb-1 font-semibold text-muted">
-            Network Interfaces
-          </div>
+          <TooltipSectionHeading title="Network Interfaces" />
           <AgentMachineNetworkInterfacesList
             interfaces={props.interfaces}
             maxInterfaces={6}
@@ -555,7 +564,7 @@ const AgentMachineDiskIOCell: Component<{
       }
     >
       <section>
-        <div class="mb-1 border-b border-border pb-1 font-semibold text-muted">Disk I/O</div>
+        <TooltipSectionHeading title="Disk I/O" />
         <div class="mb-1 grid grid-cols-[auto_minmax(0,1fr)] gap-x-2 gap-y-0.5 text-[9px]">
           <span class="font-mono text-blue-500">Read</span>
           <span class="min-w-0 truncate text-base-content">
@@ -599,11 +608,7 @@ const AgentMachineDiskIOCell: Component<{
               </div>
             )}
           </For>
-          <Show when={hiddenDetailCount() > 0}>
-            <div class="border-t border-border pt-1 text-[9px] text-muted">
-              +{hiddenDetailCount()} more devices
-            </div>
-          </Show>
+          <TooltipOverflowNote count={hiddenDetailCount()} noun="devices" />
         </div>
       </section>
     </AgentMachineMetricTooltip>
@@ -662,9 +667,9 @@ const AgentMachineRaidCell: Component<{
       }
     >
       <section>
-        <div class="mb-1 border-b border-border pb-1 font-semibold text-muted">
-          {lastKnownTitle() ? 'RAID Arrays (last known)' : 'RAID Arrays'}
-        </div>
+        <TooltipSectionHeading
+          title={lastKnownTitle() ? 'RAID Arrays (last known)' : 'RAID Arrays'}
+        />
         <div class="max-h-[300px] space-y-2 overflow-y-auto pr-1">
           <For each={shownArrays()}>
             {(array, index) => {
@@ -783,22 +788,14 @@ const AgentMachineRaidCell: Component<{
                           </span>
                         )}
                       </For>
-                      <Show when={devices().length > 12}>
-                        <span class="rounded-sm border border-border px-1.5 py-0.5 text-[9px] text-muted">
-                          +{devices().length - 12}
-                        </span>
-                      </Show>
+                      <TooltipMoreBadge count={devices().length - 12} />
                     </div>
                   </Show>
                 </div>
               );
             }}
           </For>
-          <Show when={hiddenArrayCount() > 0}>
-            <div class="border-t border-border pt-1 text-[9px] text-muted">
-              +{hiddenArrayCount()} more arrays
-            </div>
-          </Show>
+          <TooltipOverflowNote count={hiddenArrayCount()} noun="arrays" />
         </div>
       </section>
     </AgentMachineMetricTooltip>
@@ -1111,13 +1108,13 @@ const filterAgentMachineResources = (
   filterPlatformResources(resources, '', status, (machine) => {
     // Health is the row's current presentation, not its last reported status.
     // Never write this derived classification back into the canonical resource.
-    const variant = getStandaloneResourceStatusIndicator(machine, nowMs).variant;
+    const variant = getStandaloneMachineStatusIndicator(machine, nowMs).variant;
     if (variant === 'success') return 'online';
     if (variant === 'warning') return 'degraded';
     if (variant === 'danger') return 'offline';
     return 'unknown';
   }).filter((machine) =>
-    matchesAgentMachineSearch(machine, search, systemLabelFor, agentVersionFor),
+    matchesAgentMachineSearch(machine, search, systemLabelFor, agentVersionFor, nowMs),
   );
 
 const AGENT_MACHINE_SEARCH_TIPS = {
@@ -1155,41 +1152,28 @@ const agentRemovalIdFor = (machine: Resource): string => {
   return agentIdentityIdFor(machine);
 };
 
-const machineColumnWidthClass = (columnId: AgentMachineColumnId): string => {
-  switch (columnId) {
-    case 'machine':
-      return 'platform-table-mobile-w-30 w-[30%] sm:w-[28%] md:w-[15%]';
-    case 'system':
-      return 'hidden md:table-cell md:w-[12%]';
-    case 'agent':
-      return 'hidden md:table-cell md:w-[6%]';
-    case 'cpu':
-    case 'memory':
-      return 'platform-table-mobile-w-15 w-[15%] sm:w-[20%] md:w-[8%]';
-    case 'disk':
-      return 'platform-table-mobile-w-15 w-[15%] sm:w-[20%] md:w-[8%]';
-    case 'gpu':
-      return 'hidden md:table-cell md:w-[8%]';
-    case 'network':
-    case 'diskio':
-      return 'hidden lg:table-cell lg:w-[9%]';
-    case 'uptime':
-    case 'temp':
-      return 'hidden md:table-cell md:w-[5%]';
-    case 'lastSeen':
-      return 'platform-table-mobile-w-15 w-[15%] lg:w-[6%]';
-    case 'ip':
-      return 'agent-machine-address-column hidden xl:table-cell xl:w-[8%]';
-    case 'raid':
-      return 'hidden xl:table-cell xl:w-[6%]';
-    case 'arch':
-      return 'hidden xl:table-cell xl:w-[5%]';
-    case 'kernel':
-      return 'hidden xl:table-cell xl:w-[10%]';
-    case 'actions':
-      return 'platform-table-narrow-hidden w-[10%] md:w-[4%]';
-  }
+const MACHINE_COLUMN_WIDTHS: Record<AgentMachineColumnId, string> = {
+  machine: 'platform-table-mobile-w-30 w-[30%] sm:w-[28%] md:w-[15%]',
+  system: 'hidden md:table-cell md:w-[12%]',
+  agent: 'hidden md:table-cell md:w-[6%]',
+  cpu: 'platform-table-mobile-w-15 w-[15%] sm:w-[20%] md:w-[8%]',
+  memory: 'platform-table-mobile-w-15 w-[15%] sm:w-[20%] md:w-[8%]',
+  disk: 'platform-table-mobile-w-15 w-[15%] sm:w-[20%] md:w-[8%]',
+  gpu: 'hidden md:table-cell md:w-[8%]',
+  network: 'hidden lg:table-cell lg:w-[9%]',
+  diskio: 'hidden lg:table-cell lg:w-[9%]',
+  uptime: 'hidden md:table-cell md:w-[5%]',
+  temp: 'hidden md:table-cell md:w-[5%]',
+  lastSeen: 'platform-table-mobile-w-15 w-[15%] lg:w-[6%]',
+  ip: 'agent-machine-address-column hidden xl:table-cell xl:w-[8%]',
+  raid: 'hidden xl:table-cell xl:w-[6%]',
+  arch: 'hidden xl:table-cell xl:w-[5%]',
+  kernel: 'hidden xl:table-cell xl:w-[10%]',
+  actions: 'platform-table-narrow-hidden w-[10%] md:w-[4%]',
 };
+
+const machineColumnWidthClass = (columnId: AgentMachineColumnId): string =>
+  MACHINE_COLUMN_WIDTHS[columnId];
 
 const getSortIndicator = (
   activeKey: AgentMachineSortKey,
@@ -1289,6 +1273,21 @@ export const AgentsMachinesTable: Component<{
   const visibleMachineResources = createMemo(() =>
     props.resources.filter((machine) => !locallyRemovedResourceIds()[machine.id]),
   );
+  const staleMachinesBanner = createMemo(() => {
+    const nowMs = now();
+    const staleEntries: { name: string; age: string | null }[] = [];
+    for (const machine of visibleMachineResources()) {
+      if (isAgentlessMachine(machine)) continue;
+      const stale = getStandaloneMachineStaleness(machine, nowMs);
+      if (stale) {
+        staleEntries.push({
+          name: asTrimmedString(machine.name) || machine.id,
+          age: stale.age,
+        });
+      }
+    }
+    return describeStaleStandaloneMachines(staleEntries);
+  });
   const tableState = createPlatformTableFilterState({
     resources: visibleMachineResources,
     initialStatus: 'all' as PlatformResourceStatusFilter,
@@ -1511,6 +1510,13 @@ export const AgentsMachinesTable: Component<{
       }
     >
       <div class="space-y-3">
+        <Show when={staleMachinesBanner()}>
+          {(message) => (
+            <InlineNotice tone="warning" role="status" data-testid="agent-machines-stale-banner">
+              {message()}
+            </InlineNotice>
+          )}
+        </Show>
         <PlatformTableToolbar
           search={tableState.search}
           onSearchChange={tableState.setSearch}
@@ -1588,16 +1594,13 @@ export const AgentsMachinesTable: Component<{
                           asTrimmedString(machine.identity?.hostname);
                     const systemLabel = () => systemLabelFor(machine);
                     const agentVersion = () => agentVersionFor(machine);
-                    const agentStale = () =>
-                      !isAgentlessMachine(machine) && Boolean(machine.agent?.stale);
-                    const agentStaleTitle = () => {
-                      const last = asTrimmedString(machine.agent?.lastReportAt);
-                      const when = last
-                        ? ` Last report ${formatPlatformTableRelativeTimeValue(last, { now: now() })}.`
-                        : '';
-                      return `Agent has stopped reporting.${when} Re-run the install command from the Pulse UI to refresh its token.`;
-                    };
-                    const indicator = () => getStandaloneResourceStatusIndicator(machine, now());
+                    const staleNotice = () =>
+                      isAgentlessMachine(machine)
+                        ? null
+                        : getStandaloneMachineStaleness(machine, now());
+                    const agentStale = () => Boolean(staleNotice());
+                    const agentStaleTitle = () => staleNotice()?.detail ?? '';
+                    const indicator = () => getStandaloneMachineStatusIndicator(machine, now());
                     const awaitingReport = () => getAgentFirstReportStatusIndicator(machine);
                     const canRenderMetrics = () =>
                       !awaitingReport() && indicator().variant !== 'danger';
@@ -1826,6 +1829,20 @@ export const AgentsMachinesTable: Component<{
                                     </span>
                                   )}
                                 </Show>
+                                <Show when={staleNotice()}>
+                                  {(notice) => (
+                                    <span
+                                      class="block truncate text-[10px] leading-tight font-medium text-amber-800 dark:text-amber-300"
+                                      title={notice().cueTitle}
+                                      data-agent-machine-stale-cue="true"
+                                    >
+                                      <PlatformResponsiveTableLabel
+                                        compact={notice().compactBadge}
+                                        full={notice().badge}
+                                      />
+                                    </span>
+                                  )}
+                                </Show>
                               </div>
                             </div>
                             <Show when={arrayAlert()}>
@@ -2034,7 +2051,10 @@ export const AgentsMachinesTable: Component<{
                                 arrays={raidArrays()}
                                 summary={raidSummary()}
                                 lastKnownReason={
-                                  agentStale() ? HOST_AGENT_STOPPED_REPORTING_REASON : undefined
+                                  !isAgentlessMachine(machine) &&
+                                  hasExplicitBackendAgentStaleness(machine)
+                                    ? HOST_AGENT_STOPPED_REPORTING_REASON
+                                    : undefined
                                 }
                               />
                             </TableCell>
@@ -2080,6 +2100,20 @@ export const AgentsMachinesTable: Component<{
                           detailRowId={detailRowId()}
                           colSpan={detailColspan()}
                           initialShowHostDetails={false}
+                          context={
+                            <Show when={staleNotice()}>
+                              {(notice) => (
+                                <InlineNotice
+                                  tone="warning"
+                                  role="status"
+                                  class="mb-3"
+                                  data-testid="agent-machine-stale-notice"
+                                >
+                                  {notice().detail}
+                                </InlineNotice>
+                              )}
+                            </Show>
+                          }
                           onClose={() => {
                             drawer.close(machine);
                           }}

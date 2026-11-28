@@ -3,12 +3,12 @@ import {
   formatPlatformTableTitleCaseValue,
   type PlatformTableSortValue,
 } from '@/features/platformPage/sharedPlatformPage';
-import { hasImpairedResourceSource } from '@/utils/resourceSourceHealth';
 import { asTrimmedString } from '@/utils/stringUtils';
 import {
   normalizeStandaloneVMStatusFilter,
   type StandaloneVMStatusFilter,
 } from './standalonePageModel';
+import { getStandaloneVMStaleness } from './standaloneStaleness';
 
 export { normalizeStandaloneVMStatusFilter, type StandaloneVMStatusFilter };
 export type StandaloneVMStatusBucket = Exclude<StandaloneVMStatusFilter, 'all'>;
@@ -32,21 +32,23 @@ export const getStandaloneVMRuntimeState = (resource: Resource): string =>
     ''
   ).toLowerCase();
 
-const HEALTHY_SOURCE_STATUSES = new Set(['online', 'running', 'healthy', 'connected', 'ok']);
+export const isStandaloneVMSourceImpaired = (
+  resource: Resource,
+  parentHost?: Resource,
+  nowMs?: number,
+): boolean => Boolean(getStandaloneVMStaleness(resource, parentHost, nowMs));
 
-export const isStandaloneVMSourceImpaired = (resource: Resource): boolean => {
-  if (hasImpairedResourceSource(resource, 'agent')) return true;
-  const directStatus = (asTrimmedString(resource.sourceStatus?.agent?.status) ?? '').toLowerCase();
-  return directStatus !== '' && !HEALTHY_SOURCE_STATUSES.has(directStatus);
-};
-
-export const mapStandaloneVMStatus = (resource: Resource): StandaloneVMStatusBucket => {
+export const mapStandaloneVMStatus = (
+  resource: Resource,
+  parentHost?: Resource,
+  nowMs?: number,
+): StandaloneVMStatusBucket => {
   const state = getStandaloneVMRuntimeState(resource);
   if (state === 'shutoff' || state === 'stopped' || state === 'halted' || state === 'offline') {
     return 'stopped';
   }
   if (
-    isStandaloneVMSourceImpaired(resource) ||
+    isStandaloneVMSourceImpaired(resource, parentHost, nowMs) ||
     state === 'paused' ||
     state === 'suspended' ||
     state === 'shutting-down' ||
@@ -64,8 +66,12 @@ export const mapStandaloneVMStatus = (resource: Resource): StandaloneVMStatusBuc
   return 'attention';
 };
 
-export const getStandaloneVMDisplayStatus = (resource: Resource): string => {
-  const bucket = mapStandaloneVMStatus(resource);
+export const getStandaloneVMDisplayStatus = (
+  resource: Resource,
+  parentHost?: Resource,
+  nowMs?: number,
+): string => {
+  const bucket = mapStandaloneVMStatus(resource, parentHost, nowMs);
   if (bucket === 'running') return 'online';
   if (bucket === 'stopped') return 'stopped';
   const state = getStandaloneVMRuntimeState(resource);
@@ -185,16 +191,19 @@ export const filterStandaloneVMs = (
   machinesById: ReadonlyMap<string, Resource>,
   machinesByName?: ReadonlyMap<string, Resource>,
   selectedHostId?: string,
+  nowMs?: number,
 ): Resource[] => {
   const needle = search.trim().toLowerCase();
   return vms.filter((vm) => {
     if (!matchesStandaloneVMHostScope(vm, selectedHostId, machinesById, machinesByName)) {
       return false;
     }
-    if (status !== 'all' && mapStandaloneVMStatus(vm) !== status) {
+    const parentHost = resolveStandaloneVMHostResource(vm, machinesById, machinesByName);
+    if (status !== 'all' && mapStandaloneVMStatus(vm, parentHost, nowMs) !== status) {
       return false;
     }
     if (!needle) return true;
+    const staleNotice = getStandaloneVMStaleness(vm, parentHost, nowMs ?? 0);
     const haystack = [
       getStandaloneVMName(vm),
       vm.name,
@@ -202,6 +211,10 @@ export const filterStandaloneVMs = (
       getStandaloneVMStateLabel(vm),
       getStandaloneVMRuntimeState(vm),
       getStandaloneVMHypervisorLabel(vm),
+      staleNotice?.badge,
+      staleNotice?.compactBadge,
+      staleNotice?.detail,
+      staleNotice?.error,
       vm.id,
     ]
       .filter(Boolean)

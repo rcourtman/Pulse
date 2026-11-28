@@ -1,13 +1,4 @@
-import {
-  Show,
-  Suspense,
-  createEffect,
-  createMemo,
-  createSignal,
-  lazy,
-  type Component,
-  type JSX,
-} from 'solid-js';
+import { Show, createEffect, createMemo, createSignal, type Component, type JSX } from 'solid-js';
 import { useLocation, useNavigate, useSearchParams } from '@solidjs/router';
 import ActivityIcon from 'lucide-solid/icons/activity';
 import CircleAlertIcon from 'lucide-solid/icons/circle-alert';
@@ -21,7 +12,6 @@ import {
   buildInfrastructureAgentUpdatesPath,
   buildInfrastructureOnboardingPath,
 } from '@/components/Settings/infrastructureWorkspaceModel';
-import { buildAvailabilitySettingsPath } from '@/components/Settings/availabilitySettingsModel';
 import { PlatformOutdatedAgentNotice } from '@/features/platformPage/PlatformOutdatedAgentNotice';
 import {
   collectOutdatedAgentHosts,
@@ -49,19 +39,13 @@ import { updateStore } from '@/stores/updates';
 import { isFeatureAvailable } from '@/utils/featureReleases';
 import { formatRelativeTime } from '@/utils/format';
 import { useRelativeTimeNow } from '@/utils/relativeTimeClock';
-import { buildProbeAgentOptions } from '@/utils/availabilityProbeAgents';
-import {
-  AvailabilityChecksTable,
-  resolveAvailabilityChecksView,
-  type AvailabilityChecksView,
-} from './AvailabilityChecksTable';
 import { AgentsMachinesTable } from './AgentsMachinesTable';
+import { StandaloneVirtualMachinesTable } from './StandaloneVirtualMachinesTable';
 import { collectHostIdentityConflictHosts } from './hostIdentityConflict';
 import { HostIdentityConflictNotice } from './HostIdentityConflictNotice';
 import {
   buildStandaloneMachineVmCounts,
   buildStandalonePageModel,
-  buildStandalonePostureSummary,
   getStandaloneTabSpecs,
   normalizeStandaloneVMStatusFilter,
   type StandalonePostureSummary,
@@ -78,15 +62,8 @@ import {
 const STANDALONE_RESOURCE_QUERY =
   'source=agent,availability&excludeSource=proxmox,kubernetes,truenas,vmware&type=agent,vm,network-endpoint';
 
-const StandaloneVirtualMachinesTable = lazy(() =>
-  import('./StandaloneVirtualMachinesTable').then((module) => ({
-    default: module.StandaloneVirtualMachinesTable,
-  })),
-);
-
 const machineIcon = () => <ServerIcon class="h-6 w-6 text-slate-400" />;
 const vmIcon = () => <MonitorIcon class="h-6 w-6 text-slate-400" />;
-const availabilityIcon = () => <ActivityIcon class="h-6 w-6 text-slate-400" />;
 
 export const StandalonePostureCard: Component<{
   actions?: JSX.Element;
@@ -167,7 +144,6 @@ const resolveStandaloneTab = (pathname: string, vmsAvailable: boolean): Standalo
 };
 
 export function StandalonePageSurface() {
-  const now = useRelativeTimeNow();
   const location = useLocation();
   const navigate = useNavigate();
   const [searchParams, setSearchParams] = useSearchParams();
@@ -240,22 +216,6 @@ export function StandalonePageSurface() {
       { replace: true },
     );
   };
-  const availabilityView = createMemo<AvailabilityChecksView>(() =>
-    resolveAvailabilityChecksView(
-      searchParams[STANDALONE_QUERY_PARAMS.view],
-      model().availabilityChecks.length,
-    ),
-  );
-  const focusedCheckId = createMemo(() => {
-    const value = searchParams[STANDALONE_QUERY_PARAMS.check];
-    return (Array.isArray(value) ? value[0] : value)?.trim() || undefined;
-  });
-  const setAvailabilityView = (view: AvailabilityChecksView) => {
-    setSearchParams({ [STANDALONE_QUERY_PARAMS.view]: view }, { replace: true });
-  };
-  const availabilityPosture = createMemo(() =>
-    buildStandalonePostureSummary(model().availabilityChecks, now()),
-  );
   const showLoading = createMemo(
     () =>
       loading() &&
@@ -307,6 +267,25 @@ export function StandalonePageSurface() {
     }
   });
 
+  const renderEmptyMachineActions = () => (
+    <div class="flex flex-wrap items-center justify-center gap-2">
+      <Button
+        type="button"
+        variant="secondary"
+        size="sm"
+        class="gap-2 px-3"
+        onClick={() => navigate(buildInfrastructureOnboardingPath('pick'))}
+      >
+        <SettingsIcon class="h-3.5 w-3.5" />
+        Add agent
+      </Button>
+      <ButtonLink href={buildAvailabilityPath()} variant="secondary" size="sm" class="gap-2 px-3">
+        <ActivityIcon class="h-3.5 w-3.5" />
+        View checks
+      </ButtonLink>
+    </div>
+  );
+
   return (
     <div data-testid="standalone-page" class="pulse-wide-data-surface space-y-3">
       <Show when={tabs().length > 1}>
@@ -340,69 +319,22 @@ export function StandalonePageSurface() {
             />
           }
         >
-          <Show when={activeTab() === 'availability'}>
-            <div class="space-y-3">
-              <Show when={model().availabilityChecks.length > 0}>
-                <StandalonePostureCard
-                  label="Availability"
-                  noun="check"
-                  summary={availabilityPosture()}
-                  actions={
-                    <ButtonLink
-                      href={buildAvailabilitySettingsPath()}
-                      variant="secondary"
-                      size="sm"
-                      class="gap-2"
-                    >
-                      <SettingsIcon class="h-3.5 w-3.5" />
-                      Manage checks
-                    </ButtonLink>
-                  }
-                />
-              </Show>
-              <AvailabilityChecksTable
-                resources={model().availabilityChecks}
-                probeAgentOptions={buildProbeAgentOptions(model().machines)}
-                view={availabilityView()}
-                onViewChange={setAvailabilityView}
-                focusCheckId={focusedCheckId()}
-                externalSearch={machineSearchFilter}
-                onExternalSearchChange={setMachineSearchFilter}
-                externalStatus={machineStatusFilter}
-                onExternalStatusChange={setMachineStatusFilter}
-                onResetFilters={resetMachineFilters}
-                emptyIcon={availabilityIcon()}
-                emptyTitle="No availability checks"
-                emptyDescription="Add ping, TCP, MQTT, ESPHome, or HTTP checks for devices and services that cannot run Pulse Agent."
-              />
-            </div>
-          </Show>
-
           <Show when={activeTab() === 'vms'}>
-            <Suspense
-              fallback={
-                <PlatformTableLoadingState
-                  title="Loading virtual machines"
-                  description="Pulse is loading standalone virtual machines."
-                />
-              }
-            >
-              <StandaloneVirtualMachinesTable
-                titleMeta={<FeaturePreviewTag feature="standaloneVms" />}
-                vms={visibleVms()}
-                machines={model().machines}
-                selectedHostId={vmHostFilter}
-                onClearHostScope={clearVmHostFilter}
-                externalSearch={machineSearchFilter}
-                onExternalSearchChange={setMachineSearchFilter}
-                externalStatus={vmStatusFilter}
-                onExternalStatusChange={setVmStatusFilter}
-                onResetFilters={resetVmFilters}
-                emptyIcon={vmIcon()}
-                emptyTitle="No virtual machines"
-                emptyDescription="Virtual machines reported by standalone Pulse Agents (Unraid, Linux libvirt/KVM, and XCP-ng) appear here automatically."
-              />
-            </Suspense>
+            <StandaloneVirtualMachinesTable
+              titleMeta={<FeaturePreviewTag feature="standaloneVms" />}
+              vms={visibleVms()}
+              machines={model().machines}
+              selectedHostId={vmHostFilter}
+              onClearHostScope={clearVmHostFilter}
+              externalSearch={machineSearchFilter}
+              onExternalSearchChange={setMachineSearchFilter}
+              externalStatus={vmStatusFilter}
+              onExternalStatusChange={setVmStatusFilter}
+              onResetFilters={resetVmFilters}
+              emptyIcon={vmIcon()}
+              emptyTitle="No virtual machines"
+              emptyDescription="Virtual machines reported by standalone Pulse Agents (Unraid, Linux libvirt/KVM, and XCP-ng) appear here automatically."
+            />
           </Show>
 
           <Show when={activeTab() === 'machines'}>
@@ -413,29 +345,7 @@ export function StandalonePageSurface() {
                   icon={machineIcon()}
                   title="No Pulse Agent machines"
                   description="Install Pulse Agent on servers, laptops, and desktops for CPU, memory, disk, and network telemetry. Agentless reachability checks live in Availability checks."
-                  actions={
-                    <div class="flex flex-wrap items-center justify-center gap-2">
-                      <Button
-                        type="button"
-                        variant="secondary"
-                        size="sm"
-                        class="gap-2 px-3"
-                        onClick={() => navigate(buildInfrastructureOnboardingPath('pick'))}
-                      >
-                        <SettingsIcon class="h-3.5 w-3.5" />
-                        Add agent
-                      </Button>
-                      <ButtonLink
-                        href={buildAvailabilityPath()}
-                        variant="secondary"
-                        size="sm"
-                        class="gap-2 px-3"
-                      >
-                        <ActivityIcon class="h-3.5 w-3.5" />
-                        View checks
-                      </ButtonLink>
-                    </div>
-                  }
+                  actions={renderEmptyMachineActions()}
                 />
               }
             >
@@ -457,29 +367,7 @@ export function StandalonePageSurface() {
                         icon={machineIcon()}
                         title="No Pulse Agent machines"
                         description="Availability checks, including ICMP checks for computers, stay in the Availability checks tab. Install Pulse Agent when you need full machine telemetry."
-                        actions={
-                          <div class="flex flex-wrap items-center justify-center gap-2">
-                            <Button
-                              type="button"
-                              variant="secondary"
-                              size="sm"
-                              class="gap-2 px-3"
-                              onClick={() => navigate(buildInfrastructureOnboardingPath('pick'))}
-                            >
-                              <SettingsIcon class="h-3.5 w-3.5" />
-                              Add agent
-                            </Button>
-                            <ButtonLink
-                              href={buildAvailabilityPath()}
-                              variant="secondary"
-                              size="sm"
-                              class="gap-2 px-3"
-                            >
-                              <ActivityIcon class="h-3.5 w-3.5" />
-                              View checks
-                            </ButtonLink>
-                          </div>
-                        }
+                        actions={renderEmptyMachineActions()}
                       />
                     </Show>
                   }
