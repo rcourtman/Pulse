@@ -70,7 +70,7 @@ export function AlertGroupingSection(props: AlertGroupingSectionProps) {
                 max="30"
                 value={props.grouping.window}
                 aria-valuetext={`${props.grouping.window} minutes`}
-                onChange={(event) => props.setGroupingWindow(event.currentTarget.value)}
+                onInput={(event) => props.setGroupingWindow(event.currentTarget.value)}
                 class="flex-1"
               />
               <div class="w-16 rounded-md bg-surface-alt px-2 py-1 text-center text-sm text-base-content">
@@ -95,6 +95,7 @@ export function AlertGroupingSection(props: AlertGroupingSectionProps) {
                 <div class={getAlertGroupingCheckboxClass(props.grouping.byNode ?? false)}>
                   <Show when={props.grouping.byNode}>
                     <svg
+                      aria-hidden="true"
                       class="h-3 w-3 text-white"
                       fill="none"
                       viewBox="0 0 24 24"
@@ -120,6 +121,7 @@ export function AlertGroupingSection(props: AlertGroupingSectionProps) {
                 <div class={getAlertGroupingCheckboxClass(props.grouping.byGuest ?? false)}>
                   <Show when={props.grouping.byGuest}>
                     <svg
+                      aria-hidden="true"
                       class="h-3 w-3 text-white"
                       fill="none"
                       viewBox="0 0 24 24"
