@@ -65,8 +65,9 @@ check for and apply the server's target version asynchronously. PVE host agents,
 legacy agents, agents with auto-update disabled, and agents with failed or
 missing update prerequisites need a manual command.
 
-Open an outdated-agent notice or
-`/settings/infrastructure?agentDoctor=1` to open **Agent Doctor** and
+Open an outdated-agent notice or **Agent Doctor** at
+`/settings/infrastructure/agent-doctor` (legacy
+`/settings/infrastructure?agentDoctor=1` links still open the same page) and
 copy the correct per-host command. The surface does not remotely execute the
 update. Use **Settings → Infrastructure → Install on a host** for first installs
 and in-place agent reinstalls. See [Unified Agent](UNIFIED_AGENT.md#auto-update).

@@ -410,8 +410,14 @@ Path(os.environ['HOME'], '.config/pulse/agent-install.sh').write_text('other sav
 
         doc_text = doc_path.read_text(encoding="utf-8")
         agent_main = (ROOT / "cmd/pulse-agent/main.go").read_text(encoding="utf-8")
+        target_metrics = (ROOT / "internal/agenttarget/metrics.go").read_text(encoding="utf-8")
 
         for flag_name, env_name in (
+            ("agent-id-file", "PULSE_AGENT_ID_FILE"),
+            ("state-dir", "PULSE_STATE_DIR"),
+            ("cacert", "PULSE_CACERT"),
+            ("server-fingerprint", "PULSE_SERVER_FINGERPRINT"),
+            ("disable-cluster-peer-sensors", "PULSE_DISABLE_CLUSTER_PEER_SENSORS"),
             ("command-authority", "PULSE_COMMAND_AUTHORITY"),
             ("enable-live-logs", "PULSE_ENABLE_LIVE_LOGS"),
             ("docker-compose-sources", "PULSE_DOCKER_COMPOSE_SOURCES"),
@@ -424,12 +430,48 @@ Path(os.environ['HOME'], '.config/pulse/agent-install.sh').write_text('other sav
                 self.assertIn(f"`--{flag_name}`", doc_text)
                 self.assertIn(f"`{env_name}`", doc_text)
 
-        for flag_name in ("release-identity", "validate-url"):
-            with self.subTest(advanced_flag=flag_name):
+        for flag_name in ("enroll", "release-identity", "validate-url"):
+            with self.subTest(flag_only=flag_name):
                 self.assertIn(f'"{flag_name}"', agent_main)
                 self.assertIn(f"`--{flag_name}`", doc_text)
         self.assertIn("const validateURLRejectedExitCode = 65", agent_main)
         self.assertIn("exits `65`", doc_text)
+
+        # Every live CLI flag registered on pulse-agent must be documented.
+        source_flags = set(re.findall(r'fs\.(?:String|Bool|Int|Duration)\("([a-z0-9-]+)"', agent_main))
+        source_flags.update(re.findall(r'fs\.Var\([^,]+,\s*"([a-z0-9-]+)"', agent_main))
+        for flag_name in sorted(source_flags):
+            with self.subTest(documented_flag=flag_name):
+                self.assertIn(f"`--{flag_name}`", doc_text)
+
+        # Health endpoints, listener disable keywords, updater ack nudge, and Prometheus metrics.
+        for token in ('mux.HandleFunc("/status"', 'case "off", "none", "disabled":',
+                      "hostCfg.OnServerVersion = updater.NudgeVersion",
+                      '"kubernetes_enabled"'):
+            self.assertIn(token, agent_main)
+        for phrase in ("`/status`", "`none` and `disabled`", "report acknowledgement advertises a\nnewer server version",
+                       "`kubernetes_enabled`"):
+            self.assertIn(phrase, doc_text)
+        for metric_name, src in (
+            ("pulse_agent_info", agent_main),
+            ("pulse_agent_up", agent_main),
+            ("pulse_agent_module_enabled", agent_main),
+            ("pulse_agent_module_ready", agent_main),
+            ("pulse_agent_destination_configured", target_metrics),
+            ("pulse_agent_destination_delivery_up", target_metrics),
+        ):
+            with self.subTest(metric=metric_name):
+                self.assertIn(f'Name: "{metric_name}"', src)
+                self.assertIn(f"`{metric_name}`", doc_text)
+
+        # Canonical Agent Doctor route across agent/update/FAQ Help and mirrors.
+        workspace_model = (ROOT / "frontend-modern/src/components/Settings/infrastructureWorkspaceModel.ts").read_text(encoding="utf-8")
+        self.assertIn("INFRASTRUCTURE_AGENT_DOCTOR_PATH = `${INFRASTRUCTURE_BASE_PATH}/agent-doctor`", workspace_model)
+        for name in ("UNIFIED_AGENT.md", "AUTO_UPDATE.md", "FAQ.md"):
+            with self.subTest(agent_doctor_doc=name):
+                src_bytes = (ROOT / "docs" / name).read_bytes()
+                self.assertEqual(src_bytes, (ROOT / "frontend-modern/public/docs" / name).read_bytes())
+                self.assertIn("/settings/infrastructure/agent-doctor", src_bytes.decode("utf-8"))
 
 
 if __name__ == "__main__":
