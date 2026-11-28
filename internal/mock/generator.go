@@ -646,6 +646,7 @@ func buildFixtureState(config MockConfig) models.StateSnapshot {
 
 	ensureFreshFilesystemFixture(&data)
 	ensureConfigOnlyMountFixture(&data)
+	ensureMockMapTelemetry(&data)
 	// Docker-in-LXC nested hosts are added by ensureMockDockerInLXCFixture
 	// from the demo scenario layer, after guests get their final names,
 	// instances, and states.
@@ -1219,6 +1220,110 @@ func mockDefaultGateway(interfaces []models.HostNetworkInterface) (string, strin
 		}
 	}
 	return "", ""
+}
+
+// ensureMockMapTelemetry enriches mock fixtures with Linux GPU sensors,
+// passive internal TCP peer observations, and VM/Docker hardware accelerator
+// badges so demo builds exercise the same Infrastructure Map signals as live
+// agent estates.
+func ensureMockMapTelemetry(data *models.StateSnapshot) {
+	var linuxIndexes []int
+	var linuxIPs []string
+	for i := range data.Hosts {
+		host := &data.Hosts[i]
+		switch strings.ToLower(strings.TrimSpace(host.Platform)) {
+		case "windows", "macos", "darwin":
+			continue
+		}
+		if strings.EqualFold(strings.TrimSpace(host.Status), "offline") {
+			continue
+		}
+		ip := mockFirstPrivateIPv4(host.NetworkInterfaces)
+		if ip == "" {
+			continue
+		}
+		linuxIndexes = append(linuxIndexes, i)
+		linuxIPs = append(linuxIPs, ip)
+	}
+
+	if len(linuxIndexes) > 0 {
+		first := &data.Hosts[linuxIndexes[0]]
+		if len(first.Sensors.GPU) == 0 {
+			tempC := 54.0
+			utilPct := 42.0
+			usedBytes := int64(4 * 1024 * 1024 * 1024)
+			totalBytes := int64(12 * 1024 * 1024 * 1024)
+			first.Sensors.GPU = []models.HostGPUSensor{{
+				ID:                 "gpu0",
+				Name:               "NVIDIA GeForce RTX 4070",
+				TemperatureCelsius: &tempC,
+				UtilizationPercent: &utilPct,
+				MemoryUsedBytes:    &usedBytes,
+				MemoryTotalBytes:   &totalBytes,
+			}}
+		}
+		if len(first.ActivePeers) == 0 {
+			for idx := 1; idx < len(linuxIndexes); idx++ {
+				if linuxIPs[idx] != linuxIPs[0] {
+					first.ActivePeers = []models.HostNetworkPeer{{
+						LocalIP:    linuxIPs[0],
+						LocalPort:  48210,
+						RemoteIP:   linuxIPs[idx],
+						RemotePort: 5432,
+						Protocol:   "tcp",
+						Inbound:    false,
+					}}
+					break
+				}
+			}
+		}
+	}
+
+	for i := range data.VMs {
+		vm := &data.VMs[i]
+		if !strings.EqualFold(strings.TrimSpace(vm.Status), "running") || len(vm.Accelerators) > 0 {
+			continue
+		}
+		vm.Accelerators = []string{"GPU"}
+		break
+	}
+
+	for i := range data.DockerHosts {
+		host := &data.DockerHosts[i]
+		if strings.EqualFold(strings.TrimSpace(host.Status), "offline") {
+			continue
+		}
+		assigned := false
+		for j := range host.Containers {
+			container := &host.Containers[j]
+			if !strings.EqualFold(strings.TrimSpace(container.State), "running") || len(container.Accelerators) > 0 {
+				continue
+			}
+			container.Accelerators = []string{"iGPU"}
+			assigned = true
+			break
+		}
+		if assigned {
+			break
+		}
+	}
+}
+
+func mockFirstPrivateIPv4(interfaces []models.HostNetworkInterface) string {
+	for _, nic := range interfaces {
+		for _, raw := range nic.Addresses {
+			address := strings.TrimSpace(raw)
+			if slash := strings.IndexByte(address, '/'); slash >= 0 {
+				address = address[:slash]
+			}
+			ip := net.ParseIP(address).To4()
+			if ip == nil || ip.IsLoopback() || ip.IsLinkLocalUnicast() || !ip.IsPrivate() {
+				continue
+			}
+			return ip.String()
+		}
+	}
+	return ""
 }
 
 // generateNodeTemperature generates realistic temperature data for a node
