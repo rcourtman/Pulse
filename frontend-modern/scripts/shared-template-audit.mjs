@@ -1,12 +1,33 @@
 import { existsSync, readFileSync, readdirSync, statSync } from 'node:fs';
 import { extname, relative, resolve } from 'node:path';
 
-const root = resolve(new URL('..', import.meta.url).pathname);
+const root = resolve(
+  process.env.PULSE_SHARED_TEMPLATE_AUDIT_ROOT || new URL('..', import.meta.url).pathname,
+);
 const registryPath = 'scripts/shared-template-registry.json';
 
-const read = (path) => readFileSync(resolve(root, path), 'utf8');
+const fileContentsCache = new Map();
+const fileExistsCache = new Map();
+const scopeTreeCache = new Map();
+const collectFilesCache = new Map();
+
+const read = (path) => {
+  let content = fileContentsCache.get(path);
+  if (content === undefined) {
+    content = readFileSync(resolve(root, path), 'utf8');
+    fileContentsCache.set(path, content);
+  }
+  return content;
+};
 const readJson = (path) => JSON.parse(read(path));
-const fileExists = (path) => existsSync(resolve(root, path));
+const fileExists = (path) => {
+  let exists = fileExistsCache.get(path);
+  if (exists === undefined) {
+    exists = existsSync(resolve(root, path));
+    fileExistsCache.set(path, exists);
+  }
+  return exists;
+};
 const toRegistryPath = (path) => relative(root, path).split('\\').join('/');
 
 const registry = readJson(registryPath);
@@ -44,31 +65,66 @@ const verifyCanonicalExport = (id, canonical) => {
   return canonicalExport;
 };
 
+const listScopeFiles = (scopeRoot) => {
+  const cached = scopeTreeCache.get(scopeRoot);
+  if (cached !== undefined) return cached;
+
+  const files = [];
+  const visitDirectory = (directoryPath) => {
+    for (const entry of readdirSync(directoryPath, { withFileTypes: true })) {
+      const entryPath = resolve(directoryPath, entry.name);
+      if (entry.isDirectory()) {
+        visitDirectory(entryPath);
+      } else if (entry.isFile()) {
+        files.push(toRegistryPath(entryPath));
+      } else if (entry.isSymbolicLink()) {
+        visitPath(entryPath);
+      } else {
+        files.push(toRegistryPath(entryPath));
+      }
+    }
+  };
+  const visitPath = (absolutePath) => {
+    const stat = statSync(absolutePath);
+    if (stat.isDirectory()) {
+      visitDirectory(absolutePath);
+      return;
+    }
+    files.push(toRegistryPath(absolutePath));
+  };
+
+  visitPath(scopeRoot);
+  files.sort();
+  scopeTreeCache.set(scopeRoot, files);
+  return files;
+};
+
 const collectFiles = (scope, extensions) => {
   const scopeRoot = resolve(root, scope);
-  if (!existsSync(scopeRoot)) {
+  if (!fileExists(scope)) {
     failures.push(`pattern guard scope ${scope} does not exist`);
     return [];
   }
 
-  const files = [];
-  const visit = (absolutePath) => {
-    const stat = statSync(absolutePath);
-    if (stat.isDirectory()) {
-      for (const entry of readdirSync(absolutePath)) {
-        visit(resolve(absolutePath, entry));
-      }
-      return;
-    }
+  const cacheKey = `${scopeRoot}\0${extensions.join(',')}`;
+  const cached = collectFilesCache.get(cacheKey);
+  if (cached !== undefined) return cached;
 
-    if (extensions.includes(extname(absolutePath))) {
-      files.push(toRegistryPath(absolutePath));
-    }
-  };
-
-  visit(scopeRoot);
+  const extensionSet = new Set(extensions);
+  const files = listScopeFiles(scopeRoot).filter((file) => extensionSet.has(extname(file)));
+  collectFilesCache.set(cacheKey, files);
   return files;
 };
+
+const collectScopedFiles = (scopes, extensions) => {
+  if (scopes.length === 1) {
+    return collectFiles(scopes[0], extensions);
+  }
+  return [...new Set(scopes.flatMap((scope) => collectFiles(scope, extensions)))].sort();
+};
+
+const orderPatternsForMatch = (patterns) =>
+  patterns.length <= 1 ? patterns : [...patterns].sort((a, b) => b.length - a.length);
 
 const getAllowedPath = (entry) => (typeof entry === 'string' ? entry : entry?.path);
 const filterGuardFiles = (files, guard) => {
@@ -135,17 +191,15 @@ for (const guard of patternGuards) {
   const allowedPaths = new Set(allowedEntries.map(getAllowedPath).filter(Boolean));
   const ignoredEntries = guard.ignoredPaths ?? [];
   const ignoredPaths = new Set(ignoredEntries.map(getAllowedPath).filter(Boolean));
-  const files = filterGuardFiles(
-    [...new Set(scopes.flatMap((scope) => collectFiles(scope, extensions)))].sort(),
-    guard,
-  );
+  const orderedPatterns = orderPatternsForMatch(patterns);
+  const files = filterGuardFiles(collectScopedFiles(scopes, extensions), guard);
 
   for (const file of files) {
     if (file === guard.canonical.path) continue;
     if (ignoredPaths.has(file)) continue;
 
     const source = read(file);
-    const matches = patterns.every((pattern) => source.includes(pattern));
+    const matches = orderedPatterns.every((pattern) => source.includes(pattern));
     if (!matches) continue;
 
     if (allowedPaths.has(file)) continue;
@@ -216,17 +270,15 @@ for (const guard of requiredPatternGuards) {
   const allowedPaths = new Set(allowedEntries.map(getAllowedPath).filter(Boolean));
   const ignoredEntries = guard.ignoredPaths ?? [];
   const ignoredPaths = new Set(ignoredEntries.map(getAllowedPath).filter(Boolean));
-  const files = filterGuardFiles(
-    [...new Set(scopes.flatMap((scope) => collectFiles(scope, extensions)))].sort(),
-    guard,
-  );
+  const orderedTriggerPatterns = orderPatternsForMatch(triggerPatterns);
+  const files = filterGuardFiles(collectScopedFiles(scopes, extensions), guard);
 
   for (const file of files) {
     if (file === guard.canonical.path) continue;
     if (ignoredPaths.has(file)) continue;
 
     const source = read(file);
-    const triggered = triggerPatterns.every((pattern) => source.includes(pattern));
+    const triggered = orderedTriggerPatterns.every((pattern) => source.includes(pattern));
     if (!triggered) continue;
 
     if (allowedPaths.has(file)) continue;
