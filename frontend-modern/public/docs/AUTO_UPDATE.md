@@ -10,8 +10,9 @@ becomes stable.
 Eligible agents update asynchronously through their own update client. A
 server update changes their target version but does not prove fleet convergence.
 For PVE, legacy, disabled, or failed agent updates, use **Agent Doctor** at
-`/settings/infrastructure?agentDoctor=1` or the installer in
-**Settings → Infrastructure → Install on a host**. See
+`/settings/infrastructure/agent-doctor` (legacy
+`/settings/infrastructure?agentDoctor=1` links still open the same page) or the
+installer in **Settings → Infrastructure → Install on a host**. See
 [Unified Agent](UNIFIED_AGENT.md#auto-update).
 
 ## Supported Deployment Types
