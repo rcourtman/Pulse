@@ -209,6 +209,38 @@ class AuthenticationDiagnosticDocsTest(unittest.TestCase):
         self.assertIn("investigationFixRetryCooldown", source)
         self.assertIn("investigationTimeoutCooldown", source)
 
+        agentic_go = (ROOT / "internal/ai/chat/agentic.go").read_text(encoding="utf-8")
+        budget_go = (ROOT / "internal/ai/chat/agentic_investigation_budget.go").read_text(encoding="utf-8")
+        final_go = (ROOT / "internal/ai/chat/agentic_final.go").read_text(encoding="utf-8")
+        for marker, src in (
+            ("const PatrolProviderStreamIdleTimeout = 60 * time.Second", agentic_go),
+            ("const patrolSubscriptionInvestigationTurnTimeout = 4 * time.Minute", budget_go),
+            ("const investigationOutputLimitRecoveryAllowance = 4_096", budget_go),
+            ("func investigationConclusionReserve(", budget_go),
+            ("func investigationSummaryTimeout(", budget_go),
+            ("StreamIdleTimeout: investigationStreamIdleTimeout(", final_go),
+            ("const investigationRunGrace = 5 * time.Minute", patrol_findings),
+            ("func stuckInvestigationResult(", patrol_findings),
+            ("func abandonedInvestigationSession(", patrol_findings),
+            ('Patrol stopped waiting for this investigation after it ran past its time limit.', patrol_findings),
+        ):
+            with self.subTest(marker=marker):
+                self.assertIn(marker, src)
+
+        for phrase in (
+            "`PatrolProviderStreamIdleTimeout` (`60` seconds)",
+            "`4` minutes (`patrolSubscriptionInvestigationTurnTimeout`)",
+            "`ensureFinalTextResponse`",
+            "`investigationSummaryTimeout`",
+            "`investigationConclusionReserve`",
+            "`4,096` tokens (`investigationOutputLimitRecoveryAllowance`)",
+            "`5`-minute grace window (`investigationRunGrace`)",
+            "`stuckInvestigationResult` and `abandonedInvestigationSession`",
+            '"Patrol stopped waiting for this investigation after it ran past its time limit."',
+        ):
+            with self.subTest(phrase=phrase):
+                self.assertIn(phrase, guide)
+
     def test_ai_overview_help_matches_patrol_signals_retired_chat_and_assistant_docs(self):
         doc_path = ROOT / "docs/AI.md"
         shipped_path = ROOT / "frontend-modern/public/docs/AI.md"
@@ -228,8 +260,38 @@ class AuthenticationDiagnosticDocsTest(unittest.TestCase):
                 self.assertNotIn(stale, source)
 
         signals_go = (ROOT / "internal/ai/patrol_signals.go").read_text(encoding="utf-8")
+        ai_cfg_go = (ROOT / "internal/config/ai.go").read_text(encoding="utf-8")
+        findings_go = (ROOT / "internal/ai/findings.go").read_text(encoding="utf-8")
         self.assertIn('SignalGuestUnreachable SignalType = "guest_unreachable"', signals_go)
         self.assertIn("| `guest_unreachable` |", source)
+        self.assertIn("const DefaultPatrolSubscriptionInvestigationTimeoutSec = 1500", ai_cfg_go)
+        self.assertIn("func (c *AIConfig) GetPatrolInvestigationConcurrency() int", ai_cfg_go)
+        for outcome in (
+            "resolved",
+            "fix_queued",
+            "fix_executed",
+            "fix_failed",
+            "fix_rejected",
+            "fix_verified",
+            "fix_verification_failed",
+            "fix_verification_unknown",
+            "needs_attention",
+            "cannot_fix",
+            "timed_out",
+            "unclassified",
+            "interrupted",
+        ):
+            with self.subTest(outcome=outcome):
+                self.assertIn(f'= "{outcome}"', findings_go)
+                self.assertIn(f"| `{outcome}` |", source)
+        for phrase in (
+            "25 min on local Codex/Claude subscription CLIs",
+            "60–1,800 seconds (1–30 minutes)",
+            "3 (1 on local Codex/Claude subscription CLIs)",
+            "`FixRetryCooldownDuration`",
+        ):
+            with self.subTest(phrase=phrase):
+                self.assertIn(phrase, guide)
         self.assertIn("PATROL_ARCHITECTURE.md#deterministic-signal-detection-and-verification", source)
         self.assertIn("continuing Relay subscribers receive Pro capabilities", guide)
         self.assertIn("Shared Default Model", guide)

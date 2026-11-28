@@ -147,6 +147,35 @@ Patrol also recovers investigations that were left running and retries ones
 that timed out. See `recoverStuckInvestigations` and
 `retryTimedOutInvestigations` in `internal/ai/patrol_findings.go`.
 
+### Turn budgets and stuck-run recovery
+
+Investigation turns use caller-owned stall and deadline budgets in
+`internal/ai/chat/agentic_investigation_budget.go` and `internal/ai/chat/agentic_final.go`:
+
+- **Stream-idle timeout:** Streaming investigations enforce
+  `PatrolProviderStreamIdleTimeout` (`60` seconds) between provider chunks.
+  Buffered local Codex and Claude subscription CLIs widen that turn budget to
+  `4` minutes (`patrolSubscriptionInvestigationTurnTimeout`). Both budgets
+  carry over to the final narrative summary call (`ensureFinalTextResponse`) so
+  slow or local providers do not drop to a short chunk default.
+- **Summary deadline, conclusion reserve, and output-limit recovery:** Unlike
+  interactive chat's 20-second summary cap, an investigation summary may use
+  the remaining run deadline (`investigationSummaryTimeout`). Before starting
+  another evidence turn, `investigationConclusionReserve` reserves
+  `3 * max(slowestTurn, 20s) + 15s` (capped at half the run budget) so the
+  conclusion and final summary can finish before the deadline. If a final
+  response exhausts the model's output budget, Patrol runs one tool-free
+  low-reasoning synthesis pass capped at `4,096` tokens
+  (`investigationOutputLimitRecoveryAllowance`).
+- **Stuck-run sweep:** `recoverStuckInvestigations` (`stuckInvestigationResult`
+  and `abandonedInvestigationSession` in `internal/ai/patrol_findings.go`)
+  gives a live run its original deadline plus a `5`-minute grace window
+  (`investigationRunGrace`). Runs lost to a restart or shutdown close as
+  `interrupted` while still spending an attempt toward the three-attempt cap so
+  a crash loop cannot retry forever. Overdue live runs close as `timed_out`
+  with `"Patrol stopped waiting for this investigation after it ran past its time limit."`
+  so finding and session telemetry agree.
+
 ## Why it is built this way
 
 Model judgement is good at explaining and correlating across mixed
