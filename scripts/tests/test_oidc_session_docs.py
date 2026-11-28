@@ -666,11 +666,100 @@ class OIDCSessionDocsTest(unittest.TestCase):
         ):
             self.assertIn(marker, saml_cb)
 
+    def test_saml_setup_binding_slo_and_security_headers_match_source(self):
+        saml_section = guide_section("## SAML 2.0 Single Sign-On", "## 🔧 Troubleshooting")
+        for expected in (
+            "/api/saml/{id}/metadata",
+            "/api/saml/{id}/acs",
+            "/api/saml/{id}/login",
+            "<public-url>/saml/{id}",
+            "Check SAML metadata",
+            "Check the IdP SSO URL format only",
+            "signRequests",
+            "10 minutes",
+            "1,024 outstanding entries",
+            "__Host-pulse_saml_login",
+            "pulse_saml_login",
+            "one-time same-origin repost form",
+            "Allow IdP-initiated SSO",
+            "24-hour browser session cookie",
+            "missing_subject",
+            "saml_role_assignment",
+            "invalid_state",
+            "POST /api/saml/{id}/logout",
+            "/api/saml/{id}/slo",
+            "IdP-initiated Single Logout",
+            "IdP-initiated logout not supported",
+        ):
+            self.assertIn(expected, saml_section)
+
+        troubleshoot = guide_section("## 🔧 Troubleshooting", "### Safe diagnosis")
+        for expected in ("saml_validation_failed", "missing_subject", "provider_not_initialized"):
+            self.assertIn(expected, troubleshoot)
+
+        rbac = " ".join((ROOT / "docs/RBAC.md").read_text(encoding="utf-8").split())
+        self.assertIn("`sso_oidc_role_assignment` events for OIDC providers and `saml_role_assignment` events for SAML providers", rbac)
+
+        security_doc = " ".join((ROOT / "SECURITY.md").read_text(encoding="utf-8").split())
+        for expected in (
+            "upgrade-insecure-requests",
+            "Strict-Transport-Security: `max-age=31536000; includeSubDomains; preload`",
+            "PULSE_TRUSTED_PROXY_CIDRS",
+            "[SAML 2.0 SSO guide](docs/OIDC.md#saml-20-single-sign-on)",
+        ):
+            self.assertIn(expected, security_doc)
+
+        saml_service = (ROOT / "internal/api/saml_service.go").read_text(encoding="utf-8")
+        for marker in (
+            "samlRequestTTL        = 10 * time.Minute",
+            "maxSAMLRequestEntries = 1024",
+            'endpoints.entityID = baseURL + "/saml/" + providerID',
+            'acsPath = "/api/saml/" + providerID + "/acs"',
+            'metadataPath = "/api/saml/" + providerID + "/metadata"',
+            '"/api/saml/" + providerID + "/slo"',
+            "if s.config.SignRequests {",
+        ):
+            self.assertIn(marker, saml_service)
+
+        saml_handlers = (ROOT / "internal/api/saml_handlers.go").read_text(encoding="utf-8")
+        for marker in (
+            'cookieNameSAMLLogin       = "pulse_saml_login"',
+            'cookieNameSAMLLoginSecure = "__Host-pulse_saml_login"',
+            "writeSAMLACSRepost(w, req)",
+            '"saml_validation_failed"',
+            '"missing_subject"',
+            '"provider_not_initialized"',
+            '"saml_role_assignment"',
+            '"IdP-initiated logout not supported"',
+            "24*time.Hour",
+        ):
+            self.assertIn(marker, saml_handlers)
+
+        sso_handlers = (ROOT / "internal/api/identity_sso_handlers.go").read_text(encoding="utf-8")
+        for marker in (
+            "Only the SAML SSO URL format was checked. Certificates and sign-in have not been tested.",
+            "SAML metadata includes an IdP identity and an SSO URL. Sign-in has not been tested.",
+            "No signing certificate could be read from the IdP metadata. Check that it includes an X.509 signing certificate. Sign-in has not been tested.",
+        ):
+            self.assertIn(marker, sso_handlers)
+
+        security_go = (ROOT / "internal/api/security.go").read_text(encoding="utf-8")
+        for marker in (
+            '"upgrade-insecure-requests"',
+            'w.Header().Set("Strict-Transport-Security", "max-age=31536000; includeSubDomains; preload")',
+            "if shouldSetHSTS(r) {",
+        ):
+            self.assertIn(marker, security_go)
+
     def test_served_guide_matches_source(self):
         self.assertEqual(GUIDE.read_bytes(), (ROOT / "frontend-modern/public/docs/OIDC.md").read_bytes())
         self.assertEqual(
             (ROOT / "docs/RBAC.md").read_bytes(),
             (ROOT / "frontend-modern/public/docs/RBAC.md").read_bytes(),
+        )
+        self.assertEqual(
+            (ROOT / "SECURITY.md").read_bytes(),
+            (ROOT / "frontend-modern/public/docs/SECURITY.md").read_bytes(),
         )
 
 

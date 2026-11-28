@@ -408,12 +408,13 @@ discarding state. Do not test exposure by making a public export.
   - Session invalidation on password change and quick-setup credential rotation
   - Admitted local sessions and API tokens are rechecked on every request body read so a logged-out session or revoked token fails with HTTP 401 before the body completes
 - **Security headers**
-  - Content-Security-Policy
+  - Content-Security-Policy (includes `upgrade-insecure-requests` on HTTPS requests)
   - X-Frame-Options: `DENY` by default (omitted when `allowEmbedding` is enabled in system settings)
   - X-Content-Type-Options: nosniff
   - X-XSS-Protection: `0` (disables legacy browser XSS auditors in favour of Content-Security-Policy)
   - Referrer-Policy: strict-origin-when-cross-origin
   - Permissions-Policy restricting sensitive APIs
+  - Strict-Transport-Security: `max-age=31536000; includeSubDomains; preload` on direct HTTPS requests or when `X-Forwarded-Proto: https` arrives from a peer listed in `PULSE_TRUSTED_PROXY_CIDRS`
 - **Audit logging**
   - Authentication events include IP addresses
   - Rollback actions are logged with timestamps and metadata
@@ -440,11 +441,11 @@ together.
 Pulse supports **OIDC** and **SAML** SSO providers with multi-provider configuration:
 
 - **OIDC**: Google, Authentik, Keycloak, Auth0, or any compliant provider.
-- **SAML**: For enterprise IdPs that use SAML assertions.
+- **SAML**: For enterprise IdPs that use SAML assertions. See the [SAML 2.0 SSO guide](docs/OIDC.md#saml-20-single-sign-on).
 - Multiple providers can be enabled simultaneously; the login page shows all available SSO buttons.
 - Configure via **Settings → Security → Single Sign-On** (admin required).
 
-See `docs/PROXY_AUTH.md` for proxy-based auth (Authentik, Authelia, Cloudflare).
+See `docs/OIDC.md` for OIDC and SAML configuration, and `docs/PROXY_AUTH.md` for proxy-based auth (Authentik, Authelia, Cloudflare).
 
 ### Password Authentication
 
