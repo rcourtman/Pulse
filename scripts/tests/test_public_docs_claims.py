@@ -622,10 +622,10 @@ class AIAutonomyHelpDocsTest(unittest.TestCase):
             "Rotating administrator credentials invalidates existing administrator sessions immediately.",
             "Changing an OpenAI, Z.ai, or Ollama base URL to a different origin while retaining an existing stored API key or password returns `400`",
             "[Weekly summary and email](AI.md#weekly-summary-and-email)",
+            "`docs/PATROL_WEEKLY_DIGEST.md`",
         ):
             with self.subTest(doc="docs/API.md", phrase=phrase):
                 self.assertIn(phrase, api_norm)
-        self.assertNotIn("`docs/PATROL_WEEKLY_DIGEST.md`", api_norm)
 
 
 if __name__ == "__main__":

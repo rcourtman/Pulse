@@ -1942,9 +1942,10 @@ Runs a focused investigation for an alert payload (used by the UI).
     alerts Patrol reviewed, and estimated model spend with a pricing-known
     flag.
   - Computed from records Pulse already retains (run history, the findings
-    store, canonical action audits, and usage cost events), with nothing new
+    store, canonical action audits, and usage cost events), so nothing new is
     persisted. Requires the `ai:execute` scope. Backs the Patrol page's
-    "This week" card. See [Weekly summary and email](AI.md#weekly-summary-and-email).
+    "This week" card. See [Weekly summary and email](AI.md#weekly-summary-and-email)
+    (repository pointer: `docs/PATROL_WEEKLY_DIGEST.md`).
 - `GET /api/ai/patrol/attention`
   - Returns the typed Patrol attention queue projected from canonical
     operational lifecycle records. This is the active-count and queue source
