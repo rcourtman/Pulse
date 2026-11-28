@@ -179,8 +179,17 @@ historical choice is not a safe downgrade procedure for a current installation.
   an unresponsive-workload incident; use the [backup safety precaution](VM_DISK_MONITORING.md#backup-safety)
   before restoring paused monitoring.
 - Open **Settings → System → Updates** and review the upgrade checks on the
-  update plan. These describe the currently reported fleet and server update
-  path, not every installed agent's continuity or convergence.
+  update plan (`GET /api/updates/plan`). Alongside the server update path and
+  agent continuity checks, Pulse checks `agent-migration-security` (warning
+  when v5 or legacy agents still need a first-hop automatic migration over
+  HTTPS or a trusted local network before v6 signature and self-test checks
+  apply), `agent-token-scopes` (blocking readiness when registered agents have
+  no loaded `agent:report` token or all loaded agent reporting tokens are
+  expired, and warning when any expires within 14 days), and on Docker
+  deployments `container-data-persistence` (warning when `/proc/self/mountinfo`
+  shows the data directory is on the container root filesystem). These checks
+  describe the currently reported fleet and server update path, not every
+  installed agent's continuity or convergence.
 - If the instance uses SSO without a configured local administrator, verify the
   trusted IdP group's existing built-in `admin` mapping before upgrading. SSO
   authentication alone does not grant instance-administrator access; an unmapped,
@@ -228,6 +237,18 @@ collector settings. Pulling a different tag does not change a hardcoded Compose
 image or the running container. Keep a private Pro image private; do not replace
 it with `rcourtman/pulse`. Do not run `docker compose down`, remove volumes or
 recreate unrelated services for a Pulse-only update.
+
+Before recreating a Docker container, confirm that the active data directory
+(`PULSE_DATA_DIR`, default `/data`) sits on a mounted volume or bind mount.
+When `/proc/self/mountinfo` shows the data directory is on the container's root
+filesystem, Pulse surfaces a persistence warning in both the in-app update
+banner and the `container-data-persistence` check under **Settings → System →
+Updates**, because recreating the container erases configuration,
+authentication, encryption/signing keys, and history. Export a configuration
+backup from **Settings → System → Recovery** and mount a persistent volume
+(for example `-v pulse-data:/data`) before recreating the container. Set
+`PULSE_SUPPRESS_EPHEMERAL_DATA_WARNING=true` (also accepts `1` or `yes`) only
+when ephemeral container storage is intentional.
 
 ### Kubernetes (Helm)
 

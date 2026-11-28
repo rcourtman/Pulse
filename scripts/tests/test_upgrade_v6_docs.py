@@ -154,6 +154,62 @@ class UpgradeV6DocsTest(unittest.TestCase):
     def test_shipped_guide_is_byte_identical(self):
         self.assertEqual(GUIDE.read_bytes(), (ROOT / 'frontend-modern/public/docs/UPGRADE_v6.md').read_bytes())
 
+    def test_readiness_checks_and_docker_ephemeral_data_match_runtime(self):
+        readiness_go = (ROOT / 'internal/api/update_readiness.go').read_text(encoding='utf-8')
+        ephemeral_go = (ROOT / 'internal/updates/ephemeral_data.go').read_text(encoding='utf-8')
+        for token in (
+            'ID:      "container-data-persistence"',
+            'ID:      "agent-migration-security"',
+            'ID:      "agent-token-scopes"',
+            '14*24*time.Hour',
+        ):
+            self.assertIn(token, readiness_go)
+        for token in (
+            'defaultMountInfoPath = "/proc/self/mountinfo"',
+            'PULSE_SUPPRESS_EPHEMERAL_DATA_WARNING',
+            'PULSE_DATA_DIR',
+            'target = "/data"',
+        ):
+            self.assertIn(token, ephemeral_go)
+
+        before = prose(section('Before You Upgrade'))
+        for phrase in (
+            'GET /api/updates/plan',
+            'agent-migration-security',
+            'agent-token-scopes',
+            'agent:report',
+            'within 14 days',
+            'container-data-persistence',
+            '/proc/self/mountinfo',
+        ):
+            with self.subTest(section='Before You Upgrade', phrase=phrase):
+                self.assertIn(phrase, before)
+
+        docker = prose(section('Docker', '###'))
+        for phrase in (
+            'PULSE_DATA_DIR',
+            '/data',
+            '/proc/self/mountinfo',
+            'container-data-persistence',
+            'in-app update banner',
+            'Settings → System → Updates',
+            'Settings → System → Recovery',
+            '-v pulse-data:/data',
+            'PULSE_SUPPRESS_EPHEMERAL_DATA_WARNING=true',
+        ):
+            with self.subTest(section='Docker', phrase=phrase):
+                self.assertIn(phrase, docker)
+
+        ops_guide = prose((ROOT / 'docs/operations/AUTO_UPDATE.md').read_text(encoding='utf-8'))
+        for phrase in (
+            'container-data-persistence',
+            'PULSE_DATA_DIR',
+            '/data',
+            'mounted volume',
+        ):
+            with self.subTest(section='operations/AUTO_UPDATE.md', phrase=phrase):
+                self.assertIn(phrase, ops_guide)
+
 
 if __name__ == '__main__':
     unittest.main()
