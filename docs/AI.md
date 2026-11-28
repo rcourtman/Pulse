@@ -400,13 +400,14 @@ MaybeInvestigateFinding()
 
 | Setting | Default | Description |
 |---------|---------|-------------|
-| `MaxEvidenceCalls` | 10 | Maximum evidence-tool calls per investigation; the terminal typed proposal is reserved separately |
+| `MaxEvidenceCalls` | 10 | Maximum evidence-tool calls per investigation. The terminal typed proposal is reserved separately |
 | `MaxTurns` | 12 | Internal provider-response safety ceiling derived from the evidence budget (budget + proposal + final summary) |
-| `Timeout` | 10 min | Maximum duration per investigation |
-| `MaxConcurrent` | 3 | Maximum concurrent investigations |
+| `Timeout` | 10 min (25 min on local Codex/Claude subscription CLIs) | Maximum duration per investigation. Explicit overrides clamp to 60–1,800 seconds (1–30 minutes) |
+| `MaxConcurrent` | 3 (1 on local Codex/Claude subscription CLIs) | Maximum concurrent investigations. Local subscription CLIs run one investigation at a time |
 | `MaxAttemptsPerFinding` | 3 | Maximum investigation attempts per finding |
 | `CooldownDuration` | 1 hour | Cooldown before re-investigating |
-| `TimeoutCooldownDuration` | 10 min | Shorter cooldown for timeout failures |
+| `FixRetryCooldownDuration` | 20 min | Shorter cooldown after `fix_failed` or `fix_verification_failed` |
+| `TimeoutCooldownDuration` | 10 min | Shorter cooldown for timeout failures (failed runs without a conclusion carry no extra cooldown) |
 | `VerificationDelay` | 30 sec | Wait before verifying fix |
 
 ### Investigation Outcomes
@@ -417,11 +418,15 @@ MaybeInvestigateFinding()
 | `fix_queued` | Fix proposed, awaiting approval |
 | `fix_executed` | Fix auto-executed successfully |
 | `fix_failed` | Fix attempted but failed |
+| `fix_rejected` | Operator rejected the queued fix |
 | `fix_verified` | Fix worked, issue confirmed resolved |
 | `fix_verification_failed` | Fix ran but issue persists |
+| `fix_verification_unknown` | Fix ran, but post-fix verification was inconclusive (next scheduled Patrol assessment follows up) |
 | `needs_attention` | Requires human intervention |
 | `cannot_fix` | Issue cannot be automatically fixed |
-| `timed_out` | Investigation timed out (will retry sooner) |
+| `timed_out` | Investigation timed out or was closed overdue by stuck-run recovery |
+| `unclassified` | Investigation finished, but its conclusion could not be classified |
+| `interrupted` | Cancelled by a Pulse restart or shutdown (counts toward the three-attempt cap with no extra cooldown) |
 
 ---
 

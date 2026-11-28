@@ -130,13 +130,23 @@ Normal queued firing and recovery webhooks have a budget of **up to three
 queue delivery attempts, including the initial attempt**. Some failures stop
 sooner. There is no separate HTTP retry loop or guarantee of delivery. For
 HTTP 429 or 503, a usable `Retry-After` can extend the usual wait up to
-15 minutes. It cannot shorten the wait or add attempts.
+15 minutes. It cannot shorten the wait or add attempts. On HTTP 429, when
+`Retry-After` is absent or unusable, Pulse also accepts positive numeric seconds
+in `X-RateLimit-Reset-After` within the same 1-second to 15-minute cap.
 
 | Observed failure | Automatic queue behaviour |
 | --- | --- |
 | Authentication, configuration or rejected request (most HTTP 4xx, including 400, 401 and 403) | Stops as soon as this failure is classified, even with attempts left; retains the delivery as a terminal failure. |
 | HTTP 408, 421, 423, 425 or 429; HTTP 5xx; connectivity or unknown failure | Can retry with backoff while the saved attempt budget remains; exhaustion retains a terminal failure. |
 | TLS failure (certificate trust, expiry, hostname or HTTP-on-HTTPS mismatch) | Stops as soon as this failure is classified, even with attempts left. Retains the delivery as a terminal failure. Fix the server certificate or TLS settings rather than retrying, and do not disable verification. |
+
+HTTP responses map to failure classes directly: `401`, `403`, and `407` record
+`authentication`, `402` records `configuration`, `408` and `421` record
+`connectivity`, `423`, `425`, and `5xx` record `server_error`, `429` records
+`rate_limited`, and other `4xx` statuses record `rejected`. Immediate
+non-retryable TLS classification applies across webhooks, email/SMTP, and
+Apprise. Webhook and email destinations have no Skip TLS Verify setting (only
+Apprise HTTP provides one).
 
 A terminal failure means **no further automatic retry**, not that the delivery
 was successful or its history was deleted. In **Alerts → Notifications**, use
@@ -155,6 +165,8 @@ this recovery either.
 
 Alert-webhook response text is deliberately withheld from delivery errors,
 logs and Test summaries because receivers can echo credentials or alert content.
+Pulse drains at most 1 MiB of each webhook response body (`WebhookMaxResponseSize`)
+to record bounded byte-count metadata without storing the text.
 Withholding is not a delivery verdict: retain the HTTP status and failure class.
 For read failures, bounded byte counts and safe use of existing receiver records,
 follow the [withheld-response guidance](TROUBLESHOOTING.md#webhook-response-body-is-withheld).

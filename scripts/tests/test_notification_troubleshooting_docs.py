@@ -312,6 +312,43 @@ class NotificationTroubleshootingDocsTest(unittest.TestCase):
         ):
             self.assertIn(boundary, severity_section)
 
+    def test_webhook_retry_help_matches_rate_limit_header_http_mapping_and_body_cap(self):
+        response_src = (ROOT / "internal/notifications/webhook_response.go").read_text(encoding="utf-8")
+        failure_src = (ROOT / "internal/notifications/failure_class.go").read_text(encoding="utf-8")
+        notifications_src = (ROOT / "internal/notifications/notifications.go").read_text(encoding="utf-8")
+        api_src = (ROOT / "internal/api/alerting/notifications.go").read_text(encoding="utf-8")
+
+        for marker, src in (
+            ('headers.Get("X-RateLimit-Reset-After")', response_src),
+            ("const maxNotificationRetryAfter = 15 * time.Minute", response_src),
+            ("case 401, 403, 407:", failure_src),
+            ("case 402:", failure_src),
+            ("case 408, 421:", failure_src),
+            ("case 423, 425:", failure_src),
+            ("case 429:", failure_src),
+            ("WebhookMaxResponseSize  = 1 * 1024 * 1024", notifications_src),
+            ("TLS certificate error: check the server certificate and TLS settings", api_src),
+        ):
+            with self.subTest(marker=marker):
+                self.assertIn(marker, src)
+
+        raw_guide = (ROOT / "docs/WEBHOOKS.md").read_text(encoding="utf-8")
+        self.assertEqual(raw_guide, (ROOT / "frontend-modern/public/docs/WEBHOOKS.md").read_text(encoding="utf-8"))
+        retry_section = " ".join(
+            raw_guide.split("**Retries and retained failures.**", 1)[1]
+            .split("**Correlation header.**", 1)[0]
+            .split()
+        )
+        for phrase in (
+            "On HTTP 429, when `Retry-After` is absent or unusable, Pulse also accepts positive numeric seconds in `X-RateLimit-Reset-After` within the same 1-second to 15-minute cap.",
+            "`401`, `403`, and `407` record `authentication`, `402` records `configuration`, `408` and `421` record `connectivity`, `423`, `425`, and `5xx` record `server_error`, `429` records `rate_limited`, and other `4xx` statuses record `rejected`.",
+            "Immediate non-retryable TLS classification applies across webhooks, email/SMTP, and Apprise.",
+            "Webhook and email destinations have no Skip TLS Verify setting (only Apprise HTTP provides one).",
+            "Pulse drains at most 1 MiB of each webhook response body (`WebhookMaxResponseSize`)",
+        ):
+            with self.subTest(phrase=phrase):
+                self.assertIn(phrase, retry_section)
+
 
 if __name__ == "__main__":
     unittest.main()
