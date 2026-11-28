@@ -464,8 +464,18 @@ class SchedulerPollingDocsTest(unittest.TestCase):
             "When a target is removed while its claim is still waiting for a process-wide slot (`POLL_TASK_WORKERS`), the dispatcher releases the retired claim without starting provider setup or changing the worker cap and moves on to another due target",
             "keeping any explicit replacement's own due time and leaving already-admitted `running` polls to finish under normal in-flight fences",
             "Under `POLL_TASK_WORKERS`, a confirmed target removal releases a claim still waiting in `waiting_for_slot` without starting provider setup so another due target can take its turn.",
+            "When an already-admitted `running` poll returns after its monitor context or queue claim was retired, the worker releases the slot without starting another provider cadence lookup for a successor, while still preserving any explicit replacement's deadline.",
         ):
             self.assertIn(expected, adaptive)
+
+        self.assertIn(
+            "if ctx.Err() != nil || !m.taskQueue.canStartClaim(task)",
+            task_workers,
+        )
+        self.assertIn(
+            "When an already-admitted poll returns after its monitor context or claim was retired, the worker releases the slot without reading provider cadence to plan a successor, while keeping any explicit replacement schedule intact.",
+            rollout,
+        )
 
 
 if __name__ == "__main__":

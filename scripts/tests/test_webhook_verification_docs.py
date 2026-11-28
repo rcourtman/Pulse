@@ -237,6 +237,37 @@ class WebhookVerificationDocsTest(unittest.TestCase):
             with self.subTest(phrase=phrase):
                 self.assertIn(phrase, text)
 
+    def test_webhook_timeouts_rate_limit_and_proxy_bypass_match_source(self):
+        text = " ".join(DOC.read_text(encoding="utf-8").split())
+        notifications_go = (
+            ROOT / "internal/notifications/notifications.go"
+        ).read_text(encoding="utf-8")
+        delivery = (
+            ROOT / "internal/notifications/webhook_delivery.go"
+        ).read_text(encoding="utf-8")
+
+        for marker, source in (
+            ("WebhookTimeout          = 30 * time.Second", notifications_go),
+            ("WebhookTestTimeout      = 10 * time.Second", notifications_go),
+            ("webhookDNSLookupTimeout = 5 * time.Second", notifications_go),
+            ("WebhookRateLimitWindow = 1 * time.Minute", notifications_go),
+            ("WebhookRateLimitMax    = 10", notifications_go),
+            ("Proxy intentionally nil", delivery),
+            ("DialPinnedIPs(ctx, network, port, []net.IP{ip}, 10*time.Second)", delivery),
+            ("func (n *NotificationManager) checkWebhookRateLimit(", delivery),
+        ):
+            with self.subTest(marker=marker):
+                self.assertIn(marker, source)
+
+        for phrase in (
+            "Alert webhook deliveries time out after **30 seconds** (**10 seconds** for **Test** sends), with a **5-second** DNS lookup timeout and **10-second** TCP dial timeout.",
+            "limits each webhook URL to **10 requests per minute**",
+            "Deliveries past that local cap fail with `rate_limited` and retry through the queue rather than flooding the receiver.",
+            "Alert webhooks and Apprise HTTP requests deliberately ignore `HTTP_PROXY` and `HTTPS_PROXY` and dial pinned resolved IP addresses directly so an outbound proxy cannot bypass private-IP SSRF checks.",
+        ):
+            with self.subTest(phrase=phrase):
+                self.assertIn(phrase, text)
+
 
 if __name__ == "__main__":
     unittest.main()

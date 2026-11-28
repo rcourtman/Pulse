@@ -44,7 +44,10 @@ polls to finish under normal in-flight fences. Both local per-monitor workers
 and the process dispatcher also re-check claim retirement at the execution
 boundary before provider setup, so a target removed or replaced after dequeue
 or slot admission skips starting an obsolete poll and preserves the
-replacement's own due time. A positive `running` value
+replacement's own due time. When an already-admitted `running` poll returns
+after its monitor context or queue claim was retired, the worker releases the
+slot without starting another provider cadence lookup for a successor, while
+still preserving any explicit replacement's deadline. A positive `running` value
 means a worker took the poll and has not returned within its time budget,
 including while a worker stays occupied in synchronous panic recovery logging
 after releasing its queue claim. Those are server-wide signals, not one

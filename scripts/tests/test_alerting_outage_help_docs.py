@@ -633,6 +633,55 @@ class AlertingOutageHelpDocsTest(unittest.TestCase):
             with self.subTest(doc="ALERTING.md", phrase=phrase):
                 self.assertIn(phrase, alerting_norm)
 
+    def test_delivery_bounds_smtp_auth_apprise_and_retired_poll_slots_match_source(
+        self,
+    ) -> None:
+        notifications_go = (
+            ROOT / "internal/notifications/notifications.go"
+        ).read_text(encoding="utf-8")
+        notification_config = (
+            ROOT / "internal/notifications/notification_config.go"
+        ).read_text(encoding="utf-8")
+        email_enhanced = (
+            ROOT / "internal/notifications/email_enhanced.go"
+        ).read_text(encoding="utf-8")
+        deadman_config = (
+            ROOT / "internal/notifications/deadman_config.go"
+        ).read_text(encoding="utf-8")
+        poll_workers = (
+            ROOT / "internal/monitoring/poll_task_workers.go"
+        ).read_text(encoding="utf-8")
+
+        for src, marker in (
+            (notifications_go, "appriseDefaultTimeoutSecs = 15"),
+            (notifications_go, "appriseMaxTimeoutSecs     = 120"),
+            (notifications_go, "appriseMinTimeoutSecs     = 5"),
+            (notification_config, 'normalized.CLIPath = "apprise"'),
+            (notification_config, 'strings.HasPrefix(trimmed, "-")'),
+            (notification_config, "defaultEmailRateLimit = 60"),
+            (email_enhanced, "func LoginAuth(username, password string) smtp.Auth"),
+            (email_enhanced, "func alertThreadMessageID("),
+            (deadman_config, "const MaxDeadManPingURLLength = 2048"),
+            (poll_workers, "if ctx.Err() != nil || !m.taskQueue.canStartClaim(task)"),
+        ):
+            with self.subTest(marker=marker):
+                self.assertIn(marker, src)
+
+        alerting_norm = " ".join(DOC.read_text(encoding="utf-8").split())
+        for phrase in (
+            "always runs `apprise` from `PATH` (ignoring custom CLI binary paths) and discards any configured target starting with `-`",
+            "delivery timeout defaults to **15 seconds** and is clamped between **5 and 120 seconds**",
+            "Apprise HTTP mode uses the same DNS-pinned, non-proxied HTTP transport and private-IP allowlist as alert webhooks and ignores `HTTP_PROXY` and `HTTPS_PROXY`",
+            "SMTP send rate limit defaulting to **60 emails per minute** when unset",
+            "negotiates `AUTH PLAIN` and falls back to `AUTH LOGIN`",
+            "deterministic RFC 5322 thread ID in `In-Reply-To` and `References`",
+            "keeping a distinct `Message-ID` on each message",
+            "External watchdog ping URLs are capped at **2,048 characters**",
+            'When an already-admitted `stage="running"` poll returns after its monitor context or queue claim was retired, the worker releases the slot without reading provider cadence to plan a successor while still preserving any explicit replacement schedule',
+        ):
+            with self.subTest(phrase=phrase):
+                self.assertIn(phrase, alerting_norm)
+
 
 if __name__ == "__main__":
     unittest.main()

@@ -66,7 +66,9 @@ already-admitted poll still finishes before releasing its claim. Both local
 per-monitor workers and the process dispatcher also check claim retirement at
 the execution boundary before provider setup, skipping obsolete polls retired
 after dequeue or slot admission while preserving any explicit replacement's due
-time.
+time. When an already-admitted poll returns after its monitor context or claim
+was retired, the worker releases the slot without reading provider cadence to
+plan a successor, while keeping any explicit replacement schedule intact.
 See [where a poll stopped progressing](../monitoring/ADAPTIVE_POLLING.md#check-where-a-poll-stopped-progressing)
 before interpreting a flat result or changing the cadence again. An open
 breaker is a backoff state, not proof of a new regression.
