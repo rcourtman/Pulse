@@ -1984,6 +1984,118 @@ describe('useWorkloads', () => {
     expect(useWorkloadsSource).not.toContain("const DEFAULT_ORG_SCOPE = 'default'");
     expect(useWorkloadsSource).not.toContain('const normalizeOrgScope =');
   });
+
+  it.each(['api', 'snapshot'] as const)(
+    'preserves sourceStatus through %s refreshes and prefers live top-level recovery over stale platformData',
+    async (transport) => {
+      const staleEntry = {
+        status: 'error',
+        lastSeen: '2026-11-27T23:20:00Z',
+        error: 'PVE API timeout (504)',
+      };
+      const freshEntry = { status: 'online', lastSeen: '2026-11-27T23:40:00Z' };
+      const sibling = {
+        ...sampleResource,
+        id: 'cluster-b-pve2-201',
+        vmid: 201,
+        name: 'sibling-vm',
+        sourceStatus: { proxmox: freshEntry },
+      };
+      const stale = {
+        ...sampleResource,
+        id: 'cluster-a-pve1-101',
+        sourceStatus: { proxmox: staleEntry },
+        platformData: { sourceStatus: { proxmox: staleEntry } },
+      };
+      const recovered = {
+        ...stale,
+        sourceStatus: { proxmox: freshEntry },
+        // Keep stale copy inside platformData to verify top-level WS recovery wins.
+        platformData: { sourceStatus: { proxmox: staleEntry } },
+      };
+      const [snapshot, setSnapshot] = createSignal([stale, sibling] as any);
+      apiFetchJSONMock.mockResolvedValue({ data: [stale, sibling], meta: { totalPages: 1 } });
+      let dispose = () => {};
+      let result!: ReturnType<UseWorkloadsModule['useWorkloads']>;
+      createRoot((d) => {
+        dispose = d;
+        result = useWorkloads(
+          () => true,
+          transport === 'snapshot' ? { resourceSnapshot: snapshot } : {},
+        );
+      });
+      try {
+        await waitForWorkloadCount(() => result.workloads().length, 2);
+        const byId = (id: string) => result.workloads().find((row) => row.id === id)!;
+        const staleRow = byId('cluster-a-pve1-101');
+        const siblingRow = byId('cluster-b-pve2-201');
+        expect(staleRow.sourceStatus).toEqual({ proxmox: staleEntry });
+
+        if (transport === 'snapshot') {
+          setSnapshot([recovered, sibling] as any);
+        } else {
+          apiFetchJSONMock.mockResolvedValue({
+            data: [recovered, sibling],
+            meta: { totalPages: 1 },
+          });
+          await result.refetch();
+        }
+        await flushAsync();
+
+        expect(byId('cluster-a-pve1-101')).not.toBe(staleRow);
+        expect(byId('cluster-a-pve1-101').sourceStatus).toEqual({ proxmox: freshEntry });
+        expect(byId('cluster-b-pve2-201')).toBe(siblingRow);
+      } finally {
+        dispose();
+      }
+    },
+  );
+
+  it('replaces a workload row when a SolidJS store reconciles only sourceStatus in place', async () => {
+    const { createStore, reconcile } = await import('solid-js/store');
+    const staleEntry = {
+      status: 'error',
+      lastSeen: '2026-11-27T23:20:00Z',
+      error: 'PVE API timeout (504)',
+    };
+    const freshEntry = { status: 'online', lastSeen: '2026-11-27T23:40:00Z' };
+    const baseRow = {
+      ...sampleResource,
+      id: 'cluster-a-pve1-101',
+      sourceStatus: { proxmox: staleEntry },
+    };
+    const [resources, setResources] = createStore<any[]>([baseRow]);
+    const [change, setChange] = createSignal<{
+      version: number;
+      changedIds: ReadonlySet<string> | null;
+    }>({ version: 1, changedIds: null });
+    let dispose = () => {};
+    let result!: ReturnType<UseWorkloadsModule['useWorkloads']>;
+    createRoot((d) => {
+      dispose = d;
+      result = useWorkloads(() => true, {
+        resourceSnapshot: () => resources,
+        resourceSnapshotChange: change,
+      });
+    });
+    try {
+      await waitForWorkloadCount(() => result.workloads().length, 1);
+      const before = result.workloads()[0];
+      expect(before.sourceStatus).toEqual({ proxmox: staleEntry });
+
+      setResources(
+        reconcile([{ ...baseRow, sourceStatus: { proxmox: freshEntry } }], { key: 'id' }),
+      );
+      setChange({ version: 2, changedIds: null });
+      await flushAsync();
+
+      const after = result.workloads()[0];
+      expect(after).not.toBe(before);
+      expect(after.sourceStatus).toEqual({ proxmox: freshEntry });
+    } finally {
+      dispose();
+    }
+  });
 });
 
 describe('resource-owned workload identity', () => {

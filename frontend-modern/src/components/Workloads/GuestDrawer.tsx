@@ -7,6 +7,10 @@ import { Subtabs } from '@/components/shared/Subtabs';
 import { WebInterfaceLink } from '@/components/shared/WebInterfaceLink';
 import { getSimpleStatusIndicator } from '@/utils/status';
 import {
+  formatWorkloadStaleDetail,
+  getWorkloadSourceStaleNotice,
+} from '@/utils/workloadSourceFreshness';
+import {
   GUEST_DRAWER_BACKUP_PRECAUTION,
   getGuestDrawerGuestReadPrecaution,
   getGuestDrawerCurrentMetrics,
@@ -54,8 +58,16 @@ const GuestDrawerContent: Component<GuestDrawerProps> = (props) => {
   const historyDeferredMetrics = createMemo(() => getGuestDrawerDeferredMetrics(props.guest));
 
   const guestReadPrecaution = createMemo(() => getGuestDrawerGuestReadPrecaution(props.guest));
+  const staleNotice = createMemo(() => getWorkloadSourceStaleNotice(props.guest));
 
-  const headerIndicator = createMemo(() => getSimpleStatusIndicator(props.guest.status));
+  const headerIndicator = createMemo(() => {
+    const base = getSimpleStatusIndicator(props.guest.status);
+    const stale = staleNotice();
+    if (!stale) return base;
+    return base.variant === 'success'
+      ? { variant: 'warning' as const, label: `${base.label} · ${stale.badge}` }
+      : { ...base, label: `${base.label} · ${stale.badge}` };
+  });
 
   return (
     <section class="space-y-3" aria-labelledby={headingId()}>
@@ -84,6 +96,18 @@ const GuestDrawerContent: Component<GuestDrawerProps> = (props) => {
           statusLabel={headerIndicator().label}
         />
       </ObjectDrawerHeader>
+      <Show when={staleNotice()}>
+        {(notice) => (
+          <InlineNotice tone="warning" role="status" data-testid="guest-source-stale-notice">
+            <p>
+              <strong>{notice().badge}.</strong> {formatWorkloadStaleDetail(notice())}
+            </p>
+            <p>
+              Displayed status and metrics are the last reported readings until collection resumes.
+            </p>
+          </InlineNotice>
+        )}
+      </Show>
       <Show when={guestReadPrecaution()}>
         {(message) => (
           <InlineNotice

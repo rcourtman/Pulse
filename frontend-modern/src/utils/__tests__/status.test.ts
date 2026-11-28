@@ -243,6 +243,56 @@ describe('getGuestHealthIndicator', () => {
     );
     expect(result.variant).toBe('warning');
   });
+
+  it('degrades a running guest when its owning platform source is stale while keeping stopped and offline danger', () => {
+    expect(
+      getGuestHealthIndicator(
+        {
+          status: 'running',
+          platformType: 'proxmox-pve',
+          sourceStatus: { proxmox: { status: 'error', error: 'PVE API timeout (504)' } },
+        },
+        true,
+      ),
+    ).toEqual({ variant: 'warning', label: 'Running · Stale data' });
+
+    expect(
+      getGuestHealthIndicator(
+        {
+          status: 'stopped',
+          platformType: 'proxmox-pve',
+          sourceStatus: { proxmox: { status: 'stale' } },
+        },
+        true,
+      ),
+    ).toEqual({ variant: 'danger', label: 'Stopped · Stale data' });
+
+    expect(
+      getGuestHealthIndicator(
+        {
+          status: 'running',
+          platformType: 'proxmox-pve',
+          sourceStatus: { proxmox: { status: 'stale' } },
+        },
+        false,
+      ),
+    ).toEqual({ variant: 'danger', label: 'Node offline · Stale data' });
+
+    // A stale linked agent does not degrade a healthy Proxmox platform reading.
+    expect(
+      getGuestHealthIndicator(
+        {
+          status: 'running',
+          platformType: 'proxmox-pve',
+          sourceStatus: {
+            proxmox: { status: 'online' },
+            agent: { status: 'stale' },
+          },
+        },
+        true,
+      ),
+    ).toEqual({ variant: 'success', label: 'Running' });
+  });
 });
 
 describe('getAgentStatusIndicator', () => {

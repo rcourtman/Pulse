@@ -3863,4 +3863,68 @@ describe('backup disclosures keep completion separate from guest safety', () => 
       expect(dialog).toHaveTextContent(GUEST_DRAWER_BACKUP_PRECAUTION);
     },
   );
+
+  it.each(['wide', 'phone'] as const)(
+    'shows non-colour Stale data cue and clears on live recovery in %s layout',
+    (layoutMode) => {
+      const [guest, setGuest] = createSignal(
+        makeGuest({
+          name: 'prod-db-01',
+          platformType: 'proxmox-pve',
+          sourceStatus: {
+            proxmox: { status: 'error', error: 'PVE API timeout (504)' },
+          },
+        }),
+      );
+      const { container } = render(() => (
+        <table>
+          <tbody>
+            <GuestRow
+              guest={guest()}
+              workloadTableLayoutMode={layoutMode}
+              visibleColumnIds={['name', 'cpu', 'memory', 'disk']}
+            />
+          </tbody>
+        </table>
+      ));
+
+      const row = container.querySelector('tr')!;
+      expect(row).toHaveAttribute('data-workload-stale', 'true');
+      const dot = screen.getByTestId('status-dot');
+      expect(dot).toHaveAttribute('data-variant', 'warning');
+      expect(dot).toHaveAttribute('title', 'Running · Stale data');
+      const cue = screen.getByTestId('workload-stale-cue');
+      expect(cue).toHaveTextContent('Stale data');
+      expect(cue).toHaveAttribute('title', 'Proxmox VE collection error: PVE API timeout (504)');
+      // Last-known metrics remain visible while the stale cue warns they are not current.
+      expect(screen.getByTestId('cpu-bar')).toBeInTheDocument();
+      expect(screen.getByTestId('memory-bar')).toBeInTheDocument();
+
+      // Stopped + stale preserves red danger indicator alongside Stale data.
+      setGuest(
+        makeGuest({
+          name: 'prod-db-01',
+          status: 'stopped',
+          platformType: 'proxmox-pve',
+          sourceStatus: { proxmox: { status: 'stale' } },
+        }),
+      );
+      expect(screen.getByTestId('status-dot')).toHaveAttribute('data-variant', 'danger');
+      expect(screen.getByTestId('workload-stale-cue')).toHaveTextContent('Stale data');
+
+      // Live recovery clears the stale cue and restores green status without remounting the row.
+      setGuest(
+        makeGuest({
+          name: 'prod-db-01',
+          status: 'running',
+          platformType: 'proxmox-pve',
+          sourceStatus: { proxmox: { status: 'online' } },
+        }),
+      );
+      expect(container.querySelector('tr')).toBe(row);
+      expect(row).not.toHaveAttribute('data-workload-stale');
+      expect(screen.queryByTestId('workload-stale-cue')).toBeNull();
+      expect(screen.getByTestId('status-dot')).toHaveAttribute('data-variant', 'success');
+    },
+  );
 });

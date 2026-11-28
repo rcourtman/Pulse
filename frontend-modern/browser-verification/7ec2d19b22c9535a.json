@@ -1,0 +1,54 @@
+{
+  "version": 1,
+  "base_sha": "7b155e48aeebcdb7a47f6650dfb0a6a5f2a9166f",
+  "verified_at": "2026-11-28T00:30:38Z",
+  "result": "passed",
+  "changed_paths": [
+    "frontend-modern/src/components/Workloads/GuestDrawer.tsx",
+    "frontend-modern/src/components/Workloads/GuestRow.tsx",
+    "frontend-modern/src/components/Workloads/guestDrawerModel.ts",
+    "frontend-modern/src/components/Workloads/useGuestRowState.ts",
+    "frontend-modern/src/components/Workloads/workloadSelectors.ts",
+    "frontend-modern/src/hooks/useWorkloads.ts",
+    "frontend-modern/src/types/workloads.ts",
+    "frontend-modern/src/utils/status.ts",
+    "frontend-modern/src/utils/workloadSourceFreshness.ts"
+  ],
+  "content_sha256": {
+    "frontend-modern/src/components/Workloads/GuestDrawer.tsx": "9fc4a2476fbf1d78c718dfd26475da87c07180ae1dfa85ff9ee70375db93f22d",
+    "frontend-modern/src/components/Workloads/GuestRow.tsx": "28d035782db20b50acd14f14f926fdf150f9d2acedf5b395e16975dd1a8900af",
+    "frontend-modern/src/components/Workloads/guestDrawerModel.ts": "895ef1eb728c542c1f64c7121cb36774bae01507d8e88fa0b29f6643c104a1e0",
+    "frontend-modern/src/components/Workloads/useGuestRowState.ts": "4a7d28a1683fb5e9a2e3e166803e086886e240b80270be5ade12b75e4b7555df",
+    "frontend-modern/src/components/Workloads/workloadSelectors.ts": "fc54e573eb72bab02ef26e812b320feb7eb883db024814af8bc2ab1bfff316c3",
+    "frontend-modern/src/hooks/useWorkloads.ts": "81d92833ac673f77ed59c16094f4b0a0cca02e8374422c702108ae707f0d714c",
+    "frontend-modern/src/types/workloads.ts": "c5de3f48e9b94b2ca3130c20436723df9e4e45c29ac29297933994ec0abc0e40",
+    "frontend-modern/src/utils/status.ts": "aa4ad781869ea2817e92fb91be1885795afbfaff5fa74e814b5689ae89119bbc",
+    "frontend-modern/src/utils/workloadSourceFreshness.ts": "33314a88c5905462729bd7b5bf1b0f69f86ccbcfbfcfb7e8daa76109edade51e"
+  },
+  "routes": [
+    "/proxmox/overview",
+    "/vmware/overview"
+  ],
+  "viewports": [
+    {
+      "width": 1440,
+      "height": 940
+    },
+    {
+      "width": 360,
+      "height": 820
+    }
+  ],
+  "states": [
+    "paired production builds of unpatched base fde1816008a0 and patched candidate served over local HTTP/WebSocket fixture in desktop Chromium (1440x940 light theme, en-GB, UTC) and touch phone WebKit (360x820 dark theme, en-GB, UTC)",
+    "/proxmox/overview stale collection-error VM prod-db-01 (42% CPU, 68% Memory, 54% Disk), stopped+stale LXC archive-worker-102, and fresh VM web-frontend-201: candidate moves stale running prod-db-01 into Attention (Running 1, Attention 1, Stopped 1 vs Running 2, Attention 0 on base), adds non-colour Stale data cues beneath both stale guests while retaining bars and uptime, preserves red Stopped indicator on archive-worker-102, opens GuestDrawer with amber header indicator, warning InlineNotice naming Proxmox VE collection error: PVE API timeout (504), total-only 8.00 GB RAM fact, and 7/7 last-known deferred History metrics (0 current vs 7 current on base)",
+    "/proxmox/overview live WebSocket rawData recovery of prod-db-01 (sourceStatus.proxmox online, CPU 24%, Memory 52.5%) without page reload: clears Stale data cue and drawer InlineNotice, restores green status dots and Running 2 / Attention 0 counts, and restores 7/7 current History readouts while archive-worker-102 remains stopped+stale",
+    "/vmware/overview stale collection-error VM billing-api-vm (37% CPU, 73% Memory, 50% Disk) and fresh VM auth-gateway-vm: candidate achieves parity with VsphereHostsTable by moving billing-api-vm into Attention (Powered on 1, Attention 1), adding non-colour Stale data cue, rendering GuestDrawer amber header, warning InlineNotice naming vCenter collection error: vCenter session expired (401), and 5/5 last-known deferred History metrics, then clearing cleanly on live WebSocket rawData recovery without reload",
+    "zero console errors, zero page errors, zero failed network requests, and 0px horizontal overflow across all routes, themes, and viewports"
+  ],
+  "interactions": [
+    "loaded /proxmox/overview on desktop Chromium (1440x940 light) and touch WebKit phone (360x820 dark), inspected stale running, stopped+stale, and fresh rows, filtered by Attention chip (isolated prod-db-01), and searched 'stale' (matched prod-db-01 and archive-worker-102)",
+    "expanded prod-db-01 GuestDrawer, verified amber header indicator, Stale data InlineNotice, deferred Utilization/Network I/O/Disk I/O readouts, and total-only memory fact, then delivered live WebSocket rawData recovery frame verifying immediate clearance without reload",
+    "loaded /vmware/overview on desktop Chromium and touch WebKit phone, verified Stale data parity between ESXi host and VM rows, expanded billing-api-vm GuestDrawer, and delivered live WebSocket rawData recovery frame verifying immediate clearance without reload"
+  ]
+}
