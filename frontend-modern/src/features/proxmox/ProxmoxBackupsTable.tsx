@@ -82,6 +82,14 @@ import {
   collectUnreadBackupSources,
   describeUnreadBackupSources,
 } from './proxmoxBackupUnreadSources';
+import {
+  collectStaleBackupSources,
+  collectStaleWorkloadNotices,
+  describeStaleBackupSources,
+  getArtifactStaleNotice,
+  getCoverageRowStaleNotice,
+  hasStaleTextMatch,
+} from './proxmoxBackupStaleness';
 import { ProxmoxBackupServersTable } from './ProxmoxBackupServersTable';
 import { collectDatastoreJobFailures } from './proxmoxBackupServerJobs';
 import { ProxmoxCoverageTable } from './ProxmoxCoverageTable';
@@ -115,6 +123,8 @@ const EMPTY_PVE_BACKUPS: PVEBackupsPayload = {
 const EMPTY_PBS_BACKUPS: PBSBackupsPayload = { backups: [] };
 const BACKUP_READ_NOTICE_CLASS =
   'rounded-md border border-amber-300 bg-amber-50 px-3 py-2 text-xs text-amber-900 dark:border-amber-700 dark:bg-amber-950/40 dark:text-amber-100';
+const BACKUP_RETRY_BUTTON_CLASS =
+  'min-h-10 shrink-0 rounded-md border border-current px-3 font-medium hover:underline focus-visible:outline-solid focus-visible:outline-2 focus-visible:outline-offset-2 aria-disabled:opacity-50';
 const PROVIDER_HISTORY_GAP_DESCRIPTION =
   'Check the backup list in Proxmox. Some backups may not appear here.';
 
@@ -315,6 +325,17 @@ export const ProxmoxBackupsTable: Component<{
       collectUnreadBackupSources(protectionPostures.postureByResourceID().values()),
     ),
   );
+  const staleBackupSources = createMemo(() =>
+    collectStaleBackupSources(props.servers, props.workloads),
+  );
+  const staleWorkloadNotices = createMemo(() => collectStaleWorkloadNotices(props.workloads));
+  const staleBackupSourcesNotice = createMemo(() =>
+    describeStaleBackupSources(staleBackupSources()),
+  );
+  const coverageRowStaleNotice = (row: WorkloadCoverageRow) =>
+    getCoverageRowStaleNotice(row, staleBackupSources(), staleWorkloadNotices());
+  const artifactStaleNotice = (artifact: RecoverableArtifact) =>
+    getArtifactStaleNotice(artifact, staleBackupSources());
 
   // Saved views persist the current route query, so every filter and the active
   // backup workspace must share one URL owner. View changes also clear the
@@ -583,7 +604,8 @@ export const ProxmoxBackupsTable: Component<{
       if (!typeMatches(row.workload.type)) return false;
       if (filter !== 'all' && row.posture !== filter) return false;
       if (exception && backupExceptionGroupKey(row) !== exception) return false;
-      return coverageRowMatchesSearch(row, term);
+      if (coverageRowMatchesSearch(row, term)) return true;
+      return hasStaleTextMatch(coverageRowStaleNotice(row), term);
     });
     const sortKey = coverageSortKey();
     const direction = coverageSortDirection();
@@ -754,7 +776,8 @@ export const ProxmoxBackupsTable: Component<{
       }
       if (filter === 'verified' && artifact.verified !== true) return false;
       if (filter === 'unverified' && artifact.verified !== false) return false;
-      return recoverableArtifactMatchesSearch(artifact, term);
+      if (recoverableArtifactMatchesSearch(artifact, term)) return true;
+      return hasStaleTextMatch(artifactStaleNotice(artifact), term);
     });
   });
 
@@ -983,7 +1006,7 @@ export const ProxmoxBackupsTable: Component<{
               </p>
               <button
                 type="button"
-                class="min-h-10 shrink-0 rounded-md border border-current px-3 font-medium hover:underline focus-visible:outline-solid focus-visible:outline-2 focus-visible:outline-offset-2 aria-disabled:opacity-50"
+                class={BACKUP_RETRY_BUTTON_CLASS}
                 aria-label={retryLabel()}
                 aria-disabled={issue().loading()}
                 onClick={() => {
@@ -1019,7 +1042,7 @@ export const ProxmoxBackupsTable: Component<{
               <Show when={query.error()}>
                 <button
                   type="button"
-                  class="min-h-10 shrink-0 rounded-md border border-current px-3 font-medium hover:underline focus-visible:outline-solid focus-visible:outline-2 focus-visible:outline-offset-2 aria-disabled:opacity-50"
+                  class={BACKUP_RETRY_BUTTON_CLASS}
                   aria-label={`Retry ${label} inventory`}
                   data-backup-inventory-retry
                   aria-disabled={query.loading()}
@@ -1068,7 +1091,7 @@ export const ProxmoxBackupsTable: Component<{
                 </span>
                 <button
                   type="button"
-                  class="min-h-10 shrink-0 rounded-md border border-current px-3 font-medium hover:underline focus-visible:outline-solid focus-visible:outline-2 focus-visible:outline-offset-2 aria-disabled:opacity-50"
+                  class={BACKUP_RETRY_BUTTON_CLASS}
                   aria-label="Retry protection status"
                   aria-disabled={protectionPostures.response.loading}
                   onClick={() => {
@@ -1129,6 +1152,7 @@ export const ProxmoxBackupsTable: Component<{
                   </span>
                 }
                 verdict={backupVerdict()}
+                staleNotice={staleBackupSourcesNotice()}
                 isGroupPressed={exceptionGroupPressed}
                 onSelectGroup={selectExceptionGroup}
               />
@@ -1136,9 +1160,17 @@ export const ProxmoxBackupsTable: Component<{
                 selectedDay: selectedDateKey,
                 onSelectDay: selectBackupDay,
                 onRevealRestorePoints: () => revealRestorePoints(DAY_REVEAL_VISIBLE_PX),
+                staleNotice: staleBackupSourcesNotice,
               })}
             </div>
 
+            <Show when={staleBackupSourcesNotice()}>
+              {(notice) => (
+                <div role="status" class={BACKUP_READ_NOTICE_CLASS} data-stale-backup-sources>
+                  {notice()}
+                </div>
+              )}
+            </Show>
             <Show when={unreadBackupSourcesNotice()}>
               {(notice) => (
                 <div role="status" class={BACKUP_READ_NOTICE_CLASS} data-unread-backup-sources>
@@ -1299,6 +1331,7 @@ export const ProxmoxBackupsTable: Component<{
               showWorkloadConnection={showWorkloadConnection()}
               showSourceConnection={showSourceConnection()}
               retainInspectionFocus={retainEvidenceFocus}
+              staleNoticeForArtifact={artifactStaleNotice}
             />
           </Show>
 
@@ -1345,6 +1378,7 @@ export const ProxmoxBackupsTable: Component<{
                 !protectionPostures.resolvedOnce() ||
                 Boolean(protectionPostures.response.error)
               }
+              staleNoticeForRow={coverageRowStaleNotice}
             />
 
             <Show when={orphanedTotalCount() > 0}>
@@ -1395,6 +1429,7 @@ export const ProxmoxBackupsTable: Component<{
                         !protectionPostures.resolvedOnce() ||
                         Boolean(protectionPostures.response.error)
                       }
+                      staleNoticeForRow={coverageRowStaleNotice}
                     />
                   </div>
                 </Show>

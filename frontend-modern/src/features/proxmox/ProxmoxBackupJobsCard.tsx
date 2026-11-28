@@ -26,6 +26,7 @@ import {
   type BackupJobsFailure,
   type BackupJobsPayload,
 } from './proxmoxBackupJobs';
+import { BackupStaleHeaderCue } from './proxmoxBackupsTableShared';
 
 // "Did last night's backups run, and is that normal?" in the platform
 // overview's vocabulary: last-24-hour outcome pills in the header strip and
@@ -168,6 +169,7 @@ export interface BackupJobsDaySelection {
   // when selecting named outcomes that the operator could not preview.
   onSelectDay: (date: string, options: { reveal: boolean }) => void;
   onRevealRestorePoints: () => void;
+  staleNotice?: () => string | null;
 }
 
 export const ProxmoxBackupJobsCard: Component<{
@@ -178,6 +180,7 @@ export const ProxmoxBackupJobsCard: Component<{
   onRetry?: () => void;
   retrying?: boolean;
   accessMessage?: string | null;
+  staleNotice?: string | null;
 }> = (props) => {
   let card: HTMLDivElement | undefined;
   const retainRetryFocus = (button: HTMLButtonElement) => {
@@ -263,7 +266,12 @@ export const ProxmoxBackupJobsCard: Component<{
       data-backup-jobs={props.jobs.historyState}
     >
       <TableCardHeader
-        title={<span class="whitespace-nowrap">Backup jobs</span>}
+        title={
+          <span class="inline-flex flex-wrap items-center gap-x-2 gap-y-0.5">
+            <span class="whitespace-nowrap">Backup jobs</span>
+            <BackupStaleHeaderCue notice={props.staleNotice} attr="jobs" />
+          </span>
+        }
         actions={
           <Show
             when={!unavailable()}
@@ -537,6 +545,7 @@ export const ProxmoxBackupJobsSection: Component<BackupJobsDaySelection> = (prop
           }}
           retrying={query.loading()}
           accessMessage={accessMessage()}
+          staleNotice={props.staleNotice?.()}
         />
       )}
     </Show>
