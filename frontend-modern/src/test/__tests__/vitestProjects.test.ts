@@ -36,16 +36,14 @@ describe('vitest project partitioning and conditional setup helpers', () => {
         'export type DomState = { ready: boolean };\nexport const readTitle = () => document.title;\n',
       'src/utils/__tests__/pure.test.ts':
         "import { add } from '@/utils/pure';\nimport type { DomState } from '@/utils/domHelper';\nexport const state: DomState = { ready: add(1, 2) === 3 };\n",
-      'src/utils/__tests__/directDom.test.ts':
-        "export const title = window.location.href;\n",
+      'src/utils/__tests__/directDom.test.ts': 'export const title = window.location.href;\n',
       'src/utils/__tests__/transitiveDom.test.ts':
         "import { readTitle } from '@/utils/domHelper';\nexport const value = readTitle();\n",
       'src/utils/__tests__/explicitEnv.test.ts':
-        "// @vitest-environment node\nexport const ok = true;\n",
+        '// @vitest-environment node\nexport const ok = true;\n',
       'src/utils/__tests__/unresolvedImport.test.ts':
         "import { missing } from '@/utils/doesNotExist';\nexport const value = missing;\n",
-      'src/components/__tests__/Widget.test.tsx':
-        "export const Widget = () => 'ok';\n",
+      'src/components/__tests__/Widget.test.tsx': "export const Widget = () => 'ok';\n",
     });
 
     const { nodeFiles } = partitionVitestFiles(root);
@@ -54,12 +52,10 @@ describe('vitest project partitioning and conditional setup helpers', () => {
 
   it('detects jest-dom matcher usage and TSX files conservatively', () => {
     expect(needsJestDomForSource('src/components/Foo.test.tsx', 'expect(1).toBe(1)')).toBe(true);
-    expect(
-      needsJestDomForSource('src/utils/bar.test.ts', 'expect(el).toBeInTheDocument()'),
-    ).toBe(true);
-    expect(
-      needsJestDomForSource('src/utils/bar.test.ts', 'expect(add(1, 2)).toBe(3)'),
-    ).toBe(false);
+    expect(needsJestDomForSource('src/utils/bar.test.ts', 'expect(el).toBeInTheDocument()')).toBe(
+      true,
+    );
+    expect(needsJestDomForSource('src/utils/bar.test.ts', 'expect(add(1, 2)).toBe(3)')).toBe(false);
   });
 
   it('detects non-English locale tests while skipping English-only tests', () => {

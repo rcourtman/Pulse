@@ -1,9 +1,6 @@
 import fs from 'node:fs';
 import { beforeAll, beforeEach, expect } from 'vitest';
-import {
-  needsJestDomForSource,
-  needsNonEnglishLocalesForSource,
-} from './vitest.projects';
+import { needsJestDomForSource, needsNonEnglishLocalesForSource } from './vitest.projects';
 
 type StorageValue = string | null;
 
