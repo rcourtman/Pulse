@@ -43,6 +43,13 @@ func TestCanceledPollPlanDoesNotPublishAfterRosterReturns(t *testing.T) {
 				}); err != nil {
 					t.Fatal(err)
 				}
+				var laterReads int
+				if err := m.RegisterPollProvider(heldPlanningRoster{
+					testPollProvider: testPollProvider{providerType: "later-fixture"},
+					hold:             func() { laterReads++ },
+				}); err != nil {
+					t.Fatal(err)
+				}
 				go func() {
 					defer close(returned)
 					m.poll(ctx, nil)
@@ -52,6 +59,9 @@ func TestCanceledPollPlanDoesNotPublishAfterRosterReturns(t *testing.T) {
 				unblock()
 				<-returned
 
+				if laterReads != 0 {
+					t.Errorf("retired monitor started %d later provider roster read(s)", laterReads)
+				}
 				if depth := m.taskQueue.Size(); depth != 0 {
 					t.Errorf("retired monitor enqueued %d poll(s)", depth)
 				}
@@ -78,6 +88,68 @@ func TestCanceledPollPlanDoesNotPublishAfterRosterReturns(t *testing.T) {
 func (p heldPlanningRoster) pollPlanningRoster(*Monitor) []pollPlanInstance {
 	p.hold()
 	return nil
+}
+
+type cancelingCadenceProvider struct {
+	testPollProvider
+	onList, onCadence func()
+}
+
+func (p cancelingCadenceProvider) ListInstances(m *Monitor) []string {
+	p.onList()
+	return p.testPollProvider.ListInstances(m)
+}
+
+func (p cancelingCadenceProvider) FixedInstanceInterval(*Monitor, string) time.Duration {
+	p.onCadence()
+	return time.Minute
+}
+
+func TestCanceledPollPlanSkipsRemainingCadenceReads(t *testing.T) {
+	for _, tc := range []struct {
+		name             string
+		cancelDuringList bool
+		wantCadenceReads int
+	}{
+		{name: "active", wantCadenceReads: 2},
+		{name: "roster", cancelDuringList: true},
+		{name: "first cadence", wantCadenceReads: 1},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			ctx, cancel := context.WithCancel(t.Context())
+			defer cancel()
+			m := newScheduleFixture(ctx, true, nil)
+			var cadenceReads int
+			// Install the provider without the registration-time health
+			// roster read: this cancellation must happen during planning.
+			m.pollProviders = map[InstanceType]PollProvider{"fixture": cancelingCadenceProvider{
+				testPollProvider: testPollProvider{providerType: "fixture", instances: []string{"second", "first"}},
+				onList: func() {
+					if tc.cancelDuringList {
+						cancel()
+					}
+				},
+				onCadence: func() {
+					cadenceReads++
+					if tc.name == "first cadence" {
+						cancel()
+					}
+				},
+			}}
+			m.poll(ctx, nil)
+			if cadenceReads != tc.wantCadenceReads {
+				t.Errorf("cadence reads = %d; want %d", cadenceReads, tc.wantCadenceReads)
+			}
+			task, queued := m.taskQueue.Get("fixture", "second")
+			if tc.name == "active" {
+				if !queued || task.Interval != time.Minute {
+					t.Errorf("active plan did not publish fixed cadence: queued=%v task=%+v", queued, task)
+				}
+			} else if m.taskQueue.Size() != 0 {
+				t.Error("retired monitor published a partial plan")
+			}
+		})
+	}
 }
 
 func TestSchedulerPlanningAgeWhileBothPollCyclesAreHeld(t *testing.T) {

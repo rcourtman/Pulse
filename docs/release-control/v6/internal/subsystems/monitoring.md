@@ -322,16 +322,20 @@ slots occupied before enqueue, verifies that the gauge ages even with an
 empty queue, and checks that a newer successful plan does not clear the
 older marker before it unwinds.
 
-A periodic poll cycle uses its monitor's cancellation context. It does not
-admit a plan if cancellation was observed before or after reading the provider
-roster. If a roster returns after cancellation, its results reach neither
-the adaptive cache nor the queue, and the abandoned cycle does not record
-statistics or reconcile alerts. A cycle also checks cancellation before
-each enqueue and before starting its post-plan updates. These are admission
-checks, not a promise to interrupt a callback or update already in progress.
+A periodic poll cycle uses its monitor's cancellation context. Once it
+observes cancellation, it abandons the roster without starting another provider
+read or an instance cadence lookup. If an admitted read returns after
+cancellation, the partial inventory reaches neither the adaptive cache nor the
+queue, and the abandoned cycle does not record statistics or reconcile alerts.
+A cycle also checks cancellation before each enqueue and before starting its
+post-plan updates. These are admission checks, not a promise to interrupt a
+callback or update already in progress.
 `TestCanceledPollPlanDoesNotPublishAfterRosterReturns` holds a roster across
-cancellation in fixed and adaptive modes and checks the queue, adaptive
-cache, cycle count, and alert state after the planner returns.
+cancellation in fixed and adaptive modes and checks that a later provider is
+not read, no partial plan is cached or queued, and the cycle count and alert
+state do not change. `TestCanceledPollPlanSkipsRemainingCadenceReads` checks
+retirement during roster and per-instance cadence reads, with an active
+fixed-cadence plan as the control.
 
 ### Notification delivery health does not hold the monitoring tick
 
