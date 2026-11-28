@@ -141,7 +141,7 @@ class WatchdogHelpDocsTest(unittest.TestCase):
             "func (m *Monitor) planScheduledPolls(ctx context.Context, now time.Time)",
             "id := progress.beginPlanning(time.Now())",
             "defer progress.finishPlanning(id)",
-            "descriptors := m.describeInstancesForScheduler()",
+            "descriptors := m.describeInstancesForScheduler(ctx)",
             "if ctx.Err() != nil {",
             "m.taskQueue.upsertPlan(task, revision)",
             "m.state.UpdatePollStats(",
