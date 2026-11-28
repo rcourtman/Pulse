@@ -41,18 +41,6 @@ vi.mock('@/api/infrastructureMapActivity', () => ({
   recordInfrastructureMapExport: vi.fn(),
 }));
 vi.mock('@/utils/toast', () => ({ showSuccess: vi.fn(), showError: vi.fn() }));
-// The card a pointed-at or focused tile shows. Watched, so a test can read
-// whether it is up and where. What it says is drawn in place, with none of
-// the real card's positioning.
-const card = vi.hoisted(() => ({
-  read: (): { when: boolean; x: number; y: number } => ({ when: false, x: 0, y: 0 }),
-}));
-vi.mock('@/components/shared/TooltipPortal', () => ({
-  TooltipPortal: (props: { when: boolean; x: number; y: number; children: unknown }) => {
-    card.read = () => ({ when: props.when, x: props.x, y: props.y });
-    return () => (props.when ? props.children : null);
-  },
-}));
 // The shared tooltip a press shows on every device. Watched, so a test can
 // read what a tap said.
 vi.mock('@/components/shared/Tooltip', async (importOriginal) => ({
@@ -656,29 +644,31 @@ describe('InfrastructureMapSurface connections', () => {
     expect(rings(container)).toHaveLength(0);
   });
 
-  it("ends a pointer's card when the page scrolls, and keeps the card of the tile with focus", () => {
+  it("ends a pointer's inspector readout when the page scrolls, and keeps the readout of the tile with focus", () => {
     const { container } = draw();
 
-    // A pointer was resting on a tile: the tile has moved from under the card.
+    // A pointer was resting on a tile: scrolling dismisses pointer inspection.
     fireEvent.pointerOver(tile(container, 'qbittorrent'));
     expect(rings(container)).toHaveLength(2);
+    expect(screen.getByTestId('infrastructure-map-inspector')).toHaveTextContent('qbittorrent');
     window.dispatchEvent(new Event('scroll'));
     expect(rings(container)).toHaveLength(0);
+    expect(screen.queryByTestId('infrastructure-map-inspector')).toBeNull();
 
-    expect(card.read().when).toBe(false);
-
-    // The keyboard brought a tile into view: the scroll is how it got there,
-    // and the card goes where the tile went.
+    // The keyboard brought a tile into view: the bottom inspector follows
+    // focus while the tile remains in the viewport, without moving focus.
     const focused = tile(container, 'qbittorrent');
     const active = vi.spyOn(document, 'activeElement', 'get').mockReturnValue(focused);
     const at = (top: number) =>
       ({ left: 100, right: 140, width: 40, top, bottom: top + 40, height: 40 }) as DOMRect;
     const where = vi.spyOn(focused, 'getBoundingClientRect').mockReturnValue(at(300));
     fireEvent.focusIn(focused);
-    expect(card.read()).toEqual({ when: true, x: 120, y: 300 });
+    expect(screen.getByTestId('infrastructure-map-inspector')).toHaveTextContent('qbittorrent');
+    expect(focused).toHaveAttribute('aria-describedby', 'infrastructure-map-inspector-content');
+    expect(focused).toHaveAccessibleDescription(/Uses the network of gluetun/);
     where.mockReturnValue(at(210));
     window.dispatchEvent(new Event('scroll'));
-    expect(card.read()).toEqual({ when: true, x: 120, y: 210 });
+    expect(screen.getByTestId('infrastructure-map-inspector')).toHaveTextContent('qbittorrent');
     expect(rings(container)).toHaveLength(2);
 
     // A scroll of something that does not hold the map moves no tile.
@@ -686,19 +676,144 @@ describe('InfrastructureMapSurface connections', () => {
     document.body.append(menu);
     where.mockReturnValue(at(-500));
     menu.dispatchEvent(new Event('scroll'));
-    expect(card.read()).toEqual({ when: true, x: 120, y: 210 });
+    expect(screen.getByTestId('infrastructure-map-inspector')).toHaveTextContent('qbittorrent');
     menu.remove();
 
-    // Scrolled off the screen the tile has no card, and gets it back when
-    // it returns.
+    // Scrolled off the screen the tile clears the inspector, and gets it back
+    // when it returns into view.
     where.mockReturnValue(at(-90));
     window.dispatchEvent(new Event('scroll'));
-    expect(card.read().when).toBe(false);
+    expect(screen.queryByTestId('infrastructure-map-inspector')).toBeNull();
     expect(rings(container)).toHaveLength(0);
     where.mockReturnValue(at(40));
     window.dispatchEvent(new Event('scroll'));
-    expect(card.read()).toEqual({ when: true, x: 120, y: 40 });
+    expect(screen.getByTestId('infrastructure-map-inspector')).toHaveTextContent('qbittorrent');
+
+    // Escape dismisses the inspector and restores the legend while keeping focus.
+    fireEvent.keyDown(focused, { key: 'Escape' });
+    expect(screen.queryByTestId('infrastructure-map-inspector')).toBeNull();
+    expect(focused).not.toHaveAttribute('aria-describedby');
+    expect(focused).toHaveAccessibleDescription('');
     active.mockRestore();
+  });
+
+  it('swaps into the legend footprint without refitting the map, preserves accessible descriptions, and handles non-network inspect targets', () => {
+    resourcesMock.value = [
+      resource({
+        id: 'pve-node',
+        type: 'agent',
+        name: 'pve-alpha',
+        platformType: 'proxmox-pve',
+        status: 'online',
+        cpu: { current: 24 },
+        proxmox: { cpus: 16 },
+        memory: { current: 58, used: 37 * 1024 ** 3, total: 64 * 1024 ** 3 },
+        network: { rxBytes: 12 * 1024 ** 2, txBytes: 2 * 1024 ** 2 },
+        agent: {
+          networkInterfaces: [
+            { name: 'vmbr0', addresses: ['192.168.10.10/24'] },
+            { name: 'vmbr1', addresses: ['192.168.11.10/24'] },
+            { name: 'vmbr2', addresses: ['192.168.12.10/24'] },
+            { name: 'vmbr3', addresses: ['192.168.13.10/24'] },
+            { name: 'vmbr4', addresses: ['192.168.14.10/24'] },
+            { name: 'vmbr5', addresses: ['192.168.15.10/24'] },
+            { name: 'vmbr6', addresses: ['192.168.16.10/24'] },
+          ],
+        },
+      }),
+      resource({
+        id: 'vm-1',
+        type: 'vm',
+        name: 'app-one',
+        parentId: 'pve-node',
+        platformType: 'proxmox-pve',
+        status: 'running',
+        identity: { ips: ['192.168.10.21'] },
+      }),
+      resource({
+        id: 'pool-tank',
+        type: 'pool',
+        name: 'tank',
+        parentId: 'pve-node',
+        platformType: 'proxmox-pve',
+        status: 'degraded',
+        disk: { current: 78, used: 780 * 1024 ** 3, total: 1000 * 1024 ** 3 },
+        storage: {
+          vdevLayout: 'raidz1',
+          type: 'zfspool',
+          zfsPoolState: 'DEGRADED',
+          zfsReadErrors: 3,
+          zfsChecksumErrors: 1,
+        },
+      }),
+    ];
+
+    const { container } = draw();
+    const fitCallsBeforeHover = vi.mocked(fitServiceDiagram).mock.calls.length;
+
+    // Inspect targets omit native SVG <title> so the browser never draws a floating tooltip over the map.
+    for (const inspectEl of container.querySelectorAll('[data-map-inspect]')) {
+      expect(inspectEl.querySelector('title')).toBeNull();
+      expect(inspectEl.getAttribute('aria-label')).toBeTruthy();
+    }
+
+    // Hovering a degraded storage pool puts ZFS anomaly text ahead of pool usage / metadata
+    // and never triggers a map refit.
+    const poolTile = tile(container, 'tank');
+    fireEvent.pointerOver(poolTile);
+    const inspector = screen.getByTestId('infrastructure-map-inspector');
+    const text = inspector.textContent ?? '';
+    expect(text).toContain('DEGRADED');
+    expect(text).toContain('4 ZFS errors');
+    expect(text).toContain('78% used');
+    expect(text.indexOf('DEGRADED')).toBeLessThan(text.indexOf('78% used'));
+
+    // Focusing the SAME already-hovered tile still synchronizes aria-describedby to real readout text
+    // (never just "Inspected item"), and Escape clears the accessible description.
+    const activeSpy = vi.spyOn(document, 'activeElement', 'get').mockReturnValue(poolTile);
+    fireEvent.focusIn(poolTile);
+    expect(poolTile).toHaveAccessibleDescription(/4 ZFS errors/);
+    expect(poolTile).not.toHaveAccessibleDescription('Inspected item');
+    fireEvent.keyDown(poolTile, { key: 'Escape' });
+    expect(screen.queryByTestId('infrastructure-map-inspector')).toBeNull();
+    expect(poolTile).toHaveAccessibleDescription('');
+    activeSpy.mockRestore();
+
+    // Direct focus without prior hover also populates the accessible description.
+    const directSpy = vi.spyOn(document, 'activeElement', 'get').mockReturnValue(poolTile);
+    fireEvent.focusIn(poolTile);
+    expect(poolTile).toHaveAccessibleDescription(/DEGRADED.*4 ZFS errors/);
+
+    // Pressing Tab synchronously restores legend interactivity before native focus traversal.
+    const legend = container.querySelector('ul[aria-label="Legend"]') as HTMLUListElement;
+    expect(legend.inert).toBe(true);
+    fireEvent.keyDown(poolTile, { key: 'Tab' });
+    expect(legend.inert).toBe(false);
+    expect(screen.queryByTestId('infrastructure-map-inspector')).toBeNull();
+    directSpy.mockRestore();
+
+    // Hovering a host count inspect badge or all-networks overflow pill shows its scene label in the footer.
+    const hostCountBadge = container.querySelector(
+      '[data-map-inspect][aria-label^="Inspect pve-alpha"]',
+    );
+    expect(hostCountBadge).not.toBeNull();
+    fireEvent.pointerOver(hostCountBadge!);
+    expect(screen.getByTestId('infrastructure-map-inspector')).toHaveTextContent(
+      /Inspect pve-alpha/,
+    );
+
+    const moreNetworksPill = container.querySelector(
+      '[data-map-inspect][aria-label^="Inspect all "]',
+    );
+    expect(moreNetworksPill).not.toBeNull();
+    fireEvent.pointerOver(moreNetworksPill!);
+    expect(screen.getByTestId('infrastructure-map-inspector')).toHaveTextContent(/Inspect all /);
+
+    // Leaving the combined stage restores the legend without triggering fitServiceDiagram.
+    fireEvent.pointerLeave(screen.getByTestId('infrastructure-map-stage'));
+    expect(screen.queryByTestId('infrastructure-map-inspector')).toBeNull();
+    expect(legend).not.toHaveClass('invisible');
+    expect(vi.mocked(fitServiceDiagram).mock.calls.length).toBe(fitCallsBeforeHover);
   });
 
   describe('a gateway nothing monitors', () => {
@@ -1782,10 +1897,14 @@ describe('InfrastructureMapSurface spotlight, thermal/disk telemetry, and traffi
     const { container } = render(() => <InfrastructureMapSurface />);
 
     fireEvent.pointerOver(tile(container, 'pve-therm'));
-    expect(await screen.findByText(/48°C/, { selector: 'span' })).toBeInTheDocument();
-    expect(
-      screen.getByText(/Disks: 2× NVMe · 4× HDD · max 44°C · 1 unhealthy/, { selector: 'span' }),
-    ).toBeInTheDocument();
+    const inspector = await screen.findByTestId('infrastructure-map-inspector');
+    expect(inspector).toHaveTextContent('48°C');
+    expect(inspector).toHaveTextContent('1 unhealthy');
+    expect(inspector).toHaveTextContent('Disks: 2× NVMe · 4× HDD · max 44°C');
+    // Unhealthy disk anomaly leads ahead of disk summary.
+    expect(inspector.textContent!.indexOf('1 unhealthy')).toBeLessThan(
+      inspector.textContent!.indexOf('Disks: 2× NVMe'),
+    );
 
     // Open the network drawer to verify thermal and physical disk info in drawer rows.
     const networkPill = container.querySelector(
@@ -2396,6 +2515,152 @@ describe('InfrastructureMapSurface persisted preferences, networks summary, keyb
       );
     } finally {
       vi.useRealTimers();
+    }
+  });
+
+  it('keeps focus on the legend docs link when hovering a tile, and preserves a keyboard-focused tile readout on stage pointer leave', () => {
+    resourcesMock.value = [
+      resource({
+        id: 'pve-mix',
+        type: 'agent',
+        name: 'pve-mix',
+        platformType: 'proxmox-pve',
+      }),
+      resource({
+        id: 'vm-alpha',
+        type: 'vm',
+        name: 'vm-alpha',
+        platformType: 'proxmox-pve',
+        parentId: 'pve-mix',
+        status: 'running',
+      }),
+      resource({
+        id: 'vm-beta',
+        type: 'vm',
+        name: 'vm-beta',
+        platformType: 'proxmox-pve',
+        parentId: 'pve-mix',
+        status: 'running',
+      }),
+    ];
+
+    const { container } = render(() => <InfrastructureMapSurface />);
+    const stage = screen.getByTestId('infrastructure-map-stage');
+    const legend = screen.getByRole('list', { name: 'Legend' });
+    const docsLink = screen.getByRole('link', { name: 'How the map works' });
+    const alphaTile = tile(container, 'vm-alpha');
+    const betaTile = tile(container, 'vm-beta');
+
+    // 1. Focusing "How the map works" inside the legend must not be displaced by pointer hover on a tile.
+    docsLink.focus();
+    fireEvent.focusIn(docsLink);
+    fireEvent.pointerOver(alphaTile);
+    expect(document.activeElement).toBe(docsLink);
+    expect(legend.inert).toBe(false);
+    expect(screen.queryByTestId('infrastructure-map-inspector')).not.toBeInTheDocument();
+
+    // Blur legend back to map tile.
+    fireEvent.focusOut(docsLink, { relatedTarget: alphaTile });
+    (alphaTile as SVGElement).focus();
+    fireEvent.focusIn(alphaTile);
+    expect(screen.getByTestId('infrastructure-map-inspector')).toHaveTextContent('vm-alpha');
+    expect(alphaTile.getAttribute('aria-describedby')).toBe('infrastructure-map-inspector-content');
+
+    // 2. Hovering another tile and then leaving the stage restores the keyboard-focused tile readout.
+    fireEvent.pointerOver(betaTile);
+    expect(screen.getByTestId('infrastructure-map-inspector')).toHaveTextContent('vm-beta');
+    fireEvent.pointerLeave(stage);
+    expect(screen.getByTestId('infrastructure-map-inspector')).toHaveTextContent('vm-alpha');
+    expect(alphaTile.getAttribute('aria-describedby')).toBe('infrastructure-map-inspector-content');
+
+    // Pressing Escape dismisses the focused tile readout, and leaving the stage afterward keeps it dismissed.
+    fireEvent.keyDown(alphaTile, { key: 'Escape' });
+    expect(screen.queryByTestId('infrastructure-map-inspector')).not.toBeInTheDocument();
+    expect(alphaTile.getAttribute('aria-describedby')).toBeNull();
+    fireEvent.pointerLeave(stage);
+    expect(screen.queryByTestId('infrastructure-map-inspector')).not.toBeInTheDocument();
+  });
+
+  it('keeps an Escape-dismissed tile dismissed across inventory redraws, and keeps an offscreen focused tile hidden on stage leave', () => {
+    const [list, setList] = createSignal<Resource[]>([
+      resource({
+        id: 'pve-redraw',
+        type: 'agent',
+        name: 'pve-redraw',
+        platformType: 'proxmox-pve',
+      }),
+      resource({
+        id: 'vm-keep',
+        type: 'vm',
+        name: 'vm-keep',
+        platformType: 'proxmox-pve',
+        parentId: 'pve-redraw',
+        status: 'running',
+      }),
+      resource({
+        id: 'vm-drop',
+        type: 'vm',
+        name: 'vm-drop',
+        platformType: 'proxmox-pve',
+        parentId: 'pve-redraw',
+        status: 'running',
+      }),
+    ]);
+    resourcesMock.read = list;
+
+    const { container } = render(() => <InfrastructureMapSurface />);
+    const stage = screen.getByTestId('infrastructure-map-stage');
+
+    // 1. Focus vm-keep, dismiss with Escape, then remove unrelated vm-drop to force an SVG redraw.
+    const before = tile(container, 'vm-keep') as SVGElement;
+    before.focus();
+    fireEvent.focusIn(before);
+    expect(screen.getByTestId('infrastructure-map-inspector')).toHaveTextContent('vm-keep');
+    fireEvent.keyDown(before, { key: 'Escape' });
+    expect(screen.queryByTestId('infrastructure-map-inspector')).not.toBeInTheDocument();
+
+    setList(list().filter((item) => item.id !== 'vm-drop'));
+    const after = tile(container, 'vm-keep') as SVGElement;
+    expect(after).not.toBe(before);
+    expect(document.activeElement).toBe(after);
+    expect(after.getAttribute('aria-describedby')).toBeNull();
+    expect(screen.queryByTestId('infrastructure-map-inspector')).not.toBeInTheDocument();
+
+    // 2. Focus vm-keep fresh, scroll it above the viewport, then leave the stage -> stays hidden.
+    fireEvent.focusOut(after, { relatedTarget: null });
+    after.focus();
+    fireEvent.focusIn(after);
+    expect(screen.getByTestId('infrastructure-map-inspector')).toHaveTextContent('vm-keep');
+
+    const rectSpy = vi
+      .spyOn(after, 'getBoundingClientRect')
+      .mockReturnValue(new DOMRect(0, -40, 120, 24));
+    try {
+      window.dispatchEvent(new Event('scroll'));
+      expect(screen.queryByTestId('infrastructure-map-inspector')).not.toBeInTheDocument();
+      fireEvent.pointerLeave(stage);
+      expect(after.getAttribute('aria-describedby')).toBeNull();
+      expect(screen.queryByTestId('infrastructure-map-inspector')).not.toBeInTheDocument();
+    } finally {
+      rectSpy.mockRestore();
+    }
+
+    // 3. Zoomed-in tile clipped below the map viewport container stays hidden on stage leave.
+    fireEvent.click(screen.getByRole('button', { name: 'Zoom in' }));
+    const viewport = screen.getByTestId('infrastructure-map-viewport');
+    const clipSpy = vi
+      .spyOn(viewport, 'getBoundingClientRect')
+      .mockReturnValue(new DOMRect(48, 330, 1175, 376));
+    const clippedTileSpy = vi
+      .spyOn(after, 'getBoundingClientRect')
+      .mockReturnValue(new DOMRect(500, 750, 180, 32));
+    try {
+      fireEvent.pointerLeave(stage);
+      expect(after.getAttribute('aria-describedby')).toBeNull();
+      expect(screen.queryByTestId('infrastructure-map-inspector')).not.toBeInTheDocument();
+    } finally {
+      clipSpy.mockRestore();
+      clippedTileSpy.mockRestore();
     }
   });
 });

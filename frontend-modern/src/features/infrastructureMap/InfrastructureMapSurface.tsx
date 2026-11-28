@@ -31,7 +31,6 @@ import { FeaturePreviewTag } from '@/components/FeatureRelease';
 import { PageHeader } from '@/components/shared/PageHeader';
 import { StatusDot } from '@/components/shared/StatusDot';
 import { showPressedTooltip } from '@/components/shared/Tooltip';
-import { TooltipPortal } from '@/components/shared/TooltipPortal';
 import { buildAvailabilityTargetAddPath } from '@/components/Settings/availabilitySettingsModel';
 import { buildInfrastructureWorkspacePath } from '@/components/Settings/infrastructureWorkspaceModel';
 import { useDarkMode } from '@/contexts/appRuntime';
@@ -151,11 +150,6 @@ const MIN_MAP_HEIGHT = 240;
 // screen, a large estate's tiles are 13px and its text 4px.
 const PHONE_WINDOW = 768;
 
-// Vertical clearance needed above a tile before a hover tooltip flips below it
-// so it never covers the map toolbar on desktop or mobile.
-const TOOLTIP_TOP_CLEARANCE = 160;
-const TOOLTIP_BOTTOM_ROOM = 110;
-
 const MIN_ZOOM = 1;
 const MAX_ZOOM = 4;
 const ZOOM_STEP = 0.25;
@@ -253,28 +247,6 @@ const formatHitLinkSpeed = (speedMbps?: number, utilizationPercent?: number): st
   return utilizationPercent >= MAP_LINK_SATURATED_PERCENT ? `${base} · Link busy` : base;
 };
 
-const networkTooltipLines = (network: DiagramNetwork): string[] => {
-  const count =
-    network.kind === 'bridge'
-      ? `${network.memberCount.toLocaleString()} connected`
-      : `${network.memberCount.toLocaleString()} ${network.memberCount === 1 ? 'address' : 'addresses'}`;
-  return [
-    [network.detail, count].filter(Boolean).join(' · '),
-    [
-      network.netTotalBytes !== undefined && network.netTotalBytes >= 1024
-        ? `Traffic ${formatSpeed(network.netTotalBytes)}`
-        : '',
-      network.linkSpeedMbps ? `${formatMapLinkSpeed(network.linkSpeedMbps)} link` : '',
-      network.linkDownCount && network.linkDownCount > 0
-        ? `${network.linkDownCount} link down`
-        : '',
-    ]
-      .filter(Boolean)
-      .join(' · '),
-    'Click to inspect or filter',
-  ].filter(Boolean);
-};
-
 const formatHostRam = (bytes?: number): string => {
   if (!bytes || bytes <= 0) return '';
   const formatted = formatBytes(bytes).replace(/(\.\d*?[1-9])0+(?=\s)|\.0+(?=\s)/, '$1');
@@ -348,7 +320,184 @@ const formatHitPoolAnomalies = (hit: MapHit): string =>
     .filter(Boolean)
     .join(' · ');
 
-/** What a tile's card says under its name: what it is, where, what it is connected to, how busy. */
+interface MapInspectorField {
+  text: string;
+  tone?: 'default' | 'warning' | 'danger' | 'metric';
+}
+
+interface MapInspectorSummary {
+  name: string;
+  meta?: string;
+  dotVariant?: StatusIndicatorVariant;
+  dotColor?: string;
+  dotHollow?: boolean;
+  anomalies: MapInspectorField[];
+  fields: MapInspectorField[];
+  hint?: string;
+}
+
+const healthToDot = (
+  health: MapHit['health'],
+): { dotVariant?: StatusIndicatorVariant; dotHollow?: boolean } => {
+  switch (health) {
+    case 'ok':
+      return { dotVariant: 'success' };
+    case 'attention':
+      return { dotVariant: 'warning' };
+    case 'critical':
+      return { dotVariant: 'danger' };
+    case 'off':
+      return { dotHollow: true };
+    default:
+      return { dotVariant: 'muted' };
+  }
+};
+
+const isCriticalZfsAnomaly = (hit: MapHit): boolean =>
+  Boolean(
+    (hit.zfsErrorCount && hit.zfsErrorCount > 0) ||
+    (hit.zfsState && /^(fault|offline|unavail|fail)/i.test(hit.zfsState)),
+  );
+
+// Priority-ordered fields for the fixed-height bottom inspector bar so critical
+// anomalies and live telemetry always sit ahead of lower-priority metadata.
+const buildHitInspectorSummary = (
+  hit: MapHit,
+  options: {
+    density: MapDensity;
+    canAddCheck: boolean;
+    showArrowHint: boolean;
+  },
+): MapInspectorSummary => {
+  const anomalies: MapInspectorField[] = [];
+  const fields: MapInspectorField[] = [];
+  const pushAnomaly = (text: string, tone: 'warning' | 'danger') => {
+    if (text) anomalies.push({ text, tone });
+  };
+  const push = (text: string, tone: MapInspectorField['tone'] = 'default') => {
+    if (text) fields.push({ text, tone });
+  };
+
+  // Priority 1: Anomalies and active warnings always lead and cannot be squeezed out.
+  const poolAnomalies = formatHitPoolAnomalies(hit);
+  if (poolAnomalies) {
+    pushAnomaly(poolAnomalies, isCriticalZfsAnomaly(hit) ? 'danger' : 'warning');
+  }
+  if (hit.unhealthyDiskCount && hit.unhealthyDiskCount > 0) {
+    pushAnomaly(`${hit.unhealthyDiskCount} unhealthy`, 'danger');
+  }
+  if (hit.linkDownCount && hit.linkDownCount > 0) {
+    pushAnomaly(`${hit.linkDownCount} link down`, 'danger');
+  }
+  const linkSpeed = formatHitLinkSpeed(hit.linkSpeedMbps, hit.linkUtilizationPercent);
+  const linkBusy =
+    hit.linkUtilizationPercent !== undefined &&
+    hit.linkUtilizationPercent >= MAP_LINK_SATURATED_PERCENT;
+  if (linkSpeed && linkBusy) {
+    pushAnomaly(linkSpeed, 'warning');
+  }
+  if (hit.certWarning) {
+    pushAnomaly(hit.certWarning, 'warning');
+  }
+
+  // Priority 2: Live utilization, transfer rates, pool usage, and probe latency.
+  const metrics = [
+    hit.cpu !== undefined ? `CPU ${Math.round(hit.cpu)}%` : '',
+    hit.memory !== undefined ? `Memory ${Math.round(hit.memory)}%` : '',
+    hit.temperatureC !== undefined ? `${Math.round(hit.temperatureC)}°C` : '',
+    formatNetTelemetry(hit.netRxBytes, hit.netTxBytes),
+    formatDiskTelemetry(hit.diskReadBytes, hit.diskWriteBytes),
+    formatHitStoragePool(hit),
+    formatProbeAndLatency(hit.probeSummary, hit.latencyMs),
+  ].filter(Boolean);
+  for (const metric of metrics) push(metric, 'metric');
+
+  // Priority 3: Identity, networking, hardware specs, lifecycle, and links.
+  const contextParts = [
+    formatHitVmid(hit),
+    hit.composeProject ? `Stack ${hit.composeProject}` : '',
+    hit.address && !hit.meta.includes(hit.address) ? hit.address : '',
+    hit.detail ? `Published ${hit.detail}` : '',
+    formatDockerNetworks(hit.dockerNetworks),
+    linkSpeed && !linkBusy ? linkSpeed : '',
+    hit.firewallEnabled ? 'NIC firewall flag' : '',
+    formatHostSpecs(hit),
+    formatHitGpuSummary(hit),
+    hit.accelerators?.length ? `Hardware: ${hit.accelerators.join(', ')}` : '',
+    hit.diskSummary
+      ? [
+          `Disks: ${hit.diskSummary}`,
+          hit.diskMaxTempC !== undefined ? `max ${Math.round(hit.diskMaxTempC)}°C` : '',
+        ]
+          .filter(Boolean)
+          .join(' · ')
+      : '',
+    formatCompactUptime(hit.uptimeSeconds),
+    formatBackupAge(hit.lastBackupAt),
+    hit.pendingUpdates && hit.pendingUpdates > 0
+      ? `${hit.pendingUpdates.toLocaleString()} ${hit.pendingUpdates === 1 ? 'update' : 'updates'}`
+      : '',
+    ...(hit.links ?? []),
+  ].filter(Boolean);
+  for (const part of contextParts) push(part, 'default');
+
+  const hint = options.showArrowHint
+    ? 'Arrow keys move between tiles'
+    : hit.checkAddress && options.canAddCheck
+      ? 'Click to add a check'
+      : hit.inspectTarget
+        ? 'Click to browse all items'
+        : hit.id.endsWith(':more') && options.density === 'names'
+          ? 'Compact draws more of them'
+          : undefined;
+
+  return {
+    name: hit.name,
+    meta: hit.meta,
+    ...healthToDot(hit.health),
+    anomalies,
+    fields,
+    hint,
+  };
+};
+
+const buildNetworkInspectorSummary = (
+  network: DiagramNetwork,
+  dotColor: string,
+): MapInspectorSummary => {
+  const count =
+    network.kind === 'bridge'
+      ? `${network.memberCount.toLocaleString()} connected`
+      : `${network.memberCount.toLocaleString()} ${network.memberCount === 1 ? 'address' : 'addresses'}`;
+  const anomalies: MapInspectorField[] = [];
+  const fields: MapInspectorField[] = [];
+  if (network.linkDownCount && network.linkDownCount > 0) {
+    anomalies.push({ text: `${network.linkDownCount} link down`, tone: 'danger' });
+  }
+  if (network.netTotalBytes !== undefined && network.netTotalBytes >= 1024) {
+    fields.push({ text: `Traffic ${formatSpeed(network.netTotalBytes)}`, tone: 'metric' });
+  }
+  if (network.linkSpeedMbps) {
+    fields.push({ text: `${formatMapLinkSpeed(network.linkSpeedMbps)} link`, tone: 'metric' });
+  }
+  return {
+    name: network.label,
+    meta: [network.detail, count].filter(Boolean).join(' · '),
+    dotColor,
+    anomalies,
+    fields,
+    hint: 'Click to inspect or filter',
+  };
+};
+
+const buildInspectLabelSummary = (label: string): MapInspectorSummary => ({
+  name: label,
+  anomalies: [],
+  fields: [],
+  hint: 'Click to inspect',
+});
+
+/** What a tile's touch-press card says under its name: what it is, where, what it is connected to, how busy. */
 const hitLines = (hit: MapHit, density?: MapDensity): string[] =>
   [
     hit.meta,
@@ -434,18 +583,12 @@ export function InfrastructureMapSurface() {
   const [zoom, setZoom] = createSignal(MIN_ZOOM);
   const [pan, setPan] = createSignal({ x: 0, y: 0 });
   const [dragging, setDragging] = createSignal(false);
-  const [hover, setHover] = createSignal<{
-    hitId: string;
-    x: number;
-    y: number;
-    direction: 'up' | 'down';
-  } | null>(null);
-  const [hoveredNetwork, setHoveredNetwork] = createSignal<{
-    networkId: string;
-    x: number;
-    y: number;
-    direction: 'up' | 'down';
-  } | null>(null);
+  const [hover, setHover] = createSignal<string | null>(null);
+  const [hoveredNetwork, setHoveredNetwork] = createSignal<string | null>(null);
+  const [hoveredInspectLabel, setHoveredInspectLabel] = createSignal<string | null>(null);
+  const [focusedHitId, setFocusedHitId] = createSignal<string | null>(null);
+  const [focusInspectorDismissed, setFocusInspectorDismissed] = createSignal(false);
+  const [legendHasFocus, setLegendHasFocus] = createSignal(false);
   const [pillSpotlightId, setPillSpotlightId] = createSignal<string | null>(null);
   // The tile a tap on a touch screen is showing, by its id.
   const [armed, setArmed] = createSignal<string | null>(null);
@@ -573,6 +716,7 @@ export function InfrastructureMapSurface() {
       setSearchQuery('');
       setNetworkFilter(null);
       setHoveredNetwork(null);
+      setHoveredInspectLabel(null);
       setHover(null);
       setArmed(null);
       if (drawerTarget()?.kind === 'network') {
@@ -604,7 +748,9 @@ export function InfrastructureMapSurface() {
 
   // The map is fitted to what is left of the window under its toolbar, so
   // all of it is on screen at once and nothing is read by scrolling.
+  let stageRef: HTMLDivElement | undefined;
   let frameRef: HTMLDivElement | undefined;
+  let viewportRef: HTMLDivElement | undefined;
   let legendRef: HTMLUListElement | undefined;
   let searchInputRef: HTMLInputElement | undefined;
   const [space, setSpace] = createSignal<{
@@ -784,8 +930,10 @@ export function InfrastructureMapSurface() {
     return out;
   });
   const inspectTargets = createMemo(() => {
-    const out: MapInspectTarget[] = [];
-    for (const node of scene()?.nodes ?? []) if (node.kind === 'inspect') out.push(node.target);
+    const out: Array<{ target: MapInspectTarget; label: string }> = [];
+    for (const node of scene()?.nodes ?? []) {
+      if (node.kind === 'inspect') out.push({ target: node.target, label: node.label });
+    }
     return out;
   });
   const hrefForResourceId = (id: string): string | null => {
@@ -811,36 +959,44 @@ export function InfrastructureMapSurface() {
     return current ? renderMapSceneBody(current, palette(), hrefForHit) : '';
   });
 
-  const hoveredHit = createMemo<{
-    hit: MapHit;
-    x: number;
-    y: number;
-    direction: 'up' | 'down';
-  } | null>(() => {
-    const current = hover();
-    if (!current) return null;
-    const hit = hits().find((candidate) => candidate.id === current.hitId);
-    if (!hit) return null;
-    return { hit, x: current.x, y: current.y, direction: current.direction };
+  const hoveredHit = createMemo<MapHit | null>(() => {
+    const hitId = hover();
+    if (!hitId) return null;
+    return hits().find((candidate) => candidate.id === hitId) ?? null;
   });
 
   const hoveredNetworkInfo = createMemo<DiagramNetwork | null>(() => {
-    const hovered = hoveredNetwork();
-    if (!hovered) return null;
+    const networkId = hoveredNetwork();
+    if (!networkId) return null;
     const list = activeDiagram()?.networks ?? fullDiagram()?.networks ?? [];
-    return list.find((network) => network.id === hovered.networkId) ?? null;
+    return list.find((network) => network.id === networkId) ?? null;
   });
 
-  // Hoisted memos for TooltipPortal props so Solid never compiles an inline
-  // memo() inside requestAnimationFrame (which triggers a createRoot warning).
-  const showHoverTooltip = createMemo(
-    () => armed() === null && (hoveredHit() !== null || hoveredNetworkInfo() !== null),
+  const showHoverInspector = createMemo(
+    () =>
+      armed() === null &&
+      !legendHasFocus() &&
+      (hoveredHit() !== null || hoveredNetworkInfo() !== null || hoveredInspectLabel() !== null),
   );
-  const tooltipX = createMemo(() => hoveredHit()?.x ?? hoveredNetwork()?.x ?? 0);
-  const tooltipY = createMemo(() => hoveredHit()?.y ?? hoveredNetwork()?.y ?? 0);
-  const tooltipDirection = createMemo<'up' | 'down'>(
-    () => hoveredHit()?.direction ?? hoveredNetwork()?.direction ?? 'up',
-  );
+  const inspectorSummary = createMemo<MapInspectorSummary | null>(() => {
+    const hit = hoveredHit();
+    if (hit) {
+      return buildHitInspectorSummary(hit, {
+        density: density(),
+        canAddCheck: canAddCheck(),
+        showArrowHint: byKeys() && !arrowsUsed() && hits().length > 1,
+      });
+    }
+    const network = hoveredNetworkInfo();
+    if (network) {
+      return buildNetworkInspectorSummary(network, palette()[networkTone(network.colorIndex)]);
+    }
+    const label = hoveredInspectLabel();
+    if (label) {
+      return buildInspectLabelSummary(label);
+    }
+    return null;
+  });
 
   const clampPan = (next: { x: number; y: number }, scaleValue: number) => {
     if (scaleValue <= MIN_ZOOM) return { x: 0, y: 0 };
@@ -905,6 +1061,7 @@ export function InfrastructureMapSurface() {
       setDragging(true);
       setHover(null);
       setHoveredNetwork(null);
+      setHoveredInspectLabel(null);
       suppressNextClick = true;
     }
     setPan(clampPan({ x: dragStart.panX + dx, y: dragStart.panY + dy }, zoom()));
@@ -938,6 +1095,8 @@ export function InfrastructureMapSurface() {
   // last had focus, or the first one drawn, and the arrow keys move from
   // there (`handleKey`). Kept by resource, so it survives a redraw.
   let tabStopId: string | undefined;
+  let redrawingSvg = false;
+  let restoringDismissedFocus = false;
   const setTabStop = (svg: SVGSVGElement) => {
     const kept = hits().findIndex((hit) => hit.id === tabStopId);
     const stop = String(kept >= 0 ? kept : 0);
@@ -960,20 +1119,30 @@ export function InfrastructureMapSurface() {
         : null;
       const focusedAt = focused ? Number(focused.getAttribute(MAP_HIT_ATTRIBUTE)) : -1;
       const focusedId = focused ? previousHits?.[focusedAt]?.id : undefined;
-      svg.innerHTML = markup;
-      if (focused && hits().length > 0) {
-        // The same resource where it is still drawn. Where it has gone, the
-        // tile now in its place: replacing the drawing would otherwise drop
-        // the focus off the map, back to the top of the page.
-        const same = focusedId ? hits().findIndex((hit) => hit.id === focusedId) : -1;
-        const index = same >= 0 ? same : Math.min(Math.max(focusedAt, 0), hits().length - 1);
-        tabStopId = hits()[index].id;
-        setTabStop(svg);
-        svg
-          .querySelector<SVGElement>(`[${MAP_HIT_ATTRIBUTE}="${index}"]`)
-          ?.focus({ preventScroll: true });
-      } else {
-        setTabStop(svg);
+      const wasDismissedForFocusedId =
+        focusInspectorDismissed() && Boolean(focusedId) ? focusedId : null;
+      redrawingSvg = true;
+      try {
+        svg.innerHTML = markup;
+        if (focused && hits().length > 0) {
+          // The same resource where it is still drawn. Where it has gone, the
+          // tile now in its place: replacing the drawing would otherwise drop
+          // the focus off the map, back to the top of the page.
+          const same = focusedId ? hits().findIndex((hit) => hit.id === focusedId) : -1;
+          const index = same >= 0 ? same : Math.min(Math.max(focusedAt, 0), hits().length - 1);
+          tabStopId = hits()[index].id;
+          setTabStop(svg);
+          restoringDismissedFocus =
+            wasDismissedForFocusedId !== null && hits()[index].id === wasDismissedForFocusedId;
+          svg
+            .querySelector<SVGElement>(`[${MAP_HIT_ATTRIBUTE}="${index}"]`)
+            ?.focus({ preventScroll: true });
+        } else {
+          setTabStop(svg);
+        }
+      } finally {
+        restoringDismissedFocus = false;
+        redrawingSvg = false;
       }
       return hits();
     }),
@@ -1006,10 +1175,10 @@ export function InfrastructureMapSurface() {
       // A tapped tile is marked as well: no pointer rests on it to show which
       // tile the card is about.
       layer.innerHTML =
-        (armed() === null ? '' : renderMapTappedTile(current, shown.hit, palette())) +
-        renderMapLinkRings(current, shown.hit, palette());
-      if (shown.hit.linked?.length) {
-        applyMapSpotlight(svg, new Set([shown.hit.id, ...shown.hit.linked]));
+        (armed() === null ? '' : renderMapTappedTile(current, shown, palette())) +
+        renderMapLinkRings(current, shown, palette());
+      if (shown.linked?.length) {
+        applyMapSpotlight(svg, new Set([shown.id, ...shown.linked]));
       } else {
         applyMapSpotlight(svg, null);
       }
@@ -1039,6 +1208,82 @@ export function InfrastructureMapSurface() {
     applyMapSpotlight(svg, null);
   });
 
+  // Keep aria-describedby in sync on the focused map tile while the bottom
+  // inspector bar is showing (pointing at the unlabelled content container so
+  // the tile's accessible description contains the readout text, not the section
+  // aria-label), and mark the hidden legend inert while swapped.
+  createEffect(() => {
+    const inspecting = showHoverInspector();
+    if (legendRef) {
+      legendRef.inert = inspecting && !legendRef.contains(document.activeElement);
+    }
+    body();
+    const svg = svgElement();
+    if (!svg) return;
+    const shown = inspecting ? hoveredHit() : null;
+    const focusedId = focusedHitId();
+    for (const el of svg.querySelectorAll(`[${MAP_HIT_ATTRIBUTE}][aria-describedby]`)) {
+      el.removeAttribute('aria-describedby');
+    }
+    if (!shown || !focusedId || shown.id !== focusedId) return;
+    const focused = svg.contains(document.activeElement)
+      ? document.activeElement?.closest(`[${MAP_HIT_ATTRIBUTE}]`)
+      : null;
+    const focusedAt = focused ? Number(focused.getAttribute(MAP_HIT_ATTRIBUTE)) : -1;
+    if (focused && hits()[focusedAt]?.id === shown.id) {
+      focused.setAttribute('aria-describedby', 'infrastructure-map-inspector-content');
+    }
+  });
+
+  const clearInspection = () => {
+    setHover(null);
+    setHoveredNetwork(null);
+    setHoveredInspectLabel(null);
+    if (legendRef) {
+      legendRef.inert = false;
+    }
+  };
+  const isElementInViewport = (element: Element): boolean => {
+    if (typeof window === 'undefined') return true;
+    const box = element.getBoundingClientRect();
+    if (
+      box.bottom < 0 ||
+      box.top > window.innerHeight ||
+      box.right < 0 ||
+      box.left > window.innerWidth
+    ) {
+      return false;
+    }
+    if (zoom() > MIN_ZOOM && viewportRef?.isConnected) {
+      const clip = viewportRef.getBoundingClientRect();
+      if (
+        clip.width > 0 &&
+        clip.height > 0 &&
+        (box.bottom <= clip.top ||
+          box.top >= clip.bottom ||
+          box.right <= clip.left ||
+          box.left >= clip.right)
+      ) {
+        return false;
+      }
+    }
+    return true;
+  };
+  const clearPointerInspection = () => {
+    const focusedId = focusedHitId();
+    const svg = svgElement();
+    const focusedEl =
+      focusedId && svg?.contains(document.activeElement)
+        ? document.activeElement?.closest(`[${MAP_HIT_ATTRIBUTE}]`)
+        : null;
+    if (focusedEl && !focusInspectorDismissed() && isElementInViewport(focusedEl)) {
+      setHoveredNetwork(null);
+      setHoveredInspectLabel(null);
+      setHover(focusedId);
+      return;
+    }
+    clearInspection();
+  };
   const hitFromEvent = (event: Event): { hit: MapHit; element: Element } | null => {
     const element = (event.target as Element | null)?.closest?.(`[${MAP_HIT_ATTRIBUTE}]`);
     if (!element) return null;
@@ -1047,64 +1292,74 @@ export function InfrastructureMapSurface() {
   };
   const inspectHitFromEvent = (
     event: Event,
-  ): { target: MapInspectTarget; element: Element } | null => {
+  ): { target: MapInspectTarget; label: string; element: Element } | null => {
     const element = (event.target as Element | null)?.closest?.(`[${MAP_INSPECT_ATTRIBUTE}]`);
     if (!element) return null;
-    const target = inspectTargets()[Number(element.getAttribute(MAP_INSPECT_ATTRIBUTE))];
-    return target ? { target, element } : null;
-  };
-  const tooltipAnchor = (element: Element): { x: number; y: number; direction: 'up' | 'down' } => {
-    const box = element.getBoundingClientRect();
-    const frameRect = frameRef?.getBoundingClientRect();
-    const hasRealFrame = Boolean(frameRect && frameRect.height > 0);
-    const safeTop = hasRealFrame && frameRect ? Math.max(frameRect.top, 0) : 0;
-    const roomBelow = typeof window !== 'undefined' ? window.innerHeight - box.bottom : 0;
-    const flipDown =
-      hasRealFrame && box.top - safeTop < TOOLTIP_TOP_CLEARANCE && roomBelow > TOOLTIP_BOTTOM_ROOM;
-    return {
-      x: box.left + box.width / 2,
-      y: flipDown ? box.bottom : box.top,
-      direction: flipDown ? 'down' : 'up',
-    };
+    const entry = inspectTargets()[Number(element.getAttribute(MAP_INSPECT_ATTRIBUTE))];
+    return entry ? { target: entry.target, label: entry.label, element } : null;
   };
   const point = (found: { hit: MapHit; element: Element }) => {
     setHoveredNetwork(null);
-    setHover({
-      hitId: found.hit.id,
-      ...tooltipAnchor(found.element),
-    });
+    setHoveredInspectLabel(null);
+    setHover(found.hit.id);
   };
-  const pointNetwork = (networkId: string, element: Element) => {
+  const pointNetwork = (networkId: string) => {
     setHover(null);
-    setHoveredNetwork({
-      networkId,
-      ...tooltipAnchor(element),
-    });
+    setHoveredInspectLabel(null);
+    setHoveredNetwork(networkId);
+  };
+  const pointInspectLabel = (label: string) => {
+    setHover(null);
+    setHoveredNetwork(null);
+    setHoveredInspectLabel(label);
   };
   const isTouch = (event: Event): boolean => (event as PointerEvent).pointerType === 'touch';
   const showFor = (event: Event) => {
     // A finger is not a pointer that hovers. What it touched is said on the
     // tap, below.
     if (isTouch(event) || dragging()) return;
+    // Never let pointer movement swap out the legend while a keyboard user has
+    // focus inside it (for example on "How the map works").
+    if (
+      event.type !== 'focusin' &&
+      (legendHasFocus() || Boolean(legendRef?.contains(document.activeElement)))
+    ) {
+      return;
+    }
     const found = hitFromEvent(event);
     if (found) {
       point(found);
       return;
     }
     const inspected = inspectHitFromEvent(event);
-    if (inspected?.target.kind === 'network') {
-      pointNetwork(inspected.target.networkId, inspected.element);
+    if (inspected) {
+      if (inspected.target.kind === 'network') {
+        pointNetwork(inspected.target.networkId);
+      } else {
+        pointInspectLabel(inspected.label);
+      }
       return;
     }
-    setHover(null);
-    setHoveredNetwork(null);
+    // Retain the active hover readout while crossing empty canvas space toward
+    // the bottom inspector bar (WCAG 1.4.13 hoverability); leaving the combined
+    // map + footer stage clears it.
   };
   const handleFocusIn = (event: FocusEvent) => {
     const found = hitFromEvent(event);
     const svg = svgElement();
+    if (restoringDismissedFocus && found && svg) {
+      tabStopId = found.hit.id;
+      setFocusedHitId(found.hit.id);
+      setTabStop(svg);
+      return;
+    }
+    setFocusInspectorDismissed(false);
     if (found && svg) {
       tabStopId = found.hit.id;
+      setFocusedHitId(found.hit.id);
       setTabStop(svg);
+    } else {
+      setFocusedHitId(null);
     }
     setByKeys(keyedLast);
     showFor(event);
@@ -1118,8 +1373,7 @@ export function InfrastructureMapSurface() {
     const active = typeof document !== 'undefined' ? document.activeElement : null;
     drawerReturnElement =
       active instanceof HTMLElement || active instanceof SVGElement ? active : null;
-    setHover(null);
-    setHoveredNetwork(null);
+    clearInspection();
     setDrawerTarget(target);
   };
   const closeDrawer = () => {
@@ -1152,12 +1406,26 @@ export function InfrastructureMapSurface() {
   // an overflow tile opens the group drawer. Escape dismisses an open tooltip.
   // A key that moves nowhere is left to the page, which scrolls with it.
   const handleKey = (event: KeyboardEvent) => {
+    // Restore the legend before native Tab traversal resolves the next focus
+    // stop, so forward Tab lands on "How the map works" and Shift+Tab returns
+    // directly to the roving tile.
+    if (event.key === 'Tab' && !event.altKey && !event.ctrlKey && !event.metaKey) {
+      clearInspection();
+      return;
+    }
     if (event.altKey || event.ctrlKey || event.metaKey || event.shiftKey) return;
     if (event.key === 'Escape') {
-      if (hover() !== null || hoveredNetwork() !== null || armed() !== null) {
+      if (
+        hover() !== null ||
+        hoveredNetwork() !== null ||
+        hoveredInspectLabel() !== null ||
+        armed() !== null
+      ) {
         event.preventDefault();
-        setHover(null);
-        setHoveredNetwork(null);
+        if (focusedHitId() !== null) {
+          setFocusInspectorDismissed(true);
+        }
+        clearInspection();
         disarm();
       }
       return;
@@ -1196,8 +1464,7 @@ export function InfrastructureMapSurface() {
   const disarm = () => {
     if (armed() === null) return;
     setArmed(null);
-    setHover(null);
-    setHoveredNetwork(null);
+    clearInspection();
   };
   onMount(() => {
     // The next press anywhere, or a scroll, ends what a tap showed. The
@@ -1213,10 +1480,15 @@ export function InfrastructureMapSurface() {
       if (
         event.key === 'Escape' &&
         !drawerTarget() &&
-        (hover() !== null || hoveredNetwork() !== null || armed() !== null)
+        (hover() !== null ||
+          hoveredNetwork() !== null ||
+          hoveredInspectLabel() !== null ||
+          armed() !== null)
       ) {
-        setHover(null);
-        setHoveredNetwork(null);
+        if (focusedHitId() !== null) {
+          setFocusInspectorDismissed(true);
+        }
+        clearInspection();
         disarm();
         return;
       }
@@ -1273,16 +1545,16 @@ export function InfrastructureMapSurface() {
       const within = event.target;
       if (within instanceof Element && frameRef && !within.contains(frameRef)) return;
       if (hoveredNetwork() !== null) setHoveredNetwork(null);
+      if (hoveredInspectLabel() !== null) setHoveredInspectLabel(null);
       const shown = hoveredHit();
       const focused = document.activeElement?.closest?.(`[${MAP_HIT_ATTRIBUTE}]`);
       const held = focused ? hits()[Number(focused.getAttribute(MAP_HIT_ATTRIBUTE))] : undefined;
-      if (!focused || !held || (shown ? shown.hit.id !== held.id : scrolledAway !== held.id)) {
+      if (!focused || !held || (shown ? shown.id !== held.id : scrolledAway !== held.id)) {
         scrolledAway = null;
         if (hover()) setHover(null);
         return;
       }
-      const box = focused.getBoundingClientRect();
-      if (box.bottom < 0 || box.top > window.innerHeight) {
+      if (!isElementInViewport(focused)) {
         scrolledAway = held.id;
         setHover(null);
       } else {
@@ -1659,225 +1931,369 @@ export function InfrastructureMapSurface() {
 
       <div
         ref={(element) => {
-          frameRef = element;
-          observed.setElement(element);
+          stageRef = element;
         }}
-        class="min-w-0"
-      >
-        <Show
-          when={fitted()}
-          fallback={
-            <Show
-              when={!loading() && liveModel().isEmpty}
-              fallback={<div class="p-6 text-sm text-muted">Drawing the map...</div>}
-            >
-              <Show
-                when={Boolean(loadError())}
-                fallback={
-                  <EmptyState
-                    icon={<MapIcon class="h-6 w-6" aria-hidden="true" />}
-                    title="Nothing to draw yet"
-                    description={
-                      canAddSystem()
-                        ? 'The map draws itself from the systems Pulse monitors. Add one and it appears here.'
-                        : 'The map draws itself from the systems Pulse monitors. None has been added yet. Ask a Pulse administrator to add one.'
-                    }
-                    actions={
-                      <Show when={canAddSystem()}>
-                        <ButtonLink
-                          href={buildInfrastructureWorkspacePath()}
-                          variant="secondary"
-                          size="sm"
-                        >
-                          Add a system
-                        </ButtonLink>
-                      </Show>
-                    }
-                  />
-                }
-              >
-                <EmptyState
-                  icon={<TriangleAlertIcon class="h-6 w-6 text-amber-500" aria-hidden="true" />}
-                  title="Could not load the map"
-                  description="Pulse could not load your monitored resources. Check the connection and try again."
-                  actions={
-                    <Button variant="secondary" size="sm" onClick={() => void refetch?.()}>
-                      Try again
-                    </Button>
-                  }
-                />
-              </Show>
-            </Show>
+        class="flex min-w-0 flex-col gap-3"
+        data-testid="infrastructure-map-stage"
+        onPointerLeave={(event) => {
+          if (!isTouch(event)) {
+            clearPointerInspection();
           }
+        }}
+      >
+        <div
+          ref={(element) => {
+            frameRef = element;
+            observed.setElement(element);
+          }}
+          class="min-w-0"
         >
-          {(current) => (
-            <Show
-              when={hasVisibleMatches()}
-              fallback={
-                <EmptyState
-                  icon={<SearchIcon class="h-6 w-6" aria-hidden="true" />}
-                  title="No matching resources"
-                  description="No resources on the map match the active search or filter criteria."
-                  actions={
-                    <Button variant="secondary" size="sm" onClick={clearFilters}>
-                      Clear filters
-                    </Button>
-                  }
-                />
-              }
-            >
-              <div
-                class={
-                  zoom() > MIN_ZOOM
-                    ? `relative overflow-hidden rounded-lg border border-border/70 bg-surface/40 ${
-                        dragging() ? 'cursor-grabbing' : 'cursor-grab'
-                      }`
-                    : 'relative'
-                }
-                style={
-                  zoom() > MIN_ZOOM && !space()?.phone
-                    ? { height: `${Math.floor(current().scene.height * current().scale)}px` }
-                    : undefined
-                }
-                onPointerDown={handleViewportPointerDown}
-                onPointerMove={handleViewportPointerMove}
-                onPointerUp={endViewportDrag}
-                onPointerCancel={endViewportDrag}
-                onWheel={handleViewportWheel}
+          <Show
+            when={fitted()}
+            fallback={
+              <Show
+                when={!loading() && liveModel().isEmpty}
+                fallback={<div class="p-6 text-sm text-muted">Drawing the map...</div>}
               >
-                <div
-                  style={
-                    zoom() > MIN_ZOOM
-                      ? {
-                          transform: `translate3d(${pan().x}px, ${pan().y}px, 0) scale(${zoom()})`,
-                          'transform-origin': 'center top',
-                        }
-                      : undefined
+                <Show
+                  when={Boolean(loadError())}
+                  fallback={
+                    <EmptyState
+                      icon={<MapIcon class="h-6 w-6" aria-hidden="true" />}
+                      title="Nothing to draw yet"
+                      description={
+                        canAddSystem()
+                          ? 'The map draws itself from the systems Pulse monitors. Add one and it appears here.'
+                          : 'The map draws itself from the systems Pulse monitors. None has been added yet. Ask a Pulse administrator to add one.'
+                      }
+                      actions={
+                        <Show when={canAddSystem()}>
+                          <ButtonLink
+                            href={buildInfrastructureWorkspacePath()}
+                            variant="secondary"
+                            size="sm"
+                          >
+                            Add a system
+                          </ButtonLink>
+                        </Show>
+                      }
+                    />
                   }
                 >
-                  <svg
-                    ref={(element) => {
-                      setSvgElement(element);
-                      // In the capture phase, so it runs before the router's own
-                      // click handler, which follows links.
-                      element.addEventListener('click', handleSvgClick, true);
-                      onCleanup(() => {
-                        element.removeEventListener('click', handleSvgClick, true);
-                        setSvgElement(undefined);
-                      });
-                    }}
-                    class="mx-auto block max-w-full select-none"
-                    width={Math.floor(current().scene.width * current().scale)}
-                    height={Math.floor(current().scene.height * current().scale)}
-                    viewBox={`0 0 ${current().scene.width} ${current().scene.height}`}
-                    role="group"
-                    aria-label="Infrastructure map"
-                    aria-describedby="infrastructure-map-keys"
-                    onPointerOver={(event) => {
-                      if (!isTouch(event)) setByKeys(false);
-                      showFor(event);
-                    }}
-                    onPointerLeave={(event) => {
-                      if (!isTouch(event)) {
-                        setHover(null);
-                        setHoveredNetwork(null);
-                      }
-                    }}
-                    onKeyDown={handleKey}
-                    onFocusIn={handleFocusIn}
-                    onFocusOut={() => {
-                      if (armed() === null) {
-                        setHover(null);
-                        setHoveredNetwork(null);
-                      }
-                    }}
+                  <EmptyState
+                    icon={<TriangleAlertIcon class="h-6 w-6 text-amber-500" aria-hidden="true" />}
+                    title="Could not load the map"
+                    description="Pulse could not load your monitored resources. Check the connection and try again."
+                    actions={
+                      <Button variant="secondary" size="sm" onClick={() => void refetch?.()}>
+                        Try again
+                      </Button>
+                    }
                   />
+                </Show>
+              </Show>
+            }
+          >
+            {(current) => (
+              <Show
+                when={hasVisibleMatches()}
+                fallback={
+                  <EmptyState
+                    icon={<SearchIcon class="h-6 w-6" aria-hidden="true" />}
+                    title="No matching resources"
+                    description="No resources on the map match the active search or filter criteria."
+                    actions={
+                      <Button variant="secondary" size="sm" onClick={clearFilters}>
+                        Clear filters
+                      </Button>
+                    }
+                  />
+                }
+              >
+                <div
+                  ref={(element) => {
+                    viewportRef = element;
+                  }}
+                  data-testid="infrastructure-map-viewport"
+                  class={
+                    zoom() > MIN_ZOOM
+                      ? `relative overflow-hidden rounded-lg border border-border/70 bg-surface/40 ${
+                          dragging() ? 'cursor-grabbing' : 'cursor-grab'
+                        }`
+                      : 'relative'
+                  }
+                  style={
+                    zoom() > MIN_ZOOM && !space()?.phone
+                      ? { height: `${Math.floor(current().scene.height * current().scale)}px` }
+                      : undefined
+                  }
+                  onPointerDown={handleViewportPointerDown}
+                  onPointerMove={handleViewportPointerMove}
+                  onPointerUp={endViewportDrag}
+                  onPointerCancel={endViewportDrag}
+                  onWheel={handleViewportWheel}
+                >
+                  <div
+                    style={
+                      zoom() > MIN_ZOOM
+                        ? {
+                            transform: `translate3d(${pan().x}px, ${pan().y}px, 0) scale(${zoom()})`,
+                            'transform-origin': 'center top',
+                          }
+                        : undefined
+                    }
+                  >
+                    <svg
+                      ref={(element) => {
+                        setSvgElement(element);
+                        // In the capture phase, so it runs before the router's own
+                        // click handler, which follows links.
+                        element.addEventListener('click', handleSvgClick, true);
+                        onCleanup(() => {
+                          element.removeEventListener('click', handleSvgClick, true);
+                          setSvgElement(undefined);
+                        });
+                      }}
+                      class="mx-auto block max-w-full select-none"
+                      width={Math.floor(current().scene.width * current().scale)}
+                      height={Math.floor(current().scene.height * current().scale)}
+                      viewBox={`0 0 ${current().scene.width} ${current().scene.height}`}
+                      role="group"
+                      aria-label="Infrastructure map"
+                      aria-describedby="infrastructure-map-keys"
+                      onPointerOver={(event) => {
+                        if (!isTouch(event)) setByKeys(false);
+                        showFor(event);
+                      }}
+                      onPointerLeave={(event) => {
+                        if (isTouch(event)) return;
+                        const next = event.relatedTarget;
+                        if (next instanceof Node && stageRef?.contains(next)) return;
+                        clearPointerInspection();
+                      }}
+                      onKeyDown={handleKey}
+                      onFocusIn={handleFocusIn}
+                      onFocusOut={(event) => {
+                        if (redrawingSvg) return;
+                        const next = event.relatedTarget;
+                        if (next instanceof Node && svgElement()?.contains(next)) return;
+                        setFocusedHitId(null);
+                        setFocusInspectorDismissed(false);
+                        if (armed() === null) {
+                          clearInspection();
+                        }
+                      }}
+                    />
+                  </div>
                 </div>
-              </div>
+              </Show>
+            )}
+          </Show>
+          <Show when={fitted() && hasVisibleMatches()}>
+            <p id="infrastructure-map-keys" class="sr-only">
+              Arrow keys move between tiles. Home and End go to the first and last. Tab leaves the
+              map.
+            </p>
+          </Show>
+        </div>
+
+        <Show when={scene()}>
+          <div class="relative min-w-0" data-testid="infrastructure-map-footer">
+            <ul
+              ref={(element) => {
+                legendRef = element;
+                // The legend arrives after the first drawing, and wraps to more
+                // lines as the window narrows. Either way the map gets less room.
+                // Keeping it in normal flow (visibility: hidden while inspecting)
+                // guarantees hover/focus never changes footer height or resizes the map.
+                if (typeof ResizeObserver === 'undefined') return;
+                const observer = new ResizeObserver(() => requestAnimationFrame(measure));
+                observer.observe(element);
+                onCleanup(() => {
+                  observer.disconnect();
+                  legendRef = undefined;
+                });
+              }}
+              class={`flex min-h-7 flex-wrap items-center gap-x-4 gap-y-1 text-xs text-muted ${
+                showHoverInspector() ? 'invisible pointer-events-none' : ''
+              }`}
+              aria-label="Legend"
+              aria-hidden={showHoverInspector() ? 'true' : undefined}
+              onFocusIn={() => {
+                setLegendHasFocus(true);
+                clearInspection();
+              }}
+              onFocusOut={(event) => {
+                const next = event.relatedTarget;
+                if (!(next instanceof Node && legendRef?.contains(next))) {
+                  setLegendHasFocus(false);
+                }
+              }}
+            >
+              <For each={LEGEND}>
+                {([variant, label]) => (
+                  <li class="inline-flex items-center gap-1.5">
+                    <StatusDot variant={variant} size="sm" />
+                    {label}
+                  </li>
+                )}
+              </For>
+              <li class="inline-flex items-center gap-1.5">
+                <span
+                  class="inline-block h-2 w-2 shrink-0 rounded-full border-[1.5px] border-slate-400"
+                  aria-hidden="true"
+                />
+                Off
+              </li>
+              <Show when={liveTraffic() && !model().liveSamplesExpired}>
+                <li
+                  class="inline-flex items-center gap-1.5"
+                  data-testid="infrastructure-map-legend-traffic"
+                  title="Blue glow, line width, and moving packets scale with live transfer rate on active network links"
+                >
+                  <span class="inline-flex items-center gap-1" aria-hidden="true">
+                    <span class="inline-block w-3 shrink-0 border-t-[1.5px] border-dashed border-blue-600/50 dark:border-blue-400/50" />
+                    <span class="text-[10px]">→</span>
+                    <span class="inline-flex items-center">
+                      <span class="inline-block h-[3px] w-3.5 rounded-full bg-blue-600/85 dark:bg-blue-400/90" />
+                      <span class="-ml-1.5 inline-block h-2 w-2 rounded-full bg-blue-600 ring-2 ring-blue-500/35 dark:bg-blue-300 dark:ring-blue-400/40" />
+                    </span>
+                  </span>
+                  Live flow: light → heavy
+                </li>
+              </Show>
+              <Show when={activeDiagram()?.hasLinkSpeeds}>
+                <li
+                  class="inline-flex items-center gap-1.5"
+                  data-testid="infrastructure-map-legend-speed"
+                  title="Base connector line width reflects reported physical NIC speed"
+                >
+                  <span class="inline-flex items-center gap-1" aria-hidden="true">
+                    <span class="inline-block h-[3px] w-3.5 rounded-full bg-slate-400 dark:bg-slate-500" />
+                    <span class="text-[10px]">10G</span>
+                    <span class="inline-block h-[1.5px] w-3.5 rounded-full bg-slate-400 dark:bg-slate-500" />
+                    <span class="text-[10px]">1G</span>
+                  </span>
+                  Link speed
+                </li>
+              </Show>
+              {/* How a thing gets onto the map is not something the map can show. */}
+              <li class="ml-auto">
+                Apps are recognised by name, checks are drawn by their type.{' '}
+                <a href={MAP_DOC_URL} class="underline underline-offset-2 hover:text-base-content">
+                  How the map works
+                </a>
+              </li>
+            </ul>
+            <Show when={showHoverInspector() ? inspectorSummary() : null}>
+              {(summary) => (
+                <section
+                  aria-label="Inspected item"
+                  data-testid="infrastructure-map-inspector"
+                  class="absolute inset-0 flex min-w-0 items-center overflow-hidden rounded-xs border border-border/80 bg-surface-alt/95 px-2.5 text-xs"
+                >
+                  <div
+                    id="infrastructure-map-inspector-content"
+                    class="flex min-w-0 flex-1 items-center gap-x-2.5 overflow-hidden"
+                  >
+                    <span class="inline-flex min-w-0 shrink items-center gap-1.5 overflow-hidden">
+                      <Show
+                        when={summary().dotColor}
+                        fallback={
+                          <Show
+                            when={!summary().dotHollow}
+                            fallback={
+                              <span
+                                class="inline-block h-2 w-2 shrink-0 rounded-full border-[1.5px] border-slate-400"
+                                aria-hidden="true"
+                              />
+                            }
+                          >
+                            <StatusDot variant={summary().dotVariant ?? 'muted'} size="sm" />
+                          </Show>
+                        }
+                      >
+                        {(color) => (
+                          <span
+                            class="inline-block h-2 w-2 shrink-0 rounded-full"
+                            style={{ background: color() }}
+                            aria-hidden="true"
+                          />
+                        )}
+                      </Show>
+                      <span class="min-w-[72px] shrink truncate font-semibold text-base-content">
+                        {summary().name}
+                      </span>
+                      <Show when={summary().meta}>
+                        {(meta) => (
+                          <span class="min-w-0 shrink-[2] truncate text-muted">{meta()}</span>
+                        )}
+                      </Show>
+                    </span>
+                    <Show when={summary().anomalies.length > 0}>
+                      <span class="inline-flex shrink-0 items-center gap-x-2 whitespace-nowrap">
+                        <span class="shrink-0 text-border" aria-hidden="true">
+                          |
+                        </span>
+                        <For each={summary().anomalies}>
+                          {(anomaly, index) => (
+                            <>
+                              <Show when={index() > 0}>
+                                <span class="shrink-0 text-border" aria-hidden="true">
+                                  ·
+                                </span>
+                              </Show>
+                              <span
+                                data-map-inspector-anomaly={anomaly.tone}
+                                class={`shrink-0 font-semibold ${
+                                  anomaly.tone === 'danger'
+                                    ? 'text-red-700 dark:text-red-300'
+                                    : 'text-amber-700 dark:text-amber-300'
+                                }`}
+                              >
+                                {anomaly.text}
+                              </span>
+                            </>
+                          )}
+                        </For>
+                      </span>
+                    </Show>
+                    <Show when={summary().fields.length > 0}>
+                      <div class="flex min-w-0 flex-1 items-center gap-x-2 overflow-hidden whitespace-nowrap">
+                        <For each={summary().fields}>
+                          {(field, index) => (
+                            <>
+                              <span class="shrink-0 text-border" aria-hidden="true">
+                                {index() === 0 && summary().anomalies.length === 0 ? '|' : '·'}
+                              </span>
+                              <span
+                                class={`shrink-0 ${
+                                  field.tone === 'metric'
+                                    ? 'tabular-nums text-base-content'
+                                    : 'text-muted'
+                                }`}
+                              >
+                                {field.text}
+                              </span>
+                            </>
+                          )}
+                        </For>
+                      </div>
+                    </Show>
+                    <Show when={summary().hint}>
+                      {(hint) => (
+                        <span class="ml-auto shrink-0 whitespace-nowrap text-[11px] text-muted">
+                          {hint()}
+                        </span>
+                      )}
+                    </Show>
+                  </div>
+                </section>
+              )}
             </Show>
-          )}
-        </Show>
-        <Show when={fitted() && hasVisibleMatches()}>
-          <p id="infrastructure-map-keys" class="sr-only">
-            Arrow keys move between tiles. Home and End go to the first and last. Tab leaves the
-            map.
-          </p>
+          </div>
         </Show>
       </div>
-
-      <Show when={scene()}>
-        <ul
-          ref={(element) => {
-            legendRef = element;
-            // The legend arrives after the first drawing, and wraps to more
-            // lines as the window narrows. Either way the map gets less room.
-            if (typeof ResizeObserver === 'undefined') return;
-            const observer = new ResizeObserver(() => requestAnimationFrame(measure));
-            observer.observe(element);
-            onCleanup(() => {
-              observer.disconnect();
-              legendRef = undefined;
-            });
-          }}
-          class="flex flex-wrap items-center gap-x-4 gap-y-1 text-xs text-muted"
-          aria-label="Legend"
-        >
-          <For each={LEGEND}>
-            {([variant, label]) => (
-              <li class="inline-flex items-center gap-1.5">
-                <StatusDot variant={variant} size="sm" />
-                {label}
-              </li>
-            )}
-          </For>
-          <li class="inline-flex items-center gap-1.5">
-            <span
-              class="inline-block h-2 w-2 shrink-0 rounded-full border-[1.5px] border-slate-400"
-              aria-hidden="true"
-            />
-            Off
-          </li>
-          <Show when={liveTraffic() && !model().liveSamplesExpired}>
-            <li
-              class="inline-flex items-center gap-1.5"
-              data-testid="infrastructure-map-legend-traffic"
-              title="Blue glow, line width, and moving packets scale with live transfer rate on active network links"
-            >
-              <span class="inline-flex items-center gap-1" aria-hidden="true">
-                <span class="inline-block w-3 shrink-0 border-t-[1.5px] border-dashed border-blue-600/50 dark:border-blue-400/50" />
-                <span class="text-[10px]">→</span>
-                <span class="inline-flex items-center">
-                  <span class="inline-block h-[3px] w-3.5 rounded-full bg-blue-600/85 dark:bg-blue-400/90" />
-                  <span class="-ml-1.5 inline-block h-2 w-2 rounded-full bg-blue-600 ring-2 ring-blue-500/35 dark:bg-blue-300 dark:ring-blue-400/40" />
-                </span>
-              </span>
-              Live flow: light → heavy
-            </li>
-          </Show>
-          <Show when={activeDiagram()?.hasLinkSpeeds}>
-            <li
-              class="inline-flex items-center gap-1.5"
-              data-testid="infrastructure-map-legend-speed"
-              title="Base connector line width reflects reported physical NIC speed"
-            >
-              <span class="inline-flex items-center gap-1" aria-hidden="true">
-                <span class="inline-block h-[3px] w-3.5 rounded-full bg-slate-400 dark:bg-slate-500" />
-                <span class="text-[10px]">10G</span>
-                <span class="inline-block h-[1.5px] w-3.5 rounded-full bg-slate-400 dark:bg-slate-500" />
-                <span class="text-[10px]">1G</span>
-              </span>
-              Link speed
-            </li>
-          </Show>
-          {/* How a thing gets onto the map is not something the map can show. */}
-          <li class="ml-auto">
-            Apps are recognised by name, checks are drawn by their type.{' '}
-            <a href={MAP_DOC_URL} class="underline underline-offset-2 hover:text-base-content">
-              How the map works
-            </a>
-          </li>
-        </ul>
-      </Show>
 
       <InfrastructureMapDrawer
         target={drawerTarget()}
@@ -1890,46 +2306,6 @@ export function InfrastructureMapSurface() {
         onFilterByActiveTraffic={(active) => setActiveTrafficOnly(active)}
         onClose={closeDrawer}
       />
-
-      {/* A tap's card is the shared pressed tooltip, which a touch screen shows. */}
-      <TooltipPortal
-        when={showHoverTooltip()}
-        x={tooltipX()}
-        y={tooltipY()}
-        direction={tooltipDirection()}
-      >
-        <Show
-          when={hoveredHit()}
-          fallback={
-            <Show when={hoveredNetworkInfo()}>
-              {(network) => (
-                <div class="flex flex-col gap-0.5">
-                  <span class="text-[11px] font-semibold">{network().label}</span>
-                  <For each={networkTooltipLines(network())}>
-                    {(line) => <span class="text-muted">{line}</span>}
-                  </For>
-                </div>
-              )}
-            </Show>
-          }
-        >
-          {(current) => (
-            <div class="flex flex-col gap-0.5">
-              <span class="text-[11px] font-semibold">{current().hit.name}</span>
-              <For each={hitLines(current().hit, density())}>
-                {(line) => <span class="text-muted">{line}</span>}
-              </For>
-              {/* Every other tile opens the thing it shows. This one does not. */}
-              <Show when={current().hit.checkAddress && canAddCheck()}>
-                <span class="text-muted">Click to add a check</span>
-              </Show>
-              <Show when={byKeys() && !arrowsUsed() && hits().length > 1}>
-                <span class="text-muted">Arrow keys move between tiles</span>
-              </Show>
-            </div>
-          )}
-        </Show>
-      </TooltipPortal>
     </div>
   );
 }

@@ -316,12 +316,21 @@ test.describe("Infrastructure map", () => {
     await hide.click();
     await expect(hide).toHaveAttribute("aria-pressed", "false");
 
-    // Pointing at a tile says what it is.
+    // Pointing at a tile says what it is in the dedicated bottom inspector bar
+    // without moving the map or resizing the footer.
     const { name, tile: guest, href } = await pinGuest(page);
+    const mapLocator = page.locator(MAP);
+    const footerLocator = page.locator('[data-testid="infrastructure-map-footer"]');
+    const beforeMapBox = await mapLocator.boundingBox();
+    const beforeFooterBox = await footerLocator.boundingBox();
     await guest.hover();
-    const card = page.locator('[data-tooltip-portal="true"]');
-    await expect(card).toBeVisible();
-    await expect(card).toContainText(name);
+    const inspector = page.locator('[data-testid="infrastructure-map-inspector"]');
+    await expect(inspector).toBeVisible();
+    await expect(inspector).toContainText(name);
+    const hoverMapBox = await mapLocator.boundingBox();
+    const hoverFooterBox = await footerLocator.boundingBox();
+    expect(hoverMapBox).toEqual(beforeMapBox);
+    expect(hoverFooterBox).toEqual(beforeFooterBox);
 
     // Clicking it opens that guest, not merely some guest.
     await guest.click();
@@ -387,25 +396,32 @@ test.describe("Infrastructure map", () => {
         }),
       )
       .toBe(FOCUS_RING);
-    const card = page.locator('[data-tooltip-portal="true"]');
-    await expect(card).toBeVisible();
-    // Tab no longer walks the tiles, so the card says what does.
-    await expect(card).toContainText("Arrow keys move between tiles");
+    const inspector = page.locator('[data-testid="infrastructure-map-inspector"]');
+    await expect(inspector).toBeVisible();
+    // Tab no longer walks the tiles, so the inspector says what does.
+    await expect(inspector).toContainText("Arrow keys move between tiles");
 
-    // The map is one stop: the next Tab is past it, and Shift+Tab comes back
-    // to the same tile.
+    // The map is one stop: the next Tab lands on the legend documentation link,
+    // and Shift+Tab comes straight back to the same tile.
     const first = await focused.getAttribute("aria-label");
+    const docsLink = page.getByRole("link", { name: "How the map works" });
     await page.keyboard.press("Tab");
     await expect(focused).toHaveCount(0);
+    await expect(docsLink).toBeFocused();
     await page.keyboard.press("Shift+Tab");
     await expect(focused).toHaveAttribute("aria-label", first ?? "");
 
-    // An arrow moves to another tile, whose card it then is, and the map
+    // An arrow moves to another tile, whose details it then shows, and the map
     // stops saying so once that has been done.
     await page.keyboard.press("ArrowRight");
     await expect(focused).not.toHaveAttribute("aria-label", first ?? "");
-    await expect(card).toBeVisible();
-    await expect(card).not.toContainText("Arrow keys move between tiles");
+    await expect(inspector).toBeVisible();
+    await expect(inspector).not.toContainText("Arrow keys move between tiles");
+    // Escape dismisses the inspector bar while keeping focus on the same tile.
+    const afterArrow = await focused.getAttribute("aria-label");
+    await page.keyboard.press("Escape");
+    await expect(inspector).toHaveCount(0);
+    await expect(focused).toHaveAttribute("aria-label", afterArrow ?? "");
     await page.keyboard.press("End");
     const last = await focused.getAttribute("aria-label");
     expect(last).not.toBe(first);

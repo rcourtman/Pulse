@@ -1,0 +1,48 @@
+{
+  "version": 1,
+  "base_sha": "b363773edc651e0a3352b84b4b1d9c362a70846c",
+  "verified_at": "2026-11-28T15:43:13Z",
+  "result": "passed",
+  "changed_paths": [
+    "frontend-modern/src/features/infrastructureMap/InfrastructureMapSurface.tsx",
+    "frontend-modern/src/features/infrastructureMap/infrastructureMapRender.ts"
+  ],
+  "content_sha256": {
+    "frontend-modern/src/features/infrastructureMap/InfrastructureMapSurface.tsx": "1bd6beb9ec3dc49986cb35708280ce02e48ebc415a70a7809ea327eca3fb4004",
+    "frontend-modern/src/features/infrastructureMap/infrastructureMapRender.ts": "bb9273f75b480e9f7e6faf88ca0d5011bbc7a08ee29d442dd7345d9b5e14e002"
+  },
+  "routes": [
+    "/map"
+  ],
+  "viewports": [
+    {
+      "width": 1280,
+      "height": 800
+    },
+    {
+      "width": 1024,
+      "height": 768
+    },
+    {
+      "width": 390,
+      "height": 844
+    }
+  ],
+  "states": [
+    "Dark mode idle state with footer legend visible and zero floating tooltip portals",
+    "Dark mode hover on VM tile, degraded ZFS storage pool tile, connected container tile, network pill, and host inspect count badge",
+    "Light mode hover on VM tile with bottom inspector bar swapped into the exact legend footprint",
+    "125% map zoom with hover inspector pinned below the zoomed viewport and clipped focused tile suppression",
+    "Narrow 1024x768 viewport with 48-character degraded storage pool name keeping priority anomaly visible without horizontal overflow",
+    "Mobile 390x844 viewport with pointer hover inspector anomaly visible, touch tap card preserved, and zero horizontal overflow",
+    "Keyboard focus with aria-describedby linked to unlabelled inspector content, Escape dismissal across live redraws, and Tab/Shift+Tab round-trip to legend docs link"
+  ],
+  "interactions": [
+    "Hovered VM, storage pool, container, network pill, and host count badge and verified zero SVG or footer geometry shift and zero native SVG title elements on inspect targets",
+    "Moved pointer step-by-step across empty canvas space onto the bottom inspector warning text and verified hover persistence",
+    "Focused tile, pressed Tab to reach How the map works link, hovered another tile to confirm link kept focus and legend stayed non-inert, and pressed Shift+Tab back to the tile",
+    "Focused VM tile, hovered another tile, moved pointer outside the map stage, and verified focused tile readout and aria-describedby stayed intact until Escape",
+    "Focused degraded storage pool tile, zoomed to 125% so tile clipped below map viewport, hovered gateway, moved pointer outside stage, and verified clipped tile did not reopen inspector or aria-describedby",
+    "Hovered and touch-tapped degraded storage pool tile at 390x844 mobile viewport and confirmed priority warning fit inside footer inspector on hover and touch tap card appeared on tap"
+  ]
+}

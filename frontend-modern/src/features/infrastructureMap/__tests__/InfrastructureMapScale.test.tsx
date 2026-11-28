@@ -44,30 +44,6 @@ vi.mock('@/api/infrastructureMapActivity', () => ({
   recordInfrastructureMapExport: vi.fn(),
 }));
 vi.mock('@/utils/toast', () => ({ showSuccess: vi.fn(), showError: vi.fn() }));
-const tooltipState = vi.hoisted(() => ({
-  read: (): { when: boolean; x: number; y: number; direction?: 'up' | 'down' } => ({
-    when: false,
-    x: 0,
-    y: 0,
-  }),
-}));
-vi.mock('@/components/shared/TooltipPortal', () => ({
-  TooltipPortal: (props: {
-    when: boolean;
-    x: number;
-    y: number;
-    direction?: 'up' | 'down';
-    children: unknown;
-  }) => {
-    tooltipState.read = () => ({
-      when: props.when,
-      x: props.x,
-      y: props.y,
-      direction: props.direction,
-    });
-    return () => (props.when ? props.children : null);
-  },
-}));
 
 const resource = (partial: Partial<Resource> & Pick<Resource, 'id' | 'type' | 'name'>): Resource =>
   ({
@@ -359,45 +335,17 @@ describe('InfrastructureMapSurface scale interactions', () => {
     expect(zoomOut).toBeDisabled();
   });
 
-  it('flips TooltipPortal downward on top tiles so it never overlaps the toolbar', () => {
+  it('shows top-tile hover details in the bottom inspector bar instead of a floating tooltip and dismisses on Escape', () => {
     const { container } = render(() => <InfrastructureMapSurface />);
-    const frame = container.querySelector('[data-testid="infrastructure-map"] > .min-w-0')!;
-    vi.spyOn(frame, 'getBoundingClientRect').mockReturnValue({
-      top: 180,
-      bottom: 800,
-      left: 0,
-      right: 390,
-      width: 390,
-      height: 620,
-      x: 0,
-      y: 180,
-      toJSON: () => ({}),
-    } as DOMRect);
-
     const firstHit = container.querySelector('[data-map-hit="0"]')!;
-    vi.spyOn(firstHit, 'getBoundingClientRect').mockReturnValue({
-      top: 196,
-      bottom: 238,
-      left: 140,
-      right: 182,
-      width: 42,
-      height: 42,
-      x: 140,
-      y: 196,
-      toJSON: () => ({}),
-    } as DOMRect);
 
     fireEvent.pointerOver(firstHit);
-    expect(tooltipState.read()).toEqual({
-      when: true,
-      x: 161,
-      y: 238,
-      direction: 'down',
-    });
+    expect(screen.getByTestId('infrastructure-map-inspector')).toBeInTheDocument();
+    expect(container.querySelector('[data-tooltip-portal="true"]')).toBeNull();
 
-    // Escape dismisses open hover/focus tooltip (WCAG 1.4.13).
+    // Escape dismisses open hover/focus inspector readout (WCAG 1.4.13).
     fireEvent.keyDown(document, { key: 'Escape' });
-    expect(tooltipState.read().when).toBe(false);
+    expect(screen.queryByTestId('infrastructure-map-inspector')).toBeNull();
   });
 
   it('shows an error state with retry when resources fail to load', () => {
