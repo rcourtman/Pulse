@@ -12,12 +12,67 @@ import (
 
 	"github.com/prometheus/client_golang/prometheus"
 	"github.com/prometheus/client_golang/prometheus/testutil"
+	"github.com/rcourtman/pulse-go-rewrite/internal/models"
 	"github.com/rcourtman/pulse-go-rewrite/pkg/proxmox"
 )
 
 type heldPlanningRoster struct {
 	testPollProvider
 	hold func()
+}
+
+func TestCanceledPollPlanDoesNotPublishAfterRosterReturns(t *testing.T) {
+	for _, mode := range []string{"fixed", "adaptive"} {
+		t.Run(mode, func(t *testing.T) {
+			synctest.Test(t, func(t *testing.T) {
+				ctx, cancel := context.WithCancel(t.Context())
+				defer cancel()
+				m := newScheduleFixture(ctx, mode == "adaptive", nil)
+				// A cycle that reached alert synchronization would replace
+				// this marker with the alert manager's empty active set.
+				m.state.UpdateActiveAlerts([]models.Alert{{ID: "existing-alert"}})
+				held, release, returned := make(chan struct{}), make(chan struct{}), make(chan struct{})
+				unblock := sync.OnceFunc(func() { close(release) })
+				defer unblock()
+				if err := m.RegisterPollProvider(heldPlanningRoster{
+					testPollProvider: testPollProvider{providerType: "fixture"},
+					hold: func() {
+						close(held)
+						<-release
+					},
+				}); err != nil {
+					t.Fatal(err)
+				}
+				go func() {
+					defer close(returned)
+					m.poll(ctx, nil)
+				}()
+				<-held
+				cancel()
+				unblock()
+				<-returned
+
+				if depth := m.taskQueue.Size(); depth != 0 {
+					t.Errorf("retired monitor enqueued %d poll(s)", depth)
+				}
+				if m.scheduler != nil {
+					if task, ok := m.scheduler.LastScheduled(InstanceTypePVE, scheduleFixtureNode); ok {
+						t.Errorf("retired monitor cached an adaptive poll: %+v", task)
+					}
+				}
+				state := m.state.GetSnapshot()
+				if state.Stats.PollingCycles != 0 {
+					t.Errorf("retired monitor recorded %d poll cycle(s)", state.Stats.PollingCycles)
+				}
+				if len(state.ActiveAlerts) != 1 || state.ActiveAlerts[0].ID != "existing-alert" {
+					t.Errorf("retired monitor reconciled alert state after cancellation: %+v", state.ActiveAlerts)
+				}
+				if m.activePollCount != 0 {
+					t.Error("retired planner did not release its slot")
+				}
+			})
+		})
+	}
 }
 
 func (p heldPlanningRoster) pollPlanningRoster(*Monitor) []pollPlanInstance {

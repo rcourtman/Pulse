@@ -83,7 +83,10 @@ func (m *Monitor) describeInstancesForScheduler() []InstanceDescriptor {
 }
 
 func (m *Monitor) buildScheduledTasks(now time.Time) []ScheduledTask {
-	descriptors := m.describeInstancesForScheduler()
+	return m.schedulePollDescriptors(now, m.describeInstancesForScheduler())
+}
+
+func (m *Monitor) schedulePollDescriptors(now time.Time, descriptors []InstanceDescriptor) []ScheduledTask {
 	if len(descriptors) == 0 {
 		return nil
 	}
@@ -118,7 +121,7 @@ func (m *Monitor) buildScheduledTasks(now time.Time) []ScheduledTask {
 	return m.scheduler.BuildPlan(now, descriptors, queueDepth)
 }
 
-func (m *Monitor) planScheduledPolls(now time.Time) {
+func (m *Monitor) planScheduledPolls(ctx context.Context, now time.Time) {
 	if m.pollMetrics != nil {
 		progress := m.pollMetrics.workProgress
 		id := progress.beginPlanning(time.Now())
@@ -127,14 +130,29 @@ func (m *Monitor) planScheduledPolls(now time.Time) {
 	// Bind queue admission to the roster revision before reading providers.
 	// A settings refresh can finish while an older planner is still reading.
 	revision := m.taskQueue.availabilityPlanRevision()
-	for _, task := range m.buildScheduledTasks(now) {
+	if ctx.Err() != nil {
+		return
+	}
+	descriptors := m.describeInstancesForScheduler()
+	// Roster reads can outlive the monitor that started them. Do not write
+	// their results to the adaptive plan cache or queue once retired.
+	if ctx.Err() != nil {
+		return
+	}
+	for _, task := range m.schedulePollDescriptors(now, descriptors) {
+		if ctx.Err() != nil {
+			return
+		}
 		m.taskQueue.upsertPlan(task, revision)
 	}
 }
 
 // poll fetches data from all configured instances
-func (m *Monitor) poll(_ context.Context, wsHub *websocket.Hub) {
+func (m *Monitor) poll(ctx context.Context, wsHub *websocket.Hub) {
 	defer recoverFromPanic("poll")
+	if ctx.Err() != nil {
+		return
+	}
 
 	// Limit concurrent polls to 2 to prevent resource exhaustion
 	currentCount := atomic.AddInt32(&m.activePollCount, 1)
@@ -151,13 +169,19 @@ func (m *Monitor) poll(_ context.Context, wsHub *websocket.Hub) {
 		log.Debug().Msg("starting polling cycle")
 	}
 	startTime := time.Now()
-	m.planScheduledPolls(startTime)
+	m.planScheduledPolls(ctx, startTime)
+	if ctx.Err() != nil {
+		return
+	}
 
 	// Update performance metrics atomically to prevent data races when
 	// multiple poll() goroutines run concurrently (e.g. mock mode transitions).
 	wsClients := 0
 	if wsHub != nil {
 		wsClients = wsHub.GetClientCount()
+	}
+	if ctx.Err() != nil {
+		return
 	}
 	m.state.UpdatePollStats(
 		time.Since(startTime).Seconds(),
@@ -166,7 +190,9 @@ func (m *Monitor) poll(_ context.Context, wsHub *websocket.Hub) {
 	)
 
 	// Sync alert state so broadcasts include the latest acknowledgement data
-	m.syncAlertsToState()
+	if ctx.Err() == nil {
+		m.syncAlertsToState()
+	}
 
 	if logging.IsLevelEnabled(zerolog.DebugLevel) {
 		log.Debug().Dur("duration", time.Since(startTime)).Msg("polling cycle completed")

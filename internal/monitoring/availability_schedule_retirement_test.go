@@ -51,7 +51,7 @@ func TestAvailabilityRetirementRejectsOldPlansAndWorkerSuccessors(t *testing.T) 
 					t.Fatal(err)
 				}
 				go func() {
-					m.planScheduledPolls(time.Now())
+					m.planScheduledPolls(ctx, time.Now())
 					close(planned)
 				}()
 				<-held // the planner already read the roster that still included the target
@@ -88,7 +88,7 @@ func TestAvailabilityRetirementRejectsOldPlansAndWorkerSuccessors(t *testing.T) 
 				if node, ok := breakerFixtureNode(m, scheduleFixtureNode); !ok || node.CPU != 0.42 {
 					t.Fatalf("PVE poll did not publish its reading: %+v %v", node, ok)
 				}
-				m.planScheduledPolls(time.Now())
+				m.planScheduledPolls(ctx, time.Now())
 				if _, ok := m.taskQueue.Get(InstanceTypeAvailability, retired.ID); ok {
 					t.Error("an ordinary fresh plan contained the deleted check")
 				}
@@ -96,7 +96,7 @@ func TestAvailabilityRetirementRejectsOldPlansAndWorkerSuccessors(t *testing.T) 
 				if err := persistence.SaveAvailabilityTargets([]config.AvailabilityTarget{replacement}); err != nil {
 					t.Fatal(err)
 				}
-				m.planScheduledPolls(time.Now())
+				m.planScheduledPolls(ctx, time.Now())
 				if _, ok := m.taskQueue.Get(InstanceTypeAvailability, replacement.ID); !ok {
 					t.Error("a fresh plan could not admit a newly saved check")
 				}
