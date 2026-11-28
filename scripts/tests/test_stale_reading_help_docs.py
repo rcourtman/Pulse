@@ -827,6 +827,105 @@ class StaleReadingAndAgentHelpDocsTest(unittest.TestCase):
         self.assertIn('lead="Source telemetry is stale."', recoverable)
         self.assertIn("· Stale data", shared)
 
+    def test_help_documents_workload_stale_telemetry_across_rows_filters_and_drawers(self):
+        faq = doc_text("docs/FAQ.md")
+        faq_section = norm(
+            faq.split("### No data showing?\n", 1)[1].split("\n### ", 1)[0]
+        )
+        for phrase in (
+            "**Workloads (VMs and containers)** across Proxmox, VMware vSphere, Docker, and Kubernetes",
+            "without falsely flagging fresh hypervisor readings when only an optional linked Pulse agent goes quiet",
+            "Stale running and stopped workloads leave **Running** and join **Attention**",
+            "explicit **Offline**, **Error**, and **Failed** states stay ahead of staleness",
+            "amber **Stale data** badge in the node group header (`Node telemetry is stale. Workload readings below reflect the last poll received.`)",
+            "without dimming guests as **Node offline**",
+            "inline amber cue (`Stale · <age>` or `Stale data`)",
+            "workload search matches stale labels, details, and recorded source errors",
+            "inline **Readings are stale** notice that clears automatically when live telemetry recovers",
+        ):
+            with self.subTest(doc="FAQ.md", phrase=phrase):
+                self.assertIn(phrase, faq_section)
+
+        unified = doc_text("docs/UNIFIED_RESOURCES.md")
+        stale_section = norm(
+            unified.split("### Stale workload telemetry\n", 1)[1].split("\n## ", 1)[0]
+        )
+        for phrase in (
+            "primary hypervisor or container provider (`Proxmox`, `vCenter`, `Docker`, or `Kubernetes`)",
+            "fresh hypervisor readings stay unflagged when only the linked agent goes silent",
+            "Stale running and stopped workloads leave **Running** and route into **Attention**",
+            "explicit `offline`, `error`, and `failed` resource states stay ahead of staleness",
+            "`Running, not responding to probe · <stale label>`",
+            "Only a confirmed offline parent node marks its guests **Node offline** and dims them",
+            "`Node telemetry is stale. Workload readings below reflect the last poll received.`",
+            "`Stale · <age>` when report age is available, or `Stale data`",
+            "Workload search matches stale labels, stale detail text (`Showing the last values received.`), and recorded source error text",
+            "inline **Readings are stale** warning notice with the provider stale detail",
+        ):
+            with self.subTest(doc="UNIFIED_RESOURCES.md", phrase=phrase):
+                self.assertIn(phrase, stale_section)
+
+        use_workloads = doc_text("frontend-modern/src/hooks/useWorkloads.ts")
+        selectors = doc_text("frontend-modern/src/components/Workloads/workloadSelectors.ts")
+        panel = doc_text("frontend-modern/src/components/Workloads/WorkloadPanel.tsx")
+        node_header = doc_text("frontend-modern/src/components/shared/NodeGroupHeader.tsx")
+        guest_row = doc_text("frontend-modern/src/components/Workloads/GuestRow.tsx")
+        guest_drawer = doc_text("frontend-modern/src/components/Workloads/GuestDrawer.tsx")
+        status_util = doc_text("frontend-modern/src/utils/status.ts")
+
+        for marker in (
+            "case 'proxmox-pve':",
+            "label: 'Proxmox'",
+            "case 'vmware-vsphere':",
+            "label: 'vCenter'",
+            "case 'docker':",
+            "label: 'Docker'",
+            "case 'kubernetes':",
+            "label: 'Kubernetes'",
+            "if (primarySource && CONNECTED_WORKLOAD_SOURCE_STATUS.test(primaryStatus)) {",
+            "Showing the last values received.",
+            "telemetryStale: resolveWorkloadTelemetryStale(resource, platformType)",
+        ):
+            self.assertIn(marker, use_workloads)
+        for marker in (
+            "guest.telemetryStale &&",
+            "resourceStatus !== 'offline' &&",
+            "resourceStatus !== 'error' &&",
+            "resourceStatus !== 'failed'",
+            "return 'degraded';",
+            "guest.telemetryStale?.label,",
+            "guest.telemetryStale?.detail,",
+            "guest.telemetryStale?.error,",
+        ):
+            self.assertIn(marker, selectors)
+        self.assertIn(
+            "return pn ? getNodeStatusIndicator(pn).variant !== 'danger' : true;",
+            panel,
+        )
+        for marker in (
+            "data-node-group-stale",
+            'title="Node telemetry is stale. Workload readings below reflect the last poll received."',
+            "Stale data",
+        ):
+            self.assertIn(marker, node_header)
+        for marker in (
+            "data-workload-stale-cue",
+            "{stale().age ? `Stale · ${stale().age}` : stale().label}",
+        ):
+            self.assertIn(marker, guest_row)
+        for marker in (
+            "getGuestHealthIndicator(props.guest, props.parentNodeOnline !== false)",
+            'data-testid="guest-telemetry-stale-notice"',
+            '<p class="font-medium">Readings are stale</p>',
+        ):
+            self.assertIn(marker, guest_drawer)
+        for marker in (
+            "`Running, not responding to probe · ${stale.label}`",
+            "if (stale) {",
+            "return { variant: 'warning', label: stale.detail || stale.label };",
+        ):
+            self.assertIn(marker, status_util)
+
     def test_shipped_public_docs_mirrors_match_byte_for_byte(self):
         for name in (
             "AGENT_SECURITY.md",
@@ -836,6 +935,7 @@ class StaleReadingAndAgentHelpDocsTest(unittest.TestCase):
             "RECOVERY.md",
             "TRUENAS.md",
             "UNIFIED_AGENT.md",
+            "UNIFIED_RESOURCES.md",
         ):
             with self.subTest(doc=name):
                 self.assertEqual(

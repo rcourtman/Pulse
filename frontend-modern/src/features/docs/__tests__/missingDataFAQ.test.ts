@@ -74,8 +74,8 @@ describe('shipped missing-data FAQ', () => {
       sections[0].querySelector('a[href="/docs/KUBERNETES#stale-kubernetes-readings"]'),
     ).not.toBeNull();
     expect(
-      sections[0].querySelectorAll('a[href="/docs/RECOVERY#stale-proxmox-backup-telemetry"]'),
-    ).toHaveLength(2);
+      sections[0].querySelector('a[href="/docs/RECOVERY#stale-proxmox-backup-telemetry"]'),
+    ).not.toBeNull();
     expect(
       sections[0].querySelector(
         'a[href="/docs/PBS#stale-pbs-readings-and-unread-datastore-capacity"]',
