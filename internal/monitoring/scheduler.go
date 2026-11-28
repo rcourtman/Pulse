@@ -172,18 +172,29 @@ func (s *AdaptiveScheduler) BuildPlan(now time.Time, inventory []InstanceDescrip
 	s.buildUnsortedPlan(now, inventory, queueDepth, tasks)
 	// Order the private slice without holding the shared planner lock.
 	if len(tasks) > 1 {
-		sort.Slice(tasks, func(i, j int) bool {
-			if tasks[i].NextRun.Equal(tasks[j].NextRun) {
-				if tasks[i].Priority == tasks[j].Priority {
-					return tasks[i].InstanceName < tasks[j].InstanceName
-				}
-				return tasks[i].Priority > tasks[j].Priority
-			}
-			return tasks[i].NextRun.Before(tasks[j].NextRun)
-		})
+		sort.Sort(pollPlanOrder(tasks))
 	}
 	return tasks
 }
+
+// Order the task slice by index so comparing deadlines does not copy two
+// complete ScheduledTask values and swapping does not go through reflection.
+type pollPlanOrder []ScheduledTask
+
+func (p pollPlanOrder) Len() int { return len(p) }
+
+func (p pollPlanOrder) Less(i, j int) bool {
+	a, b := &p[i], &p[j]
+	if byTime := a.NextRun.Compare(b.NextRun); byTime != 0 {
+		return byTime < 0
+	}
+	if a.Priority == b.Priority {
+		return a.InstanceName < b.InstanceName
+	}
+	return a.Priority > b.Priority
+}
+
+func (p pollPlanOrder) Swap(i, j int) { p[i], p[j] = p[j], p[i] }
 
 // planSuccessor takes the same planning path as the inventory scan, but
 // returns a task value so the poll worker does not allocate a result slice.

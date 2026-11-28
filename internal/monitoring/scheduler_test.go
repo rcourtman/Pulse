@@ -3,6 +3,7 @@ package monitoring
 import (
 	"context"
 	"errors"
+	"fmt"
 	"math/rand"
 	"testing"
 	"time"
@@ -172,6 +173,39 @@ func BenchmarkAdaptiveSchedulerSuccessor(b *testing.B) {
 			b.ReportAllocs()
 			for b.Loop() {
 				tc.plan(s, now, desc)
+			}
+		})
+	}
+}
+
+func BenchmarkAdaptiveSchedulerInventoryPlan(b *testing.B) {
+	for _, size := range []int{128, 1024, 4096} {
+		b.Run(fmt.Sprint(size), func(b *testing.B) {
+			now := time.Unix(1_700_000_000, 0)
+			source := mockStalenessSource{scores: make(map[string]float64, size)}
+			inventory := make([]InstanceDescriptor, 0, size)
+			kinds := []InstanceType{InstanceTypePVE, InstanceTypePBS, InstanceTypePMG, InstanceTypeAvailability}
+			for i := range size {
+				kind := kinds[i*len(kinds)/size]
+				name := fmt.Sprintf("target-%04d", i)
+				desc := InstanceDescriptor{
+					Type: kind, Name: name,
+					// Model a warm roster in provider/name order with pending
+					// slots spread across the next 30 seconds.
+					LastScheduled: now.Add(time.Duration((i*17)%31) * time.Second),
+					LastInterval:  30 * time.Second,
+				}
+				if kind == InstanceTypeAvailability {
+					desc.FixedInterval = time.Minute
+				}
+				inventory = append(inventory, desc)
+				source.scores[string(kind)+":"+name] = float64((i*13)%11) / 10
+			}
+			s := NewAdaptiveScheduler(DefaultSchedulerConfig(), source, mockIntervalSelector{30 * time.Second}, nil)
+			s.BuildPlan(now, inventory, 0) // Exclude first-use cache population.
+			b.ReportAllocs()
+			for b.Loop() {
+				s.BuildPlan(now, inventory, 0)
 			}
 		})
 	}
@@ -2112,7 +2146,7 @@ func TestBuildPlan_MultipleInstances(t *testing.T) {
 	now := time.Now()
 	inventory := []InstanceDescriptor{
 		{Name: "future", Type: InstanceTypePVE, LastScheduled: now.Add(time.Second)},
-		{Name: "pmg1", Type: InstanceTypePMG},
+		{Name: "pmg1", Type: InstanceTypePMG, LastSuccess: now.Add(-10 * time.Second).UTC()},
 		{Name: "pbs1", Type: InstanceTypePBS},
 		{Name: "pve1", Type: InstanceTypePVE},
 	}
@@ -2125,6 +2159,8 @@ func TestBuildPlan_MultipleInstances(t *testing.T) {
 	}
 
 	// Earliest due first, then highest priority, then name for tied tasks.
+	// pmg1 and pbs1 are due at the same instant despite different time
+	// representations; the names must still break their priority tie.
 	for i, name := range want {
 		task := tasks[i]
 		if task.InstanceName != name {
