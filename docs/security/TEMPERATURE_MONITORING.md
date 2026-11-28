@@ -20,12 +20,13 @@ SSH-based temperature monitoring uses a restricted key entry that only allows th
 Recommended restrictions:
 
 ```text
-command="/usr/local/sbin/pulse-sensors",no-port-forwarding,no-X11-forwarding,no-agent-forwarding,no-pty <public-key> # pulse-sensors
+from="<pulse-ip>",command="/usr/local/sbin/pulse-sensors",no-port-forwarding,no-X11-forwarding,no-agent-forwarding,no-pty <public-key> # pulse-sensors
 ```
 
 Additional notes:
-- Use a dedicated key for temperature collection only.
-- Avoid running Pulse in a container for SSH-based collection. If you must for dev/test, set `PULSE_DEV_ALLOW_CONTAINER_SSH=true` and keep access tightly scoped.
+- Use a dedicated key for temperature collection only, and rotate it regularly.
+- Keep host SSH private keys out of Pulse containers. Automatic SSH-key generation is blocked in containers unless the development override `PULSE_DEV_ALLOW_CONTAINER_SSH=true` is set, while an already mounted key can still be used by the legacy collector with a security warning. That override does not make container-held keys safe. Prefer the host-local Unified Agent instead.
+- With multi-tenant organizations, the sensors SSH key is instance-scoped, so SSH temperature collection runs only in the **default** organization and is disabled on non-default tenants. Use the Unified Agent for non-default tenant hosts.
 
 See [docs/TEMPERATURE_MONITORING.md](../TEMPERATURE_MONITORING.md) for the full setup flow.
 

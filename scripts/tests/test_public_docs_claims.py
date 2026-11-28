@@ -534,6 +534,99 @@ class AIAutonomyHelpDocsTest(unittest.TestCase):
             normalized,
         )
 
+    def test_architecture_reflects_unsupported_claude_oauth_and_self_serve_msp(self) -> None:
+        arch = (ROOT / "ARCHITECTURE.md").read_text(encoding="utf-8")
+        mirror = (ROOT / "frontend-modern/public/docs/ARCHITECTURE.md").read_text(encoding="utf-8")
+        self.assertEqual(arch, mirror)
+        normalized = " ".join(arch.split())
+        self.assertNotIn("plus Claude OAuth", normalized)
+        self.assertIn("Anthropic subscription OAuth is unsupported and fails closed.", normalized)
+        self.assertIn(
+            "provider-hosted **MSP** (self-serve 60-day evaluation and paid plans)",
+            normalized,
+        )
+
+    def test_temperature_security_and_rollout_docs_match_runtime(self) -> None:
+        mtm_src = (ROOT / "internal/monitoring/multi_tenant_monitor.go").read_text(
+            encoding="utf-8"
+        )
+        self.assertIn("monitor.tempCollector = nil", mtm_src)
+
+        temp_sec = (ROOT / "docs/security/TEMPERATURE_MONITORING.md").read_text(encoding="utf-8")
+        temp_norm = " ".join(temp_sec.split())
+        self.assertIn('from="<pulse-ip>",command="/usr/local/sbin/pulse-sensors"', temp_sec)
+        self.assertNotIn("If you must for dev/test, set `PULSE_DEV_ALLOW_CONTAINER_SSH=true`", temp_norm)
+        self.assertIn(
+            "an already mounted key can still be used by the legacy collector with a security warning",
+            temp_norm,
+        )
+        self.assertIn(
+            "SSH temperature collection runs only in the **default** organization and is disabled on non-default tenants",
+            temp_norm,
+        )
+
+        sched_src = (ROOT / "internal/monitoring/monitor_polling_schedule.go").read_text(
+            encoding="utf-8"
+        )
+        self.assertIn("m.deadLetterQueue.Remove(task.InstanceType, task.InstanceName)", sched_src)
+
+        rollout = (ROOT / "docs/operations/ADAPTIVE_POLLING_ROLLOUT.md").read_text(
+            encoding="utf-8"
+        )
+        rollout_norm = " ".join(rollout.split())
+        self.assertNotIn("A [dead-letter entry can remain after a later poll succeeds]", rollout_norm)
+        self.assertIn(
+            "On current builds a later scheduled success clears the [dead-letter entry]",
+            rollout_norm,
+        )
+        self.assertIn("while older builds can still retain it after recovery", rollout_norm)
+
+    def test_security_and_api_docs_match_csrf_lockout_body_and_ai_origin_guards(self) -> None:
+        sec_go = (ROOT / "internal/api/security.go").read_text(encoding="utf-8")
+        body_go = (ROOT / "internal/api/request_body_authority.go").read_text(encoding="utf-8")
+        setup_go = (ROOT / "internal/api/security_setup_fix.go").read_text(encoding="utf-8")
+        transfer_go = (ROOT / "internal/api/config_transfer_authorization.go").read_text(
+            encoding="utf-8"
+        )
+        ai_go = (ROOT / "internal/api/ai_handlers.go").read_text(encoding="utf-8")
+
+        self.assertIn('csrfToken := r.Header.Get("X-CSRF-Token")', sec_go)
+        self.assertIn("if !ValidateSession(sessionID)", sec_go)
+        self.assertIn("credential withdrawn before the request body arrived", body_go)
+        self.assertIn("invalidateAdminCredentialSessions(previousAuthUser, setupRequest.Username)", setup_go)
+        self.assertIn("RecordLoginAttempt(credentialsValid, username, clientIP)", transfer_go)
+        self.assertIn("aiProviderWithSecretFollowingAddress(&originalSettings, settings, req)", ai_go)
+
+        sec_doc = (ROOT / "SECURITY.md").read_text(encoding="utf-8")
+        sec_mirror = (ROOT / "frontend-modern/public/docs/SECURITY.md").read_text(encoding="utf-8")
+        self.assertEqual(sec_doc, sec_mirror)
+        sec_norm = " ".join(sec_doc.split())
+        for phrase in (
+            "require the CSRF token in the `X-CSRF-Token` header (query parameters and form fields are ignored)",
+            "replacement `pulse_csrf` cookies are issued only for live sessions",
+            "across browser login, HTTP Basic authentication, password changes, and Basic-authenticated configuration transfers",
+            "Session invalidation on password change and quick-setup credential rotation",
+            "Admitted local sessions and API tokens are rechecked on every request body read",
+        ):
+            with self.subTest(doc="SECURITY.md", phrase=phrase):
+                self.assertIn(phrase, sec_norm)
+
+        api_doc = (ROOT / "docs/API.md").read_text(encoding="utf-8")
+        api_mirror = (ROOT / "frontend-modern/public/docs/API.md").read_text(encoding="utf-8")
+        self.assertEqual(api_doc, api_mirror)
+        api_norm = " ".join(api_doc.split())
+        for phrase in (
+            "require the CSRF token in the `X-CSRF-Token` header (query parameters and form fields are ignored)",
+            "replacement `pulse_csrf` cookies are issued only for live sessions",
+            "Admitted local sessions and API tokens are also rechecked while reading request bodies",
+            "Rotating administrator credentials invalidates existing administrator sessions immediately.",
+            "Changing an OpenAI, Z.ai, or Ollama base URL to a different origin while retaining an existing stored API key or password returns `400`",
+            "[Weekly summary and email](AI.md#weekly-summary-and-email)",
+            "`docs/PATROL_WEEKLY_DIGEST.md`",
+        ):
+            with self.subTest(doc="docs/API.md", phrase=phrase):
+                self.assertIn(phrase, api_norm)
+
 
 if __name__ == "__main__":
     unittest.main()

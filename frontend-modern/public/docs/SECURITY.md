@@ -380,11 +380,7 @@ discarding state. Do not test exposure by making a public export.
     token copies must remain private
   - Stored in `api_tokens.json` and managed via the UI
   - API-only mode supported (no password auth required)
-- **CSRF protection**: session-authenticated state changes require CSRF tokens;
-  API-token requests use their enforced scopes rather than a copied session cookie;
-  writes from another origin's page are refused when they carry Basic or proxy-auth
-  credentials, or an API token that origin has no CORS grant for, because a reverse
-  proxy can attach those for the browser
+- **CSRF protection**: session-authenticated state changes require the CSRF token in the `X-CSRF-Token` header (query parameters and form fields are ignored), and replacement `pulse_csrf` cookies are issued only for live sessions. API-token requests use their enforced scopes rather than a copied session cookie. Writes from another origin's page are refused when they carry Basic or proxy-auth credentials, or an API token that origin has no CORS grant for, because a reverse proxy can attach those for the browser
 - **Rate limiting**
   - Auth endpoints: 10 attempts/minute per IP
   - Config changes: 30 requests/minute per IP
@@ -402,13 +398,15 @@ discarding state. Do not test exposure by making a public export.
 - **Account lockout**
   - Locks after 5 failed login attempts
   - 15-minute automatic lockout duration
+  - Applies atomically across browser login, HTTP Basic authentication, password changes, and Basic-authenticated configuration transfers
   - Clear feedback showing remaining attempts
   - Time remaining displayed when locked
   - Manual reset available via API for admins
 - **Session management**
   - Secure HttpOnly cookies
   - 24-hour session expiry (30 days when "Remember me" is enabled)
-  - Session invalidation on password change
+  - Session invalidation on password change and quick-setup credential rotation
+  - Admitted local sessions and API tokens are rechecked on every request body read so a logged-out session or revoked token fails with HTTP 401 before the body completes
 - **Security headers**
   - Content-Security-Policy
   - X-Frame-Options: `DENY` by default (omitted when `allowEmbedding` is enabled in system settings)
@@ -863,7 +861,7 @@ security audit, and absence from one excerpt is not proof that no secret leaked.
 
 ### Lockout Behavior
 - After **5 failed login attempts**, the account is locked for **15 minutes**
-- Lockout applies to both username and IP address
+- Lockout applies to both username and IP address across login, HTTP Basic authentication, password changes, and Basic-authenticated configuration transfers
 - Login form shows remaining attempts after each failure
 - Clear message when locked with time remaining
 

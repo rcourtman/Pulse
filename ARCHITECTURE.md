@@ -96,14 +96,14 @@ All backend code lives under `cmd/`, `internal/`, and `pkg/`. The binary is asse
    - Gated by the `relay` license feature. Relay is no longer sold, and Pulse Mobile and Relay retire on **31 March 2027**. Existing paired phones keep working until then, and continuing Relay subscribers receive Pro entitlements at their current price.
 
 7. **AI Subsystem (`internal/ai`)**
-   - **AI runtime (`internal/ai/chat`)**: The governed tool loop behind Patrol investigations and Pulse Mobile chat (the in-app chat window has been retired). Supports bring-your-own-key (BYOK) providers (OpenAI, Anthropic, Ollama, etc.) plus Claude OAuth. External agents reach the same tools through `pulse-mcp`.
+   - **AI runtime (`internal/ai/chat`)**: The governed tool loop behind Patrol investigations and Pulse Mobile chat (the in-app chat window has been retired). Supports bring-your-own-key (BYOK) and local providers (OpenAI, Anthropic, Ollama, and other configured providers). Anthropic subscription OAuth is unsupported and fails closed. External agents reach the same tools through `pulse-mcp`.
    - **Pulse Patrol**: Scheduled background analysis that produces findings, predictions, and remediation plans. Autonomy levels: `monitor`, `approval`, `assisted`, `full`.
    - **Intelligence Services**: Patterns, correlations, anomalies, baselines, forecasts, and incident recording. All surfaced via `/api/ai/intelligence/*`.
-   - **Safety gates**: Command execution disabled by default (`--enable-commands` opt-in); circuit breakers and scoped permissions at every layer.
+   - **Safety gates**: Command execution disabled by default (`--enable-commands` opt-in). Circuit breakers and scoped permissions apply at every layer.
 
 8. **Entitlements & Licensing (`pkg/licensing`)**
    - Capability-key based gating: `ai_autofix`, `rbac`, `multi_tenant`, `relay`, `agent_profiles`, `kubernetes_ai`, `ai_alerts`, etc.
-   - Core tiers include **Community** (free), **Pro**, a retiring legacy **Relay** tier (no longer sold, receiving Pro entitlements while active), a reserved hosted **Cloud** capability tier, request-assisted **MSP**, and Enterprise/custom entitlements. The Cloud service is not generally available.
+   - Core tiers include **Community** (free), **Pro**, a retiring legacy **Relay** tier (no longer sold, receiving Pro entitlements while active), a reserved hosted **Cloud** capability tier, provider-hosted **MSP** (self-serve 60-day evaluation and paid plans), and Enterprise/custom entitlements (including optional request-assisted Pulse-hosted MSP). The Cloud service is not generally available.
    - Activation, grant refresh, renewal, expiry, and legacy-license migration.
      Active state is exposed through `/api/license/*`.
 

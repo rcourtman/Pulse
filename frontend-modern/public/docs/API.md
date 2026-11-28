@@ -214,9 +214,13 @@ Authorization: Bearer <token>
 
 For one-off read-only diagnostics, use your signed-in Pulse browser to open
 the API path on that same instance. Do not extract or paste its session cookie
-into a command or report; use the scoped token-file method above for automation.
-State-changing session requests also require Pulse's CSRF protection, which
-the UI handles.
+into a command or report. Use the scoped token-file method above for automation.
+State-changing session requests require the CSRF token in the `X-CSRF-Token`
+header (query parameters and form fields are ignored), which the UI handles,
+and replacement `pulse_csrf` cookies are issued only for live sessions.
+Admitted local sessions and API tokens are also rechecked while reading
+request bodies, so a logged-out session or revoked token fails with HTTP 401
+instead of finishing an in-flight upload.
 
 Session endpoints:
 - `POST /api/login` (sets the session cookie, `pulse_session` over plain HTTP or `__Host-pulse_session` over HTTPS, plus `pulse_csrf`)
@@ -1503,8 +1507,9 @@ Returns `204 No Content` on success.
 
 Requires a valid bootstrap token (header `X-Setup-Token`) or an authenticated session.
 When authentication is already configured, a request that would change credentials
-(`force: true`) from an API token needs an instance-wide full-access token; any
-other token gets `403`.
+(`force: true`) from an API token needs an instance-wide full-access token, and any
+other token gets `403`. Rotating administrator credentials invalidates existing
+administrator sessions immediately.
 
 ```json
 {
@@ -1866,7 +1871,7 @@ Returns current AI configuration (providers, models, patrol status). Requires ad
 
 ### Update AI Settings
 `PUT /api/settings/ai/update` (or `POST /api/settings/ai/update`)
-Configure AI providers, API keys, and preferences. Requires admin + `settings:write`.
+Configure AI providers, API keys, and preferences. Requires admin + `settings:write`. Changing an OpenAI, Z.ai, or Ollama base URL to a different origin while retaining an existing stored API key or password returns `400` unless the credential is entered again or cleared, preventing a stored secret from being sent to a different server.
 
 ### List Models
 `GET /api/ai/models`
@@ -1937,9 +1942,10 @@ Runs a focused investigation for an alert payload (used by the UI).
     alerts Patrol reviewed, and estimated model spend with a pricing-known
     flag.
   - Computed from records Pulse already retains (run history, the findings
-    store, canonical action audits, and usage cost events); nothing new is
+    store, canonical action audits, and usage cost events), so nothing new is
     persisted. Requires the `ai:execute` scope. Backs the Patrol page's
-    "This week" card; see `docs/PATROL_WEEKLY_DIGEST.md`.
+    "This week" card. See [Weekly summary and email](AI.md#weekly-summary-and-email)
+    (repository pointer: `docs/PATROL_WEEKLY_DIGEST.md`).
 - `GET /api/ai/patrol/attention`
   - Returns the typed Patrol attention queue projected from canonical
     operational lifecycle records. This is the active-count and queue source
@@ -2420,7 +2426,7 @@ End-to-end encrypted relay protocol for mobile connectivity.
 
 ---
 
-> **Note**: This is a summary of the most common endpoints. For a complete list, inspect the network traffic of the Pulse dashboard or check the source code in `internal/api/router.go`.
+> **Note**: This is a summary of the most common endpoints. For a complete list, inspect the network traffic of the Pulse dashboard or check the source code in `internal/api/router.go` and `internal/api/router_routes_*.go`.
 
 
 ## When a token change times out
