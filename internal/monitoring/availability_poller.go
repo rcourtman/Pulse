@@ -235,6 +235,10 @@ func (availabilityPollProvider) BuildPollTask(m *Monitor, instanceName string) (
 	}, nil
 }
 
+// The health roster includes all enabled checks, even those run elsewhere.
+// ListInstances reads the same catalog but only describes local work.
+func (availabilityPollProvider) describesCompleteHealthRoster() {}
+
 func (availabilityPollProvider) DescribeInstances(m *Monitor) []PollProviderInstanceInfo {
 	targets := m.availabilityTargets()
 	infos := make([]PollProviderInstanceInfo, 0, len(targets))
