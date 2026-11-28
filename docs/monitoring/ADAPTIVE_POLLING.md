@@ -30,12 +30,18 @@ readings are still missing. Neither a quiet queue nor a flat result counter
 shows that the target is down.
 
 If your build exposes [overdue poll stages](PROMETHEUS_METRICS.md#-scheduler-health)
-and you already scrape Pulse, a positive `waiting_for_slot` value means
+and you already scrape Pulse, check all three progress signals together. A
+positive `pulse_scheduler_poll_planning_age_seconds` value means an active poll
+planning pass has not finished (for example while reading a provider roster),
+which can leave the queue empty before any task is scheduled. A positive
+`waiting_for_slot` value in `pulse_scheduler_claimed_poll_overdue_seconds` means
 overdue work is waiting for a shared worker slot. A positive `running` value
-means a worker took the poll and has not returned within its time budget.
-Those are server-wide signals, not one connection's result. The queue alone cannot
-tell these stages apart. Do not change worker limits, timeouts or polling
-intervals just to identify the held stage.
+means a worker took the poll and has not returned within its time budget,
+including while a worker stays occupied in synchronous panic recovery logging
+after releasing its queue claim. Those are server-wide signals, not one
+connection's result. The queue alone cannot tell these stages apart. Do not
+change worker limits, timeouts or polling intervals just to identify the held
+stage.
 
 ## 🔬 Implementation Details (Developer Info)
 
@@ -110,10 +116,11 @@ The separate Prometheus metrics listener binds to `127.0.0.1:9091` by default. `
 | `pulse_monitor_poll_errors_total` | Counter | Error counts by category. |
 | `pulse_scheduler_queue_due_soon` | Gauge | Tasks still queued across running schedulers that are due now or within 12 seconds at scrape time. Older builds report the last recorded queue sample. |
 | `pulse_scheduler_queued_poll_overdue_seconds` | Gauge | Seconds past scheduled time for the most overdue timestamped poll still queued across running schedulers. |
-| `pulse_scheduler_claimed_poll_overdue_seconds` | Gauge | Seconds past one poll task timeout for the most overdue claimed poll, split by `waiting_for_slot` and `running` stages. |
+| `pulse_scheduler_poll_planning_age_seconds` | Gauge | Age in seconds of the oldest unfinished poll planning pass at scrape time (`0` when none is running), independent of queue depth, claimed-poll timers, and the watchdog heartbeat. |
+| `pulse_scheduler_claimed_poll_overdue_seconds` | Gauge | Seconds past one poll task timeout for the most overdue claimed poll, split by `waiting_for_slot` and `running` stages (retaining `running` while a worker is occupied in panic recovery logging after releasing its queue claim). |
 | `pulse_scheduler_dead_letter_depth` | Gauge | Terminal poll entries parked in running schedulers at scrape time. Cleared or retired label sets report zero for up to five minutes, then expire from the scrape. |
 
-Stopped or replaced schedulers drop out of the live queue and dead-letter gauges, while any worker still holding a claimed poll remains visible in `pulse_scheduler_claimed_poll_overdue_seconds` until it returns. Delayed older poll results still increment `pulse_monitor_poll_total` without moving the latest completion timestamp or staleness age backwards.
+Stopped or replaced schedulers drop out of the live queue and dead-letter gauges, while any unfinished planning pass remains visible in `pulse_scheduler_poll_planning_age_seconds` until it completes and any worker still holding a claimed poll (or blocked in panic recovery logging) remains visible in `pulse_scheduler_claimed_poll_overdue_seconds` until it returns. Delayed older poll results still increment `pulse_monitor_poll_total` without moving the latest completion timestamp or staleness age backwards.
 
 If a scrape still works but polling stops producing results, use the
 [last-success timestamp](PROMETHEUS_METRICS.md#check-whether-polling-is-still-running)

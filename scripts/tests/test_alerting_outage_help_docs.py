@@ -498,6 +498,42 @@ class AlertingOutageHelpDocsTest(unittest.TestCase):
             with self.subTest(doc="ZFS_MONITORING.md", phrase=phrase):
                 self.assertIn(phrase, zfs_norm)
 
+    def test_metrics_data_flow_aligns_with_storage_pools_stale_reading_cues(
+        self,
+    ) -> None:
+        row_pres = (
+            ROOT / "frontend-modern/src/features/storageBackups/rowPresentation.ts"
+        ).read_text(encoding="utf-8")
+        pool_row = (
+            ROOT / "frontend-modern/src/components/Storage/StoragePoolRow.tsx"
+        ).read_text(encoding="utf-8")
+
+        for marker in (
+            "const DANGER_STATE_LABELS = new Set(['critical', 'faulted', 'failed', 'offline', 'unavailable']);",
+            "const WARNING_STATE_LABELS = new Set(['warning', 'warn', 'degraded']);",
+            "return 'Stale';",
+            "export function shouldShowStoragePoolInlineStaleCue(",
+        ):
+            self.assertIn(marker, row_pres)
+        for marker in (
+            'data-storage-pool-stale="true"',
+            "Stale data",
+        ):
+            self.assertIn(marker, pool_row)
+
+        flow_doc = " ".join(
+            (ROOT / "docs/monitoring/METRICS_DATA_FLOW.md")
+            .read_text(encoding="utf-8")
+            .split()
+        )
+        for phrase in (
+            "**Storage Pools** also switch clear stale pools to amber **Stale**",
+            "leaving **Healthy**, joining **Needs attention** and warning counts, and sorting ahead of fresh healthy pools",
+            "preserving worse explicit pool states (Faulted, Offline, Critical, Failed, Unavailable, Degraded, Warning) and alert headlines with an inline amber **Stale data** cue on both desktop and phones while keeping retained usage bars visible",
+        ):
+            with self.subTest(phrase=phrase):
+                self.assertIn(phrase, flow_doc)
+
 
 if __name__ == "__main__":
     unittest.main()

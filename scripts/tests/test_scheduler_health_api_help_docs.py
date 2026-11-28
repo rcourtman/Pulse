@@ -227,6 +227,29 @@ class SchedulerHealthAPIHelpDocsTest(unittest.TestCase):
             with self.subTest(deadman_phrase=phrase):
                 self.assertIn(phrase, api_text)
 
+    def test_poll_planning_and_panic_recovery_visibility_match_runtime_source(self) -> None:
+        section = " ".join(scheduler_section().split())
+        work_progress = (
+            ROOT / "internal/monitoring/poll_work_progress.go"
+        ).read_text(encoding="utf-8")
+        task_workers = (
+            ROOT / "internal/monitoring/poll_task_workers.go"
+        ).read_text(encoding="utf-8")
+
+        self.assertIn('"pulse_scheduler_poll_planning_age_seconds"', work_progress)
+        self.assertIn('"pulse_scheduler_claimed_poll_overdue_seconds"', work_progress)
+        self.assertIn("defer progress.finish(work)", task_workers)
+        self.assertIn("Recovered from panic in scheduled poll task", task_workers)
+
+        for phrase in (
+            "does not prove that poll planning finished",
+            "`pulse_scheduler_poll_planning_age_seconds`",
+            "`pulse_scheduler_claimed_poll_overdue_seconds`",
+            "occupied in panic recovery logging after releasing its queue claim",
+        ):
+            with self.subTest(phrase=phrase):
+                self.assertIn(phrase, section)
+
     def test_in_app_links_target_real_shipped_docs_and_headings(self) -> None:
         section = scheduler_section()
         links = re.findall(r"\[[^\]]+\]\(([^)]+)\)", section)
