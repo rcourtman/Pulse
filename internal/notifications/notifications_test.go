@@ -3168,8 +3168,28 @@ func TestSendGroupedApprise_EmptyPayload(t *testing.T) {
 	}
 }
 
-func TestSendHTMLEmailWithError_EmptyToUsesFrom(t *testing.T) {
+func withZeroEmailRetryDelay(nm *NotificationManager) *NotificationManager {
+	zero := 0
+	nm.testEmailRetryDelay = &zero
+	return nm
+}
+
+func TestEmailDeliveryManagerProductionDefaultRetryDelay(t *testing.T) {
 	nm := &NotificationManager{}
+	delivery, _ := nm.emailDeliveryManager(EmailConfig{
+		From:     "sender@example.com",
+		To:       []string{"recipient@example.com"},
+		SMTPHost: "smtp.example.com",
+		SMTPPort: 587,
+	})
+	if delivery.config.MaxRetries != 2 || delivery.config.RetryDelay != 3 {
+		t.Fatalf("default email delivery retry policy = (MaxRetries=%d, RetryDelay=%d), want (2, 3)",
+			delivery.config.MaxRetries, delivery.config.RetryDelay)
+	}
+}
+
+func TestSendHTMLEmailWithError_EmptyToUsesFrom(t *testing.T) {
+	nm := withZeroEmailRetryDelay(&NotificationManager{})
 	config := EmailConfig{
 		From:     "sender@example.com",
 		To:       []string{}, // Empty To
@@ -3189,9 +3209,9 @@ func TestSendHTMLEmailWithError_EmptyToUsesFrom(t *testing.T) {
 }
 
 func TestSendHTMLEmailWithError_NilEmailManager(t *testing.T) {
-	nm := &NotificationManager{
+	nm := withZeroEmailRetryDelay(&NotificationManager{
 		emailManager: nil, // Explicitly nil
-	}
+	})
 	config := EmailConfig{
 		From:     "sender@example.com",
 		To:       []string{"recipient@example.com"},
@@ -3261,9 +3281,9 @@ func TestSendHTMLEmailWithError_DifferingConfigDoesNotMutateManager(t *testing.T
 		AuthRequired: true,
 	})
 
-	nm := &NotificationManager{
+	nm := withZeroEmailRetryDelay(&NotificationManager{
 		emailManager: existingManager,
-	}
+	})
 
 	config := EmailConfig{
 		From:     "test@example.com",
@@ -3883,7 +3903,7 @@ func TestSendResolvedEmail_AllNilAlerts(t *testing.T) {
 }
 
 func TestSendResolvedEmail_SingleAlert(t *testing.T) {
-	nm := &NotificationManager{}
+	nm := withZeroEmailRetryDelay(&NotificationManager{})
 	config := EmailConfig{
 		From:     "sender@example.com",
 		To:       []string{"recipient@example.com"},
@@ -3910,7 +3930,7 @@ func TestSendResolvedEmail_SingleAlert(t *testing.T) {
 }
 
 func TestSendResolvedEmail_MultipleAlerts(t *testing.T) {
-	nm := &NotificationManager{}
+	nm := withZeroEmailRetryDelay(&NotificationManager{})
 	config := EmailConfig{
 		From:     "sender@example.com",
 		To:       []string{"recipient@example.com"},
@@ -3945,7 +3965,7 @@ func TestSendResolvedEmail_MultipleAlerts(t *testing.T) {
 }
 
 func TestSendResolvedEmail_WithNilInMixedAlerts(t *testing.T) {
-	nm := &NotificationManager{}
+	nm := withZeroEmailRetryDelay(&NotificationManager{})
 	config := EmailConfig{
 		From:     "sender@example.com",
 		To:       []string{"recipient@example.com"},
@@ -3976,7 +3996,7 @@ func TestSendResolvedEmail_WithNilInMixedAlerts(t *testing.T) {
 }
 
 func TestSendResolvedEmail_ZeroResolvedTime(t *testing.T) {
-	nm := &NotificationManager{}
+	nm := withZeroEmailRetryDelay(&NotificationManager{})
 	config := EmailConfig{
 		From:     "sender@example.com",
 		To:       []string{"recipient@example.com"},
@@ -4678,7 +4698,7 @@ func TestSendTestNotificationWithConfig(t *testing.T) {
 }
 
 func TestSendTestNotification_EmailReturnsDeliveryError(t *testing.T) {
-	nm := &NotificationManager{
+	nm := withZeroEmailRetryDelay(&NotificationManager{
 		emailConfig: EmailConfig{
 			Enabled:  true,
 			SMTPHost: "invalid.localhost.test",
@@ -4686,7 +4706,7 @@ func TestSendTestNotification_EmailReturnsDeliveryError(t *testing.T) {
 			From:     "alerts@example.com",
 			To:       []string{"ops@example.com"},
 		},
-	}
+	})
 
 	err := nm.SendTestNotification("email")
 	if err == nil {

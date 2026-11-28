@@ -236,6 +236,7 @@ func TestPBSDatastoreOverrideLifecycleAcrossRestart(t *testing.T) {
 			name = "legacy snapshot"
 		}
 		t.Run(name, func(t *testing.T) {
+			t.Parallel()
 			dir := t.TempDir()
 			start := func() *Manager {
 				m := NewManagerWithDataDir(dir)
@@ -461,6 +462,7 @@ func TestRestoredBackupRequiresFreshEvaluation(t *testing.T) {
 			name = "sqlite-authority"
 		}
 		t.Run(name, func(t *testing.T) {
+			t.Parallel()
 			dir := t.TempDir()
 			now := time.Now().UTC()
 			lastSeen := now.Add(-4 * 24 * time.Hour)

@@ -58,6 +58,7 @@ var damagedContentTypeHeaders = map[string]map[string]string{
 func TestRealTelegramAlertWithDamagedContentTypeStillSendsText(t *testing.T) {
 	for name, headers := range damagedContentTypeHeaders {
 		t.Run(name, func(t *testing.T) {
+			t.Parallel()
 			url, captured := newWebhookCaptureServer(t)
 			m := NewNotificationManagerWithDataDir("", t.TempDir())
 			t.Cleanup(m.Stop)
@@ -122,6 +123,7 @@ func TestBuiltInServiceDeliveriesSendTemplateHeadersLikeTest(t *testing.T) {
 		}
 		for name, headers := range damagedContentTypeHeaders {
 			t.Run(tmpl.Service+"/"+name, func(t *testing.T) {
+				t.Parallel()
 				url, captured := newWebhookCaptureServer(t)
 				m := NewNotificationManager("")
 				t.Cleanup(m.Stop)

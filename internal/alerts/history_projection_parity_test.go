@@ -103,7 +103,8 @@ func TestHistoryProjectionIncrementalReadersPreserveChronologyAndIsolation(t *te
 
 func newHistoryParityManager(t *testing.T) *Manager {
 	t.Helper()
-	m := newTestManager(t)
+	m := NewManagerWithDataDir(t.TempDir())
+	t.Cleanup(m.Stop)
 	m.UpdateConfig(contractTestConfig(m))
 	store, err := eventlog.OpenInMemory()
 	if err != nil {
@@ -403,6 +404,7 @@ func writeRandomHistory(t *testing.T, m *Manager, seed int64, base time.Time) []
 	}
 	fractions := []time.Duration{0, 500 * time.Millisecond, 50 * time.Millisecond, 123456789}
 	var times []time.Time
+	events := make([]eventlog.Event, 0, 120)
 	at := base
 	for i := 0; i < 120; i++ {
 		if rng.Intn(4) != 0 {
@@ -411,9 +413,7 @@ func writeRandomHistory(t *testing.T, m *Manager, seed int64, base time.Time) []
 		occurred := at.Add(fractions[rng.Intn(len(fractions))])
 		times = append(times, occurred)
 		if i == 60 {
-			if err := store.AppendDurable(eventlog.Event{Type: eventlog.TypeHistoryCleared, AlertID: "history", OccurredAt: occurred}); err != nil {
-				t.Fatal(err)
-			}
+			events = append(events, eventlog.Event{Type: eventlog.TypeHistoryCleared, AlertID: "history", OccurredAt: occurred})
 			continue
 		}
 		id := fmt.Sprintf("alert-%d", rng.Intn(5))
@@ -433,9 +433,10 @@ func writeRandomHistory(t *testing.T, m *Manager, seed int64, base time.Time) []
 		if err != nil {
 			t.Fatal(err)
 		}
-		if err := store.AppendDurable(eventlog.Event{Type: kind, AlertID: id, OccurredAt: occurred, Snapshot: payload}); err != nil {
-			t.Fatal(err)
-		}
+		events = append(events, eventlog.Event{Type: kind, AlertID: id, OccurredAt: occurred, Snapshot: payload})
+	}
+	if err := store.ImportEvents(events); err != nil {
+		t.Fatal(err)
 	}
 	return times
 }
@@ -443,6 +444,7 @@ func writeRandomHistory(t *testing.T, m *Manager, seed int64, base time.Time) []
 func TestWindowedHistoryMatchesAWalkOfOnlyTheWindow(t *testing.T) {
 	for seed := int64(1); seed <= 25; seed++ {
 		t.Run(fmt.Sprintf("seed-%d", seed), func(t *testing.T) {
+			t.Parallel()
 			m := newHistoryParityManager(t)
 			base := recentHistoryParityBase()
 			times := writeRandomHistory(t, m, seed, base)
@@ -460,12 +462,16 @@ func TestWindowedHistoryMatchesAWalkOfOnlyTheWindow(t *testing.T) {
 				windows = append(windows, times[i], times[i].Add(time.Nanosecond), times[i].Add(-time.Nanosecond))
 			}
 			for _, since := range windows {
+				wantAll := referenceWindowedHistory(t, m, since, 0)
 				for _, limit := range []int{0, 1, 3} {
 					got, ok := m.AlertHistoryFromEvents(since, limit)
 					if !ok {
 						t.Fatal("history unavailable")
 					}
-					want := referenceWindowedHistory(t, m, since, limit)
+					want := wantAll
+					if limit > 0 && len(want) > limit {
+						want = want[:limit]
+					}
 					if !reflect.DeepEqual(got, want) {
 						t.Fatalf("since=%s limit=%d: shared fold differs from a walk of only the window\n got: %+v\nwant: %+v",
 							since.Format(time.RFC3339Nano), limit, got, want)
@@ -534,6 +540,7 @@ func TestLimitedHistoryReadCopiesOnlyReturnedRows(t *testing.T) {
 	for i := 0; i < 40; i++ {
 		metadata[fmt.Sprintf("key-%d", i)] = fmt.Sprintf("value-%d-with-some-detail", i)
 	}
+	events := make([]eventlog.Event, 0, 2000)
 	for i := 0; i < 2000; i++ {
 		occurred := at.Add(time.Duration(i) * time.Minute)
 		snapshot, err := json.Marshal(Alert{ID: fmt.Sprintf("alert-%d", i), ResourceID: "vm", StartTime: occurred,
@@ -541,10 +548,11 @@ func TestLimitedHistoryReadCopiesOnlyReturnedRows(t *testing.T) {
 		if err != nil {
 			t.Fatal(err)
 		}
-		if err := store.AppendDurable(eventlog.Event{Type: eventlog.TypeFired, AlertID: fmt.Sprintf("alert-%d", i),
-			OccurredAt: occurred, Snapshot: snapshot}); err != nil {
-			t.Fatal(err)
-		}
+		events = append(events, eventlog.Event{Type: eventlog.TypeFired, AlertID: fmt.Sprintf("alert-%d", i),
+			OccurredAt: occurred, Snapshot: snapshot})
+	}
+	if err := store.ImportEvents(events); err != nil {
+		t.Fatal(err)
 	}
 	allocated := func(limit int) uint64 {
 		var before, after runtime.MemStats

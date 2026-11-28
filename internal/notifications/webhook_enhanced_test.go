@@ -935,6 +935,7 @@ func TestSendWebhookWithRetry_ZeroRetryAfterPreservesLaterBackoff(t *testing.T) 
 	for _, firstStatus := range []int{http.StatusTooManyRequests, http.StatusServiceUnavailable} {
 		for _, status := range []int{http.StatusServiceUnavailable, http.StatusTooManyRequests} {
 			t.Run(fmt.Sprintf("%d_then_%d", firstStatus, status), func(t *testing.T) {
+				t.Parallel()
 				nm := NewNotificationManager("http://pulse.local")
 				t.Cleanup(nm.Stop)
 				require.NoError(t, nm.UpdateAllowedPrivateCIDRs("127.0.0.1"))

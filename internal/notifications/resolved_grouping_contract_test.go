@@ -31,6 +31,7 @@ func waitResolvedContract(t *testing.T, predicate func() bool) {
 func TestResolvedGroupingOrdinaryRestart(t *testing.T) {
 	for _, stage := range []string{"same_process", "after_firing", "pending_recovery", "late_arrival"} {
 		t.Run(stage, func(t *testing.T) {
+			t.Parallel()
 			type payload struct {
 				Event      string          `json:"event"`
 				Alerts     []*alerts.Alert `json:"alerts"`

@@ -132,14 +132,22 @@ func (n *NotificationManager) emailDeliveryManager(config EmailConfig) (*Enhance
 
 	n.mu.RLock()
 	manager := n.emailManager
+	retryDelayOverride := n.testEmailRetryDelay
 	n.mu.RUnlock()
 
+	applyOverride := func(delivery *EnhancedEmailManager) (*EnhancedEmailManager, []string) {
+		if retryDelayOverride != nil {
+			delivery.config.RetryDelay = *retryDelayOverride
+		}
+		return delivery, recipients
+	}
+
 	if manager == nil {
-		return newEmailDeliveryManager(config, recipients), recipients
+		return applyOverride(newEmailDeliveryManager(config, recipients))
 	}
 
 	if !emailDeliveryTransportMatches(manager, config) {
-		return newEmailDeliveryManager(config, recipients), recipients
+		return applyOverride(newEmailDeliveryManager(config, recipients))
 	}
 
 	// Concurrent queue workers and reports may share an SMTP transport while
@@ -156,7 +164,7 @@ func (n *NotificationManager) emailDeliveryManager(config EmailConfig) (*Enhance
 	delivery := NewEnhancedEmailManager(deliveryConfig)
 	// Isolating envelopes must not give every delivery a fresh rate budget.
 	delivery.rateLimit = manager.rateLimit
-	return delivery, recipients
+	return applyOverride(delivery)
 }
 
 // sendHTMLEmailWithError sends an HTML email with multipart content and returns any error
