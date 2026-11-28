@@ -1,10 +1,10 @@
-import { cleanup, fireEvent, render, screen, within } from '@solidjs/testing-library';
-import type { JSX } from 'solid-js';
+import { cleanup, fireEvent, render, screen, waitFor, within } from '@solidjs/testing-library';
+import { createSignal, type JSX } from 'solid-js';
 import { Route, Router } from '@solidjs/router';
 import { afterEach, describe, expect, it, vi } from 'vitest';
 
 import { VsphereAlertsTable } from '@/features/vmware/VsphereAlertsTable';
-import { buildVmwareIncidentRows } from '@/features/vmware/vmwarePageModel';
+import { buildVmwareIncidentRows, filterVmwareIncidents } from '@/features/vmware/vmwarePageModel';
 import type { Resource } from '@/types/resource';
 
 // Record drawers link to the object they are about, which needs a router.
@@ -221,5 +221,75 @@ describe('VsphereAlertsTable', () => {
     // No data change: only the clock moves.
     vi.advanceTimersByTime(3 * 60 * 60 * 1000);
     expect(screen.getByText('5h ago')).toBeInTheDocument();
+  });
+  it('shows stale-reading cue, search match, and drawer notice when vCenter polling is impaired and clears them on recovery', async () => {
+    const staleHost = makeHost({
+      sourceStatus: {
+        vmware: { status: 'error', error: 'vCenter session expired' },
+      },
+    });
+    const freshHost = makeHost({
+      id: 'host-fresh',
+      name: 'esxi-02.lab.local',
+      displayName: 'esxi-02.lab.local',
+      sourceStatus: { vmware: { status: 'online' } },
+      incidents: [
+        {
+          provider: 'vmware',
+          nativeId: 'alarm-402',
+          code: 'vmware_alarm_state',
+          severity: 'warning',
+          source: 'vmware',
+          summary: 'Host esxi-02 memory usage warning',
+          startedAt: '2026-05-21T14:40:00Z',
+        },
+      ],
+    });
+    const [resources, setResources] = createSignal([staleHost, freshHost]);
+    const rows = buildVmwareIncidentRows(resources());
+    expect(filterVmwareIncidents(rows, 'vCenter session expired', 'all')).toHaveLength(1);
+    expect(filterVmwareIncidents(rows, 'stale data', 'all')).toHaveLength(1);
+
+    renderInRouter(() => (
+      <VsphereAlertsTable
+        incidents={buildVmwareIncidentRows(resources())}
+        emptyIcon={<span />}
+        emptyTitle="No signals"
+        emptyDescription="No signals"
+        showToolbar={false}
+      />
+    ));
+
+    const staleRow = screen
+      .getByText('Host host-101 has VMware alarm Host connection and power state (red)')
+      .closest('tr')!;
+    const freshRow = screen.getByText('Host esxi-02 memory usage warning').closest('tr')!;
+    expect(within(staleRow).getByText('Stale data')).toHaveAttribute(
+      'data-platform-alert-stale',
+      'vsphere',
+    );
+    expect(within(staleRow).getByTitle('Critical')).toHaveClass('bg-red-500');
+    expect(within(freshRow).queryByText('Stale data')).not.toBeInTheDocument();
+
+    await fireEvent.click(staleRow);
+    const notice = screen.getByTestId('vsphere-alert-stale-readings-notice');
+    expect(notice).toHaveTextContent('Stale data.');
+    expect(notice).toHaveTextContent('vCenter collection error: vCenter session expired.');
+    expect(notice).toHaveTextContent(
+      'This alert reflects the last report received and may no longer be current.',
+    );
+
+    setResources([
+      makeHost({
+        ...staleHost,
+        sourceStatus: { vmware: { status: 'online' } },
+      }),
+      freshHost,
+    ]);
+
+    await waitFor(() => {
+      expect(screen.queryByText('Stale data')).not.toBeInTheDocument();
+      expect(screen.queryByTestId('vsphere-alert-stale-readings-notice')).not.toBeInTheDocument();
+    });
   });
 });

@@ -92,4 +92,71 @@ describe('KubernetesStorageTable', () => {
     expect(screen.getByText('services/postgres-data')).toBeInTheDocument();
     expect(screen.getAllByText('pv-postgres').length).toBeGreaterThanOrEqual(1);
   });
+
+  it('surfaces stale readings on storage classes, volumes, and claims while keeping offline severity', () => {
+    const staleSource = {
+      kubernetes: { status: 'stale', lastSeen: '2026-11-26T10:00:00Z' },
+    };
+    const { container } = render(() => (
+      <KubernetesStorageTable
+        resources={[
+          makeResource({
+            id: 'fresh-pvc',
+            type: 'k8s-persistent-volume-claim',
+            status: 'online',
+            kubernetes: {
+              namespace: 'apps',
+              phase: 'Bound',
+              storageClass: 'fast-csi',
+              capacityBytes: gib(50),
+            },
+          }),
+          makeResource({
+            id: 'stale-pvc',
+            type: 'k8s-persistent-volume-claim',
+            status: 'online',
+            sourceStatus: staleSource,
+            kubernetes: {
+              namespace: 'billing',
+              phase: 'Bound',
+              storageClass: 'fast-csi',
+              capacityBytes: gib(100),
+            },
+          }),
+          makeResource({
+            id: 'offline-stale-pv',
+            type: 'k8s-persistent-volume',
+            status: 'offline',
+            sourceStatus: staleSource,
+            kubernetes: {
+              phase: 'Failed',
+              storageClass: 'fast-csi',
+              capacityBytes: gib(200),
+            },
+          }),
+        ]}
+        emptyIcon={<span />}
+        emptyTitle="No storage"
+        emptyDescription="No storage"
+        showToolbar={false}
+      />
+    ));
+
+    const freshRow = container.querySelector('[data-kubernetes-storage-row="fresh-pvc"]');
+    expect(freshRow?.querySelector('[title="Online"]')).toHaveClass('bg-emerald-500');
+    expect(freshRow?.querySelector('[data-kubernetes-stale="storage"]')).toBeNull();
+
+    const staleRow = container.querySelector('[data-kubernetes-storage-row="stale-pvc"]');
+    expect(staleRow?.querySelector('[title="Stale data"]')).toHaveClass('bg-amber-500');
+    expect(staleRow?.querySelector('[data-kubernetes-stale="storage"]')).toHaveTextContent(
+      'Stale data',
+    );
+    expect(staleRow).toHaveTextContent('100 GB');
+
+    const offlineRow = container.querySelector('[data-kubernetes-storage-row="offline-stale-pv"]');
+    expect(offlineRow?.querySelector('[title="Offline"]')).toHaveClass('bg-red-500');
+    expect(offlineRow?.querySelector('[data-kubernetes-stale="storage"]')).toHaveTextContent(
+      'Stale data',
+    );
+  });
 });

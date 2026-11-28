@@ -71,4 +71,90 @@ describe('KubernetesAutoscalingTable', () => {
     expect(screen.getByText('5')).toBeInTheDocument();
     expect(screen.getByText('Resource, Pods')).toBeInTheDocument();
   });
+
+  it('surfaces stale readings on autoscalers while preserving worse failure states', () => {
+    const staleSource = {
+      kubernetes: {
+        status: 'stale',
+        lastSeen: '2026-11-26T10:00:00Z',
+        error: 'k8s collector timed out',
+      },
+    };
+    const { container } = render(() => (
+      <KubernetesAutoscalingTable
+        resources={[
+          makeResource({
+            id: 'fresh-hpa',
+            type: 'k8s-horizontal-pod-autoscaler',
+            status: 'online',
+            kubernetes: {
+              clusterName: 'prod',
+              namespace: 'apps',
+              targetKind: 'Deployment',
+              targetName: 'web',
+              minReplicas: 2,
+              maxReplicas: 6,
+              currentReplicas: 2,
+              desiredReplicas: 2,
+            },
+          }),
+          makeResource({
+            id: 'stale-hpa',
+            type: 'k8s-horizontal-pod-autoscaler',
+            status: 'online',
+            sourceStatus: staleSource,
+            kubernetes: {
+              clusterName: 'edge',
+              namespace: 'apps',
+              targetKind: 'Deployment',
+              targetName: 'api',
+              minReplicas: 1,
+              maxReplicas: 8,
+              currentReplicas: 3,
+              desiredReplicas: 4,
+            },
+          }),
+          makeResource({
+            id: 'offline-stale-hpa',
+            type: 'k8s-horizontal-pod-autoscaler',
+            status: 'offline',
+            sourceStatus: staleSource,
+            kubernetes: {
+              clusterName: 'edge',
+              namespace: 'apps',
+              targetKind: 'Deployment',
+              targetName: 'worker',
+              minReplicas: 1,
+              maxReplicas: 4,
+              currentReplicas: 0,
+              desiredReplicas: 1,
+            },
+          }),
+        ]}
+        emptyIcon={<span />}
+        emptyTitle="No autoscaling"
+        emptyDescription="No autoscaling"
+        showToolbar={false}
+      />
+    ));
+
+    const freshRow = container.querySelector('[data-kubernetes-autoscaling-row="fresh-hpa"]');
+    expect(freshRow?.querySelector('[title="Online"]')).toHaveClass('bg-emerald-500');
+    expect(freshRow?.querySelector('[data-kubernetes-stale="autoscaling"]')).toBeNull();
+
+    const staleRow = container.querySelector('[data-kubernetes-autoscaling-row="stale-hpa"]');
+    expect(staleRow?.querySelector('[title="Stale data"]')).toHaveClass('bg-amber-500');
+    expect(staleRow?.querySelector('[data-kubernetes-stale="autoscaling"]')).toHaveTextContent(
+      'Stale data',
+    );
+    expect(staleRow).toHaveTextContent('Deployment/api');
+
+    const offlineRow = container.querySelector(
+      '[data-kubernetes-autoscaling-row="offline-stale-hpa"]',
+    );
+    expect(offlineRow?.querySelector('[title="Offline"]')).toHaveClass('bg-red-500');
+    expect(offlineRow?.querySelector('[data-kubernetes-stale="autoscaling"]')).toHaveTextContent(
+      'Stale data',
+    );
+  });
 });

@@ -7,6 +7,7 @@ import {
 } from '@/utils/vmwareDisplay';
 import type { Resource, ResourceChange, ResourceIncident, ResourceType } from '@/types/resource';
 import type { PlatformIssue } from '@/features/platformPage/PlatformIssueReason';
+import { getPlatformResourceStaleNotice } from '@/features/platformPage/resourceStaleness';
 import { getSimpleStatusIndicator, type StatusIndicator } from '@/utils/status';
 import { workloadNodeScopeId } from '@/components/Workloads/workloadTopology';
 
@@ -1057,20 +1058,25 @@ export function filterVmwareVirtualMachines(
   );
 }
 
-const commonRowSearchFields = (row: VmwareIncidentRow | VmwareActivityRow): readonly unknown[] => [
-  row.resourceId,
-  row.resourceName,
-  row.resourceType,
-  row.entityType,
-  row.managedObjectId,
-  row.source,
-  row.resource.vmware?.connectionName,
-  row.resource.vmware?.vcenterHost,
-  row.resource.vmware?.datacenterName,
-  row.resource.vmware?.clusterName,
-  row.resource.vmware?.runtimeHostName,
-  ...(row.resource.tags ?? []),
-];
+const commonRowSearchFields = (row: VmwareIncidentRow | VmwareActivityRow): readonly unknown[] => {
+  const staleNotice = getPlatformResourceStaleNotice('vmware', row.resource);
+  return [
+    row.resourceId,
+    row.resourceName,
+    row.resourceType,
+    row.entityType,
+    row.managedObjectId,
+    row.source,
+    row.resource.vmware?.connectionName,
+    row.resource.vmware?.vcenterHost,
+    row.resource.vmware?.datacenterName,
+    row.resource.vmware?.clusterName,
+    row.resource.vmware?.runtimeHostName,
+    staleNotice?.label,
+    staleNotice?.detail,
+    ...(row.resource.tags ?? []),
+  ];
+};
 
 const incidentSearchHaystack = (row: VmwareIncidentRow): string =>
   buildSearchHaystack([

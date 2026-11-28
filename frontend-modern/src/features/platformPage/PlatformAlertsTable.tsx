@@ -1,5 +1,6 @@
 import { Show, type JSX } from 'solid-js';
 import { InlineDetailPanel, type DetailSection } from '@/components/shared/DetailSectionTable';
+import { InlineNotice } from '@/components/shared/InlineNotice';
 import { AlertSeverityBadge, AlertSeverityDot } from '@/components/shared/AlertSeverityBadge';
 import { InlineDetailTableRow } from '@/components/shared/InlineDetailTableRow';
 import { TableCell, TableHead, TableRow } from '@/components/shared/Table';
@@ -19,6 +20,10 @@ import {
   getPlatformResourceDetailRowClass,
 } from '@/features/platformPage/PlatformResourceDetailTableRow';
 import { RecordOwnerLink } from '@/features/platformPage/RecordOwnerLink';
+import {
+  ensureStaleNoticeSentence,
+  getPlatformResourceStaleNotice,
+} from '@/features/platformPage/resourceStaleness';
 import {
   formatPlatformAlertCode,
   formatPlatformAlertResourceType,
@@ -168,6 +173,8 @@ export function PlatformAlertsTable<T extends PlatformAlertIncidentBase, S exten
                   {(incident) => {
                     const detailRowId = () => drawer.detailRowId(incident);
                     const isExpanded = () => drawer.isExpanded(incident);
+                    const staleNotice = () =>
+                      getPlatformResourceStaleNotice(props.platform, incident.resource);
                     const titleMeta = () =>
                       props.resourceTitleMeta
                         ? props.resourceTitleMeta(incident)
@@ -210,6 +217,17 @@ export function PlatformAlertsTable<T extends PlatformAlertIncidentBase, S exten
                                 >
                                   {incident.resourceName}
                                 </div>
+                                <Show when={staleNotice()}>
+                                  {(stale) => (
+                                    <span
+                                      class="block truncate text-[10px] font-medium text-amber-800 dark:text-amber-300"
+                                      title={stale().detail}
+                                      data-platform-alert-stale={props.attrPrefix}
+                                    >
+                                      {stale().label}
+                                    </span>
+                                  )}
+                                </Show>
                               </div>
                             </div>
                           </TableCell>
@@ -262,7 +280,22 @@ export function PlatformAlertsTable<T extends PlatformAlertIncidentBase, S exten
                               sections={props.buildDetailSections(incident)}
                               detailAttributes={detailPanelAttrs(incident.id)}
                               onClose={() => drawer.close(incident)}
-                            />
+                            >
+                              <Show when={staleNotice()}>
+                                {(stale) => (
+                                  <div
+                                    data-testid={`${props.attrPrefix}-alert-stale-readings-notice`}
+                                  >
+                                    <InlineNotice tone="warning" role="status">
+                                      <span class="font-medium">{stale().label}.</span>{' '}
+                                      {ensureStaleNoticeSentence(stale().detail)} This alert
+                                      reflects the last report received and may no longer be
+                                      current.
+                                    </InlineNotice>
+                                  </div>
+                                )}
+                              </Show>
+                            </InlineDetailPanel>
                           </InlineDetailTableRow>
                         </Show>
                       </>

@@ -1,6 +1,5 @@
 import { createMemo, type Component, type JSX } from 'solid-js';
 import { TableCell, TableRow } from '@/components/shared/Table';
-import { getSimpleStatusIndicator } from '@/utils/status';
 import { asTrimmedString } from '@/utils/stringUtils';
 import {
   PlatformWindowedRows,
@@ -23,6 +22,7 @@ import type { Resource } from '@/types/resource';
 import {
   filterKubernetesResources,
   kubernetesScopeLabel,
+  mapKubernetesInventoryStatus,
   type KubernetesResourceStatusFilter,
   isSingleKubernetesCluster,
 } from './kubernetesPageModel';
@@ -236,7 +236,7 @@ export const KubernetesNetworkingTable: Component<{
           <>
             <PlatformWindowedRows items={sortedRows} estimatedRowHeight={32}>
               {(resource) => {
-                const indicator = () => getSimpleStatusIndicator(resource.status);
+                const indicator = () => mapKubernetesInventoryStatus(resource);
                 const name = () => resourceName(resource);
                 const address = () => addressOrHosts(resource);
                 const ports = () => portLabel(resource);
@@ -256,10 +256,10 @@ export const KubernetesNetworkingTable: Component<{
                           drawer={drawer}
                           label={name()}
                           status={indicator()}
-                          dotTitle={resource.status || 'unknown'}
+                          staleScope="networking"
                         >
                           <span
-                            class="kubernetes-network-name-value truncate font-semibold text-base-content"
+                            class="kubernetes-network-name-value block truncate font-semibold text-base-content"
                             title={name()}
                           >
                             {name()}

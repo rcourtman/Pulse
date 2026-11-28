@@ -1,6 +1,5 @@
 import { createMemo, type Component, type JSX } from 'solid-js';
 import { TableCell, TableRow } from '@/components/shared/Table';
-import { getSimpleStatusIndicator } from '@/utils/status';
 import { asTrimmedString } from '@/utils/stringUtils';
 import {
   PlatformWindowedRows,
@@ -23,6 +22,7 @@ import type { Resource } from '@/types/resource';
 import {
   filterKubernetesResources,
   kubernetesScopeLabel,
+  mapKubernetesInventoryStatus,
   type KubernetesResourceStatusFilter,
   isSingleKubernetesCluster,
 } from './kubernetesPageModel';
@@ -207,7 +207,7 @@ export const KubernetesAutoscalingTable: Component<{
           <>
             <PlatformWindowedRows items={sortedRows} estimatedRowHeight={32}>
               {(resource) => {
-                const indicator = () => getSimpleStatusIndicator(resource.status);
+                const indicator = () => mapKubernetesInventoryStatus(resource);
                 const name = () => autoscalerName(resource);
                 const target = () => targetRef(resource);
                 const metrics = () => metricSources(resource);
@@ -227,7 +227,7 @@ export const KubernetesAutoscalingTable: Component<{
                           drawer={drawer}
                           label={name()}
                           status={indicator()}
-                          dotTitle={resource.status || 'unknown'}
+                          staleScope="autoscaling"
                         />
                       </TableCell>
                       <TableCell

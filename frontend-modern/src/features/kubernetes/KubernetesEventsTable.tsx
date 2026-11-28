@@ -160,6 +160,7 @@ export const KubernetesEventsTable: Component<{
                           drawer={drawer}
                           label={name()}
                           status={indicator()}
+                          staleScope="event"
                         />
                       </TableCell>
                       <TableCell

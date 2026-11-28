@@ -148,4 +148,64 @@ describe('KubernetesPolicyTable', () => {
     fireEvent.click(detail.getByRole('button', { name: 'Collapse apps-quota details' }));
     expect(document.querySelector('[data-testid="kubernetes-policy-detail"]')).toBeNull();
   });
+
+  it('surfaces stale readings on policy rows and inside expanded policy drawers', () => {
+    const staleSource = {
+      kubernetes: {
+        status: 'stale',
+        lastSeen: '2026-11-26T10:00:00Z',
+        error: 'agent disconnected',
+      },
+    };
+    const { container } = render(() => (
+      <KubernetesPolicyTable
+        resources={[
+          makeResource({
+            id: 'fresh-netpol',
+            type: 'k8s-network-policy',
+            status: 'online',
+            kubernetes: {
+              clusterName: 'prod',
+              namespace: 'apps',
+              policyTypes: ['Ingress'],
+              ingressRuleCount: 1,
+            },
+          }),
+          makeResource({
+            id: 'stale-quota',
+            type: 'k8s-resource-quota',
+            status: 'online',
+            sourceStatus: staleSource,
+            kubernetes: {
+              clusterName: 'edge',
+              namespace: 'apps',
+              hard: { pods: '40' },
+              used: { pods: '12' },
+            },
+          }),
+        ]}
+        emptyIcon={<span />}
+        emptyTitle="No policy"
+        emptyDescription="No policy"
+        showToolbar={false}
+      />
+    ));
+
+    const freshRow = container.querySelector('[data-kubernetes-policy-row="fresh-netpol"]');
+    expect(freshRow?.querySelector('[title="Online"]')).toHaveClass('bg-emerald-500');
+    expect(freshRow?.querySelector('[data-kubernetes-stale="policy"]')).toBeNull();
+
+    const staleRow = container.querySelector('[data-kubernetes-policy-row="stale-quota"]');
+    expect(staleRow?.querySelector('[title="Stale data"]')).toHaveClass('bg-amber-500');
+    expect(staleRow?.querySelector('[data-kubernetes-stale="policy"]')).toHaveTextContent(
+      'Stale data',
+    );
+
+    fireEvent.click(staleRow as HTMLElement);
+    const panel = container.querySelector<HTMLElement>('[data-testid="kubernetes-policy-detail"]')!;
+    const notice = within(panel).getByTestId('kubernetes-stale-readings-notice');
+    expect(notice).toHaveTextContent('Stale data.');
+    expect(notice).toHaveTextContent('agent disconnected');
+    expect(within(panel).getByText('12 of 40')).toBeInTheDocument();
+  });
 });

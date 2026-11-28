@@ -32,6 +32,7 @@ import type { Resource } from '@/types/resource';
 import {
   filterKubernetesResources,
   kubernetesScopeLabel,
+  mapKubernetesInventoryStatus,
   matchesKubernetesConfigCategory,
   type KubernetesConfigCategoryFilter,
   type KubernetesResourceStatusFilter,
@@ -535,7 +536,7 @@ export const KubernetesConfigTable: Component<{
               <>
                 <PlatformWindowedRows items={sortedRows} estimatedRowHeight={32}>
                   {(resource) => {
-                    const indicator = () => getSimpleStatusIndicator(resource.status);
+                    const indicator = () => mapKubernetesInventoryStatus(resource);
                     const name = () => configName(resource);
                     const kind = () => configKind(resource);
                     const state = () => lifecycleOrTrust(resource);
@@ -558,7 +559,7 @@ export const KubernetesConfigTable: Component<{
                               drawer={drawer}
                               label={name()}
                               status={indicator()}
-                              dotTitle={resource.status || 'unknown'}
+                              staleScope="config"
                             />
                           </TableCell>
                           <TableCell

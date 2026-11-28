@@ -199,11 +199,11 @@ const applyKubernetesSourceFreshness = (
   return base;
 };
 
-export function mapKubernetesClusterStatus(resource: Resource): StatusIndicator {
-  const base = getSimpleStatusIndicator(resource.status);
-  if (base.variant === 'danger') return base;
-  return applyKubernetesSourceFreshness(resource, base);
+export function mapKubernetesInventoryStatus(resource: Resource): StatusIndicator {
+  return applyKubernetesSourceFreshness(resource, getSimpleStatusIndicator(resource.status));
 }
+
+export const mapKubernetesClusterStatus = mapKubernetesInventoryStatus;
 
 export function mapKubernetesPodStatus(resource: Resource): StatusIndicator {
   const phase = normalizeKubernetesToken(
@@ -626,6 +626,8 @@ export function kubernetesResourceSearchHaystack(resource: Resource): string {
         ]
       : []),
     ...(resource.tags ?? []),
+    hasStaleKubernetesReadings(resource) ? KUBERNETES_STALE_READINGS_LABEL : undefined,
+    hasStaleKubernetesReadings(resource) ? getKubernetesSourceError(resource) : undefined,
   ]
     .filter((value): value is string => typeof value === 'string' && value.trim().length > 0)
     .join(' ')

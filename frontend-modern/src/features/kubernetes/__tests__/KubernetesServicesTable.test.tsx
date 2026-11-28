@@ -80,4 +80,72 @@ describe('KubernetesServicesTable', () => {
     ).toHaveAttribute('href', 'https://checkout-service.internal');
     expect(screen.getByText('checkout-public').closest('a')).toBeNull();
   });
+
+  it('surfaces stale readings on services while keeping offline severity and routing fields', () => {
+    const staleSource = {
+      kubernetes: { status: 'stale', lastSeen: '2026-11-26T10:00:00Z' },
+    };
+    const { container } = render(() => (
+      <KubernetesServicesTable
+        resources={[
+          makeResource({
+            id: 'fresh-svc',
+            type: 'k8s-service',
+            status: 'online',
+            kubernetes: {
+              clusterId: 'prod',
+              namespace: 'apps',
+              serviceType: 'ClusterIP',
+              clusterIp: '10.96.0.10',
+            },
+          }),
+          makeResource({
+            id: 'stale-svc',
+            type: 'k8s-service',
+            status: 'online',
+            sourceStatus: staleSource,
+            kubernetes: {
+              clusterId: 'edge',
+              namespace: 'apps',
+              serviceType: 'LoadBalancer',
+              clusterIp: '10.96.12.20',
+            },
+          }),
+          makeResource({
+            id: 'offline-stale-svc',
+            type: 'k8s-service',
+            status: 'offline',
+            sourceStatus: staleSource,
+            kubernetes: {
+              clusterId: 'edge',
+              namespace: 'apps',
+              serviceType: 'ClusterIP',
+              clusterIp: '10.96.12.21',
+            },
+          }),
+        ]}
+        emptyIcon={<span />}
+        emptyTitle="No services"
+        emptyDescription="No services"
+        showToolbar={false}
+      />
+    ));
+
+    const freshRow = container.querySelector('[data-kubernetes-service-row="fresh-svc"]');
+    expect(freshRow?.querySelector('[title="Online"]')).toHaveClass('bg-emerald-500');
+    expect(freshRow?.querySelector('[data-kubernetes-stale="service"]')).toBeNull();
+
+    const staleRow = container.querySelector('[data-kubernetes-service-row="stale-svc"]');
+    expect(staleRow?.querySelector('[title="Stale data"]')).toHaveClass('bg-amber-500');
+    expect(staleRow?.querySelector('[data-kubernetes-stale="service"]')).toHaveTextContent(
+      'Stale data',
+    );
+    expect(staleRow).toHaveTextContent('10.96.12.20');
+
+    const offlineRow = container.querySelector('[data-kubernetes-service-row="offline-stale-svc"]');
+    expect(offlineRow?.querySelector('[title="Offline"]')).toHaveClass('bg-red-500');
+    expect(offlineRow?.querySelector('[data-kubernetes-stale="service"]')).toHaveTextContent(
+      'Stale data',
+    );
+  });
 });
