@@ -31,7 +31,9 @@ func TestTokenStreamWriterNativeMedia(t *testing.T) {
 		responseMediaCase{"sse_parameters", "Text/Event-Stream; charset=iso-8859-1", "text/event-stream; charset=utf-8"})
 	for _, media := range cases {
 		for _, commit := range []string{"write", "header", "flush", "informational"} {
+			media, commit := media, commit
 			t.Run(media.name+"/"+commit, func(t *testing.T) {
+				t.Parallel()
 				server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 					ctx, cancel := context.WithCancel(r.Context())
 					writer := &tokenStreamWriter{writer: w, flusher: w.(http.Flusher), ctx: ctx, cancel: cancel, allowed: func() bool { return true }}
@@ -262,7 +264,9 @@ func TestProtectedReadStreamsWithdrawAuthority(t *testing.T) {
 	for _, kind := range protectedReadKinds {
 		for _, transport := range []string{"header", "bearer"} {
 			for _, change := range []string{"revoked", "expired", "scope_removed", "org_access_removed", "credential_replaced", "principal_replaced", "invalid_role"} {
+				kind, transport, change := kind, transport, change
 				t.Run(kind+"/"+transport+"/"+change, func(t *testing.T) {
+					t.Parallel()
 					scope := config.ScopeSettingsRead
 					if kind == "patrol" {
 						scope = config.ScopeAIExecute
@@ -316,7 +320,9 @@ func TestProtectedReadStreamsWithdrawAuthority(t *testing.T) {
 
 func TestProtectedReadStreamsDurableDeletion(t *testing.T) {
 	for _, kind := range protectedReadKinds {
+		kind := kind
 		t.Run(kind, func(t *testing.T) {
+			t.Parallel()
 			f := newProtectedReadFixture(t, []string{config.ScopeSettingsRead, config.ScopeAIExecute})
 			primary := f.open(t, kind, scopedReadToken, "header")
 			control := f.open(t, kind, scopedReadControl, "header")
@@ -373,9 +379,11 @@ func TestProtectedReadStreamsIdleWithdrawal(t *testing.T) {
 func TestProtectedReadStreamsPreserveSessionAndProxy(t *testing.T) {
 	for _, kind := range protectedReadKinds {
 		for _, transport := range []string{"session", "proxy"} {
+			kind, transport := kind, transport
 			t.Run(kind+"/"+transport, func(t *testing.T) {
+				t.Parallel()
 				f := newProtectedReadFixture(t, []string{config.ScopeSettingsRead, config.ScopeAIExecute})
-				session := fmt.Sprintf("synthetic-read-session-%d", time.Now().UnixNano())
+				session := fmt.Sprintf("synthetic-read-session-%s-%s-%d", kind, transport, time.Now().UnixNano())
 				GetSessionStore().CreateSession(session, time.Hour, "fixture", "127.0.0.1", "stream-admin")
 				t.Cleanup(func() { GetSessionStore().DeleteSession(session) })
 				reader := f.open(t, kind, session, transport)
@@ -429,7 +437,9 @@ func TestProtectedReadStreamsRetainAdmissionPolicy(t *testing.T) {
 
 func TestProtectedReadStreamsKeepOrgAndInstanceSplit(t *testing.T) {
 	for _, kind := range protectedReadKinds {
+		kind := kind
 		t.Run(kind, func(t *testing.T) {
+			t.Parallel()
 			f := newProtectedReadFixture(t, []string{config.ScopeSettingsRead, config.ScopeAIExecute})
 			reader := f.open(t, kind, scopedReadToken, "header")
 			config.Mu.Lock()
@@ -447,7 +457,9 @@ func TestProtectedReadStreamsKeepOrgAndInstanceSplit(t *testing.T) {
 
 func TestTokenStreamWriterChecksReplayQueueAndFinalClosure(t *testing.T) {
 	for _, stage := range []string{"before_replay", "between_replay", "queued_write", "flush", "after_handler"} {
+		stage := stage
 		t.Run(stage, func(t *testing.T) {
+			t.Parallel()
 			cfg := newTestConfigWithTokens(t, newTokenRecord(t, scopedReadToken, []string{config.ScopeSettingsRead}, nil))
 			revoke := func() { config.Mu.Lock(); cfg.RemoveAPIToken(cfg.APITokens[0].ID); config.Mu.Unlock() }
 			var retained http.ResponseWriter

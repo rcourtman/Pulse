@@ -10,7 +10,7 @@ import (
 	"time"
 
 	"github.com/rcourtman/pulse-go-rewrite/internal/config"
-	"golang.org/x/crypto/bcrypt"
+	internalauth "github.com/rcourtman/pulse-go-rewrite/pkg/auth"
 )
 
 const changePasswordProbeCurrent = "correct-admin-password"
@@ -18,11 +18,11 @@ const changePasswordProbeCurrent = "correct-admin-password"
 func newChangePasswordRouter(t *testing.T) (*Router, *config.Config) {
 	t.Helper()
 	dir := t.TempDir()
-	hashed, err := bcrypt.GenerateFromPassword([]byte(changePasswordProbeCurrent), bcrypt.DefaultCost)
+	hashed, err := internalauth.HashPassword(changePasswordProbeCurrent)
 	if err != nil {
-		t.Fatalf("bcrypt: %v", err)
+		t.Fatalf("hash password: %v", err)
 	}
-	cfg := &config.Config{DataPath: dir, ConfigPath: dir, AuthUser: "admin", AuthPass: string(hashed)}
+	cfg := &config.Config{DataPath: dir, ConfigPath: dir, AuthUser: "admin", AuthPass: hashed}
 	router := newTestRouter(t, cfg, nil, nil, nil, nil, "1.0.0")
 	cleanupTestRouter(t, router)
 	return router, cfg
@@ -93,9 +93,9 @@ func TestChangePasswordBasicAuthPathUnaffected(t *testing.T) {
 func newChangePasswordRouterWithToken(t *testing.T, rawToken string, scopes []string) (*Router, *config.Config) {
 	t.Helper()
 	dir := t.TempDir()
-	hashed, err := bcrypt.GenerateFromPassword([]byte(changePasswordProbeCurrent), bcrypt.DefaultCost)
+	hashed, err := internalauth.HashPassword(changePasswordProbeCurrent)
 	if err != nil {
-		t.Fatalf("bcrypt: %v", err)
+		t.Fatalf("hash password: %v", err)
 	}
 	record, err := config.NewAPITokenRecord(rawToken, "change-password-caller", scopes)
 	if err != nil {
@@ -103,7 +103,7 @@ func newChangePasswordRouterWithToken(t *testing.T, rawToken string, scopes []st
 	}
 	cfg := &config.Config{
 		DataPath: dir, ConfigPath: dir,
-		AuthUser: "admin", AuthPass: string(hashed),
+		AuthUser: "admin", AuthPass: hashed,
 		APITokens: []config.APITokenRecord{*record},
 	}
 	cfg.SortAPITokens()

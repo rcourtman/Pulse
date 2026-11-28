@@ -67,7 +67,20 @@ type assistantStreamFixture struct {
 	otherCalls atomic.Int32
 }
 
+var assistantBinderSetupMu sync.Mutex
+
 func newAssistantStreamFixture(t *testing.T, kind string, scopes []string, writeTimeout ...time.Duration) *assistantStreamFixture {
+	t.Helper()
+	return newAssistantStreamFixtureWithBinder(t, kind, scopes, nil, writeTimeout...)
+}
+
+func newAssistantStreamFixtureWithBinder(
+	t *testing.T,
+	kind string,
+	scopes []string,
+	customBinder func(extensions.AIAlertAnalysisEndpoints, extensions.AIAlertAnalysisRuntime) extensions.AIAlertAnalysisEndpoints,
+	writeTimeout ...time.Duration,
+) *assistantStreamFixture {
 	t.Helper()
 	f := &assistantStreamFixture{kind: kind, primary: newAssistantProviderGate(), control: newAssistantProviderGate()}
 	f.licensed.Store(true)
@@ -126,18 +139,27 @@ func newAssistantStreamFixture(t *testing.T, kind string, scopes []string, write
 	}))
 	t.Cleanup(provider.Close)
 
-	// NewRouter resolves the extension while binding routes. Restore the
-	// previous binder immediately; tests never run parallel with global setup.
-	aiAlertAnalysisBindMu.RLock()
-	previous := aiAlertAnalysisEndpointsBinder
-	aiAlertAnalysisBindMu.RUnlock()
-	if kind == "investigate-alert" {
-		SetAIAlertAnalysisEndpointsBinder(func(defaults extensions.AIAlertAnalysisEndpoints, runtime extensions.AIAlertAnalysisRuntime) extensions.AIAlertAnalysisEndpoints {
+	// NewRouter resolves the extension while binding routes. Serialize only
+	// the binder swap + router creation so parallel subtests never observe
+	// another subtest's temporary binder.
+	binder := customBinder
+	if binder == nil && kind == "investigate-alert" {
+		binder = func(defaults extensions.AIAlertAnalysisEndpoints, runtime extensions.AIAlertAnalysisRuntime) extensions.AIAlertAnalysisEndpoints {
 			return assistantAnalysisFixture{AIAlertAnalysisEndpoints: defaults, runtime: runtime, licensed: &f.licensed}
-		})
-		defer SetAIAlertAnalysisEndpointsBinder(previous)
+		}
 	}
-	f.router, f.token = setupExecuteRouterForScopes(t, provider.URL, scopes, true)
+	assistantBinderSetupMu.Lock()
+	if binder != nil {
+		aiAlertAnalysisBindMu.RLock()
+		previous := aiAlertAnalysisEndpointsBinder
+		aiAlertAnalysisBindMu.RUnlock()
+		SetAIAlertAnalysisEndpointsBinder(binder)
+		f.router, f.token = setupExecuteRouterForScopes(t, provider.URL, scopes, true)
+		SetAIAlertAnalysisEndpointsBinder(previous)
+	} else {
+		f.router, f.token = setupExecuteRouterForScopes(t, provider.URL, scopes, true)
+	}
+	assistantBinderSetupMu.Unlock()
 	f.router.config.APITokens = append(f.router.config.APITokens, newTokenRecord(t, assistantControlToken, []string{config.ScopeWildcard}, nil))
 	f.router.config.AuthUser = "assistant-fixture-admin"
 	f.router.config.ProxyAuthSecret = "synthetic-assistant-proxy-secret"
@@ -253,7 +275,9 @@ func TestAssistantStreamsWithdrawAuthority(t *testing.T) {
 	for _, kind := range []string{"execute", "investigate-alert", "chat"} {
 		for _, transport := range []string{"header", "bearer"} {
 			for _, change := range []string{"revoked", "expired", "scope_removed", "org_removed", "credential_replaced", "principal_replaced", "invalid_role"} {
+				kind, transport, change := kind, transport, change
 				t.Run(kind+"/"+transport+"/"+change, func(t *testing.T) {
+					t.Parallel()
 					f := newAssistantStreamFixture(t, kind, []string{assistantScope(kind)})
 					control := f.open(t, "control", assistantControlToken, "header")
 					primary := f.open(t, "primary", f.token, transport)
@@ -307,11 +331,13 @@ func TestAssistantStreamsWithdrawAuthority(t *testing.T) {
 func TestAssistantStreamsPreserveScopeAlternativesAndNonTokenReaders(t *testing.T) {
 	for _, kind := range []string{"execute", "investigate-alert", "chat"} {
 		for _, transport := range []string{"header", "session", "proxy"} {
+			kind, transport := kind, transport
 			t.Run(kind+"/"+transport, func(t *testing.T) {
+				t.Parallel()
 				f := newAssistantStreamFixture(t, kind, []string{assistantScope(kind), config.ScopeSettingsRead})
 				raw := f.token
 				if transport == "session" {
-					raw = "synthetic-assistant-session"
+					raw = "synthetic-assistant-session-" + kind
 					GetSessionStore().CreateSession(raw, time.Hour, "fixture", "127.0.0.1", f.router.config.AuthUser)
 					t.Cleanup(func() { GetSessionStore().DeleteSession(raw) })
 				}
@@ -330,7 +356,9 @@ func TestAssistantStreamsPreserveScopeAlternativesAndNonTokenReaders(t *testing.
 		}
 	}
 	for _, scopes := range [][]string{{config.ScopeRelayMobileAccess}, {config.ScopeAIChat}, {config.ScopeAIChat, config.ScopeRelayMobileAccess}} {
+		scopes := scopes
 		t.Run(strings.Join(scopes, "+"), func(t *testing.T) {
+			t.Parallel()
 			f := newAssistantStreamFixture(t, "chat", scopes)
 			response := f.open(t, "primary", f.token, "header")
 			config.Mu.Lock()
@@ -344,7 +372,9 @@ func TestAssistantStreamsPreserveScopeAlternativesAndNonTokenReaders(t *testing.
 
 func TestAssistantStreamsRetainAdminAndLicenseGates(t *testing.T) {
 	for _, kind := range []string{"execute", "investigate-alert"} {
+		kind := kind
 		t.Run(kind, func(t *testing.T) {
+			t.Parallel()
 			f := newAssistantStreamFixture(t, kind, []string{config.ScopeAIExecute})
 			response := f.open(t, "primary", f.token, "header")
 			config.Mu.Lock()
@@ -364,6 +394,7 @@ func TestAssistantStreamsRetainAdminAndLicenseGates(t *testing.T) {
 		})
 	}
 	t.Run("extension-license", func(t *testing.T) {
+		t.Parallel()
 		f := newAssistantStreamFixture(t, "investigate-alert", []string{config.ScopeAIExecute})
 		f.licensed.Store(false)
 		response, err := f.server.Client().Do(f.request(t, "primary", f.token, "header"))
@@ -382,7 +413,9 @@ func TestAssistantStreamsRetainAdminAndLicenseGates(t *testing.T) {
 // cancels with its request. Exercise the real idle writer, not a new short timer.
 func TestAssistantStreamsPreserveExecutionLifetimes(t *testing.T) {
 	for _, kind := range []string{"execute", "investigate-alert", "chat"} {
+		kind := kind
 		t.Run(kind, func(t *testing.T) {
+			t.Parallel()
 			f := newAssistantStreamFixture(t, kind, []string{assistantScope(kind)})
 			response := f.open(t, "primary", f.token, "header")
 			config.Mu.Lock()
@@ -412,7 +445,9 @@ func TestAssistantStreamsPreserveExecutionLifetimes(t *testing.T) {
 
 func TestAssistantStreamsClearNativeServerDeadline(t *testing.T) {
 	for _, kind := range []string{"execute", "investigate-alert", "chat"} {
+		kind := kind
 		t.Run(kind, func(t *testing.T) {
+			t.Parallel()
 			f := newAssistantStreamFixture(t, kind, []string{assistantScope(kind)}, 100*time.Millisecond)
 			response := f.open(t, "primary", f.token, "header")
 			// The initial HTTP deadline has passed, but this stream was

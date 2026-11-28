@@ -132,7 +132,9 @@ func (w *agentEventRefreshWriter) Flush() {
 // of WithValue's context to prove it cannot retain earlier refresh snapshots.
 func TestAgentEventTokenRefreshKeepsBoundedContext(t *testing.T) {
 	for _, transport := range []string{"header", "bearer"} {
+		transport := transport
 		t.Run(transport, func(t *testing.T) {
+			t.Parallel()
 			const orgID = "refresh-tenant"
 			token := newTokenRecord(t, agentEventLifecycleToken, []string{config.ScopeMonitoringRead, config.ScopeAIExecute}, nil)
 			token.OrgID = orgID
@@ -253,7 +255,9 @@ func TestAgentEventTokenRefreshKeepsBoundedContext(t *testing.T) {
 func TestAgentEventTokenLifecycleRejectsWithdrawnAuthority(t *testing.T) {
 	for _, transport := range []string{"header", "bearer"} {
 		for _, change := range []string{"revoked", "expired", "read_scope_removed", "org_rebound", "identity_replaced", "principal_replaced", "invalid_role"} {
+			transport, change := transport, change
 			t.Run(transport+"/"+change, func(t *testing.T) {
+				t.Parallel()
 				router, cfg, server := newAgentLifecycleRouter(t, time.Hour)
 				primary := openAgentLifecycleStream(t, server, agentEventLifecycleToken, transport)
 				control := openAgentLifecycleStream(t, server, agentEventControlToken, transport)
@@ -295,7 +299,9 @@ func TestAgentEventTokenLifecycleRejectsWithdrawnAuthority(t *testing.T) {
 
 func TestAgentEventTokenLifecycleClosesIdleStream(t *testing.T) {
 	for _, change := range []string{"revoke", "natural_expiry"} {
+		change := change
 		t.Run(change, func(t *testing.T) {
+			t.Parallel()
 			_, cfg, server := newAgentLifecycleRouter(t, 10*time.Millisecond)
 			primary := openAgentLifecycleStream(t, server, agentEventLifecycleToken, "header")
 			config.Mu.Lock()
@@ -314,7 +320,9 @@ func TestAgentEventTokenLifecycleClosesIdleStream(t *testing.T) {
 func TestAgentEventTokenLifecycleResolvesLiveTenantInventory(t *testing.T) {
 	const orgID = "tenant-a"
 	for _, change := range []string{"replaced", "removed", "same_credential_in_new_owner", "changes_during_validation", "no_global_fallback"} {
+		change := change
 		t.Run(change, func(t *testing.T) {
+			t.Parallel()
 			record := newTokenRecord(t, agentEventLifecycleToken, []string{config.ScopeMonitoringRead, config.ScopeAIExecute}, nil)
 			record.OrgID = orgID
 			base := &config.Config{}
@@ -383,7 +391,9 @@ func TestAgentEventTokenLifecycleResolvesLiveTenantInventory(t *testing.T) {
 // redacted projection a monitoring:read token gets.
 func TestAgentEventTokenLifecyclePreservesSessionDisclosure(t *testing.T) {
 	for user, restricted := range map[string]bool{"operator": false, "viewer": true} {
+		user, restricted := user, restricted
 		t.Run(user, func(t *testing.T) {
+			t.Parallel()
 			router, cfg, server := newAgentLifecycleRouter(t, time.Hour)
 			config.Mu.Lock()
 			cfg.AuthUser = "operator"

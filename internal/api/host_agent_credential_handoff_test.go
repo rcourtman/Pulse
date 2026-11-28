@@ -59,7 +59,9 @@ func TestHostAgentCredentialFileHandoff(t *testing.T) {
 		{name: "empty file refuses fallback", environment: true, format: "empty", startupErr: true},
 		{name: "missing file refuses fallback", environment: true, format: "missing", startupErr: true},
 	} {
+		tc := tc
 		t.Run(tc.name, func(t *testing.T) {
+			t.Parallel()
 			adminRaw := "synthetic-handoff-admin.12345678"
 			envRaw := "synthetic-handoff-environment.12345678"
 			admin := newTokenRecord(t, adminRaw, []string{config.ScopeWildcard}, nil)
