@@ -177,8 +177,8 @@ export function getHistoryChartDataMax(points: AggregatedMetricPoint[]) {
   return max;
 }
 
-export type HistorySource = 'store' | 'memory' | 'live' | 'mock_synthetic';
-export type HistoryReadoutSource = HistorySource | 'native' | 'mixed';
+export type HistorySource = 'store' | 'memory' | 'live' | 'mock_synthetic' | 'native';
+export type HistoryReadoutSource = HistorySource | 'mixed';
 
 /**
  * Names the displayed reading's origin, not its durability. `memory` readings
@@ -333,6 +333,93 @@ export function formatHistoryChartTimeLabel(timestamp: number, range: HistoryTim
     return date.toLocaleDateString([], { month: 'short', day: 'numeric' });
   }
   return date.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' });
+}
+
+const SHORT_HISTORY_SPAN_MS = 15 * 60_000;
+const DAY_HISTORY_SPAN_MS = 24 * 3_600_000;
+const WEEK_HISTORY_SPAN_MS = 7 * DAY_HISTORY_SPAN_MS;
+
+const isSameLocalCalendarDay = (a: Date, b: Date): boolean =>
+  a.getFullYear() === b.getFullYear() &&
+  a.getMonth() === b.getMonth() &&
+  a.getDate() === b.getDate();
+
+/**
+ * Formats an observation timestamp for a zoomed custom interval from the
+ * visible span rather than the underlying preset dropdown.
+ */
+export function formatHistoryChartTimeLabelForSpan(
+  timestamp: number,
+  spanMs: number,
+  crossesMidnight = false,
+): string {
+  const date = new Date(timestamp);
+  if (spanMs <= SHORT_HISTORY_SPAN_MS) {
+    return crossesMidnight
+      ? date.toLocaleString([], {
+          month: 'short',
+          day: 'numeric',
+          hour: '2-digit',
+          minute: '2-digit',
+          second: '2-digit',
+        })
+      : date.toLocaleTimeString([], {
+          hour: '2-digit',
+          minute: '2-digit',
+          second: '2-digit',
+        });
+  }
+  if (spanMs <= DAY_HISTORY_SPAN_MS && !crossesMidnight) {
+    return date.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' });
+  }
+  if (spanMs <= WEEK_HISTORY_SPAN_MS) {
+    return date.toLocaleString([], {
+      month: 'short',
+      day: 'numeric',
+      hour: '2-digit',
+      minute: '2-digit',
+    });
+  }
+  return date.toLocaleDateString([], { month: 'short', day: 'numeric' });
+}
+
+/**
+ * Formats an axis endpoint for the bottom window labels, adding seconds for
+ * narrow zoomed slices so start and end remain visually distinct.
+ */
+export function formatHistoryWindowEndpointLabel(
+  timestamp: number,
+  includeSeconds: boolean,
+): string {
+  const date = new Date(timestamp);
+  return date.toLocaleString([], {
+    month: 'short',
+    day: 'numeric',
+    hour: '2-digit',
+    minute: '2-digit',
+    ...(includeSeconds ? { second: '2-digit' } : {}),
+  });
+}
+
+/**
+ * Formats a compact, unambiguous window summary for drag previews and zoomed
+ * toolbar badges without em dashes or semicolons.
+ */
+export function formatHistoryWindowSummary(startMs: number, endMs: number): string {
+  const startDate = new Date(startMs);
+  const endDate = new Date(endMs);
+  const spanMs = Math.max(0, endMs - startMs);
+  const includeSeconds = spanMs <= SHORT_HISTORY_SPAN_MS;
+  const sameDay = isSameLocalCalendarDay(startDate, endDate);
+  const startText = formatHistoryWindowEndpointLabel(startMs, includeSeconds);
+  const endText = sameDay
+    ? endDate.toLocaleTimeString([], {
+        hour: '2-digit',
+        minute: '2-digit',
+        ...(includeSeconds ? { second: '2-digit' } : {}),
+      })
+    : formatHistoryWindowEndpointLabel(endMs, includeSeconds);
+  return `${startText} to ${endText}`;
 }
 
 export function createHistoryChartGeometry({

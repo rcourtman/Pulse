@@ -35,7 +35,16 @@ func mockChartTimestamps(duration time.Duration) []time.Time {
 	}
 
 	now := normalizeMockMetricTimestamp(time.Now().UTC(), defaultMockSampleInterval)
-	timestamps := buildTieredTimestamps(now, duration)
+	return mockChartTimestampsAnchored(now, duration)
+}
+
+func mockChartTimestampsAnchored(end time.Time, duration time.Duration) []time.Time {
+	if duration <= 0 {
+		duration = time.Hour
+	}
+
+	anchor := normalizeMockMetricTimestamp(end.UTC(), defaultMockSampleInterval)
+	timestamps := buildTieredTimestamps(anchor, duration)
 	if len(timestamps) > 0 {
 		// Canonical values depend only on identity and timestamp. Select the
 		// chart's retained timestamps before synthesizing values, rather than
@@ -44,9 +53,140 @@ func mockChartTimestamps(duration time.Duration) []time.Time {
 	}
 
 	return []time.Time{
-		now.Add(-duration),
-		now,
+		anchor.Add(-duration),
+		anchor,
 	}
+}
+
+func mockChartTimestampsInWindow(start, end time.Time) []time.Time {
+	if !end.After(start) {
+		return nil
+	}
+	duration := end.Sub(start)
+	// Generate on the canonical grid anchored at end, then filter strictly to
+	// [start, end] so custom windows stay deterministic and within bounds.
+	candidates := mockChartTimestampsAnchored(end, duration)
+	filtered := make([]time.Time, 0, len(candidates))
+	for _, ts := range candidates {
+		if !ts.Before(start) && !ts.After(end) {
+			filtered = append(filtered, ts)
+		}
+	}
+	if len(filtered) >= 2 {
+		return filtered
+	}
+	// Short sub-minute or off-grid windows still need deterministic points inside [start, end].
+	interval := defaultMockSampleInterval
+	if duration < interval*2 {
+		interval = max(time.Second, duration/12)
+	}
+	startSec := start.UTC().Truncate(time.Second)
+	if startSec.Before(start) {
+		startSec = startSec.Add(time.Second)
+	}
+	endSec := end.UTC().Truncate(time.Second)
+	if endSec.Before(startSec) {
+		return nil
+	}
+	out := make([]time.Time, 0, 24)
+	for ts := startSec; !ts.After(endSec) && len(out) < 240; ts = ts.Add(interval) {
+		out = append(out, ts)
+	}
+	if len(out) > 0 && out[len(out)-1].Before(endSec) {
+		out = append(out, endSec)
+	}
+	return out
+}
+
+func mockGuestMetricsForWindow(resourceType, resourceID string, start, end time.Time) map[string][]MetricPoint {
+	resourceType = normalizeMockChartResourceType(resourceType)
+	switch resourceType {
+	case "vm", "container", "dockerContainer", "dockerHost", "agent", "k8s":
+	default:
+		return map[string][]MetricPoint{}
+	}
+
+	timestamps := mockChartTimestampsInWindow(start, end)
+	if len(timestamps) == 0 {
+		return map[string][]MetricPoint{}
+	}
+	metricTypes := mockGuestChartMetricTypes
+	if resourceType == "agent" || resourceType == "dockerHost" {
+		metricTypes = mockHostChartMetricTypes
+	}
+	result := make(map[string][]MetricPoint, len(metricTypes)+1)
+	for _, metricType := range metricTypes {
+		result[metricType] = mockCanonicalMetricSeries(resourceType, resourceID, metricType, timestamps)
+	}
+	if series := mockGuestMemoryUsedSeries(resourceType, resourceID, result["memory"]); len(series) > 0 {
+		result["memoryused"] = series
+	}
+	return result
+}
+
+func mockNodeMetricsForWindow(nodeID string, metricTypes []string, start, end time.Time) map[string][]MetricPoint {
+	nodeID = strings.TrimSpace(nodeID)
+	if nodeID == "" {
+		return map[string][]MetricPoint{}
+	}
+	if len(metricTypes) == 0 {
+		metricTypes = mockNodeChartMetricTypes
+	}
+	timestamps := mockChartTimestampsInWindow(start, end)
+	if len(timestamps) == 0 {
+		return map[string][]MetricPoint{}
+	}
+	result := make(map[string][]MetricPoint, len(metricTypes))
+	for _, metricType := range metricTypes {
+		result[metricType] = mockCanonicalMetricSeries("node", nodeID, metricType, timestamps)
+	}
+	return result
+}
+
+func isSupportedMockDiskMetric(metricType string) bool {
+	for _, supported := range mockDiskChartMetricTypes {
+		if metricType == supported {
+			return true
+		}
+	}
+	return false
+}
+
+func mockDiskMetricsForWindow(resourceID string, metricTypes []string, start, end time.Time) map[string][]MetricPoint {
+	resourceID = strings.TrimSpace(resourceID)
+	if resourceID == "" {
+		return map[string][]MetricPoint{}
+	}
+	if len(metricTypes) == 0 {
+		metricTypes = mockDiskChartMetricTypes
+	}
+	timestamps := mockChartTimestampsInWindow(start, end)
+	if len(timestamps) == 0 {
+		return map[string][]MetricPoint{}
+	}
+	result := make(map[string][]MetricPoint, len(metricTypes))
+	for _, metricType := range metricTypes {
+		if !isSupportedMockDiskMetric(metricType) {
+			continue
+		}
+		result[metricType] = mockCanonicalMetricSeries("disk", resourceID, metricType, timestamps)
+	}
+	return result
+}
+
+// MockStorageUsageForWindow synthesizes deterministic mock storage usage
+// readings strictly inside [start, end] from identity and timestamp alone,
+// without anchoring historical slices to the current live reading.
+func MockStorageUsageForWindow(storageID string, start, end time.Time) []MetricPoint {
+	storageID = strings.TrimSpace(storageID)
+	if storageID == "" {
+		return nil
+	}
+	timestamps := mockChartTimestampsInWindow(start, end)
+	if len(timestamps) == 0 {
+		return nil
+	}
+	return mockCanonicalMetricSeries("storage", storageID, "usage", timestamps)
 }
 
 func mockCanonicalMetricSeries(resourceType, resourceID, metricType string, timestamps []time.Time) []MetricPoint {

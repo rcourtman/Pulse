@@ -425,6 +425,7 @@ export const getGuestDrawerHistoryValueLabel = (
 export const getGuestDrawerHistoryRangeBounds = (
   groupedSeries: readonly { points: readonly AggregatedMetricPoint[] }[],
   window?: { start: number; end: number },
+  exactWindow = false,
 ): GuestDrawerHistoryTimeBounds | null => {
   const timestamps = groupedSeries
     .flatMap((item) => item.points.map((point) => point.timestamp))
@@ -436,6 +437,7 @@ export const getGuestDrawerHistoryRangeBounds = (
     window.end > window.start
       ? { startTime: window.start, endTime: window.end }
       : null;
+  if (exactWindow && windowBounds) return windowBounds;
   if (timestamps.length === 0) return windowBounds;
 
   // The API's requested window is shared across every panel. Do not stretch

@@ -117,6 +117,84 @@ func (m *Monitor) GetGuestMetrics(guestID string, duration time.Duration) map[st
 	return best
 }
 
+// GetGuestMetricsInRange returns in-memory historical metrics for a guest within [start, end] inclusive.
+func (m *Monitor) GetGuestMetricsInRange(guestID string, start, end time.Time) map[string][]MetricPoint {
+	if m == nil || m.metricsHistory == nil {
+		return map[string][]MetricPoint{}
+	}
+
+	candidates := monitorGuestMetricKeyCandidates(guestID)
+	best := map[string][]MetricPoint{}
+	bestSpan := time.Duration(0)
+	bestPoints := 0
+	selected := false
+
+	for _, candidate := range candidates {
+		result := m.metricsHistory.GetAllGuestMetricsInRange(candidate, start, end)
+		span := chartMapCoverageSpan(result)
+		points := monitorMetricMapPointCount(result)
+		if !selected || span > bestSpan || (span == bestSpan && points > bestPoints) {
+			best = result
+			bestSpan = span
+			bestPoints = points
+			selected = true
+		}
+	}
+
+	return best
+}
+
+func trailingLookbackForWindow(start, end time.Time) time.Duration {
+	duration := end.Sub(start)
+	if duration < 0 {
+		duration = 0
+	}
+	lookback := time.Since(start)
+	if lookback < duration {
+		lookback = duration
+	}
+	return lookback
+}
+
+func clipMetricMapToWindow(metrics map[string][]MetricPoint, start, end time.Time) map[string][]MetricPoint {
+	if len(metrics) == 0 {
+		return map[string][]MetricPoint{}
+	}
+	clipped := make(map[string][]MetricPoint, len(metrics))
+	for metric, points := range metrics {
+		if kept := filterMetricsByWindow(points, start, end); len(kept) > 0 {
+			clipped[metric] = kept
+		}
+	}
+	return clipped
+}
+
+// GetGuestMetricsForWindowWithContext serves fallback/native guest metrics strictly
+// within [start, end]. Each candidate is clipped to [start, end] before comparing
+// coverage so out-of-window data cannot displace a better in-window series.
+func (m *Monitor) GetGuestMetricsForWindowWithContext(ctx context.Context, inMemoryKey, sqlResourceType, sqlResourceID string, start, end time.Time, metricTypes ...string) map[string][]MetricPoint {
+	requestedMetricTypes := normalizeChartMetricTypes(metricTypes)
+	if mock.IsMockEnabled() {
+		return filterChartMetricMap(mockGuestMetricsForWindow(sqlResourceType, sqlResourceID, start, end), requestedMetricTypes)
+	}
+	duration := end.Sub(start)
+	if duration <= 0 {
+		return map[string][]MetricPoint{}
+	}
+
+	best := filterChartMetricMap(m.GetGuestMetricsInRange(inMemoryKey, start, end), requestedMetricTypes)
+	if len(requestedMetricTypes) > 0 && hasSufficientChartMapCoverageForMetrics(best, duration, requestedMetricTypes) {
+		return best
+	}
+
+	if nativeHistory := m.nativeGuestMetricHistoryInWindow(ctx, sqlResourceType, start, end, requestedMetricTypes, sqlResourceID); len(nativeHistory) > 0 {
+		if nativeMetrics, ok := nativeHistory[sqlResourceID]; ok {
+			best = mergeGuestMetricHistory(best, filterChartMetricMap(nativeMetrics, requestedMetricTypes), duration)
+		}
+	}
+	return best
+}
+
 // GetGuestMetricsForChart returns guest metrics optimised for chart display.
 // Short ranges are served from the in-memory ring buffer; longer ranges fall
 // back to the persistent SQLite store with LTTB downsampling.
@@ -169,6 +247,22 @@ func (m *Monitor) GetNodeMetrics(nodeID string, metricType string, duration time
 	return m.metricsHistory.GetNodeMetrics(nodeID, metricType, duration)
 }
 
+// GetNodeMetricsInRange returns in-memory historical metrics for a node within [start, end] inclusive.
+func (m *Monitor) GetNodeMetricsInRange(nodeID, metricType string, start, end time.Time) []MetricPoint {
+	if m == nil || m.metricsHistory == nil {
+		return nil
+	}
+	return m.metricsHistory.GetNodeMetricsInRange(nodeID, metricType, start, end)
+}
+
+// GetNodeMetricsForWindow returns fallback node metrics strictly within [start, end].
+func (m *Monitor) GetNodeMetricsForWindow(nodeID, metricType string, start, end time.Time) []MetricPoint {
+	if mock.IsMockEnabled() {
+		return mockNodeMetricsForWindow(nodeID, []string{metricType}, start, end)[metricType]
+	}
+	return m.GetNodeMetricsInRange(nodeID, metricType, start, end)
+}
+
 // GetNodeMetricsForChart returns node metrics for a single metric type,
 // falling back to SQLite + LTTB for longer ranges.
 func (m *Monitor) GetNodeMetricsForChart(nodeID, metricType string, duration time.Duration) []MetricPoint {
@@ -208,12 +302,53 @@ func (m *Monitor) GetStorageMetrics(storageID string, duration time.Duration) ma
 	return m.metricsHistory.GetAllStorageMetrics(storageID, duration)
 }
 
+// GetStorageMetricsInRange returns in-memory historical metrics for storage within [start, end] inclusive.
+func (m *Monitor) GetStorageMetricsInRange(storageID string, start, end time.Time) map[string][]MetricPoint {
+	if m == nil || m.metricsHistory == nil {
+		return map[string][]MetricPoint{}
+	}
+	return m.metricsHistory.GetAllStorageMetricsInRange(storageID, start, end)
+}
+
 // GetDiskMetrics returns historical metrics for a physical disk.
 func (m *Monitor) GetDiskMetrics(resourceID string, metricType string, duration time.Duration) []MetricPoint {
 	if m == nil || m.metricsHistory == nil {
 		return nil
 	}
 	return m.metricsHistory.GetDiskMetrics(resourceID, metricType, duration)
+}
+
+// GetDiskMetricsInRange returns in-memory historical metrics for a physical disk within [start, end] inclusive.
+func (m *Monitor) GetDiskMetricsInRange(resourceID, metricType string, start, end time.Time) []MetricPoint {
+	if m == nil || m.metricsHistory == nil {
+		return nil
+	}
+	return m.metricsHistory.GetDiskMetricsInRange(resourceID, metricType, start, end)
+}
+
+// GetDiskMetricsForWindowWithSource selects fallback/native disk metrics strictly
+// within [start, end]. Native candidates are clipped per provider before
+// downsampling and coverage comparison so provenance reflects the in-window series.
+func (m *Monitor) GetDiskMetricsForWindowWithSource(resourceID, metricType string, start, end time.Time) ([]MetricPoint, string) {
+	if mock.IsMockEnabled() {
+		return mockDiskMetricsForWindow(resourceID, []string{metricType}, start, end)[metricType], "mock_synthetic"
+	}
+	duration := end.Sub(start)
+	if duration <= 0 {
+		return nil, "memory"
+	}
+
+	best := cloneMetricSeries(m.GetDiskMetricsInRange(resourceID, metricType, start, end))
+	source := "memory"
+	if metricType == "smart_temp" && !hasSufficientChartSeriesCoverage(best, duration) {
+		if clippedNative := m.nativePhysicalDiskTemperatureHistoryInWindow(start, end)[resourceID]; len(clippedNative) > 0 {
+			clippedNative = lttb(clippedNative, chartDownsampleTarget)
+			if shouldPreferMetricSeries(best, clippedNative, duration) {
+				return cloneMetricSeries(clippedNative), "native"
+			}
+		}
+	}
+	return best, source
 }
 
 // GetDiskMetricsForChart returns physical-disk metrics optimized for chart
@@ -468,6 +603,51 @@ func (m *Monitor) nativePhysicalDiskTemperatureHistory(duration time.Duration) m
 			}
 			if existing, ok := history[resourceID]; !ok || chartSeriesCoverageSpan(points) > chartSeriesCoverageSpan(existing) {
 				history[resourceID] = points
+			}
+		}
+	}
+	if len(history) == 0 {
+		return nil
+	}
+	return history
+}
+
+func (m *Monitor) nativePhysicalDiskTemperatureHistoryInWindow(start, end time.Time) map[string][]MetricPoint {
+	if mock.IsMockEnabled() || !end.After(start) {
+		return nil
+	}
+
+	providers := m.supplementalProviderSnapshot()
+	if len(providers) == 0 {
+		return nil
+	}
+
+	orgID := "default"
+	if m != nil {
+		if trimmed := strings.TrimSpace(m.GetOrgID()); trimmed != "" {
+			orgID = trimmed
+		}
+	}
+
+	duration := end.Sub(start)
+	lookback := trailingLookbackForWindow(start, end)
+	history := make(map[string][]MetricPoint)
+	for _, provider := range providers {
+		historyProvider, ok := provider.(MonitorPhysicalDiskTemperatureHistoryProvider)
+		if !ok {
+			continue
+		}
+		nativeHistory := historyProvider.PhysicalDiskTemperatureHistory(m, orgID, lookback)
+		for resourceID, points := range nativeHistory {
+			if strings.TrimSpace(resourceID) == "" || len(points) == 0 {
+				continue
+			}
+			clipped := filterMetricsByWindow(points, start, end)
+			if len(clipped) == 0 {
+				continue
+			}
+			if existing, ok := history[resourceID]; !ok || shouldPreferMetricSeries(existing, clipped, duration) {
+				history[resourceID] = clipped
 			}
 		}
 	}
@@ -902,6 +1082,60 @@ func (m *Monitor) nativeGuestMetricHistory(ctx context.Context, resourceType str
 			}
 			existing := history[resourceID]
 			history[resourceID] = mergeGuestMetricHistory(existing, metricMap, duration)
+		}
+	}
+	if len(history) == 0 {
+		return nil
+	}
+	return history
+}
+
+func (m *Monitor) nativeGuestMetricHistoryInWindow(ctx context.Context, resourceType string, start, end time.Time, metricTypes []string, resourceIDs ...string) map[string]map[string][]MetricPoint {
+	if !end.After(start) {
+		return nil
+	}
+	providers := m.supplementalProviderSnapshot()
+	if len(providers) == 0 {
+		return nil
+	}
+
+	orgID := "default"
+	if m != nil {
+		if trimmed := strings.TrimSpace(m.GetOrgID()); trimmed != "" {
+			orgID = trimmed
+		}
+	}
+
+	duration := end.Sub(start)
+	lookback := trailingLookbackForWindow(start, end)
+	history := make(map[string]map[string][]MetricPoint)
+	for _, provider := range providers {
+		if ctx.Err() != nil {
+			return nil
+		}
+		if targeted, ok := provider.(MonitorTargetedGuestMetricHistoryProvider); ok && len(resourceIDs) == 1 {
+			id := resourceIDs[0]
+			metricMap := targeted.GuestMetricHistoryForResource(ctx, m, orgID, resourceType, id, lookback, metricTypes...)
+			clipped := clipMetricMapToWindow(metricMap, start, end)
+			if len(clipped) > 0 {
+				history[id] = mergeGuestMetricHistory(history[id], clipped, duration)
+			}
+			continue
+		}
+		historyProvider, ok := provider.(MonitorGuestMetricHistoryProvider)
+		if !ok {
+			continue
+		}
+		nativeHistory := historyProvider.GuestMetricHistory(m, orgID, resourceType, lookback)
+		for resourceID, metricMap := range nativeHistory {
+			if strings.TrimSpace(resourceID) == "" || len(metricMap) == 0 {
+				continue
+			}
+			clipped := clipMetricMapToWindow(metricMap, start, end)
+			if len(clipped) == 0 {
+				continue
+			}
+			history[resourceID] = mergeGuestMetricHistory(history[resourceID], clipped, duration)
 		}
 	}
 	if len(history) == 0 {

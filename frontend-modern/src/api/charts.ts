@@ -112,14 +112,27 @@ export type ResourceType =
   | 'pod'
   | 'disk';
 
-export interface MetricsHistoryParams {
+export interface MetricsHistoryBaseParams {
   resourceType: ResourceType;
   resourceId: string;
   metric?: string; // Optional: 'cpu', 'memory', 'disk', etc. Omit for all metrics
-  range?: HistoryTimeRange; // Default: '24h'
   maxPoints?: number; // Optional cap on returned points (backend may downsample)
   signal?: AbortSignal;
 }
+
+export interface MetricsHistoryRangeParams extends MetricsHistoryBaseParams {
+  range?: HistoryTimeRange; // Default: '24h'
+  start?: never;
+  end?: never;
+}
+
+export interface MetricsHistoryWindowParams extends MetricsHistoryBaseParams {
+  range?: never;
+  start: number; // Inclusive Unix timestamp in milliseconds
+  end: number; // Inclusive Unix timestamp in milliseconds
+}
+
+export type MetricsHistoryParams = MetricsHistoryRangeParams | MetricsHistoryWindowParams;
 
 export function toMetricsHistoryAPIResourceType(
   resourceType: ResourceType,
@@ -217,7 +230,7 @@ export interface SingleMetricHistoryResponse {
   start: number; // Unix timestamp in milliseconds
   end: number; // Unix timestamp in milliseconds
   points: AggregatedMetricPoint[];
-  source?: 'store' | 'memory' | 'live' | 'mock_synthetic';
+  source?: 'store' | 'memory' | 'live' | 'mock_synthetic' | 'native';
 }
 
 export type DiskMetricHistorySource = 'store' | 'memory' | 'native';
@@ -229,7 +242,7 @@ export interface AllMetricsHistoryResponse {
   start: number; // Unix timestamp in milliseconds
   end: number; // Unix timestamp in milliseconds
   metrics: Record<string, AggregatedMetricPoint[]>;
-  source?: 'store' | 'memory' | 'live' | 'mock_synthetic';
+  source?: 'store' | 'memory' | 'live' | 'mock_synthetic' | 'native';
   // Disk replies with native or mixed history identify each populated series
   // instead of describing the whole reply with one source.
   metricSources?: Record<string, DiskMetricHistorySource>;
@@ -253,6 +266,12 @@ const isHistoryPointList = (value: unknown): value is AggregatedMetricPoint[] =>
       isFiniteHistoryNumber(point.max),
   );
 
+const isHistoryPointListWithinWindow = (
+  points: readonly AggregatedMetricPoint[],
+  start: number,
+  end: number,
+): boolean => points.every((point) => point.timestamp >= start && point.timestamp <= end);
+
 // A successful transport is not evidence for the requested selection. Validate
 // before any drawer, chart or hover cache can accept the response. Keep errors
 // fixed: a mismatched body can contain another resource's private details.
@@ -268,15 +287,24 @@ function parseMetricsHistoryResponse(
     resourceType === 'k8s' && requestedId.includes(':pod:') && !requestedId.startsWith('k8s:')
       ? `k8s:${requestedId}`
       : requestedId;
+  const isCustomWindow = params.start !== undefined && params.end !== undefined;
   if (
     !isHistoryObject(value) ||
     value.resourceType !== resourceType ||
     value.resourceId !== resourceId ||
-    (params.range ? value.range !== params.range : value.range !== '' && value.range !== '24h') ||
     !isFiniteHistoryNumber(value.start) ||
     !isFiniteHistoryNumber(value.end) ||
+    (isCustomWindow
+      ? value.range !== 'custom' ||
+        value.start !== params.start ||
+        value.end !== params.end ||
+        value.source === 'live'
+      : params.range
+        ? value.range !== params.range
+        : value.range !== '' && value.range !== '24h') ||
     (value.source !== undefined &&
-      !['store', 'memory', 'live', 'mock_synthetic'].includes(value.source as string))
+      !['store', 'memory', 'live', 'mock_synthetic', 'native'].includes(value.source as string)) ||
+    (value.source === 'native' && !(resourceType === 'disk' && params.metric === 'smart_temp'))
   ) {
     throw new Error('Invalid metrics history response.');
   }
@@ -285,17 +313,23 @@ function parseMetricsHistoryResponse(
       value.metric !== params.metric ||
       'metrics' in value ||
       value.metricSources !== undefined ||
-      !isHistoryPointList(value.points)
+      !isHistoryPointList(value.points) ||
+      (isCustomWindow && !isHistoryPointListWithinWindow(value.points, params.start, params.end))
     ) {
       throw new Error('Invalid metrics history response.');
     }
     return value as unknown as SingleMetricHistoryResponse;
   }
+  if ('metric' in value || 'points' in value || !isHistoryObject(value.metrics)) {
+    throw new Error('Invalid metrics history response.');
+  }
+  const metricsValues = Object.values(value.metrics);
   if (
-    'metric' in value ||
-    'points' in value ||
-    !isHistoryObject(value.metrics) ||
-    !Object.values(value.metrics).every(isHistoryPointList)
+    !metricsValues.every(isHistoryPointList) ||
+    (isCustomWindow &&
+      !(metricsValues as AggregatedMetricPoint[][]).every((points) =>
+        isHistoryPointListWithinWindow(points, params.start, params.end),
+      ))
   ) {
     throw new Error('Invalid metrics history response.');
   }
@@ -417,7 +451,21 @@ export class ChartsAPI {
     if (selection.metric) {
       searchParams.set('metric', selection.metric);
     }
-    if (selection.range) {
+    if (selection.start !== undefined || selection.end !== undefined) {
+      if (
+        selection.range !== undefined ||
+        typeof selection.start !== 'number' ||
+        typeof selection.end !== 'number' ||
+        !Number.isSafeInteger(selection.start) ||
+        !Number.isSafeInteger(selection.end) ||
+        selection.start <= 0 ||
+        selection.end <= selection.start
+      ) {
+        throw new Error('Invalid metrics history window.');
+      }
+      searchParams.set('start', selection.start.toString());
+      searchParams.set('end', selection.end.toString());
+    } else if (selection.range) {
       searchParams.set('range', selection.range);
     }
     if (

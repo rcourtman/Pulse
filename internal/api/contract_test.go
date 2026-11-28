@@ -13300,7 +13300,7 @@ func TestContract_MetricsHistoryLiveFallbackJSONSnapshot(t *testing.T) {
 
 	req := httptest.NewRequest(
 		http.MethodGet,
-		"/api/metrics-store/history?resourceType=vm&resourceId=pve1:node1:101&metric=cpu&start=2026-03-11T00:00:00Z&end=2026-03-12T00:00:00Z",
+		"/api/metrics-store/history?resourceType=vm&resourceId=pve1:node1:101&metric=cpu&range=24h",
 		nil,
 	)
 	rec := httptest.NewRecorder()

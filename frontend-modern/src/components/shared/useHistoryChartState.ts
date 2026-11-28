@@ -42,9 +42,9 @@ export function useHistoryChartState(
   const [loading, setLoading] = createSignal(false);
   const [refreshFailed, setRefreshFailed] = createSignal(false);
   const [error, setError] = createSignal<string | null>(null);
-  const [source, setSource] = createSignal<'store' | 'memory' | 'live' | 'mock_synthetic' | null>(
-    null,
-  );
+  const [source, setSource] = createSignal<
+    'store' | 'memory' | 'live' | 'mock_synthetic' | 'native' | null
+  >(null);
   const [maxPoints, setMaxPoints] = createSignal<number | null>(null);
   const [localHoveredTimestamp, setLocalHoveredTimestamp] = createSignal<number | null>(null);
   const [hoveredPoint, setHoveredPoint] = createSignal<HistoryChartHoverPoint | null>(null);
