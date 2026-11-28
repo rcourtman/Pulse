@@ -201,13 +201,11 @@ func TestAssistantJSONWithdrawAuthority(t *testing.T) {
 func TestAssistantJSONPreserveReaders(t *testing.T) {
 	for _, kind := range []string{"execute", "kubernetes"} {
 		for _, transport := range []string{"header", "session", "proxy"} {
-			kind, transport := kind, transport
 			t.Run(kind+"/"+transport, func(t *testing.T) {
-				t.Parallel()
 				f := newAssistantJSONFixture(t, kind, []string{config.ScopeAIExecute, config.ScopeSettingsRead})
 				raw := f.token
 				if transport == "session" {
-					raw = "synthetic-assistant-json-session-" + kind
+					raw = "synthetic-assistant-json-session"
 					GetSessionStore().CreateSession(raw, time.Hour, "fixture", "127.0.0.1", f.router.config.AuthUser)
 					t.Cleanup(func() { GetSessionStore().DeleteSession(raw) })
 				}

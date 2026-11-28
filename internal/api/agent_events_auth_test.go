@@ -391,9 +391,7 @@ func TestAgentEventTokenLifecycleResolvesLiveTenantInventory(t *testing.T) {
 // redacted projection a monitoring:read token gets.
 func TestAgentEventTokenLifecyclePreservesSessionDisclosure(t *testing.T) {
 	for user, restricted := range map[string]bool{"operator": false, "viewer": true} {
-		user, restricted := user, restricted
 		t.Run(user, func(t *testing.T) {
-			t.Parallel()
 			router, cfg, server := newAgentLifecycleRouter(t, time.Hour)
 			config.Mu.Lock()
 			cfg.AuthUser = "operator"

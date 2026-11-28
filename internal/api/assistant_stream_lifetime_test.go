@@ -331,13 +331,11 @@ func TestAssistantStreamsWithdrawAuthority(t *testing.T) {
 func TestAssistantStreamsPreserveScopeAlternativesAndNonTokenReaders(t *testing.T) {
 	for _, kind := range []string{"execute", "investigate-alert", "chat"} {
 		for _, transport := range []string{"header", "session", "proxy"} {
-			kind, transport := kind, transport
 			t.Run(kind+"/"+transport, func(t *testing.T) {
-				t.Parallel()
 				f := newAssistantStreamFixture(t, kind, []string{assistantScope(kind), config.ScopeSettingsRead})
 				raw := f.token
 				if transport == "session" {
-					raw = "synthetic-assistant-session-" + kind
+					raw = "synthetic-assistant-session"
 					GetSessionStore().CreateSession(raw, time.Hour, "fixture", "127.0.0.1", f.router.config.AuthUser)
 					t.Cleanup(func() { GetSessionStore().DeleteSession(raw) })
 				}

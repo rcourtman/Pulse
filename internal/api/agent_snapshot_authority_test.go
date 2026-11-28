@@ -308,19 +308,11 @@ func TestAgentSnapshotsWithdrawnTokenCannotDisclose(t *testing.T) {
 }
 
 func TestAgentSnapshotsWithdrawnSessionCannotDisclose(t *testing.T) {
-	setupSnapshotAuthorityEnv(t)
 	for _, path := range snapshotAuthorityPaths {
 		for _, change := range []string{"logout", "expired", "replaced", "principal", "store"} {
-			path, change := path, change
 			t.Run(path+"/"+change, func(t *testing.T) {
-				if change != "store" {
-					t.Parallel()
-				}
-				f := newSnapshotAuthorityFixtureWithEnv(t, path, []string{config.ScopeMonitoringRead})
-				raw := "synthetic-snapshot-session-" + path + "-" + change
-				if change == "store" {
-					InitSessionStore(t.TempDir())
-				}
+				f := newSnapshotAuthorityFixture(t, path, []string{config.ScopeMonitoringRead})
+				const raw = "synthetic-snapshot-session"
 				GetSessionStore().CreateSession(raw, time.Hour, "fixture", "127.0.0.1", f.router.config.AuthUser)
 				t.Cleanup(func() { GetSessionStore().DeleteSession(raw) })
 				control := f.begin(t, snapshotAuthorityControl, "header")
@@ -338,9 +330,6 @@ func TestAgentSnapshotsWithdrawnSessionCannotDisclose(t *testing.T) {
 			})
 		}
 	}
-	// Reset to a parent-owned store after sequential "store" subtests finish
-	// and before parallel session-mutation subtests begin.
-	InitSessionStore(t.TempDir())
 }
 
 func TestAgentSnapshotsCommandWithdrawalAndCurrentRedaction(t *testing.T) {

@@ -379,11 +379,9 @@ func TestProtectedReadStreamsIdleWithdrawal(t *testing.T) {
 func TestProtectedReadStreamsPreserveSessionAndProxy(t *testing.T) {
 	for _, kind := range protectedReadKinds {
 		for _, transport := range []string{"session", "proxy"} {
-			kind, transport := kind, transport
 			t.Run(kind+"/"+transport, func(t *testing.T) {
-				t.Parallel()
 				f := newProtectedReadFixture(t, []string{config.ScopeSettingsRead, config.ScopeAIExecute})
-				session := fmt.Sprintf("synthetic-read-session-%s-%s-%d", kind, transport, time.Now().UnixNano())
+				session := fmt.Sprintf("synthetic-read-session-%d", time.Now().UnixNano())
 				GetSessionStore().CreateSession(session, time.Hour, "fixture", "127.0.0.1", "stream-admin")
 				t.Cleanup(func() { GetSessionStore().DeleteSession(session) })
 				reader := f.open(t, kind, session, transport)
