@@ -35,10 +35,13 @@ func (m *Monitor) dispatchTaskWorkers(ctx context.Context, limiter *pollTaskWork
 			due = time.Now()
 		}
 		work := progress.begin(pollWorkWaitingForSlot, due.Add(budget))
-		if !limiter.acquire(ctx) {
+		if !limiter.acquireClaim(ctx, m.taskQueue, task) {
 			m.taskQueue.completeClaim(task, ScheduledTask{}, noPollReschedule)
 			progress.finish(work)
-			return
+			if ctx.Err() != nil {
+				return
+			}
+			continue
 		}
 
 		progress.start(work, time.Now().Add(budget))
@@ -47,6 +50,35 @@ func (m *Monitor) dispatchTaskWorkers(ctx context.Context, limiter *pollTaskWork
 			m.executeAndRescheduleTask(ctx, task, progress, work)
 		}()
 	}
+}
+
+// A retired claim must not keep the dispatcher away from other eligible
+// work. Only the contended path needs a retirement signal.
+func (l *pollTaskWorkerLimiter) acquireClaim(ctx context.Context, q *TaskQueue, task ScheduledTask) bool {
+	select {
+	case <-ctx.Done():
+		return false
+	case l.slots <- struct{}{}:
+	default:
+		retired := q.watchClaimRetirement(task)
+		if retired == nil {
+			return false
+		}
+		select {
+		case <-ctx.Done():
+			return false
+		case <-retired:
+			return false
+		case l.slots <- struct{}{}:
+		}
+	}
+	// If the slot and retirement were both ready, retirement wins before any
+	// provider work starts. Once admitted, the normal in-flight fences apply.
+	if ctx.Err() != nil || !q.canStartClaim(task) {
+		l.release()
+		return false
+	}
+	return true
 }
 
 func (m *Monitor) taskWorker(ctx context.Context, id int) {

@@ -6651,6 +6651,14 @@ tasks. A large tenant count therefore adds only one blocked dispatcher per
 monitor rather than another full override-sized goroutine pool, while a single
 large tenant can still fill the configured I/O concurrency budget.
 
+A confirmed removal retires a claim still waiting for a process slot. The
+dispatcher releases the claim without starting provider setup and can take
+another due target, without changing the process concurrency limit. An
+explicit replacement of the retired target keeps its own due time, and a
+poll already admitted to run still owns its claim until it returns.
+`TestProcessPollDispatcherReleasesRetiredClaim` exercises deletion, a live
+peer and a later same-key replacement with the process slot held.
+
 ### Configured fixed poll intervals hold on both scheduler paths
 
 An instance that carries a user-configured cadence (availability targets via
