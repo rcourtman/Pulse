@@ -725,11 +725,114 @@ class StaleReadingAndAgentHelpDocsTest(unittest.TestCase):
         self.assertIn("data-disk-stale-cue", guest_disks)
         self.assertIn("extractPhysicalDiskFreshness(disk)", pool_detail)
 
+    def test_help_documents_proxmox_backups_stale_telemetry(self):
+        recovery = doc_text("docs/RECOVERY.md")
+        where_to_look = norm(
+            recovery.split("## Where to look\n", 1)[1].split("\n## ", 1)[0]
+        )
+        self.assertIn("(#stale-proxmox-backup-telemetry)", where_to_look)
+
+        stale_section = norm(
+            recovery.split("## Stale Proxmox backup telemetry\n", 1)[1].split(
+                "\n## ", 1
+            )[0]
+        )
+        for phrase in (
+            "**Proxmox → Backups** (`/proxmox/backups`)",
+            "optional stale host agent on a Proxmox host does not mark backup telemetry stale",
+            "`Backup telemetry is stale for <sources>. Protection status, job counts, and restore points show the last values received before polling stopped.`",
+            "**Backup health** switches a green protected verdict indicator to amber and adds `· Stale data`",
+            "**Backup jobs** adds `· Stale data` in its header while keeping **Last 24h** pills and 14-day bars intact",
+            "`Stale · <age>` or `Stale data`, or `Stale` on compact phone layouts",
+            "Unaffected fresh siblings stay untouched",
+            "`Readings are stale.` (`protection status and restore points show the last values received.`)",
+            "`Source telemetry is stale.` (`newer backups or prunes may not appear yet.`)",
+            "Search in both **Coverage** and **By date** matches stale labels, stale details, and recorded source error text",
+            "[Stale PBS readings and unread datastore capacity](PBS.md#stale-pbs-readings-and-unread-datastore-capacity)",
+            "VM_DISK_MONITORING.md#backup-safety",
+        ):
+            with self.subTest(doc="RECOVERY.md", phrase=phrase):
+                self.assertIn(phrase, stale_section)
+
+        pbs = doc_text("docs/PBS.md")
+        pbs_section = norm(
+            pbs.split("### Stale PBS readings and unread datastore capacity\n", 1)[1].split(
+                "\n### ", 1
+            )[0]
+        )
+        for phrase in (
+            "**Page-wide Proxmox Backups cues:**",
+            "shares its PBS poll-staleness check with the rest of **Proxmox → Backups** (`/proxmox/backups`)",
+            "`· Stale data` header cues on **Backup health** and **Backup jobs**",
+            "[Stale Proxmox backup telemetry](RECOVERY.md#stale-proxmox-backup-telemetry)",
+        ):
+            with self.subTest(doc="PBS.md", phrase=phrase):
+                self.assertIn(phrase, pbs_section)
+
+        faq = doc_text("docs/FAQ.md")
+        faq_section = norm(
+            faq.split("### No data showing?\n", 1)[1].split("\n### ", 1)[0]
+        )
+        for phrase in (
+            "**Proxmox Backups** (`/proxmox/backups`)",
+            "`Backup telemetry is stale for <sources>. Protection status, job counts, and restore points show the last values received before polling stopped.`",
+            "**Backup health** downgrades a green protected dot to amber with a `· Stale data` header cue",
+            "**Backup jobs** adds `· Stale data` while preserving **Last 24h** pills and 14-day bars",
+            "`Readings are stale.` in **Coverage** and `Source telemetry is stale.` in **By date**",
+            "[Stale Proxmox backup telemetry](RECOVERY.md#stale-proxmox-backup-telemetry)",
+            "[Stale PBS readings](PBS.md#stale-pbs-readings-and-unread-datastore-capacity)",
+        ):
+            with self.subTest(doc="FAQ.md", phrase=phrase):
+                self.assertIn(phrase, faq_section)
+
+        staleness = doc_text(
+            "frontend-modern/src/features/proxmox/proxmoxBackupStaleness.ts"
+        )
+        backups_table = doc_text(
+            "frontend-modern/src/features/proxmox/ProxmoxBackupsTable.tsx"
+        )
+        strip = doc_text(
+            "frontend-modern/src/features/proxmox/ProxmoxBackupsCoverageStrip.tsx"
+        )
+        jobs_card = doc_text(
+            "frontend-modern/src/features/proxmox/ProxmoxBackupJobsCard.tsx"
+        )
+        coverage = doc_text(
+            "frontend-modern/src/features/proxmox/ProxmoxCoverageTable.tsx"
+        )
+        recoverable = doc_text(
+            "frontend-modern/src/features/proxmox/ProxmoxRecoverableTable.tsx"
+        )
+        shared = doc_text(
+            "frontend-modern/src/features/proxmox/proxmoxBackupsTableShared.tsx"
+        )
+
+        for marker in (
+            "Backup telemetry is stale for ${list}. Protection status, job counts, and restore points show the last values received before polling stopped.",
+            "badge: age ? `Stale · ${age}` : 'Stale data'",
+            "compactBadge: 'Stale'",
+            "'protection status and restore points show the last values received.'",
+            "'newer backups or prunes may not appear yet.'",
+            "export const isPBSServerPollStale =",
+            "export const hasStaleTextMatch =",
+        ):
+            self.assertIn(marker, staleness)
+        self.assertIn("data-stale-backup-sources", backups_table)
+        self.assertIn("hasStaleTextMatch(coverageRowStaleNotice(row), term)", backups_table)
+        self.assertIn("hasStaleTextMatch(artifactStaleNotice(artifact), term)", backups_table)
+        self.assertIn("props.staleNotice && props.verdict.tone === 'protected' ? 'attention' : props.verdict.tone", strip)
+        self.assertIn('<BackupStaleHeaderCue notice={props.staleNotice} attr="verdict" />', strip)
+        self.assertIn('<BackupStaleHeaderCue notice={props.staleNotice} attr="jobs" />', jobs_card)
+        self.assertIn('lead="Readings are stale."', coverage)
+        self.assertIn('lead="Source telemetry is stale."', recoverable)
+        self.assertIn("· Stale data", shared)
+
     def test_shipped_public_docs_mirrors_match_byte_for_byte(self):
         for name in (
             "AGENT_SECURITY.md",
             "FAQ.md",
             "KUBERNETES.md",
+            "PBS.md",
             "RECOVERY.md",
             "TRUENAS.md",
             "UNIFIED_AGENT.md",

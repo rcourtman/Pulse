@@ -344,6 +344,22 @@ does not prove that every reading is fresh. Missing or unavailable is not zero.
   under **Worth checking** (`Shown figures are last reported values.`), and
   inline History withholds stale snapshot values as live chart readings until
   fresh Proxmox updates arrive.
+- **Proxmox Backups** (`/proxmox/backups`) surfaces backend PVE and PBS poll
+  staleness without hiding retained protection records or treating an optional
+  stale host agent as a backup failure when provider polling is healthy. A
+  page-level warning banner lists affected sources and ages
+  (`Backup telemetry is stale for <sources>. Protection status, job counts, and
+  restore points show the last values received before polling stopped.`),
+  **Backup health** downgrades a green protected dot to amber with a
+  `· Stale data` header cue while keeping counts and bars visible, **Backup
+  jobs** adds `· Stale data` while preserving **Last 24h** pills and 14-day
+  bars, and only affected **Coverage** and **By date** rows show compact amber
+  stale cues (`Stale · <age>` or `Stale data`, or `Stale` on phones) and expanded
+  drawer notices (`Readings are stale.` in **Coverage** and `Source telemetry is
+  stale.` in **By date**), while search matches stale labels, details, and
+  source errors. See
+  [Stale Proxmox backup telemetry](RECOVERY.md#stale-proxmox-backup-telemetry)
+  and [Stale PBS readings](PBS.md#stale-pbs-readings-and-unread-datastore-capacity).
 - **TrueNAS protection** (`/truenas/protection`) matches cached ZFS snapshots
   and replication tasks to their owning TrueNAS system (by connection ID or
   provider scope first, then unambiguous hostname) when TrueNAS polling hits a
@@ -467,6 +483,7 @@ does not prove that every reading is fresh. Missing or unavailable is not zero.
 
 Use the relevant checks for [stale TrueNAS data](TRUENAS.md#stale-truenas-data),
 [stale Kubernetes readings](KUBERNETES.md#stale-kubernetes-readings),
+[stale Proxmox backup telemetry](RECOVERY.md#stale-proxmox-backup-telemetry),
 [empty PBS History](PBS.md#pbs-is-connected-but-history-stays-empty),
 [missing or stale PVE replication jobs](TROUBLESHOOTING.md#replication-jobs-are-pending-stale-or-missing) or
 [missing VM disk usage](VM_DISK_MONITORING.md#a-missing-reading-is-not-an-installation-diagnosis). Check Proxmox
