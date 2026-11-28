@@ -2323,15 +2323,16 @@ func (m *Monitor) AcknowledgeDockerHostCommand(commandID, hostID, status, messag
 // Wiping the agent state dir regenerates the agent ID, and a fresh install
 // command mints a fresh token, so identity resolution correctly refuses to
 // adopt the old record (a foreign token must never take over a live host,
-// #1008) and creates a new one — leaving the old record behind forever with a
+// #1008) and creates a new one, leaving the old record behind forever with a
 // stale agent version, stale containers, and stale image digests (#1586,
-// #1564). A record qualifies as a corpse only when it stopped reporting
-// before the superseding token was even minted: generating a fresh install
-// command for the same machine is explicit replace intent (the same rule the
-// removal block uses for re-enrollment, #1581), while a record that is still
-// reporting keeps advancing LastSeen and is never touched. Unlike a
-// user-initiated removal this does not set the resurrection block and does
-// not revoke the orphaned token.
+// #1564). A record qualifies as a corpse when it stopped reporting before the
+// superseding token was minted or within one of its own health windows after
+// minting (a still-running old agent often sends one final report while the
+// user copies and runs the replacement install command, mirroring
+// staleHostIdentityForReenrollment), while a live record keeps advancing
+// LastSeen past that window and is never touched. Unlike a user-initiated
+// removal this does not set the resurrection block and does not revoke the
+// orphaned token.
 func (m *Monitor) dockerHostRecordViews() []*unifiedresources.DockerHostView {
 	if m == nil || m.state == nil {
 		return nil
@@ -2344,7 +2345,24 @@ func (m *Monitor) dockerHostRecordViews() []*unifiedresources.DockerHostView {
 	return views
 }
 
-func dockerTokenEnrolledElsewhere(tokenRecord *config.APITokenRecord, dockerHosts []*unifiedresources.DockerHostView, hostModels []models.Host, excludeID string) bool {
+func dockerHostMatchesHostModel(current models.DockerHost, host models.Host) bool {
+	hostID := strings.TrimSpace(host.ID)
+	currentID := strings.TrimSpace(current.ID)
+	if hostID != "" && hostID == currentID {
+		return true
+	}
+	currentAgentID := strings.TrimSpace(current.AgentID)
+	if currentAgentID != "" && hostID == currentAgentID {
+		return true
+	}
+	currentMachineID := strings.TrimSpace(current.MachineID)
+	currentHostname := strings.TrimSpace(current.Hostname)
+	return currentMachineID != "" && currentHostname != "" &&
+		strings.TrimSpace(host.MachineID) == currentMachineID &&
+		unifiedresources.HostnamesEquivalent(host.Hostname, currentHostname)
+}
+
+func dockerTokenEnrolledElsewhere(tokenRecord *config.APITokenRecord, dockerHosts []*unifiedresources.DockerHostView, hostModels []models.Host, current models.DockerHost) bool {
 	if tokenRecord == nil {
 		return false
 	}
@@ -2352,19 +2370,38 @@ func dockerTokenEnrolledElsewhere(tokenRecord *config.APITokenRecord, dockerHost
 	if tokenID == "" {
 		return false
 	}
-	excludeID = strings.TrimSpace(excludeID)
+	currentID := strings.TrimSpace(current.ID)
+	currentAgentID := strings.TrimSpace(current.AgentID)
+	if enrolledID := strings.TrimSpace(tokenRecord.Metadata[agenttokens.CommandPolicyAppliedAgentIDMetadataKey]); enrolledID != "" &&
+		enrolledID != currentID &&
+		(currentAgentID == "" || enrolledID != currentAgentID) {
+		sameMachineEnrolled := false
+		for _, host := range hostModels {
+			if strings.TrimSpace(host.ID) == enrolledID && dockerHostMatchesHostModel(current, host) {
+				sameMachineEnrolled = true
+				break
+			}
+		}
+		if !sameMachineEnrolled {
+			return true
+		}
+	}
 	for _, host := range dockerHosts {
 		if host == nil {
 			continue
 		}
-		if strings.TrimSpace(host.TokenID()) == tokenID && dockerHostStableID(host) != excludeID {
+		if strings.TrimSpace(host.TokenID()) == tokenID && dockerHostStableID(host) != currentID {
 			return true
 		}
 	}
 	for _, host := range hostModels {
-		if strings.TrimSpace(host.TokenID) == tokenID && strings.TrimSpace(host.ID) != excludeID {
-			return true
+		if strings.TrimSpace(host.TokenID) != tokenID {
+			continue
 		}
+		if dockerHostMatchesHostModel(current, host) {
+			continue
+		}
+		return true
 	}
 	return false
 }
@@ -2373,21 +2410,19 @@ func (m *Monitor) supersedeStaleDockerHostDuplicates(current models.DockerHost, 
 	if tokenRecord == nil || tokenRecord.CreatedAt.IsZero() {
 		return
 	}
-	if dockerTokenEnrolledElsewhere(tokenRecord, hosts, m.state.GetHosts(), current.ID) {
-		return
-	}
 	machineID := strings.TrimSpace(current.MachineID)
 	hostname := strings.TrimSpace(current.Hostname)
 	if machineID == "" || hostname == "" {
 		return
 	}
-
+	currentID := strings.TrimSpace(current.ID)
+	var candidates []*unifiedresources.DockerHostView
 	for _, stale := range hosts {
 		if stale == nil {
 			continue
 		}
 		staleID := dockerHostStableID(stale)
-		if staleID == "" || staleID == strings.TrimSpace(current.ID) {
+		if staleID == "" || staleID == currentID {
 			continue
 		}
 		if strings.TrimSpace(stale.MachineID()) != machineID {
@@ -2396,9 +2431,20 @@ func (m *Monitor) supersedeStaleDockerHostDuplicates(current models.DockerHost, 
 		if !unifiedresources.HostnamesEquivalent(stale.Hostname(), hostname) {
 			continue
 		}
-		if !stale.LastSeen().Before(tokenRecord.CreatedAt) {
+		if stale.LastSeen().After(tokenRecord.CreatedAt.Add(dockerAgentHealthWindow(stale.IntervalSeconds()))) {
 			continue
 		}
+		candidates = append(candidates, stale)
+	}
+	if len(candidates) == 0 {
+		return
+	}
+	if dockerTokenEnrolledElsewhere(tokenRecord, hosts, m.state.GetHosts(), current) {
+		return
+	}
+
+	for _, stale := range candidates {
+		staleID := dockerHostStableID(stale)
 
 		removed, ok := m.state.RemoveDockerHost(staleID)
 		if !ok {
@@ -2497,7 +2543,7 @@ func (m *Monitor) ApplyDockerReport(report agentsdocker.Report, tokenRecord *con
 	unlockDockerReport := m.lockDockerReportApplication(identifier)
 	defer unlockDockerReport()
 	receivedAt := time.Now()
-	previousState, hadStoredDockerHost := m.GetDockerHost(identifier)
+	previousState, _ := m.GetDockerHost(identifier)
 	dockerHosts = m.dockerHostRecordViews()
 	previous = nil
 	hasPrevious = false
@@ -3007,10 +3053,7 @@ func (m *Monitor) ApplyDockerReport(report agentsdocker.Report, tokenRecord *con
 
 	m.state.UpsertDockerHost(host)
 	m.state.SetConnectionHealth(dockerConnectionPrefix+host.ID, true)
-
-	if !hadStoredDockerHost {
-		m.supersedeStaleDockerHostDuplicates(host, tokenRecord, dockerHosts)
-	}
+	m.supersedeStaleDockerHostDuplicates(host, tokenRecord, dockerHosts)
 
 	// Check if the host was previously hidden and is now visible again
 	if hasPrevious && previous.Hidden() && !host.Hidden {
@@ -5769,6 +5812,10 @@ var dockerAgentReportLease = models.AgentReportLease{
 	MinimumWindow:   dockerMinimumHealthWindow,
 	MaximumWindow:   dockerMaximumHealthWindow,
 	GraceMultiplier: dockerOfflineGraceMultiplier,
+}
+
+func dockerAgentHealthWindow(interval int) time.Duration {
+	return dockerAgentReportLease.Window(interval)
 }
 
 // evaluateDockerAgents updates health for Docker hosts based on last report time.
