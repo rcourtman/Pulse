@@ -37,7 +37,10 @@ There is no top-level Recovery page. Open the existing platform view:
 - **Proxmox → Backups** (`/proxmox/backups`): **By date** lists recorded
   artifacts; **Coverage** groups them by workload. Expand a coverage row to
   inspect its protection reason and individual artifacts. Backup servers have
-  their own rows on the same page.
+  their own rows on the same page. When Proxmox VE or PBS polling goes quiet or
+  hits an error, stale indicators mark affected summaries and rows rather than
+  showing retained data as fresh. See
+  [Stale Proxmox backup telemetry](#stale-proxmox-backup-telemetry).
 - **Proxmox → Replication** (`/proxmox/replication`): scheduled ZFS
   replication jobs between Proxmox VE nodes, read separately from PBS backups.
   See [Proxmox replication freshness](#proxmox-replication-freshness).
@@ -491,6 +494,53 @@ badge.** If a guest is unresponsive or freeze/thaw is uncertain, stop this
 display comparison and follow [Backup safety](VM_DISK_MONITORING.md#backup-safety).
 An OK task or a corrected posture does not establish guest thaw, successful
 writes to every covered filesystem or workload liveness.
+
+## Stale Proxmox backup telemetry
+
+When a Proxmox VE node or Proxmox Backup Server stops reporting fresh polling
+data, hits a poll error, or goes degraded or offline in Pulse, **Proxmox →
+Backups** (`/proxmox/backups`) keeps retained protection, job, and restore-point
+records visible while marking them stale so retained `200 OK` responses do not
+look like current protection:
+
+- **Source detection:** Pulse checks backend Proxmox VE (`proxmox`) and PBS
+  (`pbs`) source status, connection health, and resource staleness. An optional
+  stale host agent on a Proxmox host does not mark backup telemetry stale while
+  the underlying PVE or PBS API poll itself is healthy.
+- **Page-level banner:** A warning banner names up to three stale PVE or PBS
+  sources with their last-report age (plus any remaining count):
+  `Backup telemetry is stale for <sources>. Protection status, job counts, and restore points show the last values received before polling stopped.`
+- **Backup health and Backup jobs:** **Backup health** switches a green
+  protected verdict indicator to amber and adds `· Stale data` in the header
+  without hiding protected counts, exception groups, or share bars. **Backup
+  jobs** adds `· Stale data` in its header while keeping **Last 24h** pills and
+  14-day bars intact.
+- **Coverage rows and drawers:** Only workloads affected by a stale PVE node,
+  PVE connection, or PBS scope show a stale cue beneath their posture
+  (`Stale · <age>` or `Stale data`, or `Stale` on compact phone layouts) and switch
+  a green **Protected** indicator to amber. Unaffected fresh siblings stay
+  untouched, and backup ages remain visible. Expanding an affected row shows
+  `<posture> · <stale cue>` in the drawer status and an amber warning notice
+  starting `Readings are stale.` (`protection status and restore points show the
+  last values received.`).
+- **By date rows and drawers:** Only restore points whose owning PVE or PBS
+  source is stale show the amber stale cue beneath **State** while keeping
+  **Verified**, **Unverified**, **Kept**, **Running**, **Failed**, and
+  **Snapshot** badges visible. Expanding an affected restore point shows an
+  amber warning notice starting `Source telemetry is stale.` (`newer backups or
+  prunes may not appear yet.`).
+- **Search and Backup servers:** Search in both **Coverage** and **By date**
+  matches stale labels, stale details, and recorded source error text. The
+  **Backup servers** table uses the same PBS poll-staleness check. See
+  [Stale PBS readings and unread datastore capacity](PBS.md#stale-pbs-readings-and-unread-datastore-capacity).
+
+When live PVE or PBS polling recovers, the banner, header cues, row cues, and
+drawer notices clear automatically. While telemetry is stale, check the affected
+PVE or PBS connection in **Settings → Infrastructure** and confirm current
+backups directly in Proxmox or PBS. Do not restart Pulse, run another backup,
+verification, or restore, clear History, or widen token permissions just to
+clear a stale indicator. If a guest is unresponsive or freeze/thaw is uncertain,
+follow [Backup safety](VM_DISK_MONITORING.md#backup-safety).
 
 ## Proxmox replication freshness
 

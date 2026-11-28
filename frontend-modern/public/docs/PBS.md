@@ -615,6 +615,13 @@ polls from retained snapshots and unread datastores:
   removed or excluded), Pulse clears the removed entries from unified storage
   instead of leaving stale datastores behind. A failed datastore read still
   preserves the last known storage entries.
+- **Page-wide Proxmox Backups cues:** **Backup servers** shares its PBS
+  poll-staleness check with the rest of **Proxmox → Backups** (`/proxmox/backups`),
+  so stale PBS polling also surfaces the page-level stale telemetry banner,
+  `· Stale data` header cues on **Backup health** and **Backup jobs**, and
+  scoped stale cues and drawer notices on affected **Coverage** and **By date**
+  rows while leaving unaffected fresh sources intact. See
+  [Stale Proxmox backup telemetry](RECOVERY.md#stale-proxmox-backup-telemetry).
 
 ### PBS CPU and memory alerts
 
