@@ -1216,8 +1216,9 @@ Common reporting error codes:
 - `GET /api/notifications/queue/stats` (admin, `settings:read` and `monitoring:read`)
   - Returns counts for all rows still retained by the queue. Status counts have
     different retention windows and are not a delivery rate or lifetime total.
-- `GET /api/notifications/dlq` (admin)
-- `POST /api/notifications/dlq/retry` (admin)
+- `GET /api/notifications/dlq` (admin, `settings:read` and `monitoring:read`)
+  - Returns diagnostic summaries of dead-letter notifications. Optional `limit` defaults to 100 and is capped at 1000.
+- `POST /api/notifications/dlq/retry` (admin, `settings:write`)
 - `POST /api/notifications/dlq/delete` (admin, `settings:write`; `DELETE` also accepted)
   - Body: `{ "id": "<notification id>" }`. Marks that queue row `cancelled`
     with the note "Manually deleted from DLQ"; the row is not removed and is
@@ -1232,6 +1233,17 @@ Common reporting error codes:
 - `POST /api/notifications/terminal-failures/dismiss` (admin, `settings:write`)
   - Marks every retained terminal delivery `cancelled`, clearing the active
     queue-health warning without deleting delivery history.
+
+### Delivery Rehearsals
+- `GET /api/notifications/rehearsals` (org manager or admin, `settings:read` or `settings:write`)
+  - Lists recent notification delivery rehearsals for the active organization.
+- `POST /api/notifications/rehearsals` (org manager or admin, `settings:write`)
+  - Starts a delivery rehearsal against the active organization's saved destinations only. Ad-hoc URLs and credentials are not accepted.
+  - Strict JSON body up to 4 KiB: `id` (36-byte unique identifier), `level` (`info`, `warning`, or `critical`), and optional `tags` (up to 32 entries of at most 64 bytes each).
+- `GET /api/notifications/rehearsals/{id}` (org manager or admin, `settings:read` or `settings:write`)
+  - Returns one delivery rehearsal and its per-destination outcomes.
+- `POST /api/notifications/rehearsals/{id}/recover` (org manager or admin, `settings:write`)
+  - Re-queues recoverable failed deliveries from that rehearsal.
 
 ---
 
@@ -1255,6 +1267,9 @@ it, use the snooze and unsnooze endpoints below.
 - `PUT /api/alerts/config` — replaces only the top-level keys the body
   carries; a key left out keeps its stored value, and the merged config is
   normalized as before. The body must be a JSON object.
+- `GET /api/alerts/intent-policies` (`monitoring:read`)
+- `PUT /api/alerts/intent-policies` (`monitoring:write`)
+- `POST /api/alerts/intent-policies/preview` (`monitoring:read`)
 - `GET /api/alerts/deadman/config` — returns only whether an external watchdog
   is configured; `pingUrl` is `***REDACTED***` when present and never returns
   the credential-bearing URL
@@ -1274,7 +1289,9 @@ it, use the snooze and unsnooze endpoints below.
 - `POST /api/alerts/activate` enables notification delivery and can notify about existing unacknowledged critical alerts. It is not a maintenance toggle, and there is no matching `/api/alerts/deactivate` endpoint.
 - `GET /api/alerts/active` (see [Active alerts](#active-alerts) for live `metricStatus` evaluation fields)
 - `GET /api/alerts/delivery-diagnosis?alertIdentifier=<alert-id>` (omit `alertIdentifier` to get the diagnosis array for every active alert)
-- `GET /api/alerts/events?alertIdentifier=<alert-id>&type=<event-type,...>&since=<RFC3339>&limit=<n>` — append-only alert event log: lifecycle transitions and notification decisions, including suppressions with reasons; all parameters optional, newest first
+- `GET /api/alerts/events?alertIdentifier=<alert-id>&type=<event-type,...>&since=<RFC3339>&limit=<n>` - append-only alert event log covering lifecycle transitions and notification decisions, including suppressions with reasons. All parameters are optional, newest first. Responses include `X-Pulse-History-Complete` and `X-Pulse-History-Gap-Revision` headers alongside the event array.
+- `GET /api/alerts/history/durability` (`monitoring:read`) - reports alert event-history completeness separately from retained rows (`healthy` and `durability`). Read access never acknowledges a gap.
+- `POST /api/alerts/history/durability/acknowledgement` (`monitoring:write`) - strict JSON body up to 4 KiB (`{ "revision": <uint64>, "reason": "<1-1024 bytes>" }`) for the exact inspected gap revision. Records acceptance of missing history facts without claiming recovery or reconstructing events, and returns `409` if history changed or obligations remain unsettled.
 - `GET /api/alerts/history` — each entry carries at most one `evidence` envelope, the newest; `operationalRecord.evidenceIds` keeps the full list, and `GET /api/alerts/active` returns an open alert's full evidence
 - `DELETE /api/alerts/history`
 - `GET /api/alerts/incidents`
@@ -1685,9 +1702,14 @@ Returns minimal server info for installer scripts.
 
 ## 🔑 OIDC / SSO
 
-### Provider Login
+### Provider Login and SAML Flows
 - `GET /api/oidc/{providerID}/login`
 - `GET /api/oidc/{providerID}/callback`
+- `GET /api/saml/{providerID}/metadata` (`GET` only, returns Service Provider metadata XML for IdP registration)
+- `GET` or `POST /api/saml/{providerID}/login` (`GET` redirects `302` to the IdP, `POST` validates an optional JSON body up to 16 KiB with `returnTo` and returns `{"authorizationUrl": "..."}`, binding the AuthnRequest to a short-lived HTTP-only login cookie)
+- `POST /api/saml/{providerID}/acs` (`POST` only, verifies the signed assertion against the current saved provider policy and browser login cookie)
+- `POST /api/saml/{providerID}/logout` (`POST` only, requires an active authenticated browser session and returns `401` without one)
+- `GET` or `POST /api/saml/{providerID}/slo` (accepts a signed `SAMLResponse` bound to an outstanding SP-initiated logout request, rejects missing payloads or unsupported IdP-initiated `SAMLRequest` calls with `400`, and rejects unbound or invalid responses with `403`)
 
 OIDC and SAML configuration is managed via SSO providers.
 
@@ -1701,7 +1723,9 @@ OIDC and SAML configuration is managed via SSO providers.
 A provider decides who can sign in and which roles its groups receive, so an
 API token may create, update or delete one only if it has full-access scope
 (`*`) and is not bound to a non-default organization. Any other token gets
-`403`. Browser sessions are not limited this way.
+`403`. Browser sessions are not limited this way. Updating or deleting a
+provider managed by `OIDC_*` environment variables returns `409`
+(`provider_managed_by_environment`).
 
 Provider mutation request contract:
 - Max request body: 1MB.
@@ -2403,7 +2427,7 @@ TrueNAS resources (pools, datasets, disks, ZFS snapshots, replication tasks, ale
 
 ## VMware vSphere (Early Access)
 
-VMware vCenter connection management endpoints for adding, testing, previewing, updating, and removing vCenter connections. When VMware integration is explicitly disabled via `PULSE_FEATURE_VMWARE=false`, these routes return `404` (`vmware_disabled`).
+VMware vCenter connection management endpoints for adding, testing, previewing, updating, and removing vCenter connections. When VMware integration is explicitly disabled via `PULSE_ENABLE_VMWARE=false`, these routes return `404` (`vmware_disabled`).
 
 ### Connection Management (Admin)
 - `GET /api/vmware/connections` (admin, `settings:read`) - List configured vCenter connections with secrets redacted plus `poll` and `observed` runtime status summaries.
