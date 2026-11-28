@@ -24,9 +24,34 @@ const DIRECT_DOM_RE = new RegExp(
   ].join('|'),
 );
 
-const TYPE_ONLY_IMPORT_RE = /^\s*(?:import|export)\s+type\b[^;\n]*;?\s*$/gm;
+const TYPE_ONLY_IMPORT_RE =
+  /^\s*import\s+type\s+(?:\*\s+as\s+[A-Za-z_$][\w$]*|[A-Za-z_$][\w$]*(?:\s*,\s*\{[^}]*\})?|\{[^}]*\})\s+from\s+['"][^'"]+['"]\s*;?/gm;
+const TYPE_ONLY_EXPORT_RE =
+  /^\s*export\s+type\s+(?:\*(?:\s+as\s+[A-Za-z_$][\w$]*)?|\{[^}]*\})\s+from\s+['"][^'"]+['"]\s*;?/gm;
+const NAMED_TYPE_IMPORT_EXPORT_RE =
+  /^\s*(?:import|export)\s*\{([^}]+)\}\s+from\s+['"][^'"]+['"]\s*;?/gm;
 const IMPORT_SPECIFIER_RE =
   /(?:from\s+|import\s*\(\s*|vi\.(?:mock|doMock|importActual|importMock)\s*\(\s*|require\s*\(\s*|^\s*import\s+)['"]([^'"]+)['"]/gm;
+const HOISTED_FACTORY_MOCK_RE =
+  /^vi\.mock\s*\(\s*['"]([^'"]+)['"]\s*,\s*(?:async\s*)?\(\s*\)\s*=>/gm;
+const DYNAMIC_MOCK_ESCAPE_RE =
+  /\b(?:importOriginal|importActual|doUnmock|unmock|resetModules)\b/;
+
+function stripTypeOnlyModuleEdges(source: string): string {
+  return source
+    .replace(TYPE_ONLY_IMPORT_RE, '')
+    .replace(TYPE_ONLY_EXPORT_RE, '')
+    .replace(NAMED_TYPE_IMPORT_EXPORT_RE, (full, body: string) => {
+      const specifiers = body
+        .split(',')
+        .map((item) => item.trim())
+        .filter(Boolean);
+      if (specifiers.length > 0 && specifiers.every((item) => /^type\s+[A-Za-z_$]/.test(item))) {
+        return '';
+      }
+      return full;
+    });
+}
 
 const SKIP_DIRS = new Set(['node_modules', 'dist', 'coverage', '.git']);
 const NON_RUNTIME_LOCAL_EXTS = new Set(['.json', '.md', '.txt']);
@@ -129,7 +154,7 @@ export function partitionVitestFiles(frontendRoot: string): { nodeFiles: string[
     let cached = depsCache.get(filePath);
     if (cached !== undefined) return cached;
 
-    const stripped = readSource(filePath).replace(TYPE_ONLY_IMPORT_RE, '');
+    const stripped = stripTypeOnlyModuleEdges(readSource(filePath));
     const localDeps: string[] = [];
     let unresolvedOrDom = false;
 
@@ -162,7 +187,28 @@ export function partitionVitestFiles(frontendRoot: string): { nodeFiles: string[
     return cached;
   };
 
+  const getHoistedFactoryMockedLocalDeps = (entryFile: string): Set<string> => {
+    const mocked = new Set<string>();
+    const source = readSource(entryFile);
+    if (DYNAMIC_MOCK_ESCAPE_RE.test(source)) {
+      return mocked;
+    }
+    HOISTED_FACTORY_MOCK_RE.lastIndex = 0;
+    let match: RegExpExecArray | null;
+    while ((match = HOISTED_FACTORY_MOCK_RE.exec(source)) !== null) {
+      const specifier = match[1];
+      if (specifier.startsWith('@/') || specifier.startsWith('.')) {
+        const resolved = resolveLocalModule(srcRoot, entryFile, specifier);
+        if (resolved) {
+          mocked.add(resolved);
+        }
+      }
+    }
+    return mocked;
+  };
+
   const requiresJsdom = (entryFile: string): boolean => {
+    const mockedLocalDeps = getHoistedFactoryMockedLocalDeps(entryFile);
     const visited = new Set<string>([entryFile]);
     const stack = [entryFile];
     while (stack.length > 0) {
@@ -171,6 +217,7 @@ export function partitionVitestFiles(frontendRoot: string): { nodeFiles: string[
       const { unresolvedOrDom, localDeps } = getRuntimeDeps(current);
       if (unresolvedOrDom) return true;
       for (const dep of localDeps) {
+        if (mockedLocalDeps.has(dep)) continue;
         if (!visited.has(dep)) {
           visited.add(dep);
           stack.push(dep);
