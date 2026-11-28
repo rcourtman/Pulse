@@ -361,12 +361,6 @@ func (m *Monitor) pollPBSInstance(ctx context.Context, instanceName string, clie
 				snapshot := cfg
 				snapshot.ExcludeDatastores = append([]string(nil), cfg.ExcludeDatastores...)
 				instanceCfg = &snapshot
-				if debugEnabled {
-					log.Debug().
-						Str("instance", instanceName).
-						Bool("monitorDatastores", snapshot.MonitorDatastores).
-						Msg("Found PBS instance config")
-				}
 				break
 			}
 		}
@@ -376,6 +370,14 @@ func (m *Monitor) pollPBSInstance(ctx context.Context, instanceName string, clie
 		pollErr = fmt.Errorf("PBS instance config %q not found", instanceName)
 		log.Error().Str("instance", instanceName).Msg("PBS instance config not found")
 		return
+	}
+	// A slow log sink must not hold the shared config lock. The diagnostic
+	// describes the same snapshot that this poll will use.
+	if debugEnabled {
+		log.Debug().
+			Str("instance", instanceName).
+			Bool("monitorDatastores", instanceCfg.MonitorDatastores).
+			Msg("Found PBS instance config")
 	}
 	if instanceCfg.Disabled {
 		skipped = true
