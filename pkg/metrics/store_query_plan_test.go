@@ -539,6 +539,7 @@ func explainQueryPlan(t *testing.T, db *sql.DB, query string, args []any) string
 }
 
 func TestRetainedUnaggregatedQueryAvoidsMetricSort(t *testing.T) {
+	t.Parallel()
 	db := newPlanTestDB(t)
 	store := &Store{}
 	end := time.Unix(2000000040, 0)
@@ -565,6 +566,7 @@ func TestRetainedUnaggregatedQueryAvoidsMetricSort(t *testing.T) {
 }
 
 func TestRetainedResourceNumbersPreserveScopeAndOrderedSeries(t *testing.T) {
+	t.Parallel()
 	for _, clustered := range []bool{false, true} {
 		t.Run(fmt.Sprintf("clustered_%t", clustered), func(t *testing.T) {
 			t.Parallel()
@@ -676,6 +678,7 @@ func TestRetainedResourceNumbersPreserveScopeAndOrderedSeries(t *testing.T) {
 // transport one series ordinal, while a cache hit with reordered metric names
 // must still resolve against this statement's current bindings.
 func TestRetainedRawFleetSeriesNumbersBindCurrentMetrics(t *testing.T) {
+	t.Parallel()
 	for _, clustered := range []bool{false, true} {
 		for _, valuesOnly := range []bool{false, true} {
 			t.Run(fmt.Sprintf("clustered=%t/values=%t", clustered, valuesOnly), func(t *testing.T) {
@@ -741,6 +744,7 @@ func TestRetainedRawFleetSeriesNumbersBindCurrentMetrics(t *testing.T) {
 }
 
 func TestRetainedPackedSeriesKeepsNegativeTimestampsAndOverflowFallback(t *testing.T) {
+	t.Parallel()
 	db := newPlanTestDB(t)
 	store := &Store{db: pdb.Wrap(db, "packed-series-boundary")}
 	ids, names := []string{"second", "first"}, []string{"memory", "cpu", "disk"}
@@ -805,8 +809,10 @@ func TestRetainedPackedSeriesKeepsNegativeTimestampsAndOverflowFallback(t *testi
 // single-resource assembler, including interleaved rows and empty series. Wide
 // sparse filters exercise the bounded fallback without losing statement scope.
 func TestRetainedNumberedAssemblyMatchesSingleResourceReads(t *testing.T) {
+	t.Parallel()
 	for _, clustered := range []bool{false, true} {
 		t.Run(fmt.Sprintf("clustered=%t", clustered), func(t *testing.T) {
+			t.Parallel()
 			db := newPlanTestDB(t)
 			if clustered {
 				if _, err := db.Exec(`DROP TABLE metrics; CREATE TABLE metrics (` + metricsTableColumns + `) WITHOUT ROWID; CREATE INDEX idx_metrics_tier_time ON metrics(tier,timestamp)`); err != nil {

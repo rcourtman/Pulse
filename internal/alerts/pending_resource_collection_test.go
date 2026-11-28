@@ -234,6 +234,7 @@ func TestHostPendingResourceCollectionAllocationsStayHostLocal(t *testing.T) {
 	const childEnv = "PULSE_HOST_PENDING_COLLECTION_ALLOCATION_CHILD"
 	const complete = "host-local allocation guard and fleet-copy controls completed"
 	if os.Getenv(childEnv) != "1" {
+		t.Parallel()
 		ctx, cancel := context.WithTimeout(context.Background(), 30*time.Second)
 		defer cancel()
 		cmd := exec.CommandContext(ctx, os.Args[0],

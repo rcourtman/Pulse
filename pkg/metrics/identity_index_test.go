@@ -149,7 +149,7 @@ func steadyStateWALFrames(t *testing.T, layout string) int64 {
 // on 2026-09-24: 25,310 WAL frames for the metric-major layout and 6,022 for
 // the time-major layout over 30 polls of 480 series.
 func TestMetricsIdentityIndexSteadyStateWrites(t *testing.T) {
-	suppressTestLogs(t)
+	t.Parallel()
 	var metricMajor, timeMajor int64
 	t.Run("measure", func(t *testing.T) {
 		t.Run("metric-major", func(t *testing.T) {

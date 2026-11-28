@@ -1166,6 +1166,7 @@ func TestHostNativeSensorThresholdRaisesOnlyFromItsOwnOverride(t *testing.T) {
 }
 
 func TestHostNativeSensorGapsHoldAndPolicyResolves(t *testing.T) {
+	t.Parallel()
 	hot := 47.0
 	for _, gap := range []string{"invalid", "no-value", "missing", "empty-inventory", "expired"} {
 		for _, policy := range []string{"override-removed", "override-disabled", "override-zero", "config-save", "host-disabled", "agents-disabled", "host-removed"} {

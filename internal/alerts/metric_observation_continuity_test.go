@@ -202,6 +202,7 @@ func continuityObserver(t *testing.T, m *Manager, route, gap string) (string, st
 }
 
 func TestMetricObservationGapRestartsActivation(t *testing.T) {
+	t.Parallel()
 	for _, explicit := range []bool{false, true} {
 		for _, route := range []string{"legacy", "canonical", "unified", "host", "storage", "guest-memory", "guest-aggregate", "guest-filesystem", "guest-filesystem-expired", "host-disk-temperature"} {
 			gaps := []string{"missing"}
@@ -259,6 +260,7 @@ func TestMetricObservationGapRestartsActivation(t *testing.T) {
 }
 
 func TestMetricObservationGapRestartsRecovery(t *testing.T) {
+	t.Parallel()
 	for _, route := range []string{"legacy", "canonical", "unified", "host", "guest-memory", "host-disk-temperature"} {
 		gaps := []string{"missing"}
 		if route == "legacy" || route == "canonical" {
@@ -316,6 +318,7 @@ func TestMetricObservationGapRestartsRecovery(t *testing.T) {
 }
 
 func TestUnifiedMetricObservationGapCoversRejectedAndAbsentValues(t *testing.T) {
+	t.Parallel()
 	cases := []struct{ resourceType, metric string }{
 		{"vm", "cpu"}, {"vm", "memory"}, {"vm", "disk"}, {"vm", "diskRead"}, {"vm", "diskWrite"}, {"vm", "networkIn"}, {"vm", "networkOut"},
 		{"node", "temperature"}, {"agent", "memory"}, {"pbs", "memory"}, {"storage", "usage"}, {"truenas-system", "memory"},

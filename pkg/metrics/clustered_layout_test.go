@@ -61,6 +61,7 @@ func assertClusteredStore(t *testing.T, store *Store) {
 }
 
 func TestClusteredMetricsRollupPlanUsesBoundedPrimaryRanges(t *testing.T) {
+	t.Parallel()
 	store, err := NewStore(DefaultConfig(t.TempDir()))
 	if err != nil {
 		t.Fatal(err)
@@ -99,7 +100,7 @@ func TestClusteredMetricsRollupPlanUsesBoundedPrimaryRanges(t *testing.T) {
 }
 
 func TestClusteredMetricsRollupsMatchLegacyAggregation(t *testing.T) {
-	suppressLogs(t)
+	t.Parallel()
 	stores := make([]*Store, 2)
 	for i := range stores {
 		cfg := DefaultConfig(t.TempDir())
@@ -189,6 +190,7 @@ func TestClusteredMetricsRollupsMatchLegacyAggregation(t *testing.T) {
 }
 
 func TestClusteredMetricsFreshAndRestart(t *testing.T) {
+	t.Parallel()
 	cfg := DefaultConfig(t.TempDir())
 	for i := 0; i < 2; i++ {
 		store, err := NewStore(cfg)
@@ -387,7 +389,7 @@ func TestClusteredMetricsCrashRollsBackSwap(t *testing.T) {
 		_ = store.WaitForMaintenance(30 * time.Second)
 		os.Exit(89)
 	}
-	suppressTestLogs(t)
+	t.Parallel()
 	dbPath := filepath.Join(t.TempDir(), "metrics.db")
 	issue1124CreateLegacyStore(t, dbPath, 10_000, false)
 	cmd := exec.Command(os.Args[0], "-test.run=^TestClusteredMetricsCrashRollsBackSwap$")
@@ -453,6 +455,7 @@ func TestClusteredMetricsRefreshesAnotherStoreAndCachedShapes(t *testing.T) {
 }
 
 func TestClusteredMetricsReopeningLegacyExecutableIndexes(t *testing.T) {
+	t.Parallel()
 	cfg := DefaultConfig(t.TempDir())
 	store, err := NewStore(cfg)
 	if err != nil {
@@ -492,6 +495,7 @@ func TestClusteredMetricsReopeningLegacyExecutableIndexes(t *testing.T) {
 }
 
 func TestClusteredRetainedPlansUsePrimaryTable(t *testing.T) {
+	t.Parallel()
 	db := newPlanTestDB(t)
 	store := &Store{db: pdb.Wrap(db, "metrics"), config: DefaultConfig(t.TempDir())}
 	if err := store.migrateClusteredMetrics(context.Background()); err != nil {

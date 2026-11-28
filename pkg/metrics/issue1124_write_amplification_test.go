@@ -82,7 +82,7 @@ type issue1124Series struct {
 }
 
 func TestStoreConsolidatesLegacyMetricsIndexes(t *testing.T) {
-	suppressTestLogs(t)
+	t.Parallel()
 	dbPath := filepath.Join(t.TempDir(), "metrics.db")
 	issue1124CreateLegacyStore(t, dbPath, 2_000, false)
 
@@ -146,7 +146,7 @@ func TestStoreConsolidatesLegacyMetricsIndexes(t *testing.T) {
 }
 
 func TestStoreIdentityMigrationDeduplicatesLegacyRows(t *testing.T) {
-	suppressTestLogs(t)
+	t.Parallel()
 	dbPath := filepath.Join(t.TempDir(), "metrics.db")
 	issue1124CreateLegacyStore(t, dbPath, 2, true)
 
@@ -205,7 +205,7 @@ func TestStoreIdentityMigrationRecoversAfterCrash(t *testing.T) {
 		os.Exit(89)
 	}
 
-	suppressTestLogs(t)
+	t.Parallel()
 	dbPath := filepath.Join(t.TempDir(), "metrics.db")
 	issue1124CreateLegacyStore(t, dbPath, 10_000, false)
 
@@ -251,7 +251,7 @@ func TestStoreIdentityMigrationRecoversAfterCrash(t *testing.T) {
 }
 
 func TestStoreIdentityMigrationBackupRestore(t *testing.T) {
-	suppressTestLogs(t)
+	t.Parallel()
 	dir := t.TempDir()
 	legacyPath := filepath.Join(dir, "legacy.db")
 	issue1124CreateLegacyStore(t, legacyPath, 5_000, false)
@@ -408,7 +408,7 @@ func TestStoreIdentityMigrationKeepsReadersAvailable(t *testing.T) {
 // 50,516, and both fail this invariant. It starts from an empty table, so
 // TestMetricsIdentityIndexSteadyStateWrites covers retained history.
 func TestMetricsWriteAmplificationInvariant(t *testing.T) {
-	suppressTestLogs(t)
+	t.Parallel()
 	dir := t.TempDir()
 	dbPath := filepath.Join(dir, "metrics.db")
 	cfg := DefaultConfig(dir)
