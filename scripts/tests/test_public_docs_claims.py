@@ -833,6 +833,91 @@ class AIAutonomyHelpDocsTest(unittest.TestCase):
             with self.subTest(doc="API.md", phrase=phrase):
                 self.assertIn(phrase, api_norm)
 
+    def test_storage_pool_staleness_help_matches_frontend_presentation(self) -> None:
+        pool_row = (
+            ROOT / "frontend-modern/src/components/Storage/StoragePoolRow.tsx"
+        ).read_text(encoding="utf-8")
+        row_pres = (
+            ROOT / "frontend-modern/src/features/storageBackups/rowPresentation.ts"
+        ).read_text(encoding="utf-8")
+        model_core = (
+            ROOT / "frontend-modern/src/features/storageBackups/storageModelCore.ts"
+        ).read_text(encoding="utf-8")
+        drawer_pres = (
+            ROOT
+            / "frontend-modern/src/features/storageBackups/storagePoolDrawerPresentation.ts"
+        ).read_text(encoding="utf-8")
+        page_state = (
+            ROOT / "frontend-modern/src/components/Storage/storagePageState.ts"
+        ).read_text(encoding="utf-8")
+
+        self.assertIn("shouldShowStoragePoolInlineStaleCue", pool_row)
+        self.assertIn("Stale data", pool_row)
+        self.assertIn("return 'Stale';", row_pres)
+        self.assertIn("Retained last-known storage values.", row_pres)
+        self.assertIn("record.freshness === 'stale' ? 'stale stale data' : ''", model_core)
+        self.assertIn("getEffectiveStorageRecordHealth(record)", model_core)
+        self.assertIn(
+            "const STALE_POOL_MESSAGE = 'Retained last-known storage values, not a current reading.';",
+            drawer_pres,
+        )
+        self.assertIn("{ value: 'attention', label: 'Needs attention' }", page_state)
+
+        for rel in ("docs/FAQ.md", "docs/ZFS_MONITORING.md", "docs/TRUENAS.md"):
+            doc = (ROOT / rel).read_text(encoding="utf-8")
+            mirror = (ROOT / "frontend-modern/public" / rel).read_text(encoding="utf-8")
+            self.assertEqual(doc, mirror)
+            norm = " ".join(doc.split())
+            for phrase in (
+                "Status: Healthy",
+                "Status: Needs attention",
+                "Status: Warning",
+                "Stale data",
+                "Worth checking",
+                "Retained last-known storage values, not a current reading.",
+            ):
+                with self.subTest(doc=rel, phrase=phrase):
+                    self.assertIn(phrase, norm)
+
+    def test_scheduler_poll_planning_and_recovery_help_matches_monitoring_source(
+        self,
+    ) -> None:
+        progress_go = (
+            ROOT / "internal/monitoring/poll_work_progress.go"
+        ).read_text(encoding="utf-8")
+        workers_go = (
+            ROOT / "internal/monitoring/poll_task_workers.go"
+        ).read_text(encoding="utf-8")
+
+        self.assertIn('"pulse_scheduler_claimed_poll_overdue_seconds"', progress_go)
+        self.assertIn('"pulse_scheduler_poll_planning_age_seconds"', progress_go)
+        self.assertIn("while the panic handler is blocked writing to the log sink", workers_go)
+
+        prom_norm = " ".join(
+            (ROOT / "docs/monitoring/PROMETHEUS_METRICS.md")
+            .read_text(encoding="utf-8")
+            .split()
+        )
+        for phrase in (
+            "task preparation, provider calls, rescheduling and recovery logging.",
+            "If `pulse_scheduler_queued_poll_overdue_seconds` and both claimed-poll stages stay at zero while expected poll counters stop moving, check `pulse_scheduler_poll_planning_age_seconds` on successive scrapes.",
+            "A rising age means an unfinished poll planning pass is still blocked reading provider rosters, building the plan, or queuing tasks before any work reaches the queue.",
+        ):
+            with self.subTest(doc="PROMETHEUS_METRICS.md", phrase=phrase):
+                self.assertIn(phrase, prom_norm)
+
+        sched_norm = " ".join(
+            (ROOT / "docs/api/SCHEDULER_HEALTH.md")
+            .read_text(encoding="utf-8")
+            .split()
+        )
+        for phrase in (
+            "or an unfinished poll planning pass blocked before tasks reach the queue.",
+            "`pulse_scheduler_claimed_poll_overdue_seconds` and `pulse_scheduler_poll_planning_age_seconds`",
+        ):
+            with self.subTest(doc="SCHEDULER_HEALTH.md", phrase=phrase):
+                self.assertIn(phrase, sched_norm)
+
 
 if __name__ == "__main__":
     unittest.main()
